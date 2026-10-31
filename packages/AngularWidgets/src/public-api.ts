@@ -83,6 +83,8 @@ export { CollabHomeListComponent, HomeListRow } from './lib/home-list.component'
 export { CollabSpaceWorkComponent } from './lib/space-work.component';
 export {
     CollabSpaceChatComponent,
+    CollabChatScopeBarComponent,
+    type SpaceChatCitationModel,
     type WorkstreamLinkedItem,
     type ChatThreadMessageLike,
     type PendingAgentPromptState,

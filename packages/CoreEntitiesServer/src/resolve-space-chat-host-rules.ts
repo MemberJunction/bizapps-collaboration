@@ -7,6 +7,7 @@ import {
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { evaluateCanStartSpaceConversation } from './create-space-conversation.js';
+import { isDecisionRoutingAvailable } from './space-chat-decision-routing.js';
 import { asMetadata, parseUuid } from './uuid.js';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { spaceWriteRefusal } from './space-status-gate.js';
@@ -32,6 +33,7 @@ export interface SpaceChatHostRulesResult {
     mentionPeople: SpaceChatHostRulesMentionPerson[];
     canStartConversation: boolean;
     allowedConversationKinds: string[];
+    decisionRoutingAvailable?: boolean;
 }
 
 interface SpaceRow {
@@ -160,7 +162,7 @@ export async function resolveSpaceChatHostRules(
             allowedConversationKinds: [],
         };
     }
-    const agentReplyMode = chatSettings.agentReplyMode;
+    let agentReplyMode = chatSettings.agentReplyMode;
 
     // 3. Resolve allowed agents & default agent
     let allowed: Awaited<ReturnType<typeof resolveAllowedAgents>>;
@@ -340,6 +342,7 @@ export async function resolveSpaceChatHostRules(
 
     // If conversationId is specified, check conversation access
     let targetChatKind: string = 'General';
+    let targetChatOwnerUserId: string | null = null;
     let targetChatArchived = false;
     if (conversationId) {
         const parsedConvId = parseUuid(conversationId);
@@ -357,10 +360,10 @@ export async function resolveSpaceChatHostRules(
                 allowedConversationKinds: [],
             };
         }
-        const chatCheck = await rv.RunView<{ ID: string; Kind: string; Status: string }>({
+        const chatCheck = await rv.RunView<{ ID: string; Kind: string; Status: string; OwnerUserID?: string | null }>({
             EntityName: 'MJ_BizApps_Collaboration: Space Chats',
             ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedConvId}'`,
-            Fields: ['ID', 'Kind', 'Status'],
+            Fields: ['ID', 'Kind', 'Status', 'OwnerUserID'],
             MaxRows: 1,
             ResultType: 'simple',
         }, systemUser);
@@ -393,6 +396,7 @@ export async function resolveSpaceChatHostRules(
             };
         }
         targetChatKind = chatCheck.Results[0].Kind;
+        targetChatOwnerUserId = parseUuid(chatCheck.Results[0].OwnerUserID);
         targetChatArchived = chatCheck.Results[0].Status === 'Archived';
     }
 
@@ -411,6 +415,31 @@ export async function resolveSpaceChatHostRules(
                 allowedConversationKinds: [],
             };
         }
+    }
+
+    if (targetChatKind === 'Assistant') {
+        if (!targetChatOwnerUserId || targetChatOwnerUserId !== callerId) {
+            return {
+                ok: false,
+                message: 'Caller is not the owner of this assistant conversation.',
+                agentReplyMode: 'MentionOnly',
+                allowedAgentIds: [],
+                defaultAgentId: null,
+                defaultAgentName: null,
+                agentHistoryFrom: null,
+                mentionPeople: [],
+                canStartConversation: false,
+                allowedConversationKinds: [],
+            };
+        }
+        const oneToOneSettings = await resolveSpaceChatSettings(
+            provider,
+            spaceId,
+            systemUser,
+            { configuration: chatSettings.configuration, typeSettings: chatSettings.typeConfig },
+            { isOneToOne: true }
+        );
+        agentReplyMode = oneToOneSettings.agentReplyMode;
     }
 
     // After the Internal Only check, so a caller who can't see Team never learns that an internal conversation is archived
@@ -447,6 +476,9 @@ export async function resolveSpaceChatHostRules(
     // 7. Resolve mention people for this conversation
     const mentionPeople: SpaceChatHostRulesMentionPerson[] = [];
     const mentionUserIds = [...reachingUserIds].filter((uid) => {
+        if (targetChatKind === 'Assistant') {
+            return uid === callerId;
+        }
         if (targetChatKind === 'Private') {
             return userReachMap.get(uid)?.role.canSeeTeamBand === true;
         }
@@ -501,5 +533,6 @@ export async function resolveSpaceChatHostRules(
         mentionPeople,
         canStartConversation: startPerms.canStartConversation,
         allowedConversationKinds: startPerms.allowedConversationKinds,
+        decisionRoutingAvailable: isDecisionRoutingAvailable(),
     };
 }

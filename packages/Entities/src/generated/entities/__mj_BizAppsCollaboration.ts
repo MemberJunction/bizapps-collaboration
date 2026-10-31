@@ -219,13 +219,14 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
         * * Field Name: Subject
         * * Display Name: Subject
         * * SQL Data Type: nvarchar(500)`),
-    Kind: z.union([z.literal('General'), z.literal('Private'), z.literal('Topic')]).describe(`
+    Kind: z.union([z.literal('Assistant'), z.literal('General'), z.literal('Private'), z.literal('Topic')]).describe(`
         * * Field Name: Kind
         * * Display Name: Kind
         * * SQL Data Type: nvarchar(50)
         * * Default Value: General
     * * Value List Type: List
     * * Possible Values 
+    *   * Assistant
     *   * General
     *   * Private
     *   * Topic`),
@@ -254,6 +255,12 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen.`),
+    OwnerUserID: z.string().nullable().describe(`
+        * * Field Name: OwnerUserID
+        * * Display Name: Owner User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: For an Assistant space chat (1-to-1 with an agent): the user who owns the conversation. Null on General, Private, and Topic chats.`),
     Space: z.string().describe(`
         * * Field Name: Space
         * * Display Name: Space
@@ -262,6 +269,10 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
+    OwnerUser: z.string().nullable().describe(`
+        * * Field Name: OwnerUser
+        * * Display Name: Owner User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type mjBizAppsCollaborationSpaceChatEntityType = z.infer<typeof mjBizAppsCollaborationSpaceChatSchema>;
@@ -1847,14 +1858,15 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
     * * Default Value: General
     * * Value List Type: List
     * * Possible Values 
+    *   * Assistant
     *   * General
     *   * Private
     *   * Topic
     */
-    get Kind(): 'General' | 'Private' | 'Topic' {
+    get Kind(): 'Assistant' | 'General' | 'Private' | 'Topic' {
         return this.Get('Kind');
     }
-    set Kind(value: 'General' | 'Private' | 'Topic') {
+    set Kind(value: 'Assistant' | 'General' | 'Private' | 'Topic') {
         this.Set('Kind', value);
     }
 
@@ -1910,6 +1922,20 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
     }
 
     /**
+    * * Field Name: OwnerUserID
+    * * Display Name: Owner User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: For an Assistant space chat (1-to-1 with an agent): the user who owns the conversation. Null on General, Private, and Topic chats.
+    */
+    get OwnerUserID(): string | null {
+        return this.Get('OwnerUserID');
+    }
+    set OwnerUserID(value: string | null) {
+        this.Set('OwnerUserID', value);
+    }
+
+    /**
     * * Field Name: Space
     * * Display Name: Space
     * * SQL Data Type: nvarchar(200)
@@ -1925,6 +1951,15 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: OwnerUser
+    * * Display Name: Owner User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OwnerUser(): string | null {
+        return this.Get('OwnerUser');
     }
 }
 

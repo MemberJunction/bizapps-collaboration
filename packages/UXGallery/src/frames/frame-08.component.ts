@@ -5,7 +5,13 @@ import {
     CollabSpaceHeaderComponent,
     CollabSpaceTabsComponent,
     CollabAudiencePillComponent,
+    CollabBandChipComponent,
+    CollabChatScopeBarComponent,
+    CollabNewConversationDialogComponent,
+    type NewConversationSubmitPayload,
+    type SpaceChatCitationModel,
 } from '@mj-biz-apps/collaboration-ng-widgets';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import {
     ExampleBoardNextMeetingCard,
     ExampleBoardAgendaCard,
@@ -26,6 +32,10 @@ import { FRAME_08_FIXTURE, type Frame08FixtureData } from '../fixtures/frame-08.
         CollabSpaceHeaderComponent,
         CollabSpaceTabsComponent,
         CollabAudiencePillComponent,
+        CollabBandChipComponent,
+        CollabChatScopeBarComponent,
+        CollabNewConversationDialogComponent,
+        MJButtonDirective,
         ExampleBoardNextMeetingCard,
         ExampleBoardAgendaCard,
         ExampleBoardVoteCard,
@@ -115,6 +125,47 @@ import { FRAME_08_FIXTURE, type Frame08FixtureData } from '../fixtures/frame-08.
                         <mjc-example-board-papers-tab></mjc-example-board-papers-tab>
                     } @else if (activeTab === 'motions') {
                         <mjc-example-board-motions-tab></mjc-example-board-motions-tab>
+                    } @else if (activeTab === 'chat') {
+                        <div class="chat-gallery-surface" data-testid="frame-08-chat-view">
+                            <div class="chat-header-bar">
+                                <div class="chat-header-left">
+                                    <div class="row gap8">
+                                        <i [class]="activeChatKind === 'Assistant' ? 'fa-solid fa-robot' : 'fa-solid fa-hashtag'" style="color: var(--mj-brand-primary);" aria-hidden="true"></i>
+                                        <span class="chat-header-title" data-testid="active-chat-title">{{ activeChatName }}</span>
+                                        <mjc-band-chip [Band]="activeChatKind === 'Private' ? 'Team' : 'Shared'" />
+                                    </div>
+                                    <div class="chat-header-sub" data-testid="active-chat-subtitle">
+                                        {{ activeChatKind === 'Assistant' ? '1-to-1 Assistant · Private to you' : 'Team members and outside participants can see this conversation.' }}
+                                    </div>
+                                </div>
+                                <div class="row gap8">
+                                    <button
+                                        type="button"
+                                        mjButton
+                                        Variant="primary"
+                                        Size="sm"
+                                        data-testid="btn-open-new-conversation"
+                                        (click)="showNewConversationDialog = true">
+                                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                                        <span>New Conversation</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <mjc-chat-scope-bar
+                                [RetrievalScope]="chatRetrievalScope"
+                                [AllowEverythingScope]="activeChatKind === 'Assistant'"
+                                [Citations]="sourcesInScope"
+                                (RetrievalScopeChanged)="chatRetrievalScope = $event"
+                            />
+                        </div>
+                        @if (showNewConversationDialog) {
+                            <mjc-new-conversation-dialog
+                                [SpaceName]="f.header.title"
+                                [AllowedKinds]="['General', 'Topic', 'Private', 'Assistant']"
+                                (CancelRequested)="showNewConversationDialog = false"
+                                (SubmitRequested)="onConversationCreated($event)"
+                            />
+                        }
                     } @else {
                         <div style="padding: 32px; color: var(--mj-text-muted);">
                             {{ activeTab | titlecase }} view
@@ -227,9 +278,67 @@ import { FRAME_08_FIXTURE, type Frame08FixtureData } from '../fixtures/frame-08.
         .av.ext {
             border: 2px solid #ec4899;
         }
+        .chat-gallery-surface {
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface);
+        }
+        .chat-header-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--mj-border-default);
+        }
+        .chat-header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .chat-header-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--mj-text-primary);
+        }
+        .chat-header-sub {
+            font-size: 12px;
+            color: var(--mj-text-secondary);
+        }
     `],
 })
 export class Frame08Component {
     public f: Frame08FixtureData = FRAME_08_FIXTURE;
     public activeTab: string = 'overview';
+    public showNewConversationDialog = false;
+    public activeChatName = 'Audit Committee General';
+    public activeChatKind: 'General' | 'Topic' | 'Private' | 'Assistant' = 'General';
+    public chatRetrievalScope: 'ThisSpace' | 'Subtree' | 'Everything' = 'Subtree';
+    public sourcesInScope: SpaceChatCitationModel[] = [
+        {
+            SpaceItemID: 'item-board-pack-fy26',
+            SpaceID: 'space-audit-committee',
+            EntityID: 'entity-files',
+            RecordID: 'file-board-pack-fy26',
+            Name: 'FY2026 Audit Committee Pack.pdf',
+            Band: 'Shared',
+        },
+        {
+            SpaceItemID: 'item-charter-review',
+            SpaceID: 'space-audit-committee',
+            EntityID: 'entity-files',
+            RecordID: 'file-charter-review',
+            Name: 'Audit Charter Review Memo.docx',
+            Band: 'Shared',
+        },
+    ];
+
+    public onConversationCreated(payload: NewConversationSubmitPayload): void {
+        this.activeChatName = payload.name;
+        this.activeChatKind = payload.kind;
+        if (payload.kind !== 'Assistant' && this.chatRetrievalScope === 'Everything') {
+            this.chatRetrievalScope = 'Subtree';
+        }
+        this.showNewConversationDialog = false;
+    }
 }

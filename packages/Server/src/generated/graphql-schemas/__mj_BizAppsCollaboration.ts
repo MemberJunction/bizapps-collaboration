@@ -639,6 +639,10 @@ export class mjBizAppsCollaborationSpaceChat_ {
     @Field(() => Boolean, {nullable: true, description: "Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen."}) 
     ArchivedOnSpaceClose?: boolean;
         
+    @Field({nullable: true, description: "For an Assistant space chat (1-to-1 with an agent): the user who owns the conversation. Null on General, Private, and Topic chats."}) 
+    @MaxLength(36)
+    OwnerUserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Space?: string;
@@ -646,6 +650,10 @@ export class mjBizAppsCollaborationSpaceChat_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    OwnerUser?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -681,6 +689,9 @@ export class CreatemjBizAppsCollaborationSpaceChatInput {
     @Field(() => Boolean, { nullable: true })
     ArchivedOnSpaceClose?: boolean;
 
+    @Field({ nullable: true })
+    OwnerUserID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -714,6 +725,9 @@ export class UpdatemjBizAppsCollaborationSpaceChatInput {
 
     @Field(() => Boolean, { nullable: true })
     ArchivedOnSpaceClose?: boolean;
+
+    @Field({ nullable: true })
+    OwnerUserID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -74,6 +74,90 @@ const checks: NamedCheck[] = [
                 const systemUsers = await FindRows<{ ID: string }>(ctx, 'MJ: Users', "Email = 'not.set@nowhere.com'", ['ID']);
                 Assert(systemUsers.length === 1, 'System user found in MJ: Users');
                 Assert(room.UserID.toLowerCase() === systemUsers[0].ID.toLowerCase(), `Room conversation must be bound to system user, saw: ${room.UserID}`);
+
+                // Verify 1-to-1 Assistant conversation over the GraphQL wire
+                const samCtx = await getPersonaClientContext(ctx, 'sam');
+                const samClient = new CollaborationClient(samCtx.GraphQLProvider);
+                const beaCtx = await getPersonaClientContext(ctx, 'bea');
+                const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
+
+                const oneToOneRes = await adaClient.CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-rm1-1to1-wire-${Date.now()}`,
+                    Kind: 'Assistant',
+                });
+                Assert(oneToOneRes.Success === true && !!oneToOneRes.ConversationID && !!oneToOneRes.SpaceChatID, `Ada starts 1-to-1 Assistant conversation over wire: ${oneToOneRes.ErrorMessage ?? ''}`);
+                try {
+                    const assistantRows = await FindRows<{ ID: string; Kind: string; OwnerUserID: string | null }>(
+                        ctx,
+                        SPACE_CHAT_ENTITY,
+                        `ID = '${oneToOneRes.SpaceChatID}'`,
+                        ['ID', 'Kind', 'OwnerUserID'],
+                    );
+                    Assert(assistantRows.length === 1 && assistantRows[0].Kind === 'Assistant', 'Assistant SpaceChat row created over wire');
+                    Assert(assistantRows[0].OwnerUserID?.toLowerCase() === adaCtx.User.ID.toLowerCase(), 'Assistant SpaceChat OwnerUserID stamped as Ada over wire');
+
+                    const oneToOneRules = await adaClient.GetSpaceChatHostRules(DISCOVERY_SPACE_ID, oneToOneRes.ConversationID!);
+                    Assert(oneToOneRules.Success === true && oneToOneRules.AgentReplyMode === 'Always', `1-to-1 Assistant resolves AgentReplyMode=Always over wire, saw ${oneToOneRules.AgentReplyMode}`);
+
+                    const adaPost = await adaClient.PostSpaceMessage({
+                        SpaceID: DISCOVERY_SPACE_ID,
+                        ConversationID: oneToOneRes.ConversationID!,
+                        Text: 'Over-the-wire untagged assistant question.',
+                    });
+                    Assert(adaPost.Success === true && !!adaPost.DetailID, `Ada posts in Assistant conversation over wire: ${adaPost.ErrorMessage ?? ''}`);
+                    if (adaPost.DetailID) createdDetailIds.push(adaPost.DetailID);
+
+                    // Bea (Space Participant) gets 0 rows over the wire on MJ: Conversations, MJ: Conversation Details, and Space Chats
+                    const beaConvView = await View(beaCtx).RunView<{ ID: string }>({
+                        EntityName: CONVERSATION_ENTITY,
+                        ExtraFilter: `ID = '${oneToOneRes.ConversationID}'`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                    }, beaCtx.User);
+                    Assert(beaConvView.Success && (beaConvView.Results?.length ?? 0) === 0, "Bea over-the-wire RunView on Ada's Assistant MJ: Conversations returns 0 rows");
+
+                    const beaDetailView = await View(beaCtx).RunView<{ ID: string }>({
+                        EntityName: CONVERSATION_DETAIL_ENTITY,
+                        ExtraFilter: `ConversationID = '${oneToOneRes.ConversationID}'`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                    }, beaCtx.User);
+                    Assert(beaDetailView.Success && (beaDetailView.Results?.length ?? 0) === 0, "Bea over-the-wire RunView on Ada's Assistant MJ: Conversation Details returns 0 rows");
+
+                    const beaChatView = await View(beaCtx).RunView<{ ID: string }>({
+                        EntityName: SPACE_CHAT_ENTITY,
+                        ExtraFilter: `ID = '${oneToOneRes.SpaceChatID}'`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                    }, beaCtx.User);
+                    Assert(beaChatView.Success && (beaChatView.Results?.length ?? 0) === 0, "Bea over-the-wire RunView on Ada's Assistant Space Chats returns 0 rows");
+
+                    // Sam and Bea are refused PostSpaceMessage and direct MJConversationDetailEntity.Save() over the wire
+                    const samPost = await samClient.PostSpaceMessage({
+                        SpaceID: DISCOVERY_SPACE_ID,
+                        ConversationID: oneToOneRes.ConversationID!,
+                        Text: 'Sam attempting to post in Ada Assistant chat over wire',
+                    });
+                    Assert(!samPost.Success && /another member's assistant conversation|not the owner of this assistant conversation/i.test(samPost.ErrorMessage ?? ''), `Sam refused PostSpaceMessage on Ada's Assistant chat over wire: ${samPost.ErrorMessage ?? ''}`);
+
+                    for (const [label, pCtx] of [['Sam', samCtx], ['Bea', beaCtx]] as const) {
+                        const directDetail = await pCtx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, pCtx.User);
+                        directDetail.NewRecord();
+                        directDetail.ConversationID = oneToOneRes.ConversationID!;
+                        directDetail.UserID = pCtx.User.ID;
+                        directDetail.Role = 'User';
+                        directDetail.Message = `${label} attempting direct wire entity save into Ada Assistant chat`;
+                        directDetail.Status = 'Complete';
+                        const directSaved = await directDetail.Save();
+                        if (directSaved && directDetail.ID) {
+                            await deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, directDetail.ID, `unexpected ${label} direct wire detail`);
+                        }
+                        Assert(!directSaved || !directDetail.ID, `Non-owner ${label} direct MJConversationDetailEntity.Save() over wire into Ada's Assistant chat must be refused`);
+                    }
+                } finally {
+                    await cleanupConversation(ctx.Provider, ctx.User, oneToOneRes.ConversationID!, oneToOneRes.SpaceChatID!);
+                }
             } finally {
                 await cleanupConversation(ctx.Provider, ctx.User, convId, chatId);
             }

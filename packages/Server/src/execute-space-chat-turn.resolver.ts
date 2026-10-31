@@ -20,6 +20,9 @@ export class ExecuteSpaceChatTurnInput {
     @Field({ nullable: true })
     Route?: string;
 
+    @Field({ nullable: true })
+    RetrievalScope?: string;
+
     /** Answer once the reply row is written In-Progress; the run goes on, and its progress and text reach this session. */
     @Field({ nullable: true })
     Background?: boolean;
@@ -41,6 +44,11 @@ export class ExecuteSpaceChatTurnPayload {
 
     @Field(() => [String], { nullable: true })
     AllowedItemNames?: string[];
+
+    /** Candidate items in retrieval scope for the turn (sources-in-scope chips), as JSON. */
+    @Field({ nullable: true })
+    CitationsJSON?: string;
+
     /** What the turn gave the agent (B20): the audience, the action ids, the data grant names, the knowledge sources and what was withheld, as JSON. */
     @Field({ nullable: true })
     ToolsJSON?: string;
@@ -70,12 +78,17 @@ export class ExecuteSpaceChatTurnResolver extends ResolverBase {
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) return { Success: false, ErrorMessage: 'The chat turn needs a signed-in person.' };
         try {
+            const validScope =
+                input.RetrievalScope === 'ThisSpace' || input.RetrievalScope === 'Subtree' || input.RetrievalScope === 'Everything'
+                    ? input.RetrievalScope
+                    : undefined;
             const result = await executeSpaceChatTurn(provider, user, {
                 spaceId: input.SpaceID,
                 conversationId: input.ConversationID,
                 userMessageId: input.UserMessageID,
                 agentId: input.AgentID,
                 route: input.Route,
+                retrievalScope: validScope,
                 // A background turn answers at once, and the run's progress and text reach the browser as they happen
                 background: input.Background === true,
                 observer: input.Background === true ? this.observeTurn(pubSub, context.userPayload) : undefined,
@@ -89,6 +102,7 @@ export class ExecuteSpaceChatTurnResolver extends ResolverBase {
                 AgentRunID: result.agentRunId,
                 QuotedCount: result.quotedCount,
                 AllowedItemNames: result.allowedItemNames,
+                CitationsJSON: result.citations ? JSON.stringify(result.citations) : undefined,
                 ToolsJSON: result.tools ? JSON.stringify(result.tools) : undefined,
             };
         } catch (error) {

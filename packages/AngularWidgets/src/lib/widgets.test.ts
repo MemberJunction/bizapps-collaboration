@@ -1237,11 +1237,27 @@ describe('CollabNewConversationDialogComponent', () => {
     expect(comp.name).toBe('');
     expect(comp.kind).toBe('General');
     expect(comp.IsSubmitting).toBe(false);
-    expect(comp.AllowedKinds).toEqual(['General', 'Topic']);
+    expect(comp.AllowedKinds).toEqual(['General', 'Topic', 'Assistant']);
     expect(comp.canShowPrivate).toBe(false);
+    expect(comp.canShowAssistant).toBe(true);
 
     comp.name = '   Weekly Sync   ';
     expect(comp.trimmedName).toBe('Weekly Sync');
+  });
+
+  it('emits SubmitRequested for 1-to-1 Assistant conversation kind', () => {
+    const comp = new CollabNewConversationDialogComponent();
+    comp.name = '  audit-prep-assistant  ';
+    comp.kind = 'Assistant';
+    let submitted: NewConversationSubmitPayload | null = null;
+    comp.SubmitRequested.subscribe(payload => {
+      submitted = payload;
+    });
+    comp.onSubmit();
+    expect(submitted).toEqual({
+      name: 'audit-prep-assistant',
+      kind: 'Assistant',
+    });
   });
 
   it('allows Private kind only when explicitly permitted in AllowedKinds', () => {
@@ -2210,7 +2226,20 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
   });
 });
 
-
-
-
-
+describe('CollabChatScopeBarComponent sources-in-scope chips', async () => {
+  const { CollabChatScopeBarComponent } = await import('./space-chat.component.ts');
+  it('emits CitationClicked when a source-in-scope chip is clicked', () => {
+    const bar = new CollabChatScopeBarComponent();
+    const clicked: string[] = [];
+    bar.CitationClicked.subscribe((c) => clicked.push(c.SpaceItemID));
+    bar.onCitationClick({
+      SpaceItemID: 'item-1',
+      SpaceID: 'space-1',
+      EntityID: 'entity-1',
+      RecordID: 'rec-1',
+      Name: 'FY2026 Audit Pack.pdf',
+      Band: 'Shared',
+    });
+    expect(clicked).toEqual(['item-1']);
+  });
+});

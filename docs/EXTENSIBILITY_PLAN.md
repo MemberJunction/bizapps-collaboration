@@ -300,13 +300,13 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 | Sub-spaces, on the **parent's** type driver | `ValidateChildSpaceChange` | `OnChildSpaceChanged` |
 | Members | `ValidateMemberChange` (invite, role, band, remove) | `OnMemberChanged` |
 | Items | `ValidateItemChange` (add, update, promote, move, remove) | `OnItemChanged` |
-| Chats | `ValidateChatChange`, when a conversation is started. `ValidateChatMemberChange` waits for chats with their own people (A5), and `ValidateMessage` for A19 (the plan's D44). | `OnMessagePosted`, which waits for A19 too |
+| Chats | `ValidateChatChange`, when a conversation is started; `ValidateMessage`, on the server `PostSpaceMessage` path only (direct entity saves to `MJ: Conversation Details` wait for A19 / the plan's D44). `ValidateChatMemberChange` waits for chats with their own people (A5). | `OnMessagePosted`, on the server `PostSpaceMessage` path only (direct entity saves wait for A19 too) |
 | Agents | | `BuildAgentContext` adds type-specific instructions and data to an agent turn, such as the roster and the next meeting. It receives the chat and its members' bands, so it can leave out Team-only data when an outside person is in the chat. Not called yet: the agent turn doesn't use it. |
 | Tasks | | `OnTaskFiled` |
 | Anchored spaces | `ValidateAnchor` (who may open the record's space) | `ResolveAnchorParent` names the parent, for example the account's root space |
 
 **Where Collaboration calls them.**
-- `SpaceEntityServer`, `SpaceMemberEntityServer` and `SpaceItemEntityServer`; `CreateSpaceConversation` (`ValidateChatChange`); `CreateSpaceTask` (`OnTaskFiled`); and `EnsureSpaceForRecord` (`ValidateAnchor`, `ResolveAnchorParent`). The message hooks wait for A19 (D44), adding people waits for A5, and the agent turn doesn't call `BuildAgentContext` yet.
+- `SpaceEntityServer`, `SpaceMemberEntityServer` and `SpaceItemEntityServer`; `CreateSpaceConversation` (`ValidateChatChange`); `PostSpaceMessage` (`ValidateMessage` and `OnMessagePosted`, which gate the server `PostSpaceMessage` path only — direct entity saves to `MJ: Conversation Details` wait for A19 / D44); `CreateSpaceTask` (`OnTaskFiled`); and `EnsureSpaceForRecord` (`ValidateAnchor`, `ResolveAnchorParent`). Adding people to a chat waits for A5, and the agent turn doesn't call `BuildAgentContext` yet.
 - Validate hooks run in `ValidateAsync` and add `ValidationErrorInfo`, so `Save()` returns false with the driver's message.
 - React hooks run after the space's own save, as above, inside the caller's transaction when there is one. Running them inside the save's own transaction, through MJ's `RunInEntityTransaction`, is planned for stage 2; then a thrown error will roll the whole save back.
 - Email, HTTP and other outside work goes through `provider.RunAfterCommit`.
@@ -357,7 +357,7 @@ The first two apply to a new space, and to an existing one only in the direction
 
 Today the page calls `GetTabs`, `GetTabLabel`, `GetOverviewCards` and `GetDetailsForm`. `GetHeaderChips`, `GetHeaderActions`, `GetSettingsSections`, `GetNewSpaceSteps` and `GetVocabulary` are declared and not called yet. `GetOverviewCards` gets only the contributed cards, since the Overview's own sections aren't descriptors.
 
-**Events.** The UI driver has cancellable `Before…` hooks and one `After…` hook: `BeforeInvite`, `BeforeCreateChildSpace`, `BeforeStartChat`, `BeforeAddToChat`, `BeforePostMessage`, `BeforeCloseSpace` and `AfterSpaceOpened`. Their args carry `cancel` and `cancelReason`. Today the page raises only `BeforeInvite` and `BeforeStartChat`; the others are declared and not raised yet. The driver can cancel, and the server hook still enforces.
+**Events.** The UI driver has cancellable `Before…` hooks and one `After…` hook: `BeforeInvite`, `BeforeCreateChildSpace`, `BeforeStartChat`, `BeforeAddToChat`, `BeforePostMessage`, `BeforeCloseSpace` and `AfterSpaceOpened`. Their args carry `cancel` and `cancelReason`. Today the page raises `BeforeInvite`, `BeforeStartChat` and `BeforePostMessage` (when asking from the Overview); the others are declared and not raised yet. The driver can cancel, and `ValidateMessage` enforces on the server `PostSpaceMessage` path only.
 
 **Words.** Tab labels come from the type's and the space's `Labels` ([§ 4](#4-configuration-one-bag-per-type-and-per-space)), through the driver's `GetTabLabel`, which it can override. A space's noun, the type's `Vocabulary`, comes through `GetVocabulary`, which the page doesn't call yet.
 
@@ -440,8 +440,8 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 ### Data
 
 - **`SpaceChat`**, one per conversation in a space:
-  - `SpaceID`, `ConversationID` (an MJ Conversation), `Kind` (`General`, `Topic` or `Private`, which the page calls Internal Only), `Name`, `Subject` (text), `Status` (`Active` or `Archived`) and `ArchivedOnSpaceClose`;
-  - a chat about one record, such as a meeting, a document or a task, and a creator column, are planned;
+  - `SpaceID`, `ConversationID` (an MJ Conversation), `Kind` (`General`, `Topic`, `Private`, which the page calls Internal Only, or `Assistant`, a 1-to-1 private conversation with the space's assistant), `OwnerUserID` (populated for `Kind = 'Assistant'`), `Name`, `Subject` (text), `Status` (`Active` or `Archived`) and `ArchivedOnSpaceClose`;
+  - a chat about one record, such as a meeting, a document or a task, is planned;
   - it replaced the binding through `Conversation.LinkedRecordID`, which allowed only one conversation per space.
 - **A chat's people are MJ core's conversation participants,** `MJ: Conversation Participants` (the plan's A5 and D10). MJ has no such table today, in 6.1.3 or on `next` as of 2026-09-29; the nearest are the realtime bridges' `MJ: AI Agent Session Bridge Participants`, a conversation's owner (`Conversation.UserID`) and Resource Permission shares.
   - Each participant row carries `AddedByUserID`, `AddedAt`, `RemovedAt` and `HistoryFrom`.
@@ -455,8 +455,8 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 
 ### Who sees what
 
-- **A space's conversations** are started on request, and none is created with the space (the plan's D25). Their participants are derived from the space's roster: everyone who reaches the space for General and Topic, and only those who see Team for Internal Only. Collaboration keeps them in step as seats change (the plan's B3). Each sees all of it, from its first message, like a Teams channel, except the AI messages sealed for them. Until A5, the roster applies through Collaboration's row-level security on the conversations and their messages, Collaboration keeps each contributing seat's Edit grant in step with the seats, and sealing waits for A4 and A7.
-- **A chat with its own people** is B3's, and waits for A5. Only its participants will see it.
+- **A space's conversations** are started on request, and none is created with the space (the plan's D25). Their participants are derived from the space's roster for room-wide channels: everyone who reaches the space for General and Topic, and only those who see Team for Internal Only. A 1-to-1 Assistant chat (`Kind = 'Assistant'`) belongs solely to its `OwnerUserID`, enforced in row-level security, `Resource Permissions` grant synchronization, and the server operations. Collaboration keeps grants in step as seats change (the plan's B3). Each sees all of it, from its first message, like a Teams channel, except the AI messages sealed for them. Until A5, multi-person subset chats wait for MJ core's `MJ: Conversation Participants`, while room-wide channels and 1-to-1 Assistant chats apply through Collaboration's row-level security and Edit grant sync, and sealing waits for A4 and A7.
+- **A multi-person chat with its own subset of people** is B3's, and waits for A5. Only its participants will see it.
 - **Nothing else in a space is time-limited.** A seat opens everything its band allows, from the space's first day: the library, the tasks, the space's conversations and every chat the person is in.
 - **Sub-spaces keep their own membership** when `InheritsMembership` is off, as today. A compensation sub-committee under a board, for example, isn't open to the whole board. A type's server driver can set the switch for the sub-spaces it allows ([§ 5](#5-server-drivers)).
 - **Reads are enforced in SQL:** row-level security on `SpaceChat`, as Collaboration's metadata, and core's row-level security on Conversations and Conversation Details, keyed on participants and their `HistoryFrom` (the plan's A5). Core applies it to everyone, staff included, so the chat area needs no cutoff of its own. That's decision 14. Until A5, reads by the Space Participant role go through Collaboration's own filters on Conversations and Conversation Details, keyed on the space's roster and the conversation's kind.
@@ -478,12 +478,13 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 
 ### When an agent answers
 
-- **By default** (`Chats.AgentReplyMode` = `MentionOrOneToOne`), an agent answers when it's tagged, or on every message in a chat that holds exactly one person and one agent. In any other chat, a space's conversations included, it answers only when tagged. Until chats with their own people exist, `MentionOrOneToOne` works as `MentionOnly` (the plan's D25).
+- **By default** (`Chats.AgentReplyMode` = `MentionOrOneToOne`), an agent answers when it's tagged, when a person replies directly to one of its messages (`ParentID` pointing to an `AI` message within the caller's history floor), or on every message in a chat that holds exactly one person and one agent. In any other chat, a space's conversations included, it answers only when tagged or replied to in a thread. Replying to another person's message without mentioning an agent, or tagging a person (`@{"type":"user",...}`) without tagging an agent, never starts an agent turn—even under `Always`. Until chats with their own people exist, `MentionOrOneToOne` works as `MentionOnly` (the plan's D25).
 - **A type or a space can change it** to `MentionOnly` or `Always`.
 - **The reply goes to the chat it was asked in.** A private chat's reply is seen only by that person; a group chat's by everyone in it.
 - **In the chat area:** MJ's `mj-conversation-chat-area` has `AgentReplyMode`, `Always` (its default) or `MentionOnly`, from MemberJunction/MJ#4788 ([§ 9](#9-mj-changes)). Collaboration works out its own three modes and passes one of those two:
   - for a chat with one person and one agent under `MentionOrOneToOne`, `Always`, with that agent as the default and the only allowed agent;
   - for any other chat, `MentionOnly`, unless the space's mode is `Always`.
+  - `EnableDecisionRouting` defaults to `false` on `mj-collab-space-chat` until a decision model and labelled evaluation corpus are configured; the server never trusts a client `route: 'DecisionRouted'` string to bypass `MentionOnly`.
 
 ### Every agent turn goes through Collaboration's server
 
@@ -498,7 +499,7 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 ### What an agent sees
 
 - **Messages:** only the ones every current person in the chat can see: those after the latest `HistoryFrom` among them, and not sealed for any of them. So a summary can't show history to someone added with none.
-  - Collaboration's server passes that floor when it runs the agent, and MJ's server loads the conversation from it ([§ 9](#9-mj-changes), `AgentHistoryFrom`).
+  - Collaboration's server passes that floor when it runs the agent, and MJ's server loads the conversation from it ([§ 9](#9-mj-changes), `AgentHistoryFrom`), assembling the context window with `speakerAttribution: 'always'` and `speakerLabels` so each message is prefixed with `[Speaker]:` or `[Speaker -> replying to Target]:`.
   - Under a floor, MJ skips its summary of earlier messages, since the summary covers messages before the floor. The agent then sees the last 20 messages after the floor.
   - Until A5, the floor is the asker's own: the start of their seat, unless `Chats.HistoryOnAdd` is `All`.
 - **Search: the audience of the answer decides it** (the plan's D2). This extends the subtree bound this plan first set:
@@ -547,7 +548,7 @@ Collaboration keeps MJ's `mj-conversation-chat-area` and never forks it (decisio
 
 | Addition | What it does | Collaboration uses it for |
 |---|---|---|
-| `AgentReplyMode`: `Always` (default) or `MentionOnly` | In `MentionOnly`, a message that tags no agent starts no turn: no placeholder row and no events | Tagged-only replies in a space's conversations |
+| `AgentReplyMode`: `Always` (default) or `MentionOnly` | In `MentionOnly`, a message that tags no agent starts no turn unless routed as a follow-up to an agent already participating in the conversation | Tagged, thread-reply, and decision-routed follow-up replies in a space's conversations |
 | `AllowedAgentIDs` | Narrows the `@` list, every route and the default agent's delegation to these agents | The space's allowed list |
 | `MentionPeople` | The people this composer's `@` list offers. By default it offers only the current user. | The chat's members |
 | `AgentHistoryFrom` | The first moment an agent turn may read. MJ's server loads the agent's context from there and skips its summary of earlier messages. | The chat's floor ([§ 8](#8-chats-history-and-agents)) |

@@ -91,6 +91,179 @@ export interface ChatParticipantListItem {
   isOutside: boolean;
 }
 
+/** Candidate item in retrieval scope for the turn (sources-in-scope chip). */
+export interface SpaceChatCitationModel {
+  SpaceItemID: string;
+  SpaceID: string;
+  EntityID: string;
+  RecordID: string;
+  Name: string;
+  Band: SpaceBand;
+}
+
+@Component({
+  selector: 'mjc-chat-scope-bar',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [CollabBandChipComponent],
+  template: `
+    <div class="scope-bar" role="group" aria-label="Retrieval scope" data-testid="space-chat-scope-bar">
+      <span class="scope-label"><i class="fa-solid fa-compass" aria-hidden="true"></i> Scope:</span>
+      <button
+        type="button"
+        class="scope-pill"
+        data-testid="scope-pill-this-space"
+        [class.active]="RetrievalScope === 'ThisSpace'"
+        [attr.aria-pressed]="RetrievalScope === 'ThisSpace'"
+        (click)="onScopeChange('ThisSpace')">
+        This Space
+      </button>
+      <button
+        type="button"
+        class="scope-pill"
+        data-testid="scope-pill-subtree"
+        [class.active]="RetrievalScope === 'Subtree'"
+        [attr.aria-pressed]="RetrievalScope === 'Subtree'"
+        (click)="onScopeChange('Subtree')">
+        This Space &amp; Sub-spaces
+      </button>
+      @if (AllowEverythingScope) {
+        <button
+          type="button"
+          class="scope-pill"
+          data-testid="scope-pill-everything"
+          [class.active]="RetrievalScope === 'Everything'"
+          [attr.aria-pressed]="RetrievalScope === 'Everything'"
+          (click)="onScopeChange('Everything')">
+          All My Spaces
+        </button>
+      }
+    </div>
+    @if (Citations.length > 0) {
+      <div class="citations-bar" role="region" aria-label="Sources in scope for the assistant's reply" data-testid="sources-in-scope-bar">
+        <span class="citations-label">
+          <i class="fa-solid fa-book-open" aria-hidden="true"></i>
+          <span>Sources in scope ({{ Citations.length }}):</span>
+        </span>
+        @for (citation of Citations; track citation.SpaceItemID) {
+          <button
+            type="button"
+            class="citation-chip"
+            data-testid="source-in-scope-chip"
+            (click)="onCitationClick(citation)"
+            [title]="citation.Name">
+            <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+            <span class="citation-name">{{ citation.Name }}</span>
+            <mjc-band-chip [Band]="citation.Band" />
+          </button>
+        }
+      </div>
+    }
+  `,
+  styles: [
+    COLLAB_TOKENS_CSS,
+    `
+      :host {
+        display: block;
+      }
+      .scope-bar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 6px 16px;
+        background: var(--mj-bg-surface-sunken, #f8fafc);
+        border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      }
+      .scope-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--mj-text-secondary, #64748b);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-right: 2px;
+      }
+      .scope-pill {
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        background: var(--mj-bg-surface, #ffffff);
+        color: var(--mj-text-secondary, #475569);
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .scope-pill:hover {
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-text-primary, #0f172a);
+      }
+      .scope-pill.active {
+        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary, #0076b6);
+      }
+      .citations-bar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 6px 16px;
+        background: var(--mj-bg-surface-sunken, #f1f5f9);
+        border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+        font-size: 12px;
+      }
+      .citations-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        color: var(--mj-text-secondary, #475569);
+      }
+      .citation-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: var(--mj-bg-surface, #ffffff);
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        color: var(--mj-text-primary, #0f172a);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color 0.15s ease;
+      }
+      .citation-chip:hover {
+        border-color: var(--mj-brand-primary, #0076b6);
+      }
+      .citation-name {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    `,
+  ],
+})
+export class CollabChatScopeBarComponent {
+  @Input() public RetrievalScope: 'ThisSpace' | 'Subtree' | 'Everything' = 'Subtree';
+  @Input() public AllowEverythingScope = false;
+  @Input() public Citations: readonly SpaceChatCitationModel[] = [];
+  @Output() public RetrievalScopeChanged = new EventEmitter<'ThisSpace' | 'Subtree' | 'Everything'>();
+  @Output() public CitationClicked = new EventEmitter<SpaceChatCitationModel>();
+
+  public onScopeChange(scope: 'ThisSpace' | 'Subtree' | 'Everything'): void {
+    this.RetrievalScope = scope;
+    this.RetrievalScopeChanged.emit(scope);
+  }
+
+  public onCitationClick(citation: SpaceChatCitationModel): void {
+    this.CitationClicked.emit(citation);
+  }
+}
+
 /**
  * The conversation of a space: MemberJunction's chat area, held to the space's audience and rules,
  * with collapsed threads in `messageExtra` and the live Assistant indicator in `agentPresence`.
@@ -102,6 +275,7 @@ export interface ChatParticipantListItem {
   imports: [
     CollabAvatarComponent,
     CollabBandChipComponent,
+    CollabChatScopeBarComponent,
     ConversationsModule,
     MJButtonDirective,
     MJEmptyStateComponent,
@@ -323,6 +497,13 @@ export interface ChatParticipantListItem {
                 </div>
               </div>
             </div>
+
+            <mjc-chat-scope-bar
+              [RetrievalScope]="RetrievalScope"
+              [AllowEverythingScope]="AllowEverythingScope"
+              [Citations]="Citations"
+              (RetrievalScopeChanged)="onScopeChange($event)"
+              (CitationClicked)="onCitationClick($event)" />
           </ng-template>
 
           <ng-template mjChatSlot="messageExtra" let-message="message">
@@ -1323,6 +1504,48 @@ export interface ChatParticipantListItem {
         gap: var(--mj-space-2);
       }
 
+      .scope-bar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 6px 16px;
+        background: var(--mj-bg-surface-sunken, #f8fafc);
+        border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      }
+
+      .scope-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--mj-text-secondary, #64748b);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-right: 2px;
+      }
+
+      .scope-pill {
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        background: var(--mj-bg-surface, #ffffff);
+        color: var(--mj-text-secondary, #475569);
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .scope-pill:hover {
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-text-primary, #0f172a);
+      }
+      .scope-pill.active {
+        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary, #0076b6);
+      }
+
+
       /* A conversation that can't be posted in says why from a lock, not a banner that takes a row: on hover, and, since a
          keyboard has no hover and a touch screen no pointer, on focus and on tap, from a button that shows the reason beside it */
       .read-only-lock-wrap {
@@ -1553,7 +1776,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   @Input() public AllowAttachments = false;
   @Input() public AgentReplyMode: AgentReplyMode = 'MentionOnly';
   @Input() public AllowedAgentIDs: readonly string[] = [];
-  @Input() public EnableDecisionRouting = true;
+  @Input() public EnableDecisionRouting = false;
   @Input() public CanStartConversation = false;
   @Input() public HasConversations = false;
   @Input() public MentionPeople: readonly MentionPerson[] | null = null;
@@ -1563,10 +1786,15 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   @Input() public ComposerDraft: string | null = null;
   @Input() public PendingMessage: string | null = null;
   @Input() public PendingMessageConversationId: string | null = null;
+  @Input() public RetrievalScope: 'ThisSpace' | 'Subtree' | 'Everything' = 'Subtree';
+  @Input() public AllowEverythingScope = false;
+  @Input() public Citations: readonly SpaceChatCitationModel[] = [];
 
   @Output() public NewConversationRequested = new EventEmitter<void>();
   @Output() public ComposerDraftConsumed = new EventEmitter<void>();
   @Output() public PendingMessageConsumed = new EventEmitter<void>();
+  @Output() public RetrievalScopeChanged = new EventEmitter<'ThisSpace' | 'Subtree' | 'Everything'>();
+  @Output() public CitationClicked = new EventEmitter<SpaceChatCitationModel>();
 
   public onNewConversation(): void {
     this.NewConversationRequested.emit();
@@ -1576,6 +1804,15 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     if (this.LinkedWorkstreamItem) {
       this.LinkedItemOpenRequested.emit(this.LinkedWorkstreamItem);
     }
+  }
+
+  public onScopeChange(scope: 'ThisSpace' | 'Subtree' | 'Everything'): void {
+    this.RetrievalScope = scope;
+    this.RetrievalScopeChanged.emit(scope);
+  }
+
+  public onCitationClick(citation: SpaceChatCitationModel): void {
+    this.CitationClicked.emit(citation);
   }
 
   public onComposerDraftConsumed(): void {

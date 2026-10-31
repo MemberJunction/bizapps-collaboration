@@ -280,4 +280,32 @@ describe('ExampleBoardServerDriver', () => {
         expect(result.contextData?.['term']).toBe('FY2026');
         expect(result.contextData?.['quorumPercent']).toBe(50);
     });
+
+    it('ValidateMessage enforces BlockedPhrases configured on the board space type on the server PostSpaceMessage path', () => {
+        const typeWithBlocked = createMockSpaceType('example-board', { BlockedPhrases: ['off the record', 'unofficial'] });
+        const allowed = driver.ValidateMessage({
+            chatId: 'chat-1',
+            messageText: 'Motion to approve the Q3 minutes.',
+            actingUser: createMockUser(),
+            provider: {} as unknown as IMetadataProvider,
+            space: createMockSpace(),
+            spaceType: typeWithBlocked,
+            effectiveRules: createMockRules(),
+            configuration: createMockConfiguration(),
+        });
+        expect(allowed.ok).toBe(true);
+
+        const refused = driver.ValidateMessage({
+            chatId: 'chat-1',
+            messageText: 'Let us keep this OFF THE RECORD for now.',
+            actingUser: createMockUser(),
+            provider: {} as unknown as IMetadataProvider,
+            space: createMockSpace(),
+            spaceType: typeWithBlocked,
+            effectiveRules: createMockRules(),
+            configuration: createMockConfiguration(),
+        });
+        expect(refused.ok).toBe(false);
+        expect(refused.message).toContain('off the record');
+    });
 });

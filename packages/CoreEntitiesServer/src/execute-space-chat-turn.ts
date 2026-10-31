@@ -7,7 +7,6 @@ import {
 } from '@memberjunction/core';
 import {
     ConversationEngine,
-    ConversationWindowFields,
     MJConversationDetailEntity,
     MJAIAgentRunEntity,
 } from '@memberjunction/core-entities';
@@ -23,21 +22,13 @@ import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
+import { resolveTurnAgentViaDecision, type SpaceChatDecisionRunner } from './space-chat-decision-routing.js';
 import { parseUuid } from './uuid.js';
 import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
-const SPEAKER_WINDOW_FIELDS = ['UserID', 'User', 'AgentID', 'Agent', 'ParentID'] as const;
-if (Array.isArray(ConversationWindowFields) && !Object.isFrozen(ConversationWindowFields)) {
-    const mutableFields = ConversationWindowFields as string[];
-    for (const field of SPEAKER_WINDOW_FIELDS) {
-        if (!mutableFields.includes(field)) {
-            mutableFields.push(field);
-        }
-    }
-}
 
 /** How a turn ended, told to whoever is watching it once its reply row is final. */
 export interface TurnOutcome {
@@ -67,13 +58,27 @@ export interface ExecuteSpaceChatTurnInput {
     conversationId: string;
     userMessageId: string;
     agentId?: string;
+    /** The MJ AgentTurnRoute the client resolved; 'Redirect' marks the author's explicit "Ask <Agent>" on a no-agent message. */
     route?: string;
+    retrievalScope?: 'ThisSpace' | 'Subtree' | 'Everything';
     /**
      * Return as soon as the reply row is written In-Progress, and run the agent after that: the caller shows the row, and the
      * observer's callbacks carry the run's progress to it. Without it the call returns when the reply is final.
      */
     background?: boolean;
     observer?: TurnObserver;
+    /** Optional unit-test seam for server-side decision routing; production uses AgentDecisionService (Default Decision). */
+    decisionRunner?: SpaceChatDecisionRunner;
+}
+
+/** Candidate item in retrieval scope for the turn (sources-in-scope chip). */
+export interface SpaceAgentCitation {
+    SpaceItemID: string;
+    SpaceID: string;
+    EntityID: string;
+    RecordID: string;
+    Name: string;
+    Band: 'Shared' | 'Team';
 }
 
 /** What the turn gave the agent (B20), for the harness and the log: never the values, only the names and ids. */
@@ -91,7 +96,15 @@ export interface TurnToolsGiven {
 }
 
 export type ExecuteSpaceChatTurnResult =
-    | { ok: true; replyDetailIds: string[]; agentRunId?: string; quotedCount?: number; allowedItemNames?: string[]; tools?: TurnToolsGiven }
+    | {
+          ok: true;
+          replyDetailIds: string[];
+          agentRunId?: string;
+          quotedCount?: number;
+          allowedItemNames?: string[];
+          citations?: SpaceAgentCitation[];
+          tools?: TurnToolsGiven;
+      }
     | { ok: false; message: string };
 
 /** What everyone in the space reads when a turn fails; the cause goes to the log, not to the conversation. */
@@ -202,10 +215,10 @@ async function runClaimedTurn(
     }
 
     // 2. Verify conversation belongs to this space and is active
-    const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string; Status: string }>({
+    const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string; Status: string; OwnerUserID?: string | null }>({
         EntityName: SPACE_CHATS,
         ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${conversationId}' AND Status = 'Active'`,
-        Fields: ['ID', 'ConversationID', 'Kind', 'Status'],
+        Fields: ['ID', 'ConversationID', 'Kind', 'Status', 'OwnerUserID'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
@@ -217,6 +230,10 @@ async function runClaimedTurn(
     const foundChat = chatCheck.Results[0];
     if (foundChat.Kind === 'Private' && !reach.role.canSeeTeamBand) {
         return { ok: false, message: 'Caller cannot initiate an agent turn in an internal conversation without Team visibility.' };
+    }
+    const isOneToOneAssistant = foundChat.Kind === 'Assistant';
+    if (isOneToOneAssistant && parseUuid(foundChat.OwnerUserID) !== callerId) {
+        return { ok: false, message: 'Caller cannot initiate an agent turn in another member\'s assistant conversation.' };
     }
 
     // 'Redirect' is the MJ AgentTurnRoute used when the message's author clicks "Ask <Agent>":
@@ -279,7 +296,7 @@ async function runClaimedTurn(
     }
     let chatSettings: Awaited<ReturnType<typeof resolveSpaceChatSettings>>;
     try {
-        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system, loaded);
+        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system, loaded, { isOneToOne: isOneToOneAssistant });
     } catch (settingsError) {
         return { ok: false, message: settingsError instanceof Error ? settingsError.message : 'Space settings refused.' };
     }
@@ -327,7 +344,7 @@ async function runClaimedTurn(
         }
     }
 
-    // 7. Mention, thread-reply, and active-agent continuity rules (Item 6)
+    // 7. Mention and thread-reply rules (Item 6)
     const parser = new MentionParser();
     const parseResult = parser.parseMentions(messageText, availableAgents);
     const taggedAgentId = parseResult.agentMention?.id
@@ -359,13 +376,6 @@ async function runClaimedTurn(
                 return { ok: false, message: 'No assistant is available in this space right now.' };
             }
             targetAgentId = resolvedDefault;
-        } else if (input.route === 'DecisionRouted' && parseUuid(input.agentId)) {
-            const requestedAgentId = parseUuid(input.agentId)!;
-            const hasPriorReply = await hasAgentRepliedInConversation(view, system, conversationId, requestedAgentId, conversationHistoryFrom);
-            if (!hasPriorReply) {
-                return { ok: false, message: 'The message does not mention an agent.' };
-            }
-            targetAgentId = requestedAgentId;
         } else {
             return { ok: false, message: 'The message does not mention an agent.' };
         }
@@ -374,16 +384,23 @@ async function runClaimedTurn(
             return { ok: false, message: 'No assistant is available in this space right now.' };
         }
         targetAgentId = resolvedDefault;
-    } else if (input.route === 'DecisionRouted' && parseUuid(input.agentId)) {
-        const requestedAgentId = parseUuid(input.agentId)!;
-        const hasPriorReply = await hasAgentRepliedInConversation(view, system, conversationId, requestedAgentId, conversationHistoryFrom);
-        if (!hasPriorReply) {
-            return { ok: false, message: 'The message does not mention an agent.' };
-        }
-        targetAgentId = requestedAgentId;
     } else {
-        // Under MentionOnly without a tagged agent, thread reply to AI, or decision-routed active agent: refuse!
-        return { ok: false, message: 'The message does not mention an agent.' };
+        // Under MentionOnly without a tagged agent or thread reply to AI: evaluate via server-side decision routing
+        const decisionResolved = await resolveTurnAgentViaDecision({
+            view,
+            system,
+            spaceId,
+            conversationId,
+            userMessageId,
+            messageText,
+            allowedAgentIds: allowed.allowedAgentIds,
+            conversationHistoryFrom,
+            decisionRunner: input.decisionRunner,
+        });
+        if (!decisionResolved.ok) {
+            return { ok: false, message: decisionResolved.message };
+        }
+        targetAgentId = decisionResolved.agentId;
     }
 
     // Treat client's agentId strictly as a check (Item 6)
@@ -402,7 +419,9 @@ async function runClaimedTurn(
     }
 
     // 7b. The turn's tools (B20): the grants in force for the conversation's audience, and the agent grant's run settings
-    const audience = audienceOfConversationKind(foundChat.Kind);
+    const audience = isOneToOneAssistant
+        ? (reach.role.canSeeTeamBand ? 'Team' : 'Shared')
+        : audienceOfConversationKind(foundChat.Kind);
     let turnTools: Awaited<ReturnType<typeof resolveTurnTools>>;
     try {
         turnTools = await resolveTurnTools(provider, system, loaded.configuration, audience, targetAgentId);
@@ -435,11 +454,15 @@ async function runClaimedTurn(
         }, system);
         if (!seats.Success) throw new Error(seats.ErrorMessage ?? 'the space\'s seats could not be read');
         const viewerBands: Record<string, 'Team' | 'Shared'> = {};
-        for (const seat of seats.Results ?? []) {
-            const seatUserId = parseUuid(seat.UserID) ?? seat.UserID;
-            viewerBands[seatUserId.toUpperCase()] = seat.Band === 'Team' ? 'Team' : 'Shared';
-            if (seat.User?.trim()) {
-                speakerLabels.set(seatUserId, seat.User.trim());
+        if (isOneToOneAssistant) {
+            viewerBands[callerId.toUpperCase()] = reach.role.canSeeTeamBand ? 'Team' : 'Shared';
+        } else {
+            for (const seat of seats.Results ?? []) {
+                const seatUserId = parseUuid(seat.UserID) ?? seat.UserID;
+                viewerBands[seatUserId.toUpperCase()] = seat.Band === 'Team' ? 'Team' : 'Shared';
+                if (seat.User?.trim()) {
+                    speakerLabels.set(seatUserId, seat.User.trim());
+                }
             }
         }
         const built = await driver.call.driver.BuildAgentContext({ ...driver.call.base, chatId: foundChat.ID, viewerBands });
@@ -449,10 +472,27 @@ async function runClaimedTurn(
     }
 
     // 9. Bound agent to conversation audience (Item 23 / B2.3: what the room can reach)
+    const requestedScope = input.retrievalScope;
+    const effectiveNarrowing =
+        requestedScope === 'ThisSpace'
+            ? 'ThisSpace'
+            : requestedScope === 'Everything' && isOneToOneAssistant
+                ? 'Everything'
+                : 'Subtree';
     const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId, {
         conversationKind: foundChat.Kind,
+        participantUserIds: isOneToOneAssistant ? [callerId] : undefined,
+        narrowing: effectiveNarrowing,
     });
     const audienceQuoted = retrieval.quotedItems;
+    const citations: SpaceAgentCitation[] = audienceQuoted.map((item) => ({
+        SpaceItemID: item.ID,
+        SpaceID: item.SpaceID,
+        EntityID: item.EntityID,
+        RecordID: item.RecordID,
+        Name: item.Name,
+        Band: item.Band,
+    }));
     const participantUserIds = retrieval.audienceUserIds.length > 0 ? retrieval.audienceUserIds : [callerId];
 
     // 10. Write reply as system user (Item 5 / A19 Part 2)
@@ -503,26 +543,13 @@ async function runClaimedTurn(
                 provider,
                 conversationHistoryFrom
             );
-            const windowOptions: NonNullable<Parameters<typeof ConversationEngine.AssembleContextWindow>[1]> & {
-                speakerAttribution?: 'off' | 'auto' | 'always';
-                speakerLabels?: ReadonlyMap<string, string>;
-            } = {
+            const assembledMessages = ConversationEngine.AssembleContextWindow(windowRows, {
                 excludeDetailIds: [assistantDetail.ID],
                 historyFrom: conversationHistoryFrom ?? null,
                 maxTailMessages: 20,
                 speakerAttribution: 'always',
                 speakerLabels,
-            };
-            const assembledWindow: ReadonlyArray<
-                ReturnType<typeof ConversationEngine.AssembleContextWindow>[number] & {
-                    metadata?: { rawContent?: string };
-                }
-            > = ConversationEngine.AssembleContextWindow(windowRows, windowOptions);
-            const assembledMessages = ensureSpeakerAttributedMessages(
-                assembledWindow,
-                windowRows as ReadonlyArray<WindowRowWithSpeaker>,
-                speakerLabels,
-            );
+            });
 
             const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
             if (agentEntity && (await agentEntity.Load(targetAgentId))) {
@@ -645,6 +672,7 @@ async function runClaimedTurn(
             agentRunId,
             quotedCount: audienceQuoted.length,
             allowedItemNames: audienceQuoted.map((item) => item.Name),
+            citations,
             tools: toolsGiven,
         };
     };
@@ -679,7 +707,7 @@ async function runClaimedTurn(
         // The reply row is written and the call returns; the agent runs on, and its end is told to the observer
         handoff.runsOn = true;
         void settleTurn().finally(handoff.release);
-        return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name), tools: toolsGiven };
+        return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name), citations, tools: toolsGiven };
     }
     return settleTurn();
 }
@@ -717,110 +745,3 @@ async function resolveParentReplyAgent(
     return { ok: false, message: 'The message does not mention an agent.' };
 }
 
-async function hasAgentRepliedInConversation(
-    view: RunView,
-    system: UserInfo,
-    conversationId: string,
-    agentId: string,
-    historyFrom: Date | undefined,
-): Promise<boolean> {
-    const res = await view.RunView<{ ID: string; Role?: string | null; AgentID?: string | null; __mj_CreatedAt?: string | Date | null }>({
-        EntityName: DETAILS,
-        ExtraFilter: `ConversationID = '${conversationId}' AND Role = 'AI' AND AgentID = '${agentId}'`,
-        Fields: ['ID', 'Role', 'AgentID', '__mj_CreatedAt'],
-        MaxRows: 50,
-        ResultType: 'simple',
-    }, system);
-    if (!res.Success || !res.Results?.length) {
-        return false;
-    }
-    return res.Results.some((row) => {
-        if (row.AgentID && (parseUuid(row.AgentID) ?? '').toLowerCase() !== agentId.toLowerCase()) {
-            return false;
-        }
-        if (historyFrom && row.__mj_CreatedAt) {
-            return new Date(row.__mj_CreatedAt).getTime() >= historyFrom.getTime();
-        }
-        return true;
-    });
-}
-
-type WindowRowWithSpeaker = ReturnType<typeof ConversationEngine.LoadWindowRowsFresh> extends Promise<Array<infer R>>
-    ? R & {
-          UserID?: string | null;
-          User?: string | null;
-          AgentID?: string | null;
-          Agent?: string | null;
-          ParentID?: string | null;
-      }
-    : never;
-
-function resolveRowSpeakerLabel(
-    row: WindowRowWithSpeaker | undefined,
-    speakerLabels: ReadonlyMap<string, string>,
-): string | null {
-    if (!row) return null;
-    const role = (row.Role ?? '').trim().toLowerCase();
-    const isAssistant = role === 'ai' || role === 'assistant' || role === 'system';
-    const rawId = isAssistant ? row.AgentID : row.UserID;
-    const normalizedId = rawId ? (parseUuid(rawId) ?? rawId) : null;
-    if (normalizedId) {
-        for (const [k, v] of speakerLabels.entries()) {
-            if (k.toLowerCase() === normalizedId.toLowerCase() && v.trim()) {
-                return v.trim();
-            }
-        }
-    }
-    const nameField = isAssistant ? row.Agent : row.User;
-    if (nameField?.trim()) {
-        return nameField.trim();
-    }
-    return isAssistant ? 'Assistant' : 'User';
-}
-
-function ensureSpeakerAttributedMessages(
-    assembledWindow: ReadonlyArray<
-        ReturnType<typeof ConversationEngine.AssembleContextWindow>[number] & {
-            metadata?: { rawContent?: string };
-        }
-    >,
-    windowRows: ReadonlyArray<WindowRowWithSpeaker>,
-    speakerLabels: ReadonlyMap<string, string>,
-): ExecuteAgentParams['conversationMessages'] {
-    const rowsById = new Map<string, WindowRowWithSpeaker>();
-    for (const r of windowRows) {
-        rowsById.set((parseUuid(r.ID) ?? r.ID).toLowerCase(), r);
-    }
-    return assembledWindow.map((m) => {
-        const textContent = typeof m.content === 'string' ? m.content : '';
-        if (m.metadata?.rawContent !== undefined || m.metadata?.isConversationSummary === true || typeof m.content !== 'string') {
-            return {
-                role: m.role,
-                content: m.content,
-                ...(m.metadata ? { metadata: m.metadata } : {}),
-            };
-        }
-        const detailId = m.metadata?.conversationDetailId;
-        const row = detailId ? rowsById.get((parseUuid(detailId) ?? detailId).toLowerCase()) : undefined;
-        const speaker = resolveRowSpeakerLabel(row, speakerLabels);
-        if (!speaker) {
-            return {
-                role: m.role,
-                content: m.content,
-                ...(m.metadata ? { metadata: m.metadata } : {}),
-            };
-        }
-        const parentKey = row?.ParentID ? (parseUuid(row.ParentID) ?? row.ParentID).toLowerCase() : null;
-        const parentRow = parentKey ? rowsById.get(parentKey) : undefined;
-        const replyTo = resolveRowSpeakerLabel(parentRow, speakerLabels);
-        const prefix = replyTo ? `[${speaker} -> replying to ${replyTo}]: ` : `[${speaker}]: `;
-        return {
-            role: m.role,
-            content: `${prefix}${textContent}`,
-            metadata: {
-                ...(m.metadata ?? {}),
-                rawContent: textContent,
-            },
-        };
-    });
-}

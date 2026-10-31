@@ -539,7 +539,6 @@ describe('executeSpaceChatTurn', () => {
         const result = await executeSpaceChatTurn(provider, callerUser, {
             ...defaultInput,
             agentId: ALLOWED_AGENT_ID,
-            route: 'DecisionRouted',
         });
         assert.equal(result.ok, false);
         if (!result.ok) {
@@ -566,7 +565,6 @@ describe('executeSpaceChatTurn', () => {
         const result = await executeSpaceChatTurn(provider, callerUser, {
             ...defaultInput,
             agentId: ALLOWED_AGENT_ID,
-            route: 'ThreadReply',
         });
         assert.equal(result.ok, true);
     });
@@ -621,25 +619,9 @@ describe('executeSpaceChatTurn', () => {
         }
     });
 
-    it('refuses DecisionRouted under MentionOnly when no agent has replied in the conversation yet (cold start)', async () => {
+    it('refuses an untagged follow-up with agentId under MentionOnly when the server decision selects no_agent (human-to-human remark)', async () => {
         const provider = createMockProvider({
-            messageText: 'Make the second paragraph shorter',
-            conversationDetails: [],
-        });
-        const result = await executeSpaceChatTurn(provider, callerUser, {
-            ...defaultInput,
-            agentId: ALLOWED_AGENT_ID,
-            route: 'DecisionRouted',
-        });
-        assert.equal(result.ok, false);
-        if (!result.ok) {
-            assert.match(result.message, /does not mention an agent/i);
-        }
-    });
-
-    it('succeeds for a DecisionRouted untagged follow-up under MentionOnly once the agent has replied in the conversation, and attributes speakers in conversationMessages', async () => {
-        const provider = createMockProvider({
-            messageText: 'Make the second paragraph shorter',
+            messageText: 'Hey Bea, are you free after standup?',
             conversationDetails: [
                 {
                     ID: 'detail-1',
@@ -661,7 +643,137 @@ describe('executeSpaceChatTurn', () => {
                     __mj_CreatedAt: new Date('2026-02-01T10:00:05Z'),
                 },
                 {
-                    ID: 'detail-3',
+                    ID: USER_MESSAGE_ID,
+                    Sequence: 3,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    Message: 'Hey Bea, are you free after standup?',
+                    __mj_CreatedAt: new Date('2026-02-01T10:02:00Z'),
+                },
+            ],
+        });
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            agentId: ALLOWED_AGENT_ID,
+            decisionRunner: async () => ({
+                Success: true,
+                ModelName: 'Jev',
+                ResolvedModel: 'typesafe/jev-1.13-20260917',
+                Answers: {
+                    route: {
+                        Kind: 'Choice',
+                        Value: 'no_agent',
+                        Confidence: 0.98,
+                        Probabilities: { [ALLOWED_AGENT_ID]: 0.02, no_agent: 0.98 },
+                    },
+                    continues: {
+                        Kind: 'Likelihood',
+                        Probability: 0.05,
+                    },
+                },
+            }),
+        });
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message, /does not mention an agent/i);
+        }
+    });
+
+    it('routes an untagged follow-up under MentionOnly when the server decision confirms the participating agent', async () => {
+        const detail1Id = 'bbbbbbbb-0001-4111-8111-111111111111';
+        const detail2Id = 'bbbbbbbb-0002-4111-8111-111111111111';
+        const provider = createMockProvider({
+            messageText: 'Make the second paragraph shorter',
+            conversationDetails: [
+                {
+                    ID: detail1Id,
+                    Sequence: 1,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    Message: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} draft the release notes`,
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:00Z'),
+                },
+                {
+                    ID: detail2Id,
+                    Sequence: 2,
+                    Role: 'AI',
+                    AgentID: ALLOWED_AGENT_ID,
+                    Agent: 'Sage',
+                    ParentID: detail1Id,
+                    Message: 'Here is the initial draft.',
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:05Z'),
+                },
+                {
+                    ID: USER_MESSAGE_ID,
+                    Sequence: 3,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    Message: 'Make the second paragraph shorter',
+                    __mj_CreatedAt: new Date('2026-02-01T10:02:00Z'),
+                },
+            ],
+        });
+        let capturedState = '';
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            agentId: undefined,
+            decisionRunner: async ({ state }) => {
+                capturedState = state;
+                return {
+                    Success: true,
+                    ModelName: 'LLM Decision',
+                    ResolvedModel: 'GPT-OSS-120B',
+                    Answers: {
+                        route: {
+                            Kind: 'Choice',
+                            Value: ALLOWED_AGENT_ID,
+                            Confidence: 0.95,
+                            Probabilities: { [ALLOWED_AGENT_ID]: 0.95, no_agent: 0.05 },
+                        },
+                        continues: {
+                            Kind: 'Likelihood',
+                            Probability: 0.95,
+                        },
+                    },
+                };
+            },
+        });
+        assert.equal(result.ok, true);
+        assert.match(capturedState, /Make the second paragraph shorter/);
+    });
+
+    it('attributes speakers and reply targets via AssembleContextWindow on a thread-reply turn', async () => {
+        const detail1Id = 'aaaaaaaa-0001-4111-8111-111111111111';
+        const detail2Id = 'aaaaaaaa-0002-4111-8111-111111111111';
+        const detail3Id = 'aaaaaaaa-0003-4111-8111-111111111111';
+        const provider = createMockProvider({
+            messageText: 'Make the second paragraph shorter',
+            messageParentId: detail2Id,
+            conversationDetails: [
+                {
+                    ID: detail1Id,
+                    Sequence: 1,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    Message: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} draft the release notes`,
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:00Z'),
+                },
+                {
+                    ID: detail2Id,
+                    Sequence: 2,
+                    Role: 'AI',
+                    AgentID: ALLOWED_AGENT_ID,
+                    Agent: 'Sage',
+                    ParentID: detail1Id,
+                    Message: 'Here is the initial draft.',
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:05Z'),
+                },
+                {
+                    ID: detail3Id,
                     Sequence: 3,
                     Role: 'User',
                     UserID: OTHER_USER_ID,
@@ -675,6 +787,7 @@ describe('executeSpaceChatTurn', () => {
                     Role: 'User',
                     UserID: CALLER_ID,
                     User: 'Caller',
+                    ParentID: detail2Id,
                     Message: 'Make the second paragraph shorter',
                     __mj_CreatedAt: new Date('2026-02-01T10:02:00Z'),
                 },
@@ -691,15 +804,17 @@ describe('executeSpaceChatTurn', () => {
         try {
             const result = await executeSpaceChatTurn(provider, callerUser, {
                 ...defaultInput,
-                agentId: ALLOWED_AGENT_ID,
-                route: 'DecisionRouted',
+                agentId: undefined,
             });
             assert.equal(result.ok, true, result.ok ? '' : result.message);
             assert.ok(capturedMessages && capturedMessages.length === 4);
             assert.match(String(capturedMessages[0].content), /^\[Caller\]:/);
             assert.equal(capturedMessages[1].content, '[Sage -> replying to Caller]: Here is the initial draft.');
             assert.equal(capturedMessages[2].content, '[Other User]: Looks good so far.');
-            assert.equal(capturedMessages[3].content, '[Caller]: Make the second paragraph shorter');
+            assert.equal(
+                capturedMessages[3].content,
+                '[Caller -> replying to Sage]: Make the second paragraph shorter',
+            );
         } finally {
             AgentRunner.prototype.RunAgent = heldRunAgent;
         }

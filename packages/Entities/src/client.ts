@@ -50,6 +50,7 @@ export interface PostSpaceMessageGraphQLInput {
     SpaceID: string;
     Text: string;
     ConversationID?: string;
+    ParentDetailID?: string;
 }
 
 export interface PostSpaceMessageGraphQLPayload {
@@ -64,6 +65,7 @@ export interface ExecuteSpaceChatTurnGraphQLInput {
     UserMessageID: string;
     AgentID?: string;
     Route?: string;
+    RetrievalScope?: 'ThisSpace' | 'Subtree' | 'Everything';
     /**
      * Answer as soon as the reply row is written In-Progress, and send the run's progress and text to this session as it goes
      * (the messages MemberJunction's chat follows). Without it the call returns when the reply is final.
@@ -77,6 +79,8 @@ export interface ExecuteSpaceChatTurnGraphQLPayload {
     AgentRunID?: string;
     QuotedCount?: number;
     AllowedItemNames?: string[];
+    /** Candidate items in retrieval scope for the turn (sources-in-scope chips), as JSON. */
+    CitationsJSON?: string;
     /** The turn's tools (B20) as JSON: audience, actionIds, dataGrantNames, knowledgeSourceIds, withheld. */
     ToolsJSON?: string;
     ErrorMessage?: string;
@@ -85,7 +89,7 @@ export interface ExecuteSpaceChatTurnGraphQLPayload {
 export interface CreateSpaceConversationGraphQLInput {
     SpaceID: string;
     Name: string;
-    Kind?: 'General' | 'Topic' | 'Private';
+    Kind?: 'General' | 'Topic' | 'Private' | 'Assistant';
 }
 
 export interface CreateSpaceConversationGraphQLPayload {
@@ -156,6 +160,8 @@ export interface SpaceChatHostRulesGraphQLPayload {
     AllowedConversationKinds: string[];
     /** The largest upload the host takes. */
     UploadMaxBytes?: number;
+    /** Whether the host has a Decision model configured for multi-party chat routing. */
+    DecisionRoutingAvailable?: boolean;
     MentionPeople: {
         ID: string;
         Name: string;
@@ -313,6 +319,7 @@ query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
         CanStartConversation
         AllowedConversationKinds
         UploadMaxBytes
+        DecisionRoutingAvailable
         MentionPeople {
             ID
             Name
@@ -442,7 +449,8 @@ mutation ExecuteSpaceChatTurn($input: ExecuteSpaceChatTurnInput!) {
         AgentRunID
         QuotedCount
         AllowedItemNames
-            ToolsJSON
+        CitationsJSON
+        ToolsJSON
         ErrorMessage
     }
 }

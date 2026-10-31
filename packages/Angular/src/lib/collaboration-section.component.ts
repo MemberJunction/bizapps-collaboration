@@ -19,6 +19,7 @@ import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSp
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
+import { taskAssigneeLabels, type AssigneeKind, type TaskAssignmentRow } from './logic/task-assignee.js';
 import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
 import { resolveDriverSafely } from './logic/ui-driver-safe.js';
@@ -108,7 +109,9 @@ import {
     BaseSpaceTab,
     BaseSpaceTypeUIDriver,
     type BeforeInviteEvent,
+    type BeforePostMessageEvent,
     type BeforeStartChatEvent,
+    type SpaceChatCitationModel,
     type SpaceOverviewCardDescriptor,
     type SpaceTabDescriptor,
     type SpaceUIContext,
@@ -1370,12 +1373,18 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [LinkedWorkstreamItem]="activeConversationLinkedItem"
                                                     [AgentReplyMode]="chatAgentReplyMode"
                                                     [AllowedAgentIDs]="chatAllowedAgentIds"
+                                                    [EnableDecisionRouting]="chatDecisionRoutingAvailable"
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed"
                                                     [HasConversations]="spaceConversations.length > 0"
                                                     [MentionPeople]="chatMentionPeople"
                                                     [SpaceMembers]="spaceMembers"
                                                     [AgentHistoryFrom]="chatAgentHistoryFrom"
                                                     [AgentTurnHandler]="handleAgentTurn"
+                                                    [RetrievalScope]="chatRetrievalScope"
+                                                    [AllowEverythingScope]="isOneToOneActiveConversation"
+                                                    [Citations]="chatCitations"
+                                                    (RetrievalScopeChanged)="onChatRetrievalScopeChanged($event)"
+                                                    (CitationClicked)="onChatCitationClicked($event)"
                                                     [AutoNameConversation]="false"
                                                     [ComposerDraft]="composerDraft"
                                                     (ComposerDraftConsumed)="composerDraft = null"
@@ -1857,11 +1866,23 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public composerDraft: string | null = null;
     public chatAgentReplyMode: AgentReplyMode = 'MentionOnly';
     public chatAllowedAgentIds: readonly string[] = [];
+    public chatDecisionRoutingAvailable = false;
     public chatDefaultAgentId: string | null = null;
     public chatDefaultAgentName: string | null = null;
     public chatAgentHistoryFrom: Date | null = null;
     public chatMentionPeople: readonly MentionPerson[] = [];
+    public chatRetrievalScope: 'ThisSpace' | 'Subtree' | 'Everything' = 'Subtree';
     private hostRulesRequestId = 0;
+
+    public get isOneToOneActiveConversation(): boolean {
+        const active = this.spaceConversations.find((c) => UUIDsEqual(c.id, this.activeConversationId));
+        return active?.kind === 'Assistant';
+    }
+
+    public onChatRetrievalScopeChanged(scope: 'ThisSpace' | 'Subtree' | 'Everything'): void {
+        this.chatRetrievalScope = scope;
+        this.RefreshView();
+    }
     private selectSpaceRequestId = 0;
 
     // Header metadata
@@ -1889,6 +1910,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public canCloseCurrentSpace = false;
     public loadErrorMessage = '';
     public isSubmittingAsk = false;
+    public chatCitations: SpaceChatCitationModel[] = [];
 
     public async updateCanConfigureCurrentSpace(): Promise<void> {
         // The grants can change while the page is open (a host edits them): what the page offers follows them on the next selection
@@ -4318,6 +4340,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.hostRulesRequestId++;
         this.chatAgentReplyMode = 'MentionOnly';
         this.chatAllowedAgentIds = [];
+        this.chatDecisionRoutingAvailable = false;
         this.chatDefaultAgentId = null;
         this.chatDefaultAgentName = null;
         this.chatAgentHistoryFrom = null;
@@ -4938,8 +4961,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 Status?: string | null;
                 Priority?: string | null;
                 PercentComplete?: number | null;
-                TargetEndDate?: string | null;
-                AssignedTo?: string | null;
+                DueAt?: string | null;
             }>({
                 EntityName: 'MJ_BizApps_Tasks: Tasks',
                 ExtraFilter: `ID IN (${taskIds.map(id => `'${id}'`).join(',')})`,
@@ -4953,9 +4975,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.spaceTasks = [];
                 this.taskCount = 0;
             } else if (tasksRes.Results) {
+                const assignees = await this.loadTaskAssignees(rv, taskIds);
+                if (!isCurrent()) return;
                 this.spaceTasks = tasksRes.Results.map(t => {
                     const spaceItem = taskItemMap.get(t.ID.toLowerCase());
-                    const assigned = t.AssignedTo || undefined;
+                    const assigned = assignees.get(t.ID.toLowerCase());
                     return {
                         id: t.ID,
                         name: t.Name,
@@ -4965,7 +4989,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         band: spaceItem?.Band || 'Shared',
                         assigneeName: assigned,
                         assigneeInitials: assigned ? assigned.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : undefined,
-                        dueDate: t.TargetEndDate ? this.formatDate(t.TargetEndDate) : undefined,
+                        dueDate: t.DueAt ? this.formatDate(t.DueAt) : undefined,
                         percentComplete: t.PercentComplete || 0,
                     };
                 });
@@ -5161,6 +5185,67 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.svg') || (contentType && contentType.startsWith('image/'))) return 'img';
         if (lowerName.endsWith('.zip') || lowerName.endsWith('.tar') || lowerName.endsWith('.gz')) return 'zip';
         return 'doc';
+    }
+
+    /**
+     * Who each task is assigned to, by lower-case task ID. Tasks keep assignees in Task Assignments, each naming a People
+     * record (or an IS-A subtype of People) or a User, so the names are read from those two. A failed read leaves the
+     * rows Unassigned rather than failing the Work tab.
+     */
+    private async loadTaskAssignees(rv: RunView, taskIds: string[]): Promise<Map<string, string>> {
+        try {
+            const md = this.ProviderToUse;
+            const assignmentsRes = await rv.RunView<TaskAssignmentRow>({
+                EntityName: 'MJ_BizApps_Tasks: Task Assignments',
+                ExtraFilter: `TaskID IN (${taskIds.map(id => `'${id}'`).join(',')})`,
+                Fields: ['TaskID', 'AssigneeEntityID', 'AssigneeRecordID', 'Status', 'AssignedAt'],
+                ResultType: 'simple',
+            });
+            if (!assignmentsRes?.Success) {
+                LogError(`Failed to load task assignments: ${assignmentsRes?.ErrorMessage ?? 'unknown error'}`);
+                return new Map();
+            }
+            const rows = assignmentsRes.Results ?? [];
+            const usersEntityId = md.EntityByName('MJ: Users')?.ID;
+            const kindOf = (entityId: string): AssigneeKind => {
+                if (usersEntityId && UUIDsEqual(entityId, usersEntityId)) return 'user';
+                const entity = md.EntityByID(entityId);
+                const people = 'MJ_BizApps_Common: People';
+                return entity && (entity.Name === people || (entity.ParentChain ?? []).some(parent => parent.Name === people)) ? 'person' : null;
+            };
+            const idsOf = (kind: AssigneeKind) =>
+                [...new Set(rows.filter(r => kindOf(r.AssigneeEntityID) === kind && isValidUuid(r.AssigneeRecordID)).map(r => r.AssigneeRecordID))];
+            const personIds = idsOf('person');
+            const userIds = idsOf('user');
+            const [peopleRes, usersRes] = await rv.RunViews([
+                {
+                    EntityName: 'MJ_BizApps_Common: People',
+                    ExtraFilter: personIds.length ? `ID IN (${personIds.map(id => `'${id}'`).join(',')})` : '1=0',
+                    Fields: ['ID', 'DisplayName', 'FirstName', 'LastName'],
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Users',
+                    ExtraFilter: userIds.length ? `ID IN (${userIds.map(id => `'${id}'`).join(',')})` : '1=0',
+                    Fields: ['ID', 'FirstLast', 'Name'],
+                    ResultType: 'simple',
+                },
+            ]);
+            const person = new Map<string, string>();
+            for (const p of (peopleRes?.Results ?? []) as { ID: string; DisplayName?: string | null; FirstName?: string | null; LastName?: string | null }[]) {
+                const name = p.DisplayName || [p.FirstName, p.LastName].filter(Boolean).join(' ');
+                if (name) person.set(p.ID.toLowerCase(), name);
+            }
+            const user = new Map<string, string>();
+            for (const u of (usersRes?.Results ?? []) as { ID: string; FirstLast?: string | null; Name?: string | null }[]) {
+                const name = u.FirstLast || u.Name;
+                if (name) user.set(u.ID.toLowerCase(), name);
+            }
+            return taskAssigneeLabels(rows, kindOf, { person, user });
+        } catch (err) {
+            LogError('Error loading task assignees: ' + (err instanceof Error ? err.message : String(err)));
+            return new Map();
+        }
     }
 
     private formatDate(isoStr: string): string {
@@ -6027,6 +6112,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         // Reset to safe defaults first
         this.chatAgentReplyMode = 'MentionOnly';
         this.chatAllowedAgentIds = [];
+        this.chatDecisionRoutingAvailable = false;
         this.chatDefaultAgentId = null;
         this.chatDefaultAgentName = null;
         this.chatAgentHistoryFrom = null;
@@ -6042,6 +6128,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (res?.Success) {
                 this.chatAgentReplyMode = res.AgentReplyMode ?? 'MentionOnly';
                 this.chatAllowedAgentIds = res.AllowedAgentIDs ?? [];
+                this.chatDecisionRoutingAvailable = res.DecisionRoutingAvailable === true;
                 this.chatDefaultAgentId = res.DefaultAgentID ?? null;
                 this.chatDefaultAgentName = res.DefaultAgentName ?? null;
                 this.chatAgentHistoryFrom = res.AgentHistoryFrom ? new Date(res.AgentHistoryFrom) : null;
@@ -6053,8 +6140,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.canStartConversation = res.CanStartConversation ?? false;
                 if (res.UploadMaxBytes && res.UploadMaxBytes > 0) this.uploadMaxBytes = res.UploadMaxBytes;
                 this.canStartConversationKinds = (res.AllowedConversationKinds ?? []).filter(
-                    (k): k is 'General' | 'Topic' | 'Private' => k === 'General' || k === 'Topic' || k === 'Private'
+                    (k): k is 'General' | 'Topic' | 'Private' | 'Assistant' =>
+                        k === 'General' || k === 'Topic' || k === 'Private' || k === 'Assistant'
                 );
+                if (!this.isOneToOneActiveConversation && this.chatRetrievalScope === 'Everything') {
+                    this.chatRetrievalScope = 'Subtree';
+                }
             } else {
                 this.chatAllowedAgentIds = [];
                 this.chatDefaultAgentId = null;
@@ -6078,12 +6169,26 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
-            return spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request)));
+            const result = spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request, this.chatRetrievalScope)));
+            this.chatCitations = result.Citations ?? [];
+            this.RefreshView();
+            return result;
         } catch (error) {
             LogError(`Failed to execute space chat turn: ${error instanceof Error ? error.message : String(error)}`);
             return spaceTurnFailure(error);
         }
     };
+
+    public onChatCitationClicked(citation: SpaceChatCitationModel): void {
+        if (!citation?.SpaceItemID) return;
+        if (!this.hasTab('Library')) return;
+        this.selectedItemId = citation.SpaceItemID;
+        this.isDrawerOpen = true;
+        this.setTab('Library');
+        this.UpdateQueryParams({ tab: 'library', item: citation.SpaceItemID });
+        void this.showPreviewFor(citation.SpaceItemID);
+        this.RefreshView();
+    }
 
     public onTaskSelected(task: TaskItemModel): void {
         if (!task?.id) return;
@@ -6203,6 +6308,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
         if (beforeAsk.cancel) {
             SharedService.Instance.CreateSimpleNotification(beforeAsk.cancelReason ?? 'This space does not allow a new conversation.', 'warning', 5000);
+            return;
+        }
+        const beforePost: BeforePostMessageEvent = { cancel: false, spaceId, chatId: '', messageText: askedMessage };
+        if (!this.runBeforeHook('BeforePostMessage', spaceId, () => this.uiDriver.BeforePostMessage(beforePost))) {
+            SharedService.Instance.CreateSimpleNotification("This space's type couldn't check this message.", 'error', 5000);
+            return;
+        }
+        if (beforePost.cancel) {
+            SharedService.Instance.CreateSimpleNotification(beforePost.cancelReason ?? 'This space does not allow posting that message.', 'warning', 5000);
             return;
         }
         this.isSubmittingAsk = true;
