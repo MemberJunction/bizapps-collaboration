@@ -16,16 +16,16 @@
   },
   "license": "UNLICENSED",
   "peerDependencies": {
-    "@memberjunction/actions": "6.2.0-edge.2",
-    "@memberjunction/actions-base": "6.2.0-edge.2",
-    "@memberjunction/core": "6.2.0-edge.2",
-    "@memberjunction/global": "6.2.0-edge.2"
+    "@memberjunction/actions": "6.2.0-edge.7",
+    "@memberjunction/actions-base": "6.2.0-edge.7",
+    "@memberjunction/core": "6.2.0-edge.7",
+    "@memberjunction/global": "6.2.0-edge.7"
   },
   "devDependencies": {
-    "@memberjunction/actions": "6.2.0-edge.2",
-    "@memberjunction/actions-base": "6.2.0-edge.2",
-    "@memberjunction/core": "6.2.0-edge.2",
-    "@memberjunction/global": "6.2.0-edge.2",
+    "@memberjunction/actions": "6.2.0-edge.7",
+    "@memberjunction/actions-base": "6.2.0-edge.7",
+    "@memberjunction/core": "6.2.0-edge.7",
+    "@memberjunction/global": "6.2.0-edge.7",
     "typescript": "5.9.3"
   },
   "repository": {
