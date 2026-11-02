@@ -63,7 +63,8 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         // 2. Navigation rail (Angular component: mjc-space-rail)
         const rail = page.locator('mjc-space-rail nav.appnav');
         await expect(rail).toBeVisible();
-        await expect(rail.locator('.jump')).toContainText('Jump to a space');
+        // The rail opens with the space switcher (Home mode shows 'All spaces'); the jump search lives in its popover
+        await expect(rail.locator('[data-testid="rail-space-switcher"] .switcher-title')).toHaveText('All spaces');
         await expect(rail.locator('.nav-item').filter({ hasText: 'Home' })).toBeVisible();
         await expect(rail.locator('.nav-item').filter({ hasText: 'Inbox' })).toContainText('4');
         await expect(rail.locator('.nav-item').filter({ hasText: 'My tasks' })).toContainText('6');
@@ -82,11 +83,12 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
 
         // Title and Chips
         await expect(header.locator('h1.h1')).toHaveText('Discovery');
-        await expect(header.locator('.chip.plain')).toHaveText('Engagement');
-        await expect(header.locator('.chip.ok')).toContainText('Active');
+        await expect(header.locator('.chip.type-chip')).toHaveText('Engagement');
+        // An Active space shows no status chip; only another status does
+        await expect(header.locator('.chip.status-chip')).toHaveCount(0);
 
         // Subtitle with lifecycle progress
-        const sub = header.locator('.sub');
+        const sub = header.locator('.sub-inline');
         await expect(sub).toContainText('Supply-chain operating model diagnostic');
         await expect(sub).toContainText('Week 7 of 10');
         await expect(sub).toContainText('Readout Oct 9');
@@ -94,8 +96,9 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         // 4. Audience Pill (Angular component: mjc-audience-pill)
         const aud = header.locator('mjc-audience-pill .aud');
         await expect(aud).toBeVisible();
-        await expect(aud).toContainText('9 people');
-        await expect(aud).toContainText('3 Meridian · 6 Northwind');
+        // The pill shows the two sides by count (3 staff, 4 outside in the fixture); people and summary live in its popover
+        await expect(aud).toContainText('Team 3');
+        await expect(aud).toContainText('Outside 4');
 
         // 5. Tabs (Angular component: mjc-space-tabs)
         const tabs = header.locator('mjc-space-tabs .tab');

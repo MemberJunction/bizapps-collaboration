@@ -42,14 +42,15 @@ test.describe('Frame 08 — Board & Committee Member Portal', () => {
         const header = page.locator('mjc-space-header');
         await expect(header).toBeVisible();
         await expect(header.locator('h1')).toHaveText('Audit Committee');
-        await expect(header.locator('.chip.plain')).toHaveText('Committee');
+        await expect(header.locator('.chip.type-chip')).toHaveText('Committee');
         await expect(header).toContainText('Financial reporting, internal controls and the external audit');
 
         // 3. Audience Pill (7 members, 2 outside directors)
         const audiencePill = page.locator('mjc-audience-pill');
         await expect(audiencePill).toBeVisible();
-        await expect(audiencePill).toContainText('7 members');
-        await expect(audiencePill).toContainText('2 outside directors');
+        // The pill shows the two sides by count (3 staff, 2 outside directors in the fixture)
+        await expect(audiencePill).toContainText('Team 3');
+        await expect(audiencePill).toContainText('Outside 2');
 
         // 4. Custom Tabs contributed by ExampleBoardUIDriver
         const tabs = page.locator('mjc-space-tabs');
