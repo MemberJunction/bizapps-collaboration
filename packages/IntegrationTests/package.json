@@ -38,7 +38,7 @@
     "@mj-biz-apps/collaboration-entities": "workspace:*",
     "@mj-biz-apps/collaboration-example-space-types-entities": "workspace:*",
     "@mj-biz-apps/collaboration-example-space-types-server": "workspace:*",
-    "@mj-biz-apps/common-entities": "5.46.0",
+    "@mj-biz-apps/common-entities": "5.59.0",
     "@mj-biz-apps/tasks-entities": "1.5.0",
     "mssql": "12.7.0"
   },
