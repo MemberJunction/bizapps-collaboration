@@ -71,8 +71,11 @@
       "CanRead": 1,
       "CanUpdate": 0,
       "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Shell Empty"
-    }
+      "ReadRLSFilterID": null
+    },
+    "_comments": [
+      "MJ's Explorer shell reads the resource-type catalog at startup (it needs the Custom type's ID to open an app's landing page), so a participant reads the whole catalog. It names types, not records; every resource stays behind its own entity's filters."
+    ]
   },
   {
     "primaryKey": {
