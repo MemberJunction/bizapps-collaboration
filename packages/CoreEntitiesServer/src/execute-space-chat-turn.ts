@@ -22,6 +22,7 @@ import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
+import { buildSpaceMeetingsAgentContext } from './space-meetings.js';
 import { resolveTurnAgentViaDecision, type SpaceChatDecisionRunner } from './space-chat-decision-routing.js';
 import { parseUuid } from './uuid.js';
 import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
@@ -472,7 +473,11 @@ async function runClaimedTurn(
             }
         }
         const built = await driver.call.driver.BuildAgentContext({ ...driver.call.base, chatId: foundChat.ID, viewerBands });
-        typeContext = { instructions: [...(built?.instructions ?? [])], contextData: { ...(built?.contextData ?? {}) } };
+        const meetingsContext = await buildSpaceMeetingsAgentContext(provider, spaceId, viewerBands, system);
+        typeContext = {
+            instructions: [...(built?.instructions ?? []), ...(meetingsContext.instructions ?? [])],
+            contextData: { ...(built?.contextData ?? {}), ...(meetingsContext.contextData ?? {}) },
+        };
     } catch (contextError) {
         LogError(`executeSpaceChatTurn: the type's driver failed building the agent context for space ${spaceId}; the turn runs without it: ${contextError instanceof Error ? contextError.message : String(contextError)}`);
     }

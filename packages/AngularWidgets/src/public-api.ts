@@ -111,4 +111,7 @@ export {
 } from './lib/space-pages.component';
 export { DiffWords, HasTextChange, SummarizeDiff, type DiffSegment, type DiffOp } from './lib/page-diff';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';
+export { SpaceMeetingsTabComponent, type SpaceMeetingCardItem } from './lib/space-meetings-tab.component';
+export { SpaceComingUpCardComponent } from './lib/space-coming-up-card.component';
+
 

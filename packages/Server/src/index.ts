@@ -16,6 +16,7 @@ import {
     LoadSpacePageEntityServer,
     LoadCollaborationTaskEntityServer,
     LoadTaskAttributionEntityServer,
+    LoadSpaceMeetingsAgendaProvider,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import './generated/generated.js';
 import { fileURLToPath } from 'node:url';
@@ -55,4 +56,5 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadSpacePageEntityServer();
     LoadTaskAttributionEntityServer();
     LoadCollaborationTaskEntityServer();
+    LoadSpaceMeetingsAgendaProvider();
 }

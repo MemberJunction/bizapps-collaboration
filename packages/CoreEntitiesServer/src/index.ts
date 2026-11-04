@@ -115,3 +115,20 @@ export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant } from './
 export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction.js';
 export type { TurnToolsGiven } from './execute-space-chat-turn.js';
 export { IsPeopleEntity, PEOPLE_ENTITY, ResolvePersonIDForUser, ResolveUserIDForPerson, ResolveUserIDsForPeople } from '@mj-biz-apps/common-entities';
+export {
+    COLLABORATION_SPACES_ENTITY_ID,
+    MEETING_SUBJECT_PREFIX,
+    SpaceMeetingsAgendaProvider,
+    LoadSpaceMeetingsAgendaProvider,
+    buildSpaceMeetingsAgentContext,
+    ensureMeetingSpaceChat,
+    loadSpaceMeetings,
+    meetingChatSubject,
+    parseMeetingIdFromSubject,
+} from './space-meetings.js';
+export type {
+    SpaceMeetingAgendaItemSummary,
+    SpaceMeetingNoteSummary,
+    SpaceMeetingSummary,
+    SpaceMeetingsResult,
+} from './space-meetings.js';

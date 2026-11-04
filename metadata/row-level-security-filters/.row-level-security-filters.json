@@ -548,5 +548,75 @@
       "Description": "The resource-type catalog: MJ's Explorer shell reads it at startup (it needs the Custom type's ID to open an app's landing page). It names types, not records. The filter is present so the participant is not exempt from row-level security, as All Application Roles is.",
       "FilterText": "(1 = 1)"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300001-1111-4111-8111-000000000001"
+    },
+    "fields": {
+      "Name": "Collaboration: Meetings In Reach",
+      "Description": "Meetings linked to a space the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "(ID IN (SELECT MeetingID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE MeetingID IS NOT NULL))"
+    },
+    "sync": {
+      "lastModified": "2026-11-04T06:58:22.658Z",
+      "checksum": "aebb73757645d022b0f89020efeecbf04de542b75b21f3c59b2052edd752df18"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300002-1111-4111-8111-000000000002"
+    },
+    "fields": {
+      "Name": "Collaboration: Meeting Series In Reach",
+      "Description": "Meeting series linked to a space the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "(ID IN (SELECT SeriesID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE SeriesID IS NOT NULL))"
+    },
+    "sync": {
+      "lastModified": "2026-11-04T06:58:22.687Z",
+      "checksum": "7cae3b39490faa12a97320df945b64644647b07882b810ab4fc398e3cd419c23"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300003-1111-4111-8111-000000000003"
+    },
+    "fields": {
+      "Name": "Collaboration: Meeting Rows In Reach",
+      "Description": "Attendees, agenda items, and notes of meetings the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "(MeetingID IN (SELECT MeetingID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE MeetingID IS NOT NULL))"
+    },
+    "sync": {
+      "lastModified": "2026-11-04T06:58:22.712Z",
+      "checksum": "12c63544ebdad9558fac662885a950ed3cfaecd220994ad29598df3e1ca77008"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300004-1111-4111-8111-000000000004"
+    },
+    "fields": {
+      "Name": "Collaboration: Meeting Series Rows In Reach",
+      "Description": "Series attendees of meeting series the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "(SeriesID IN (SELECT SeriesID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE SeriesID IS NOT NULL))"
+    },
+    "sync": {
+      "lastModified": "2026-11-04T06:58:22.736Z",
+      "checksum": "bc91bb2a8a16f6c0ac5d4b18cd40d804156780e8a6e319060b215f343804c375"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300005-1111-4111-8111-000000000005"
+    },
+    "fields": {
+      "Name": "Collaboration: Meeting Links In Reach",
+      "Description": "MeetingLink rows for meetings or series the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "((MeetingID IS NOT NULL AND MeetingID IN (SELECT MeetingID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE MeetingID IS NOT NULL)) OR (SeriesID IS NOT NULL AND SeriesID IN (SELECT SeriesID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE SeriesID IS NOT NULL)))"
+    },
+    "sync": {
+      "lastModified": "2026-11-04T06:58:22.758Z",
+      "checksum": "d5fd9ae3269a97c23f4846c2acd216db36641d9bcb219ad9d02ef23f86785208"
+    }
   }
 ]
