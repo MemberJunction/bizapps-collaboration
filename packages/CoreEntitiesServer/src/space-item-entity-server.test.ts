@@ -691,5 +691,76 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
         }
     });
+
+    it('Delete() calls ContentUploadIngestor.Remove and clears tombstone ContentItem.FileID when last SpaceItem is deleted', async () => {
+        const { ContentPipelineStartup, ContentUploadIngestor } = await import('@memberjunction/content-pipeline');
+        const { SPACE_FILES_CONTENT_SOURCE_ID } = await import('../dist/SpaceItemEntityServer.js');
+
+        const origStartup = ContentPipelineStartup.Instance.HandleStartup;
+        const origRemove = ContentUploadIngestor.Remove;
+        const removeCalls: Array<Parameters<typeof ContentUploadIngestor.Remove>[0]> = [];
+        let clearedTombstoneFileId: string | null | undefined = 'initial';
+
+        ContentPipelineStartup.Instance.HandleStartup = async () => {};
+        ContentUploadIngestor.Remove = async (params) => {
+            removeCalls.push(params);
+            return { DeletedItemCount: 1, ProcessRunIDs: ['RUN-DEL-1'], ContentItemIDs: ['CI-TOMBSTONE-1'], DependentsMarked: 0 };
+        };
+
+        try {
+            const provider = createDeleteMockProvider({ itemsRunViewResult: [] });
+            const origEntityByName = provider.EntityByName.bind(provider);
+            provider.EntityByName = ((name: string) => {
+                if (name === 'MJ: Content Items') return { ID: 'CONTENT-ITEMS-ID', Name: 'MJ: Content Items' } as never;
+                return origEntityByName(name);
+            }) as IMetadataProvider['EntityByName'];
+
+            const rvProvider = provider as unknown as { RunView: (params: { EntityName: string; ExtraFilter?: string }) => Promise<unknown> };
+            const origRunView = rvProvider.RunView.bind(provider);
+            rvProvider.RunView = async (params: { EntityName: string; ExtraFilter?: string }) => {
+                if (params.EntityName === 'MJ: Content Items') {
+                    return { Success: true, Results: [{ ID: 'CI-TOMBSTONE-1' }] };
+                }
+                return origRunView(params);
+            };
+
+            const origGetEntityObject = provider.GetEntityObject.bind(provider);
+            provider.GetEntityObject = (async (entityName: string, contextUser?: UserInfo) => {
+                if (entityName === 'MJ: Content Items') {
+                    const ciEntity = {
+                        FileID: FILE_ID as string | null,
+                        async InnerLoad() { return true; },
+                        async Save() {
+                            clearedTombstoneFileId = this.FileID;
+                            return true;
+                        },
+                    };
+                    return ciEntity as unknown as BaseEntity;
+                }
+                return origGetEntityObject(entityName, contextUser);
+            }) as IMetadataProvider['GetEntityObject'];
+
+            const item = createMockItem(provider);
+            const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+                return true;
+            };
+            try {
+                const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
+                assert.equal(ok, true);
+                assert.equal(removeCalls.length, 1);
+                assert.equal(removeCalls[0].FileID?.toLowerCase(), FILE_ID.toLowerCase());
+                assert.equal(removeCalls[0].ContentSourceID, SPACE_FILES_CONTENT_SOURCE_ID);
+                assert.equal(removeCalls[0].RunNow, true);
+                assert.equal(clearedTombstoneFileId, null, 'Tombstone ContentItem.FileID cleared before MJ: Files row delete');
+            } finally {
+                Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+            }
+        } finally {
+            ContentPipelineStartup.Instance.HandleStartup = origStartup;
+            ContentUploadIngestor.Remove = origRemove;
+        }
+    });
 });
+
 

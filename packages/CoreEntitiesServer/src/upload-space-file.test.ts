@@ -316,6 +316,79 @@ describe('uploadSpaceFile', () => {
             assert.equal(item.Folder, doc.folder, `SpaceItem folder for ${doc.fileName}`);
         }
     });
+
+    it('triggers ContentUploadIngestor.Ingest off the request path and never fails the upload if ingest throws', async () => {
+        const { ContentPipelineStartup, ContentUploadIngestor } = await import('@memberjunction/content-pipeline');
+        const { SPACE_FILES_CONTENT_SOURCE_ID } = await import('../dist/upload-space-file.js');
+
+        const origStartup = ContentPipelineStartup.Instance.HandleStartup;
+        const origIngest = ContentUploadIngestor.Ingest;
+        const ingestCalls: Array<Parameters<typeof ContentUploadIngestor.Ingest>[0]> = [];
+        let shouldThrow = false;
+
+        ContentPipelineStartup.Instance.HandleStartup = async () => {};
+        ContentUploadIngestor.Ingest = async (params) => {
+            ingestCalls.push(params);
+            if (shouldThrow) {
+                throw new Error('Synthetic pipeline failure');
+            }
+            return {
+                ContentItem: {} as never,
+                ContentItemID: 'CI-1',
+                Created: true,
+                EntityRecordDocumentID: 'ERD-1',
+                ProcessRunID: 'RUN-1',
+                Queued: true,
+                ReusedExisting: false,
+            };
+        };
+
+        try {
+            const { provider, store } = harness(true, 'Shared');
+            const origEntityByName = provider.EntityByName.bind(provider);
+            provider.EntityByName = ((name: string) => {
+                if (name === 'MJ: Content Items') return { ID: 'CONTENT-ITEMS-ID' } as never;
+                return origEntityByName(name);
+            }) as IMetadataProvider['EntityByName'];
+
+            const outcome1 = await uploadSpaceFile({
+                user: USER,
+                storageUser: SYSTEM,
+                provider,
+                store,
+                ...base,
+                gate: async () => ({ ok: true, band: 'Shared' }),
+            });
+            assert.equal(outcome1.ok, true);
+            await new Promise((resolve) => setImmediate(resolve));
+            assert.equal(ingestCalls.length, 1);
+            assert.equal(ingestCalls[0].ContentSourceID, SPACE_FILES_CONTENT_SOURCE_ID);
+            assert.equal(ingestCalls[0].FileID, 'FILE-1');
+            assert.equal(ingestCalls[0].Name, 'brief.pdf');
+            assert.deepEqual(ingestCalls[0].Origin, {
+                EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                RecordID: 'ITEM-1',
+            });
+            assert.equal(ingestCalls[0].RunNow, true);
+            assert.equal(ingestCalls[0].ContextUser, SYSTEM);
+
+            shouldThrow = true;
+            const outcome2 = await uploadSpaceFile({
+                user: USER,
+                storageUser: SYSTEM,
+                provider,
+                store,
+                ...base,
+                gate: async () => ({ ok: true, band: 'Shared' }),
+            });
+            assert.equal(outcome2.ok, true, 'Upload still succeeds even when ContentUploadIngestor.Ingest throws');
+            await new Promise((resolve) => setImmediate(resolve));
+            assert.equal(ingestCalls.length, 2);
+        } finally {
+            ContentPipelineStartup.Instance.HandleStartup = origStartup;
+            ContentUploadIngestor.Ingest = origIngest;
+        }
+    });
 });
 
 describe('artifactTypeNameFor', () => {
@@ -329,3 +402,4 @@ describe('artifactTypeNameFor', () => {
         assert.equal(artifactTypeNameFor('data.bin', 'application/octet-stream'), 'Generic Binary');
     });
 });
+

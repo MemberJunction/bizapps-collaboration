@@ -1,0 +1,28 @@
+[
+  {
+    "_comments": [
+      "Enable lexical LIKE search over MJ: Content Item Chunks.Text (nvarchar(max)) via EntitySearchProvider in Collaboration Space Scope."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Item Chunks"
+    },
+    "fields": {
+      "Name": "MJ: Content Item Chunks"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Item Chunks&Name=Text"
+          },
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "Text",
+            "IncludeInUserSearchAPI": true,
+            "UserSearchParamFormatAPI": "LIKE N'%{0}%'"
+          }
+        }
+      ]
+    }
+  }
+]

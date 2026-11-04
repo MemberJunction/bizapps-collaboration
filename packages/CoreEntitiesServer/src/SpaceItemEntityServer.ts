@@ -1,6 +1,7 @@
 import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
+import { ContentUploadIngestor } from '@memberjunction/content-pipeline';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
 import { recordItemUse, recordShare } from './library-events.js';
@@ -18,6 +19,9 @@ import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.j
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Items';
+
+/** Shipped `MJ: Content Sources` ID for Collaboration's `"Space files"` (`Upload`) source. */
+export const SPACE_FILES_CONTENT_SOURCE_ID = 'CA69AB7B-248F-4543-86EE-5E0D00A41B35';
 
 /** The item object this upload created. Another request's item cannot match it. */
 const vouchedItems = new WeakSet<object>();
@@ -180,6 +184,12 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const previousBand = this.Fields.find((field) => field.Name === 'Band')?.OldValue as Band | null | undefined;
         // One reading per save: taken here, handed to validation, used by the reaction. Dropped when the save is done.
         const own = this.readChange();
+        const provider = asMetadata(this.ProviderToUse);
+        const filesEntity = provider?.EntityByName('MJ: Files');
+        const oldEntityId = !wasNew ? String(own.oldValues.EntityID ?? this.EntityID ?? '') : '';
+        const wasFileItem = !wasNew && !!filesEntity && oldEntityId.toLowerCase() === filesEntity.ID.toLowerCase();
+        const oldRawRecId = wasFileItem ? String(own.oldValues.RecordID ?? this.RecordID ?? '') : '';
+        const oldFileId = oldRawRecId ? parseUuid(oldRawRecId.toLowerCase().startsWith('id|') ? oldRawRecId.slice(3) : oldRawRecId) : null;
         this.readingForSave = own;
         let ok = false;
         try {
@@ -190,6 +200,14 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const decided = own;
         const user = this.ContextCurrentUser;
         if (!ok || !user || !this.ID) return ok;
+        if (oldFileId && provider && filesEntity) {
+            const nowFileItem = !!this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
+            const nowRawRecId = nowFileItem && this.RecordID ? (this.RecordID.toLowerCase().startsWith('id|') ? this.RecordID.slice(3) : this.RecordID) : '';
+            const nowFileId = nowRawRecId ? parseUuid(nowRawRecId) : null;
+            if (!nowFileId || nowFileId.toLowerCase() !== oldFileId.toLowerCase()) {
+                await cleanupStoredFileIfUnreferenced(provider, this, oldFileId, filesEntity.ID, this.ID);
+            }
+        }
         const becameShared = this.Band === 'Shared' && (wasNew || previousBand !== 'Shared');
         try {
             if (!wasNew && becameShared) await recordItemUse(this, user, this.ID, this.SpaceID, 'promote');
@@ -441,6 +459,8 @@ async function cleanupStoredFileIfUnreferenced(
 }
 
 async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo, fileId: string): Promise<void> {
+    removeSpaceFileFromContentPipeline(provider, user, fileId);
+
     let storagePath: string | null = null;
     let accountId: string | null = null;
     let fileEntity: MJFileEntity | null = null;
@@ -497,6 +517,34 @@ async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo
         LogError(`Space item artifact cleanup: ${error instanceof Error ? error.message : String(error)}`);
     }
 
+    if (typeof provider.EntityByName === 'function' && provider.EntityByName('MJ: Content Items')) {
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const linked = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Content Items',
+                    ExtraFilter: `FileID = '${fileId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                },
+                user,
+            );
+            for (const row of linked.Success ? linked.Results ?? [] : []) {
+                const ci = await provider.GetEntityObject<BaseEntity & { FileID?: string | null }>('MJ: Content Items', user);
+                if (await ci.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: row.ID }]))) {
+                    ci.FileID = null;
+                    if (typeof ci.Set === 'function') {
+                        ci.Set('FileID', null);
+                    }
+                    await ci.Save();
+                }
+            }
+        } catch (error) {
+            LogError(`Space item content item file detachment: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
     let rowGone = false;
     if (fileEntity && fileEntity.IsSaved) {
         try {
@@ -507,6 +555,27 @@ async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo
     }
     if ((storagePath && !objectGone) || !rowGone) {
         LogError(`Space item file cleanup incomplete for ${fileId}: object=${objectGone} row=${rowGone}.`);
+    }
+}
+
+// ponytail: if an ingest finishes after its item was deleted, the leftover Content Item's origin is gone,
+// so the read filters and VerifyOriginRecords already hide it. A later cleanup can sweep it.
+function removeSpaceFileFromContentPipeline(provider: IMetadataProvider, user: UserInfo, fileId: string): void {
+    if (typeof provider.EntityByName !== 'function' || !provider.EntityByName('MJ: Content Items')) {
+        return;
+    }
+    try {
+        void ContentUploadIngestor.Remove({
+            FileID: fileId,
+            ContentSourceID: SPACE_FILES_CONTENT_SOURCE_ID,
+            RunNow: true,
+            ContextUser: user,
+            Provider: provider,
+        }).catch((error: unknown) => {
+            LogError(`Space item content pipeline cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        });
+    } catch (error) {
+        LogError(`Space item content pipeline cleanup: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 

@@ -1,0 +1,29 @@
+[
+  {
+    "primaryKey": {
+      "ID": "45BD8C52-FFBA-4BF3-961B-B28F204EC51B"
+    },
+    "fields": {
+      "Name": "Collaboration Space Item Document",
+      "Description": "Entity document template for Collaboration Space Items",
+      "UserID": "@lookup:MJ: Users.Name=System",
+      "IsActive": true
+    },
+    "relatedEntities": {
+      "MJ: Template Contents": [
+        {
+          "primaryKey": {
+            "ID": "AF1B1F15-C396-4F90-98FD-7EAAC285ACE3"
+          },
+          "fields": {
+            "TemplateID": "@parent:ID",
+            "TypeID": "@lookup:MJ: Template Content Types.Name=Text",
+            "TemplateText": "{{ Name }}{% if Description %} — {{ Description }}{% endif %}",
+            "Priority": 1,
+            "IsActive": true
+          }
+        }
+      ]
+    }
+  }
+]

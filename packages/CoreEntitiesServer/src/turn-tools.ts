@@ -22,6 +22,11 @@ import {
 export const RUN_SPACE_DATA_ACTION_ID = 'EAE6CFED-E2EB-4B6E-816D-6CFE5156A5F5';
 export const RUN_SPACE_DATA_ACTION_NAME = 'Collaboration: Run Space Data';
 
+/** MJ's shipped *Scoped Search* action, as MJ's `metadata/actions/` ships it. */
+export const SCOPED_SEARCH_ACTION_ID = '3671FCE1-E4A1-4AB2-83E8-552D19E80A4F';
+/** The shipped *Collaboration Space Scope*: the space subtree and the chat's audience are derived on the server from the run's chat. */
+export const COLLABORATION_SPACE_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
+
 /** One query or view the turn may run through *Run space data*: what the model is told, and what the action checks against. */
 export interface TurnSpaceDataGrant {
     GrantID: string;
@@ -91,6 +96,9 @@ export async function resolveTurnTools(
     // Collaboration's action and the granted ones (B20, step 2)
     const given = new Set<string>(tools.Actions.map((grant) => grant.TargetRecordID.trim().toUpperCase()));
     if (spaceData.length) given.add(RUN_SPACE_DATA_ACTION_ID);
+    // The space's own search is Collaboration's too: the turn hands every agent the space scope (SearchScopeIDs), which
+    // derives the space and the audience from the run's chat, so the model cannot widen it
+    given.add(SCOPED_SEARCH_ACTION_ID);
     const own = await rv.RunView<{ ActionID: string }>({
         EntityName: AGENT_ACTIONS,
         ExtraFilter: `AgentID = '${esc(targetAgentId)}' AND Status = 'Active'`,
@@ -114,6 +122,7 @@ export async function resolveTurnTools(
 
     return { tools, spaceData, actionIds: [...given], actionChanges, runSettings, agentGrant, withheld };
 }
+
 
 /** The data grants as the model and the action see them: names, descriptions and the parameters the model may set. */
 async function describeDataGrants(rv: RunView, system: UserInfo, grants: readonly EffectiveGrant[]): Promise<TurnSpaceDataGrant[]> {

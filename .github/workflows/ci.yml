@@ -53,7 +53,7 @@ jobs:
     permissions:
       contents: read
     # The same procedure as docs/building-the-database.md, against a throwaway SQL Server: MemberJunction core at the commit
-    # the pinned 6.2.0-edge.1 packages were published from, bizapps-common and bizapps-tasks at the commits the workspace
+    # the pinned 6.2.0-edge.7 packages were published from, bizapps-common and bizapps-tasks at the commits the workspace
     # builds against, then this app's baseline, metadata, test metadata and world. The client harness needs an MJAPI with
     # this app's packages loaded and is not run here.
     env:
@@ -81,13 +81,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MemberJunction/MJ
-          ref: 91c3c9115c54157665a4dd022e4271ac05d5ce8e
+          ref: 59a9cc463aad11b82dcfe2f2d33c07ff77ac62a5
           path: .ci/MJ
-          # MJ's prompt templates @include files under packages/AI/CorePlus/generated-for-prompt, so the push needs them too.
+          # MJ's prompt templates @include files under these generated-for-prompt folders, so the push needs them too.
           sparse-checkout: |
             migrations
             metadata
             packages/AI/CorePlus/generated-for-prompt
+            packages/AI/VideoStudio/Core/generated-for-prompt
       - uses: actions/checkout@v4
         with:
           repository: MemberJunction/bizapps-common

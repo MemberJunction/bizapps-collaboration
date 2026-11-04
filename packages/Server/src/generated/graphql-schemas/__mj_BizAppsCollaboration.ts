@@ -17,7 +17,7 @@ import { MaxLength } from 'class-validator';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
-import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity, mjBizAppsCollaborationSpaceAnchorEntity, mjBizAppsCollaborationSpaceChatEntity, mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberPinEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceNoteEntity, mjBizAppsCollaborationSpaceRoleTypeEntity, mjBizAppsCollaborationSpaceTypeStatusEntity, mjBizAppsCollaborationSpaceTypeEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity, mjBizAppsCollaborationSpaceAnchorEntity, mjBizAppsCollaborationSpaceChatEntity, mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberPinEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceNoteEntity, mjBizAppsCollaborationSpacePageEntity, mjBizAppsCollaborationSpaceRoleTypeEntity, mjBizAppsCollaborationSpaceTypeStatusEntity, mjBizAppsCollaborationSpaceTypeEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
     
 
 //****************************************************************************
@@ -1584,7 +1584,7 @@ export class mjBizAppsCollaborationSpaceMember_ {
     SpaceRoleType?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(201)
+    @MaxLength(250)
     Person?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
@@ -1945,6 +1945,264 @@ export class mjBizAppsCollaborationSpaceNoteResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ_BizApps_Collaboration: Space Notes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ_BizApps_Collaboration: Space Pages
+//****************************************************************************
+@ObjectType({ description: "A customizable block-canvas page in a space: either the saved block layout for a tab (BuiltInTab set) or a custom page in the space's Pages tab (BuiltInTab null)." })
+export class mjBizAppsCollaborationSpacePage_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The space this page belongs to."}) 
+    @MaxLength(36)
+    SpaceID?: string;
+        
+    @Field({nullable: true, description: "The tab key this page lays out (built-in or contributed by a space type), or null for a custom page."}) 
+    @MaxLength(30)
+    BuiltInTab?: string;
+        
+    @Field({nullable: true, description: "The published title of the page."}) 
+    @MaxLength(200)
+    Title?: string;
+        
+    @Field({nullable: true, description: "Font Awesome icon class displayed beside the page title in the page rail and header."}) 
+    @MaxLength(100)
+    IconClass?: string;
+        
+    @Field({nullable: true, description: "Team or Shared: who in the space may read the page. A Shared page never moves back to Team."}) 
+    @MaxLength(10)
+    Band?: string;
+        
+    @Field({nullable: true, description: "Draft or Published lifecycle state of the page."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Display order among pages in the space."}) 
+    Sequence?: number;
+        
+    @Field({nullable: true, description: "JSON array of published canvas blocks (id, type, title, width, body, and block-specific properties)."}) 
+    PublishedBlocks?: string;
+        
+    @Field({nullable: true, description: "JSON array of unpublished draft canvas blocks while a draft is in progress. Readable by anyone who can read the page (within the page's band), as row filters apply per row rather than per column."}) 
+    DraftBlocks?: string;
+        
+    @Field({nullable: true, description: "Unpublished draft title while a draft is in progress. Readable by anyone who can read the page (within the page's band), as row filters apply per row rather than per column."}) 
+    @MaxLength(200)
+    DraftTitle?: string;
+        
+    @Field({nullable: true, description: "The user who most recently published this page."}) 
+    @MaxLength(36)
+    PublishedByUserID?: string;
+        
+    @Field({nullable: true, description: "When this page was most recently published."}) 
+    PublishedAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Space?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    PublishedByUser?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Pages
+//****************************************************************************
+@InputType()
+export class CreatemjBizAppsCollaborationSpacePageInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SpaceID?: string;
+
+    @Field({ nullable: true })
+    BuiltInTab: string | null;
+
+    @Field({ nullable: true })
+    Title?: string;
+
+    @Field({ nullable: true })
+    IconClass: string | null;
+
+    @Field({ nullable: true })
+    Band?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    PublishedBlocks: string | null;
+
+    @Field({ nullable: true })
+    DraftBlocks: string | null;
+
+    @Field({ nullable: true })
+    DraftTitle: string | null;
+
+    @Field({ nullable: true })
+    PublishedByUserID: string | null;
+
+    @Field({ nullable: true })
+    PublishedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Pages
+//****************************************************************************
+@InputType()
+export class UpdatemjBizAppsCollaborationSpacePageInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SpaceID?: string;
+
+    @Field({ nullable: true })
+    BuiltInTab?: string | null;
+
+    @Field({ nullable: true })
+    Title?: string;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
+
+    @Field({ nullable: true })
+    Band?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    PublishedBlocks?: string | null;
+
+    @Field({ nullable: true })
+    DraftBlocks?: string | null;
+
+    @Field({ nullable: true })
+    DraftTitle?: string | null;
+
+    @Field({ nullable: true })
+    PublishedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    PublishedAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ_BizApps_Collaboration: Space Pages
+//****************************************************************************
+@ObjectType()
+export class RunmjBizAppsCollaborationSpacePageViewResult {
+    @Field(() => [mjBizAppsCollaborationSpacePage_])
+    Results: mjBizAppsCollaborationSpacePage_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(mjBizAppsCollaborationSpacePage_)
+export class mjBizAppsCollaborationSpacePageResolver extends ResolverBase {
+    @Query(() => RunmjBizAppsCollaborationSpacePageViewResult)
+    async RunmjBizAppsCollaborationSpacePageViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpacePageViewResult)
+    async RunmjBizAppsCollaborationSpacePageViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpacePageViewResult)
+    async RunmjBizAppsCollaborationSpacePageDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ_BizApps_Collaboration: Space Pages';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => mjBizAppsCollaborationSpacePage_, { nullable: true })
+    async mjBizAppsCollaborationSpacePage(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpacePage_ | null> {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Pages', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpacePages')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Pages', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Pages', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpacePage_)
+    async CreatemjBizAppsCollaborationSpacePage(
+        @Arg('input', () => CreatemjBizAppsCollaborationSpacePageInput) input: CreatemjBizAppsCollaborationSpacePageInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ_BizApps_Collaboration: Space Pages', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => mjBizAppsCollaborationSpacePage_)
+    async UpdatemjBizAppsCollaborationSpacePage(
+        @Arg('input', () => UpdatemjBizAppsCollaborationSpacePageInput) input: UpdatemjBizAppsCollaborationSpacePageInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ_BizApps_Collaboration: Space Pages', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpacePage_)
+    async DeletemjBizAppsCollaborationSpacePage(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ_BizApps_Collaboration: Space Pages', key, options, provider, userPayload, pubSub);
     }
     
 }

@@ -90,8 +90,8 @@ export async function agentsFromConfiguration(
         }
     }
 
-    // The default: the configuration's choice when it is still in the list, else the nearest flagged, else the first
-    const configuredDefault = list.find((item) => item.grantId && item.grantId === configuration.DefaultAgentGrantID);
+    // The default: the configuration's flagged choice when it is still in the list, else the nearest flagged, else the first
+    const configuredDefault = list.find((item) => item.grantId && item.grantId === configuration.DefaultAgentGrantID && item.isDefault);
     const defaultItem = configuredDefault ?? [...list].reverse().find((item) => item.isDefault) ?? list[0];
     return {
         allowedAgentIds: list.map((item) => item.agentId),

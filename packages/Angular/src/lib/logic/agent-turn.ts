@@ -5,6 +5,7 @@ export interface SpaceTurnRequest {
     ConversationId: string;
     UserMessageId: string;
     AgentId: string;
+    Route?: string;
 }
 
 export interface SpaceTurnCitation {
@@ -40,6 +41,7 @@ export function spaceTurnInput(
         ConversationID: request.ConversationId,
         UserMessageID: request.UserMessageId,
         AgentID: request.AgentId,
+        ...(request.Route ? { Route: request.Route } : {}),
         ...(retrievalScope ? { RetrievalScope: retrievalScope } : {}),
         Background: true,
     };

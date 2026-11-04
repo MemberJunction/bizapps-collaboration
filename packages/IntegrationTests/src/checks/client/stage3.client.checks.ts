@@ -17,6 +17,8 @@ const CHAPTER_12 = 'C1000001-0000-4000-8000-000000000016';
 const CHAPTER_12_STAFF = 'C1000001-0000-4000-8000-000000000019';
 /** `Collaboration: Run Space Data`, as `metadata/actions/` ships it. */
 const RUN_SPACE_DATA_ACTION_ID = 'EAE6CFED-E2EB-4B6E-816D-6CFE5156A5F5';
+/** MJ's Scoped Search: every space turn is given the space's own search, which is not a grant. */
+const SCOPED_SEARCH_ACTION_ID = '3671FCE1-E4A1-4AB2-83E8-552D19E80A4F';
 type ClientPersona = Awaited<ReturnType<typeof getPersonaClientContext>>;
 const clientOf = (persona: ClientPersona): CollaborationClient => new CollaborationClient(persona.GraphQLProvider);
 
@@ -50,9 +52,10 @@ const checks: NamedCheck[] = [
                 conversation = { id: started.ConversationID!, chat: started.SpaceChatID! };
                 const { tools, reply } = await turnOverTheWire(ctx, lena, CHAPTER_12, conversation.id, `@${COLLABORATION_TEST_AGENT_NAME} what can you run here?`);
                 Assert(tools.audience === 'Shared', `Shared audience (${tools.audience})`);
-                Assert(tools.actionIds.length === 0 && tools.dataGrantNames.length === 0, `No action and no data for the leader (${tools.actionIds.join(',')} / ${tools.dataGrantNames.join(',')})`);
+                const granted = tools.actionIds.filter((id) => id.toUpperCase() !== SCOPED_SEARCH_ACTION_ID);
+                Assert(granted.length === 0 && tools.dataGrantNames.length === 0, `No granted action and no data for the leader (${tools.actionIds.join(',')} / ${tools.dataGrantNames.join(',')})`);
                 Assert(tools.withheld.some((line) => /A16/.test(line)), `The bound action is withheld: ${tools.withheld.join(' | ')}`);
-                Assert(/Tools: none/.test(reply), 'The agent was told of no tools');
+                Assert(new RegExp(`Tools: ${SCOPED_SEARCH_ACTION_ID}$`, 'im').test(reply), 'The agent was told only of the space search');
             } finally {
                 if (conversation) await cleanupConversation(ctx.Provider, ctx.User, conversation.id, conversation.chat);
                 if (attachment) await detachTestAgent(ctx, attachment);

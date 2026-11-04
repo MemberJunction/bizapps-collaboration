@@ -1,0 +1,19 @@
+[
+  {
+    "primaryKey": {
+      "ID": "CA69AB7B-248F-4543-86EE-5E0D00A41B35"
+    },
+    "fields": {
+      "Name": "Space files",
+      "ContentTypeID": "@lookup:MJ: Content Types.Name=Space File",
+      "ContentSourceTypeID": "@lookup:MJ: Content Source Types.Name=Upload",
+      "ContentFileTypeID": "@lookup:MJ: Content File Types.Name=Other",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
+      "EntityDocumentID": "@lookup:MJ: Entity Documents.Name=Space Item",
+      "EmbeddingModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "URL": "upload://collaboration/space-items",
+      "ForceDiscovery": false
+    }
+  }
+]

@@ -64,6 +64,7 @@ export interface ExecuteSpaceChatTurnGraphQLInput {
     ConversationID: string;
     UserMessageID: string;
     AgentID?: string;
+    Route?: string;
     RetrievalScope?: 'ThisSpace' | 'Subtree' | 'Everything';
     /**
      * Answer as soon as the reply row is written In-Progress, and send the run's progress and text to this session as it goes

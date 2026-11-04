@@ -38,6 +38,48 @@ export function notePromotionVerdict(viewer: NotePromotionViewer, note: NoteForP
     return { ok: false, reason: 'not-allowed', message: 'Only the space\'s owner or a seat that may promote the band moves a note to Shared.' };
 }
 
+export interface PageEditViewer {
+    userId: string;
+    /** Whether the viewer owns the space the page is in. */
+    isSpaceOwner: boolean;
+    /** The viewer's reaching role in that space, or null when they hold no seat. */
+    role: Pick<RoleFlags, 'canPromoteBand' | 'canSeeTeamBand'> | null;
+    /** Whether the viewer can edit the space's settings. */
+    canEditSpaceSettings?: boolean;
+    /** Whether the viewer administers spaces (the host's administrators edit pages in any open space). */
+    administers?: boolean;
+}
+
+export interface SpaceForPageEdit {
+    /** Whether the space is read-only (for example via its status reach or closed state). */
+    isReadOnly?: boolean;
+    /** When the space was closed, if closed. */
+    closedAt?: Date | string | null;
+}
+
+export type PageEditVerdict =
+    | { ok: true }
+    | { ok: false; reason: 'read-only' | 'not-allowed'; message: string };
+
+/** Whether `viewer` may create, edit, publish or delete a page in `space`, and why not. */
+export function pageEditVerdict(viewer: PageEditViewer, space: SpaceForPageEdit): PageEditVerdict {
+    if (space.isReadOnly || space.closedAt != null) {
+        return {
+            ok: false,
+            reason: 'read-only',
+            message: 'The space is closed or read-only; its pages cannot be changed.',
+        };
+    }
+    if (viewer.administers || viewer.isSpaceOwner || viewer.role?.canPromoteBand || viewer.canEditSpaceSettings) {
+        return { ok: true };
+    }
+    return {
+        ok: false,
+        reason: 'not-allowed',
+        message: 'Only the space\'s owner, a seat that may promote the band, someone who can edit the space\'s settings, or a space administrator may create, edit, publish, or delete a page.',
+    };
+}
+
 /** What a promotion makes visible, for the confirmation: the note's own body; its comments and conversation stay with the team. */
 export function promotionConsequence(note: { Title: string }, sharedLabel: string): string {
     return `"${note.Title}" will be visible to ${sharedLabel}. Its text moves; any comments or conversation on it stay with the team. This is not undone: members may read it as soon as it is shared.`;

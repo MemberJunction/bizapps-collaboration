@@ -30,6 +30,7 @@ export interface SpaceAgentCandidateItem {
     Description: string | null;
     Band: Band;
     StoredContentType: string | null;
+    ChunkTexts?: string[];
 }
 
 export interface SpaceAgentRetrievalDecision {
@@ -518,20 +519,23 @@ export async function resolveSpaceAgentRetrieval(
         }
     }
 
-    const candidateItems: SpaceAgentCandidateItem[] = [];
+    const preliminaryCandidates: Array<{
+        item: SpaceAgentCandidateItem;
+        allowed: boolean;
+        reason: string;
+    }> = [];
+    const spaceIndex = new Map<string, SpaceNode>();
+    for (const s of spaceNodes) {
+        spaceIndex.set(s.id.toLowerCase(), s);
+    }
+
     for (const raw of rawItems) {
         const entityId = (parseUuid(raw.EntityID) ?? raw.EntityID).toLowerCase();
         const recId = cleanRecordId(raw.RecordID).toLowerCase();
         const target = targetNames.get(`${entityId}:${recId}`);
         const name = target?.name ?? `Item ${raw.ID}`;
         const description = target?.description ?? null;
-        if (options?.query) {
-            const q = options.query.toLowerCase();
-            if (!name.toLowerCase().includes(q) && !(description && description.toLowerCase().includes(q))) {
-                continue;
-            }
-        }
-        candidateItems.push({
+        const item: SpaceAgentCandidateItem = {
             ID: raw.ID,
             SpaceID: raw.SpaceID,
             EntityID: raw.EntityID,
@@ -540,17 +544,7 @@ export async function resolveSpaceAgentRetrieval(
             Description: description,
             Band: raw.Band,
             StoredContentType: target?.contentType ?? null,
-        });
-    }
-
-    const quotedItems: SpaceAgentCandidateItem[] = [];
-    const decisions: SpaceAgentRetrievalDecision[] = [];
-    const spaceIndex = new Map<string, SpaceNode>();
-    for (const s of spaceNodes) {
-        spaceIndex.set(s.id.toLowerCase(), s);
-    }
-
-    for (const item of candidateItems) {
+        };
         const itemSpaceId = parseUuid(item.SpaceID) ?? item.SpaceID;
         const itemReach = membershipReaches(spaceNodes, memberSnapshots, cleanUserId, itemSpaceId);
         const itemCallerCanSeeTeam = itemReach ? itemReach.role.canSeeTeamBand : false;
@@ -585,13 +579,36 @@ export async function resolveSpaceAgentRetrieval(
             scope,
         );
         const allowed = callerAllowed && audienceDecision.allowed;
-
         const reason = allowed
             ? 'Allowed: item is within effective retrieval scope and readable by caller.'
             : audienceDecision.reason ?? 'Refused: agentMayQuote excluded item based on space subtree, team band, or retrieval policy.';
+        preliminaryCandidates.push({ item, allowed, reason });
+    }
 
-        decisions.push({ item, allowed, reason });
-        if (allowed) {
+    const allowedItemIds = preliminaryCandidates.filter((c) => c.allowed).map((c) => c.item.ID);
+    const chunksBySpaceItemId = await loadChunksBySpaceItemId(provider, rvUser, user, allowedItemIds);
+
+    const candidateItems: SpaceAgentCandidateItem[] = [];
+    const quotedItems: SpaceAgentCandidateItem[] = [];
+    const decisions: SpaceAgentRetrievalDecision[] = [];
+
+    for (const entry of preliminaryCandidates) {
+        const chunkTexts = entry.allowed ? chunksBySpaceItemId.get((parseUuid(entry.item.ID) ?? entry.item.ID).toLowerCase()) : undefined;
+        const item: SpaceAgentCandidateItem = chunkTexts && chunkTexts.length > 0 ? { ...entry.item, ChunkTexts: chunkTexts } : entry.item;
+
+        if (options?.query) {
+            const q = options.query.toLowerCase();
+            const matchesName = item.Name.toLowerCase().includes(q);
+            const matchesDescription = !!(item.Description && item.Description.toLowerCase().includes(q));
+            const matchesChunks = !!(chunkTexts && chunkTexts.some((t) => t.toLowerCase().includes(q)));
+            if (!matchesName && !matchesDescription && !matchesChunks) {
+                continue;
+            }
+        }
+
+        candidateItems.push(item);
+        decisions.push({ item, allowed: entry.allowed, reason: entry.reason });
+        if (entry.allowed) {
             quotedItems.push(item);
         }
     }
@@ -606,4 +623,130 @@ export async function resolveSpaceAgentRetrieval(
         quotedItems,
         decisions,
     };
+}
+
+async function loadChunksBySpaceItemId(
+    provider: IMetadataProvider,
+    rvUser: RunView,
+    user: UserInfo,
+    allowedItemIds: readonly string[],
+): Promise<Map<string, string[]>> {
+    const result = new Map<string, string[]>();
+    if (
+        allowedItemIds.length === 0 ||
+        typeof provider.EntityByName !== 'function' ||
+        !provider.EntityByName('MJ: Content Item Chunks')
+    ) {
+        return result;
+    }
+
+    const validIds = allowedItemIds.map((id) => parseUuid(id)).filter((id): id is string => !!id);
+    if (validIds.length === 0) {
+        return result;
+    }
+
+    try {
+        const recordIdClauses = validIds.flatMap((id) => [`'ID|${id}'`, `'${id}'`]).join(', ');
+        const erdRes = await rvUser.RunView<{ ID: string; RecordID: string }>(
+            {
+                EntityName: 'MJ: Entity Record Documents',
+                ExtraFilter: `Entity = '${ITEMS_ENTITY}' AND RecordID IN (${recordIdClauses})`,
+                Fields: ['ID', 'RecordID'],
+                MaxRows: 2000,
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            user,
+        );
+        if (!erdRes.Success || !erdRes.Results || erdRes.Results.length === 0) {
+            return result;
+        }
+
+        const spaceItemIdByErdId = new Map<string, string>();
+        const erdIdClauses: string[] = [];
+        for (const erd of erdRes.Results) {
+            const erdId = parseUuid(erd.ID);
+            const itemId = parseUuid(cleanRecordId(erd.RecordID));
+            if (erdId && itemId) {
+                spaceItemIdByErdId.set(erdId.toLowerCase(), itemId.toLowerCase());
+                erdIdClauses.push(`'${erdId}'`);
+            }
+        }
+        if (erdIdClauses.length === 0) {
+            return result;
+        }
+
+        const erdInList = erdIdClauses.join(', ');
+        const ciRes = await rvUser.RunView<{ ID: string; EntityRecordDocumentID: string | null; RootParentID: string | null }>(
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `DeleteStatus IS NULL AND (EntityRecordDocumentID IN (${erdInList}) OR RootParentID IN (SELECT ID FROM [__mj].[vwContentItems] WHERE DeleteStatus IS NULL AND EntityRecordDocumentID IN (${erdInList})))`,
+                Fields: ['ID', 'EntityRecordDocumentID', 'RootParentID'],
+                MaxRows: 2000,
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            user,
+        );
+        if (!ciRes.Success || !ciRes.Results || ciRes.Results.length === 0) {
+            return result;
+        }
+
+        const erdIdByRootCiId = new Map<string, string>();
+        for (const ci of ciRes.Results) {
+            const ciId = parseUuid(ci.ID);
+            const erdId = ci.EntityRecordDocumentID ? parseUuid(ci.EntityRecordDocumentID) : null;
+            if (ciId && erdId) {
+                erdIdByRootCiId.set(ciId.toLowerCase(), erdId.toLowerCase());
+            }
+        }
+
+        const spaceItemIdByCiId = new Map<string, string>();
+        const ciIdClauses: string[] = [];
+        for (const ci of ciRes.Results) {
+            const ciId = parseUuid(ci.ID);
+            if (!ciId) continue;
+            const directErdId = ci.EntityRecordDocumentID ? parseUuid(ci.EntityRecordDocumentID)?.toLowerCase() : null;
+            const rootCiId = ci.RootParentID ? parseUuid(ci.RootParentID)?.toLowerCase() : null;
+            const resolvedErdId = directErdId ?? (rootCiId ? erdIdByRootCiId.get(rootCiId) ?? null : null);
+            const spaceItemId = resolvedErdId ? spaceItemIdByErdId.get(resolvedErdId) : undefined;
+            if (spaceItemId) {
+                spaceItemIdByCiId.set(ciId.toLowerCase(), spaceItemId);
+                ciIdClauses.push(`'${ciId}'`);
+            }
+        }
+        if (ciIdClauses.length === 0) {
+            return result;
+        }
+
+        const chunksRes = await rvUser.RunView<{ ID: string; ContentItemID: string; Text: string | null; Sequence: number }>(
+            {
+                EntityName: 'MJ: Content Item Chunks',
+                ExtraFilter: `DeleteStatus IS NULL AND ContentItemID IN (${ciIdClauses.join(', ')})`,
+                Fields: ['ID', 'ContentItemID', 'Text', 'Sequence'],
+                OrderBy: 'Sequence ASC',
+                MaxRows: 2000,
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            user,
+        );
+        if (!chunksRes.Success || !chunksRes.Results) {
+            return result;
+        }
+
+        for (const chunk of chunksRes.Results) {
+            const ciId = parseUuid(chunk.ContentItemID)?.toLowerCase();
+            const spaceItemId = ciId ? spaceItemIdByCiId.get(ciId) : undefined;
+            const normalizedText = typeof chunk.Text === 'string' ? chunk.Text.replace(/\s+/g, ' ').trim() : '';
+            if (!spaceItemId || !normalizedText) continue;
+            const list = result.get(spaceItemId) ?? [];
+            list.push(normalizedText);
+            result.set(spaceItemId, list);
+        }
+    } catch (err) {
+        LogError(`resolveSpaceAgentRetrieval chunk lookup failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    return result;
 }

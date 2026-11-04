@@ -8,10 +8,15 @@ import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type Na
 import type { UserInfo } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
 import { mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
-import { createSpaceConversation, executeSpaceChatTurn, postSpaceMessage, resolveSpaceAgentRetrieval, RUN_SPACE_DATA_ACTION_ID, RUN_SPACE_DATA_ACTION_NAME } from '@mj-biz-apps/collaboration-core-entities-server';
+import { createSpaceConversation, executeSpaceChatTurn, postSpaceMessage, resolveSpaceAgentRetrieval, RUN_SPACE_DATA_ACTION_ID, RUN_SPACE_DATA_ACTION_NAME, SCOPED_SEARCH_ACTION_ID } from '@mj-biz-apps/collaboration-core-entities-server';
 import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
 import { CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_GRANT_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY } from '../entity-names.js';
-import { FindRows, GetPersonaUser } from '../wire.js';
+import { FindRows, GetPersonaUser, SameID } from '../wire.js';
+
+/** The granted actions of a turn: every turn is also given the space's own search (Scoped Search), which is not a grant. */
+const grantedActions = (ids: readonly string[]): string[] => ids.filter((id) => !SameID(id, SCOPED_SEARCH_ACTION_ID));
+/** The test agent's reply lists the tools it was given; with no grant in force that is the space search alone. */
+const onlySpaceSearch = new RegExp(`Tools: ${SCOPED_SEARCH_ACTION_ID}$`, 'im');
 import { cleanupConversation, cleanupSpace, cleanupStep, registerChecks } from './cleanup-helpers.js';
 import { attachAgentToSpace, detachTestAgent } from './test-agent-attachment.js';
 
@@ -91,10 +96,11 @@ const checks: NamedCheck[] = [
                 const asLena = await turnAs(ctx, lena, CHAPTER_12, general.conversationId!, `@${COLLABORATION_TEST_AGENT_NAME} what can you run here?`);
                 const tools = asLena.result.ok ? asLena.result.tools : undefined;
                 Assert(tools?.audience === 'Shared', `A General conversation seats everyone, so the audience is Shared (${tools?.audience})`);
-                Assert(tools !== undefined && tools.actionIds.length === 0, `No action is given: the type's reminder grant binds ChapterID (${tools?.actionIds.join(',')})`);
+                Assert(tools !== undefined && grantedActions(tools.actionIds).length === 0, `No granted action is given: the type's reminder grant binds ChapterID (${tools?.actionIds.join(',')})`);
+                Assert(tools !== undefined && tools.actionIds.some((id) => SameID(id, SCOPED_SEARCH_ACTION_ID)), "The space's own search is given on every turn");
                 Assert(tools !== undefined && tools.dataGrantNames.length === 0, `No data to run (${tools?.dataGrantNames.join(',')})`);
                 Assert(tools !== undefined && tools.withheld.some((line) => /binds ChapterID/.test(line) && /A16/.test(line)), `The bound action is withheld and says why: ${tools?.withheld.join(' | ')}`);
-                Assert(/Tools: none/.test(asLena.reply) && /Data: none/.test(asLena.reply), `The agent was told of no tools and no data: ${asLena.reply.split('\n').slice(-3).join(' / ')}`);
+                Assert(onlySpaceSearch.test(asLena.reply) && /Data: none/.test(asLena.reply), `The agent was told only of the space search, and of no data: ${asLena.reply.split('\n').slice(-3).join(' / ')}`);
 
                 // Then a Team grant of the same action on the space itself, with no binding: the nearest level's grant for a target
                 // replaces the type's (D30), so for Team it is an unbound action, and for a Shared audience it is simply not in force
@@ -102,8 +108,8 @@ const checks: NamedCheck[] = [
                 grantId = teamGrant.grantId;
                 const lenaAgain = await turnAs(ctx, lena, CHAPTER_12, general.conversationId!, `@${COLLABORATION_TEST_AGENT_NAME} and now?`);
                 const toolsAgain = lenaAgain.result.ok ? lenaAgain.result.tools : undefined;
-                Assert(toolsAgain !== undefined && toolsAgain.actionIds.length === 0 && toolsAgain.dataGrantNames.length === 0, `The space's Team grant is not in force for a Shared audience (${toolsAgain?.actionIds.join(',')})`);
-                Assert(/Tools: none/.test(lenaAgain.reply), 'The agent was still told of no tools');
+                Assert(toolsAgain !== undefined && grantedActions(toolsAgain.actionIds).length === 0 && toolsAgain.dataGrantNames.length === 0, `The space's Team grant is not in force for a Shared audience (${toolsAgain?.actionIds.join(',')})`);
+                Assert(onlySpaceSearch.test(lenaAgain.reply), 'The agent was still told only of the space search');
 
                 const internal = await createSpaceConversation(ctx.Provider, nico, { SpaceID: CHAPTER_12, Name: `chapter-12-t1-internal-${Date.now()}`, Kind: 'Private' });
                 Assert(internal.ok === true && !!internal.conversationId, `Nico starts an Internal Only conversation: ${internal.ok ? '' : internal.message}`);
@@ -113,7 +119,7 @@ const checks: NamedCheck[] = [
                 const staffTools = asNico.result.ok ? asNico.result.tools : undefined;
                 Assert(staffTools?.audience === 'Team', 'An Internal Only conversation seats Team');
                 Assert(staffTools !== undefined && staffTools.actionIds.map((id) => id.toUpperCase()).includes(teamGrant.actionId), `The space's unbound Team action grant is in force for Team (${staffTools?.actionIds.join(',')})`);
-                Assert(staffTools !== undefined && staffTools.actionIds.length === 1, `One action: the space's grant replaced the type's bound one for this target (D30), and with no data to run Run space data is not given (${staffTools?.actionIds.join(',')})`);
+                Assert(staffTools !== undefined && grantedActions(staffTools.actionIds).length === 1, `One granted action: the space's grant replaced the type's bound one for this target (D30), and with no data to run Run space data is not given (${staffTools?.actionIds.join(',')})`);
                 Assert(staffTools !== undefined && !staffTools.actionIds.map((id) => id.toUpperCase()).includes(RUN_SPACE_DATA_ACTION_ID), 'Run space data is not given when there is nothing to run');
                 Assert(staffTools !== undefined && staffTools.withheld.length === 0, `Nothing is withheld once the unbound grant stands in for the bound one (${staffTools?.withheld.join(' | ')})`);
                 Assert(new RegExp(`Tools: .*${teamGrant.actionId}`, 'i').test(asNico.reply), `The agent was told of the action: ${asNico.reply.split('\n').slice(-3).join(' / ')}`);
