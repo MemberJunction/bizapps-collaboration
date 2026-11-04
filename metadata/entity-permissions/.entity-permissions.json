@@ -824,5 +824,20 @@
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Content Item Chunks In Reach"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "E6F213DD-6C6F-4347-81B6-843F32338678"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Branches",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Branches In Reach"
+    }
   }
 ]
