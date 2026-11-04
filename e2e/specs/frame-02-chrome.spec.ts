@@ -69,9 +69,9 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await expect(rail.locator('.nav-item').filter({ hasText: 'Inbox' })).toContainText('4');
         await expect(rail.locator('.nav-item').filter({ hasText: 'My tasks' })).toContainText('6');
 
-        // Spaces tree in rail
-        const discoveryItem = rail.locator('.tree-item.active');
-        await expect(discoveryItem).toContainText('Discovery');
+        // Spaces tree in rail: in Home mode no row is marked active (the open space shows in the header), so find the row by name
+        const discoveryItem = rail.locator('.tree-item').filter({ hasText: 'Discovery' });
+        await expect(discoveryItem).toBeVisible();
         await expect(discoveryItem.locator('.unread')).toBeVisible();
 
         // 3. Space Header & Breadcrumbs (Angular component: mjc-space-header)
