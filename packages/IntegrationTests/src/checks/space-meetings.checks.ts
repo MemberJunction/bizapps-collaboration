@@ -101,6 +101,8 @@ const checks: NamedCheck[] = [
             const [northwind] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, "Name = 'Northwind relationship'", ['ID']);
             Assert(!!northwind, 'Northwind relationship space exists');
             const ada = await GetPersonaUser(ctx, 'ada');
+            const casey = await GetPersonaUser(ctx, 'casey');
+            const dana = await GetPersonaUser(ctx, 'dana');
             const sam = await GetPersonaUser(ctx, 'sam');
             const nora = await GetPersonaUser(ctx, 'nora');
             const startsAt = new Date(Date.now() + 2 * 86_400_000);
@@ -197,6 +199,57 @@ const checks: NamedCheck[] = [
                 // Verify loadSpaceMeetings as persona Ada
                 const loaded = await loadSpaceMeetings(ctx.Provider, northwind.ID, ada, { includeDetails: true });
                 Assert(loaded.upcoming.some((m) => m.ID.toLowerCase() === meetingId!.toLowerCase()), 'Standard meeting appears in loadSpaceMeetings.upcoming for Ada');
+
+                // Verify RunView (FindRows) and loadSpaceMeetings RLS enforcement for Space Participant personas:
+                // - Casey (Space Participant seated on Northwind, non-attendee of Private meeting) sees Standard meeting (1) and NOT Private meeting (0)
+                const caseyMeetings = await FindRows<{ ID: string }>(
+                    ctx,
+                    MEETING_ENTITY,
+                    `ID IN ('${meetingId}', '${privateMeetingId}')`,
+                    ['ID'],
+                    casey,
+                    { BypassCache: true },
+                );
+                Assert(
+                    caseyMeetings.length === 1 && caseyMeetings[0].ID.toLowerCase() === meetingId.toLowerCase(),
+                    `Casey (seated Space Participant, non-attendee) sees Standard meeting only via RunView (got ${JSON.stringify(caseyMeetings)})`,
+                );
+                const caseyLoaded = await loadSpaceMeetings(ctx.Provider, northwind.ID, casey, { includeDetails: true });
+                Assert(
+                    caseyLoaded.upcoming.some((m) => m.ID.toLowerCase() === meetingId!.toLowerCase()) &&
+                        !caseyLoaded.upcoming.some((m) => m.ID.toLowerCase() === privateMeetingId!.toLowerCase()),
+                    'Casey loadSpaceMeetings includes Standard meeting and excludes Private meeting',
+                );
+
+                // - Sam (Team member on Northwind, non-attendee of Private meeting) sees Standard meeting (1) and NOT Private meeting (0) via RunView
+                const samMeetings = await FindRows<{ ID: string }>(
+                    ctx,
+                    MEETING_ENTITY,
+                    `ID IN ('${meetingId}', '${privateMeetingId}')`,
+                    ['ID'],
+                    sam,
+                    { BypassCache: true },
+                );
+                Assert(
+                    samMeetings.length === 1 && samMeetings[0].ID.toLowerCase() === meetingId.toLowerCase(),
+                    `Sam (Team member, non-attendee) sees Standard meeting only and NOT Private meeting via RunView (got ${JSON.stringify(samMeetings)})`,
+                );
+
+                // - Dana (Space Participant not seated on Northwind) sees 0 rows via RunView and loadSpaceMeetings
+                const danaMeetings = await FindRows<{ ID: string }>(
+                    ctx,
+                    MEETING_ENTITY,
+                    `ID IN ('${meetingId}', '${privateMeetingId}')`,
+                    ['ID'],
+                    dana,
+                    { BypassCache: true },
+                );
+                Assert(
+                    danaMeetings.length === 0,
+                    `Dana (Space Participant outsider to Northwind) sees 0 meetings via RunView (got ${JSON.stringify(danaMeetings)})`,
+                );
+                const danaLoaded = await loadSpaceMeetings(ctx.Provider, northwind.ID, dana, { includeDetails: true });
+                Assert(danaLoaded.meetings.length === 0, `Dana sees 0 meetings via loadSpaceMeetings (got ${danaLoaded.meetings.length})`);
 
                 // Verify buildSpaceMeetingsAgentContext as persona Ada:
                 // - When Ada is the only viewer (attendee of Private meeting), both Standard and Private meetings are included

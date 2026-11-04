@@ -132,3 +132,11 @@ export type {
     SpaceMeetingSummary,
     SpaceMeetingsResult,
 } from './space-meetings.js';
+export {
+    mintSpaceLink,
+    resolveMagicLinkHost,
+    setMagicLinkHostProvider,
+    type MagicLinkHost,
+    type MintSpaceLinkResult,
+} from './mint-space-link.js';
+

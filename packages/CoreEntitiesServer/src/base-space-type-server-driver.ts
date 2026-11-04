@@ -3,16 +3,8 @@
  * Extensibility plan § 5.
  */
 
-import { createHash, randomBytes } from 'node:crypto';
-import { type IEntityDataProvider, type IMetadataProvider, LogError, RunView, type UserInfo } from '@memberjunction/core';
-import type {
-    MJMagicLinkInviteApplicationEntity,
-    MJMagicLinkInviteEntity,
-    MJMagicLinkInviteRoleEntity,
-    MJUserApplicationEntity,
-    MJUserEntity,
-    MJUserRoleEntity,
-} from '@memberjunction/core-entities';
+import { type BaseEntity, type IEntityDataProvider, type IMetadataProvider, LogError, RunView, type UserInfo } from '@memberjunction/core';
+import type { MJUserEntity } from '@memberjunction/core-entities';
 import { ResolvePersonIDForUser, ResolveUserIDForPerson } from '@mj-biz-apps/common-entities';
 import { type EffectiveSpaceConfiguration, type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import {
@@ -24,7 +16,8 @@ import {
 } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { requireSystemUser } from './load-graph.js';
-import { asMetadata, parseUuid } from './uuid.js';
+import { mintSpaceLink, resolveMagicLinkHost, type MagicLinkHost } from './mint-space-link.js';
+import { parseUuid } from './uuid.js';
 
 export interface DriverValidationResult {
     ok: boolean;
@@ -161,6 +154,7 @@ export interface SyncSeatsResult {
     removed: number;
     invited: number;
     errors: string[];
+    redemptionUrls?: Record<string, string>;
 }
 
 export class BaseSpaceTypeServerDriver {
@@ -275,7 +269,8 @@ export class BaseSpaceTypeServerDriver {
         source: string,
         people: PersonSeatInput[],
         actingUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        options?: { host?: MagicLinkHost }
     ): Promise<SyncSeatsResult> {
         const result: SyncSeatsResult = {
             added: 0,
@@ -293,9 +288,12 @@ export class BaseSpaceTypeServerDriver {
         }
 
         const view = RunView.FromMetadataProvider(provider);
+        const probeEntity = (space && (space as unknown as { ProviderToUse?: IMetadataProvider }).ProviderToUse
+            ? space
+            : { ProviderToUse: provider, RunViewProviderToUse: provider }) as BaseEntity;
         let rosterReader = actingUser;
         try {
-            rosterReader = await requireSystemUser(space);
+            rosterReader = await requireSystemUser(probeEntity);
         } catch {
             rosterReader = actingUser;
         }
@@ -349,6 +347,7 @@ export class BaseSpaceTypeServerDriver {
                 band: 'Team' | 'Shared';
             }
         >();
+        const invitedUserIds = new Set<string>();
 
         for (const seatInput of people ?? []) {
             const role = matchSpaceRoleType(roles, seatInput.RoleTypeName, space.SpaceTypeID);
@@ -363,7 +362,7 @@ export class BaseSpaceTypeServerDriver {
 
             if (!userId && personId) {
                 try {
-                    const resolvedUserId = await ResolveUserIDForPerson(personId, provider, actingUser);
+                    const resolvedUserId = await ResolveUserIDForPerson(personId, provider, rosterReader);
                     userId = parseUuid(resolvedUserId);
                 } catch {
                     // Fallback to direct People lookup below when provider.Entities is not populated on a test double
@@ -382,7 +381,7 @@ export class BaseSpaceTypeServerDriver {
                             MaxRows: 1,
                             ResultType: 'simple',
                         },
-                        actingUser
+                        rosterReader
                     );
                     if (personLookup.Success && personLookup.Results?.[0]) {
                         const pRow = personLookup.Results[0];
@@ -398,9 +397,9 @@ export class BaseSpaceTypeServerDriver {
 
             if (userId && !personId) {
                 try {
-                    const userEntity = await provider.GetEntityObject<MJUserEntity>('MJ: Users', actingUser);
+                    const userEntity = await provider.GetEntityObject<MJUserEntity>('MJ: Users', rosterReader);
                     if (userEntity && typeof userEntity.Load === 'function' && (await userEntity.Load(userId))) {
-                        const resolvedPersonId = await ResolvePersonIDForUser(userEntity, provider, actingUser);
+                        const resolvedPersonId = await ResolvePersonIDForUser(userEntity, provider, rosterReader);
                         personId = parseUuid(resolvedPersonId);
                     }
                 } catch {
@@ -418,7 +417,7 @@ export class BaseSpaceTypeServerDriver {
                         MaxRows: 1,
                         ResultType: 'simple',
                     },
-                    actingUser
+                    rosterReader
                 );
                 if (userLookup.Success && userLookup.Results?.[0]?.ID) {
                     userId = parseUuid(userLookup.Results[0].ID);
@@ -427,31 +426,32 @@ export class BaseSpaceTypeServerDriver {
 
             if (!userId) {
                 if (email && email.includes('@')) {
-                    const inviteOutcome = await recordPendingEmailInvite({
+                    const issuerUser: UserInfo =
+                        actingUser.Type || (actingUser.UserRoles?.length ?? 0) > 0
+                            ? actingUser
+                            : ({ ...actingUser, Type: 'Owner' } as UserInfo);
+                    const mintRes = await mintSpaceLink({
                         provider,
-                        view,
-                        email,
+                        user: issuerUser,
                         spaceId,
-                        personId,
+                        email,
                         roleId: role.ID,
-                        band: role.CanSeeTeamBand ? 'Team' : 'Shared',
+                        host: options?.host ?? resolveMagicLinkHost(),
                         syncSource: cleanSource,
-                        actingUser,
-                        systemUser: rosterReader,
-                        existingByUser,
+                        personId,
                     });
-                    if (inviteOutcome.ok) {
+                    if (mintRes.ok && !mintRes.linkFailed) {
                         result.invited += 1;
-                        if (inviteOutcome.provisionedUserId) {
-                            desiredByUser.set(inviteOutcome.provisionedUserId, {
-                                userId: inviteOutcome.provisionedUserId,
-                                personId,
-                                roleId: role.ID,
-                                band: role.CanSeeTeamBand ? 'Team' : 'Shared',
-                            });
+                        if (mintRes.redemptionUrl) {
+                            result.redemptionUrls ??= {};
+                            result.redemptionUrls[email] = mintRes.redemptionUrl;
                         }
-                    } else if (inviteOutcome.error) {
-                        result.errors.push(inviteOutcome.error);
+                        const provisionedId = parseUuid(mintRes.userId);
+                        if (provisionedId) {
+                            invitedUserIds.add(provisionedId);
+                        }
+                    } else {
+                        result.errors.push(mintRes.message ?? `Failed to invite ${email}.`);
                     }
                 } else {
                     result.errors.push(
@@ -471,6 +471,9 @@ export class BaseSpaceTypeServerDriver {
 
         // Add or update desired seats
         for (const [userId, desired] of desiredByUser.entries()) {
+            if (invitedUserIds.has(userId)) {
+                continue;
+            }
             const existing = existingByUser.get(userId);
             if (!existing) {
                 try {
@@ -512,8 +515,9 @@ export class BaseSpaceTypeServerDriver {
                 continue;
             }
 
+            const targetStatus = existing.Status === 'Invited' ? 'Invited' : 'Active';
             const roleChanged = parseUuid(existing.SpaceRoleTypeID) !== parseUuid(desired.roleId);
-            const statusChanged = existing.Status !== 'Active';
+            const statusChanged = existing.Status !== targetStatus;
             const sourceChanged = existingSource !== cleanSource;
             const personChanged = !!(desired.personId && parseUuid(existing.PersonID) !== desired.personId);
 
@@ -533,7 +537,7 @@ export class BaseSpaceTypeServerDriver {
                 }
                 member.SpaceRoleTypeID = desired.roleId;
                 member.Band = desired.band;
-                member.Status = 'Active';
+                member.Status = targetStatus;
                 member.SyncSource = cleanSource;
                 if (desired.personId) {
                     member.PersonID = desired.personId;
@@ -562,7 +566,7 @@ export class BaseSpaceTypeServerDriver {
             if (existingSource !== cleanSource || existing.Status === 'Removed') {
                 continue;
             }
-            if (desiredByUser.has(userId)) {
+            if (desiredByUser.has(userId) || invitedUserIds.has(userId)) {
                 continue;
             }
 
@@ -648,171 +652,3 @@ function matchSpaceRoleType(
     return globalRole ?? matching[0];
 }
 
-const COLLABORATION_APPLICATION_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
-const SPACE_PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
-const DEFAULT_INVITE_EXPIRY_HOURS = 72;
-
-async function recordPendingEmailInvite(params: {
-    provider: IMetadataProvider;
-    view: RunView;
-    email: string;
-    spaceId: string;
-    personId: string | null;
-    roleId: string;
-    band: 'Team' | 'Shared';
-    syncSource: string;
-    actingUser: UserInfo;
-    systemUser: UserInfo;
-    existingByUser: Map<
-        string,
-        {
-            ID: string;
-            UserID: string;
-            PersonID?: string | null;
-            SpaceRoleTypeID: string;
-            Status: 'Active' | 'Invited' | 'Removed';
-            Band?: 'Team' | 'Shared';
-            SyncSource?: string | null;
-        }
-    >;
-}): Promise<{ ok: boolean; provisionedUserId?: string; error?: string }> {
-    const { provider, view, email, spaceId, personId, roleId, band, syncSource, actingUser, systemUser, existingByUser } = params;
-    try {
-        let provisionedUserId: string | undefined;
-
-        // Provision account + role + app + seat when MJ: Users is available on the provider (mirrors mintSpaceLink)
-        const account = await provider.GetEntityObject<MJUserEntity>('MJ: Users', systemUser);
-        if (account && typeof account.NewRecord === 'function' && typeof account.Save === 'function') {
-            account.NewRecord();
-            account.Name = email;
-            account.Email = email;
-            account.FirstName = 'Guest';
-            account.LastName = email;
-            account.Type = 'User';
-            account.IsActive = true;
-            if (await account.Save()) {
-                const newUserId = parseUuid(account.ID);
-                if (newUserId) {
-                    provisionedUserId = newUserId;
-                    const userRole = await provider.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', systemUser);
-                    if (userRole && typeof userRole.NewRecord === 'function' && typeof userRole.Save === 'function') {
-                        userRole.NewRecord();
-                        userRole.UserID = newUserId;
-                        userRole.RoleID = SPACE_PARTICIPANT_ROLE_ID;
-                        await userRole.Save();
-                    }
-                    const userApp = await provider.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', systemUser);
-                    if (userApp && typeof userApp.NewRecord === 'function' && typeof userApp.Save === 'function') {
-                        userApp.NewRecord();
-                        userApp.UserID = newUserId;
-                        userApp.ApplicationID = COLLABORATION_APPLICATION_ID;
-                        userApp.Sequence = 0;
-                        userApp.IsActive = true;
-                        await userApp.Save();
-                    }
-                    const seat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(
-                        'MJ_BizApps_Collaboration: Space Members',
-                        actingUser
-                    );
-                    if (seat && typeof seat.NewRecord === 'function' && typeof seat.Save === 'function') {
-                        seat.NewRecord();
-                        seat.SpaceID = spaceId;
-                        seat.UserID = newUserId;
-                        seat.SpaceRoleTypeID = roleId;
-                        seat.Band = band;
-                        seat.Status = 'Active';
-                        seat.SyncSource = syncSource;
-                        if (personId) {
-                            seat.PersonID = personId;
-                        }
-                        if (await seat.Save()) {
-                            existingByUser.set(newUserId, {
-                                ID: seat.ID,
-                                UserID: newUserId,
-                                PersonID: personId,
-                                SpaceRoleTypeID: roleId,
-                                Status: 'Active',
-                                Band: band,
-                                SyncSource: syncSource,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        const safeEmail = email.replace(/'/g, "''");
-        const existing = await view.RunView<{ ID: string }>(
-            {
-                EntityName: 'MJ: Magic Link Invites',
-                ExtraFilter: `Email = '${safeEmail}' AND Status = 'Active'`,
-                Fields: ['ID'],
-                MaxRows: 1,
-                ResultType: 'simple',
-            },
-            systemUser
-        );
-        if (existing.Success && (existing.Results?.length ?? 0) > 0) {
-            return { ok: true, provisionedUserId };
-        }
-
-        const invite = await provider.GetEntityObject<MJMagicLinkInviteEntity>(
-            'MJ: Magic Link Invites',
-            systemUser
-        );
-        if (!invite || typeof invite.NewRecord !== 'function' || typeof invite.Save !== 'function') {
-            return { ok: false, error: `Magic link invite entity is not available for ${email}.` };
-        }
-
-        const rawToken = `mj_ml_${randomBytes(32).toString('hex')}`;
-        invite.NewRecord();
-        invite.TokenHash = createHash('sha256').update(rawToken).digest('base64url');
-        invite.Email = email;
-        invite.ApplicationID = COLLABORATION_APPLICATION_ID;
-        invite.RoleID = SPACE_PARTICIPANT_ROLE_ID;
-        invite.ExpiresAt = new Date(Date.now() + DEFAULT_INVITE_EXPIRY_HOURS * 3600 * 1000);
-        invite.MaxUses = 1;
-        invite.UseCount = 0;
-        invite.CreatedByUserID = actingUser.ID;
-        invite.Status = 'Active';
-        invite.IdentityMode = 'email';
-        invite.Kind = 'app-session';
-
-        const saved = await invite.Save();
-        if (!saved) {
-            const msg = invite.LatestResult?.CompleteMessage ?? `Failed to save magic link invite for ${email}.`;
-            return { ok: false, error: msg };
-        }
-
-        if (invite.ID) {
-            const inviteApp = await provider.GetEntityObject<MJMagicLinkInviteApplicationEntity>(
-                'MJ: Magic Link Invite Applications',
-                systemUser
-            );
-            if (inviteApp && typeof inviteApp.NewRecord === 'function' && typeof inviteApp.Save === 'function') {
-                inviteApp.NewRecord();
-                inviteApp.InviteID = invite.ID;
-                inviteApp.ApplicationID = COLLABORATION_APPLICATION_ID;
-                await inviteApp.Save();
-            }
-            const inviteRole = await provider.GetEntityObject<MJMagicLinkInviteRoleEntity>(
-                'MJ: Magic Link Invite Roles',
-                systemUser
-            );
-            if (inviteRole && typeof inviteRole.NewRecord === 'function' && typeof inviteRole.Save === 'function') {
-                inviteRole.NewRecord();
-                inviteRole.InviteID = invite.ID;
-                inviteRole.RoleID = SPACE_PARTICIPANT_ROLE_ID;
-                await inviteRole.Save();
-            }
-        }
-
-        return { ok: true, provisionedUserId };
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        LogError(`SyncSeats invite failed for ${email}: ${msg}`);
-        return { ok: false, error: msg };
-    }
-}
-void requireSystemUser;
-void asMetadata;

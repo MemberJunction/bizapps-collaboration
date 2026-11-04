@@ -853,10 +853,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Meetings In Reach"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:25.810Z",
-      "checksum": "fb5c14247e8fe800cd2b4aaac559204e6accc97b982e08939a67c6640c21e5a1"
     }
   },
   {
@@ -872,10 +868,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Meeting Series In Reach"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:25.839Z",
-      "checksum": "0d5d976f58f01b47b52dcace2b9f0bfea6228c0599ad9e531498f3c523d058fb"
     }
   },
   {
@@ -891,10 +883,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Meeting Rows In Reach"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:25.870Z",
-      "checksum": "f0b2a667485eeb5998a4655d9a27e6e502a9e102728488e84bcff26d404ef28a"
     }
   },
   {
@@ -910,10 +898,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Meeting Series Rows In Reach"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:25.898Z",
-      "checksum": "8c2f63965a5ae71f2d0afc039c712561556fccf4bb7c23a6490f69d31fdf0655"
     }
   },
   {
@@ -929,10 +913,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Meeting Rows In Reach"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:25.931Z",
-      "checksum": "b63c8c1e9697f55692fb2cdbb3773d3e1ca2816226ef9f86e1fb29f0bd71efde"
     }
   },
   {
@@ -948,10 +928,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Meeting Rows In Reach"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:25.965Z",
-      "checksum": "7851d89e63347920315f1c9382d28d9d0945a4847861adc7cb6e38ecf4b67392"
     }
   },
   {
@@ -967,10 +943,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Meeting Links In Reach"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:26.012Z",
-      "checksum": "ee7d3d79daf9596608b040de7b16c21972e71ab704ee545c78bf0c51efce0d8c"
     }
   },
   {
@@ -986,10 +958,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Task Catalog"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:26.028Z",
-      "checksum": "f53657b0b250c9f668784e70b3de12097c0e48c1af1c7abfd0c598b17d39d0f5"
     }
   },
   {
@@ -1005,10 +973,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Task Catalog"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:26.044Z",
-      "checksum": "a8a03785ddd6fb23c5b44ffdd2d16db839fbbcff27dbc08c03829ccc68b16dd6"
     }
   },
   {
@@ -1024,10 +988,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Task Catalog"
-    },
-    "sync": {
-      "lastModified": "2026-11-04T06:58:26.058Z",
-      "checksum": "79a63aaf4f2df13166a386e2c5c3eb8c0582d789722fadbecd42817cd440e156"
     }
   }
 ]
