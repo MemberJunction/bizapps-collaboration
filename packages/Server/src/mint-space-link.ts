@@ -407,10 +407,10 @@ async function deleteNewAccount(provider: IMetadataProvider, system: UserInfo, u
 }
 
 /**
- * Gives the account a Person when it has none. The account is bound to the new Person through its
- * own link (`LinkedEntityID` = People, `LinkedEntityRecordID` = the Person), which replaces the
- * deprecated `People.LinkedUserID`. An account already linked to a record outside People keeps that
- * link, so its Person is bound through `LinkedUserID` as before.
+ * Gives the account a Person when it has none. Writes both `People.LinkedUserID` (the active 1:1
+ * security-principal bridge restored in `bizapps-common#349`) and, when the account is not already
+ * linked to a record outside People, the user's own People link (`LinkedRecordType = 'Person'`,
+ * `LinkedEntityID` = People, `LinkedEntityRecordID` = the Person).
  */
 async function ensurePerson(provider: IMetadataProvider, system: UserInfo, userId: string, email: string): Promise<void> {
     const people = provider.EntityByName(PEOPLE);
@@ -425,10 +425,10 @@ async function ensurePerson(provider: IMetadataProvider, system: UserInfo, userI
     person.FirstName = parts[0] || 'Member';
     person.LastName = parts.slice(1).join(' ') || 'Member';
     person.Email = email;
-    if (linkedElsewhere) person.LinkedUserID = userId;
+    person.LinkedUserID = userId;
     if (!(await person.Save())) throw new Error(person.LatestResult?.CompleteMessage ?? 'Person save failed.');
     if (linkedElsewhere) return;
-    account.LinkedRecordType = 'Other';
+    account.LinkedRecordType = 'Person';
     account.LinkedEntityID = people.ID;
     account.LinkedEntityRecordID = person.ID;
     if (!(await account.Save())) {
