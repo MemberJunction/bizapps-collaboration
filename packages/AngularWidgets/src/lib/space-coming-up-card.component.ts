@@ -61,17 +61,35 @@ export class SpaceMeetingsWidgetAgendaProvider extends BaseAgendaProvider {
 /**
  * Queries all registered `BaseAgendaProvider` implementations and merges their items chronologically.
  */
-export async function collectSpaceAgendaItems(context: SpaceBatchContext): Promise<AgendaItem[]> {
+export async function collectSpaceAgendaItems(
+    context: SpaceBatchContext & { spaceType?: string },
+): Promise<AgendaItem[]> {
     void SpaceMeetingsWidgetAgendaProvider;
+    const normalizedType = context.spaceType?.toLowerCase().trim() ?? '';
+    const now = Date.now();
     const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseAgendaProvider);
     const arrays: AgendaItem[][] = [];
     for (const reg of registrations) {
+        const meta = reg.Metadata as Record<string, unknown> | undefined;
+        const spaceTypes = Array.isArray(meta?.['spaceTypes']) ? (meta['spaceTypes'] as string[]) : undefined;
+        if (spaceTypes && spaceTypes.length > 0) {
+            const matches = spaceTypes.some(
+                (t) => t === '*' || (normalizedType.length > 0 && t.toLowerCase().trim() === normalizedType),
+            );
+            if (!matches) continue;
+        }
         try {
             const Ctor = reg.SubClass as new () => BaseAgendaProvider;
             const instance = new Ctor();
             const items = await instance.getItemsForSpaces(context);
             if (Array.isArray(items) && items.length > 0) {
-                arrays.push(items);
+                const upcoming = items.filter((item) => {
+                    const t = item.date instanceof Date ? item.date.getTime() : new Date(item.date).getTime();
+                    return !Number.isFinite(t) || t >= now;
+                });
+                if (upcoming.length > 0) {
+                    arrays.push(upcoming);
+                }
             }
         } catch {
             // A faulty agenda provider never breaks the view

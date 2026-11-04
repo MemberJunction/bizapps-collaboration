@@ -2930,7 +2930,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    /** Loads the global Home rail badge counts for Inbox (`bizapps-approval-inbox`) and My tasks (`bizapps-my-tasks`) using the exact same entity and filter as those components. */
+    /** Loads the global Home rail badge counts for Inbox (`bizapps-approval-inbox`) and My tasks (`bizapps-my-tasks`) without cross-view SQL that RLS rejects. */
     public async loadGlobalNavCounts(): Promise<void> {
         if (!this.currentPersonId) {
             this.inboxApprovalCount = 0;
@@ -2941,35 +2941,78 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         try {
             const rv = new RunView(this.RunViewToUse);
             const personID = this.currentPersonId.replace(/'/g, "''");
-            const inboxFilter = [
-                `TypeID IN (SELECT ID FROM __mj_BizAppsTasks.vwTaskTypes WHERE IsApproval = 1)`,
-                `Status NOT IN ('Completed', 'Cancelled')`,
-                `ID IN (SELECT TaskID FROM __mj_BizAppsTasks.vwTaskAssignments WHERE AssigneeRecordID = '${personID}')`,
-                `ID NOT IN (SELECT d.TaskID FROM __mj_BizAppsTasks.vwTaskDecisions d INNER JOIN __mj_BizAppsTasks.vwTaskDecisionOutcomes o ON d.OutcomeID = o.ID WHERE o.IsTerminal = 1)`,
-            ].join(' AND ');
-            const myTasksFilter = `ID IN (SELECT TaskID FROM __mj_BizAppsTasks.vwTaskAssignments WHERE AssigneeRecordID = '${personID}')`;
-            const [approvalsRes, tasksRes] = await Promise.all([
-                rv.RunView<{ ID: string }>({
+            const assignRes = await rv.RunView<{ TaskID: string }>({
+                EntityName: 'MJ_BizApps_Tasks: Task Assignments',
+                ExtraFilter: `AssigneeRecordID = '${personID}'`,
+                Fields: ['TaskID'],
+                ResultType: 'simple',
+                MaxRows: 200,
+            });
+            const taskIds = Array.from(
+                new Set(
+                    (assignRes?.Success && assignRes.Results ? assignRes.Results : [])
+                        .map((r) => r.TaskID)
+                        .filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
+                ),
+            );
+            if (taskIds.length === 0) {
+                this.inboxApprovalCount = 0;
+                this.myTasksCount = 0;
+                this.RefreshView();
+                return;
+            }
+            const quotedIds = taskIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+            const [tasksRes, approvalTypesRes, decisionsRes, outcomesRes] = await Promise.all([
+                rv.RunView<{ ID: string; TypeID: string | null; Status: string | null }>({
                     EntityName: 'MJ_BizApps_Tasks: Tasks',
-                    ExtraFilter: inboxFilter,
-                    Fields: ['ID'],
+                    ExtraFilter: `ID IN (${quotedIds})`,
+                    Fields: ['ID', 'TypeID', 'Status'],
                     ResultType: 'simple',
                     MaxRows: 200,
                 }),
                 rv.RunView<{ ID: string }>({
-                    EntityName: 'MJ_BizApps_Tasks: Tasks',
-                    ExtraFilter: myTasksFilter,
+                    EntityName: 'MJ_BizApps_Tasks: Task Types',
+                    ExtraFilter: `IsApproval = 1`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    MaxRows: 200,
+                }),
+                rv.RunView<{ TaskID: string; OutcomeID: string }>({
+                    EntityName: 'MJ_BizApps_Tasks: Task Decisions',
+                    ExtraFilter: `TaskID IN (${quotedIds})`,
+                    Fields: ['TaskID', 'OutcomeID'],
+                    ResultType: 'simple',
+                    MaxRows: 500,
+                }),
+                rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ_BizApps_Tasks: Task Decision Outcomes',
+                    ExtraFilter: `IsTerminal = 1`,
                     Fields: ['ID'],
                     ResultType: 'simple',
                     MaxRows: 200,
                 }),
             ]);
-            if (approvalsRes?.Success && approvalsRes.Results) {
-                this.inboxApprovalCount = approvalsRes.Results.length;
-            }
-            if (tasksRes?.Success && tasksRes.Results) {
-                this.myTasksCount = tasksRes.Results.length;
-            }
+            const tasks = tasksRes?.Success && tasksRes.Results ? tasksRes.Results : [];
+            const approvalTypeIds = new Set(
+                (approvalTypesRes?.Success && approvalTypesRes.Results ? approvalTypesRes.Results : []).map((t) =>
+                    t.ID.toLowerCase(),
+                ),
+            );
+            const terminalOutcomeIds = new Set(
+                (outcomesRes?.Success && outcomesRes.Results ? outcomesRes.Results : []).map((o) => o.ID.toLowerCase()),
+            );
+            const terminalTaskIds = new Set(
+                (decisionsRes?.Success && decisionsRes.Results ? decisionsRes.Results : [])
+                    .filter((d) => terminalOutcomeIds.has((d.OutcomeID ?? '').toLowerCase()))
+                    .map((d) => (d.TaskID ?? '').toLowerCase()),
+            );
+            this.myTasksCount = tasks.length;
+            this.inboxApprovalCount = tasks.filter((t) => {
+                const status = t.Status ?? '';
+                if (status === 'Completed' || status === 'Cancelled') return false;
+                if (!t.TypeID || !approvalTypeIds.has(t.TypeID.toLowerCase())) return false;
+                return !terminalTaskIds.has(t.ID.toLowerCase());
+            }).length;
             this.RefreshView();
         } catch (err) {
             this.logOnce('global-nav-counts', `Global nav counts could not be read: ${err instanceof Error ? err.message : String(err)}`);
