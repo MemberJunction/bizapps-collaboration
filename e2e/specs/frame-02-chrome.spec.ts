@@ -77,9 +77,10 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         // 3. Space Header & Breadcrumbs (Angular component: mjc-space-header)
         const header = page.locator('mjc-space-header section.space-head');
         await expect(header).toBeVisible();
-        await expect(header.locator('.crumbs')).toContainText('Spaces');
+        // The breadcrumb names the ancestors only ("All spaces › Northwind"); the open space is the title below it
+        await expect(header.locator('.crumbs')).toContainText('All spaces');
         await expect(header.locator('.crumbs')).toContainText('Northwind');
-        await expect(header.locator('.crumbs')).toContainText('Discovery');
+        await expect(header.locator('.crumbs')).not.toContainText('Discovery');
 
         // Title and Chips
         await expect(header.locator('h1.h1')).toHaveText('Discovery');
