@@ -1,9 +1,8 @@
 import { type IMetadataProvider, LogError, RunView, type UserInfo } from '@memberjunction/core';
-import type { MJConversationEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClassEx } from '@memberjunction/global';
 import { type AgendaItem, BaseAgendaProvider, type SpaceBatchContext } from '@mj-biz-apps/collaboration-core';
-import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
 import type { AgentContextResult } from './base-space-type-server-driver.js';
+import { createSpaceConversation } from './create-space-conversation.js';
 import { parseUuid } from './uuid.js';
 
 export const COLLABORATION_SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
@@ -354,8 +353,8 @@ export async function loadSpaceMeetings(
 
 /**
  * Finds or creates a `SpaceChat` bound to a meeting via `Subject = 'meeting:<MeetingID>'`.
- * A `Private` meeting creates a `Private` SpaceChat (visible only to Team-band members);
- * a `Standard` meeting creates a `Topic` SpaceChat.
+ * Routes creation through `createSpaceConversation` so the space type driver's
+ * `ValidateChatChange` hook, `Chats.WhoCanStart` setting, and room edit grants are enforced.
  */
 export async function ensureMeetingSpaceChat(
     provider: IMetadataProvider,
@@ -365,6 +364,7 @@ export async function ensureMeetingSpaceChat(
         meetingName: string;
         visibility?: 'Standard' | 'Private';
         contextUser: UserInfo;
+        createConversation?: typeof createSpaceConversation;
     }
 ): Promise<
     | { ok: true; spaceChatId: string; conversationId: string; created: boolean }
@@ -398,47 +398,26 @@ export async function ensureMeetingSpaceChat(
     }
 
     try {
-        const conversation = await provider.GetEntityObject<MJConversationEntity>(
-            'MJ: Conversations',
-            params.contextUser
-        );
-        conversation.NewRecord();
-        conversation.Name = params.meetingName.trim() || 'Meeting Discussion';
-        conversation.UserID = params.contextUser.ID;
-        conversation.Status = 'Available';
-        if (!(await conversation.Save()) || !conversation.ID) {
+        const createFn = params.createConversation ?? createSpaceConversation;
+        const created = await createFn(provider, params.contextUser, {
+            SpaceID: cleanSpaceId,
+            Name: params.meetingName.trim() || 'Meeting Discussion',
+            Kind: params.visibility === 'Private' ? 'Private' : 'Topic',
+            Subject: subject,
+        });
+        if (!created.ok || !created.spaceChatId || !created.conversationId) {
             return {
                 ok: false,
                 message:
-                    conversation.LatestResult?.CompleteMessage ??
-                    'Could not create the conversation for this meeting.',
-            };
-        }
-
-        const spaceChat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(
-            'MJ_BizApps_Collaboration: Space Chats',
-            params.contextUser
-        );
-        spaceChat.NewRecord();
-        spaceChat.SpaceID = params.spaceId;
-        spaceChat.ConversationID = conversation.ID;
-        spaceChat.Name = params.meetingName.trim() || 'Meeting Discussion';
-        spaceChat.Subject = subject;
-        spaceChat.Kind = params.visibility === 'Private' ? 'Private' : 'Topic';
-        spaceChat.Status = 'Active';
-        if (!(await spaceChat.Save()) || !spaceChat.ID) {
-            return {
-                ok: false,
-                message:
-                    spaceChat.LatestResult?.CompleteMessage ??
+                    created.message ??
                     'Could not create the space chat for this meeting.',
             };
         }
 
         return {
             ok: true,
-            spaceChatId: spaceChat.ID,
-            conversationId: conversation.ID,
+            spaceChatId: created.spaceChatId,
+            conversationId: created.conversationId,
             created: true,
         };
     } catch (err) {
@@ -450,8 +429,10 @@ export async function ensureMeetingSpaceChat(
 
 /**
  * Builds space meeting context for `executeSpaceChatTurn` (Decision A4):
- * Whenever any chat participant in `viewerBands` is on the `Shared` band,
- * `Private` meetings are completely hidden from the agent's instructions and contextData.
+ * - Runs as the acting `contextUser` so row-level security applies.
+ * - `Standard` meetings are visible to all space participants.
+ * - `Private` meetings are included ONLY when every viewer in `viewerBands` is on the
+ *   `Team` band AND every viewer in `viewerBands` is an attendee of that `Private` meeting.
  */
 export async function buildSpaceMeetingsAgentContext(
     provider: IMetadataProvider,
@@ -459,6 +440,7 @@ export async function buildSpaceMeetingsAgentContext(
     viewerBands: Record<string, 'Team' | 'Shared'>,
     contextUser: UserInfo
 ): Promise<AgentContextResult> {
+    const viewerUserIds = Object.keys(viewerBands).map((id) => (parseUuid(id) ?? id.trim()).toUpperCase());
     const bandValues = Object.values(viewerBands);
     const allViewersOnTeam = bandValues.length > 0 && bandValues.every((band) => band === 'Team');
 
@@ -466,9 +448,47 @@ export async function buildSpaceMeetingsAgentContext(
         includeDetails: true,
     });
 
-    const visibleMeetings = loaded.meetings.filter(
-        (m) => m.Visibility === 'Standard' || (m.Visibility === 'Private' && allViewersOnTeam)
-    );
+    const privateMeetings = loaded.meetings.filter((m) => m.Visibility === 'Private');
+    const attendeesByMeetingId = new Map<string, Set<string>>();
+
+    if (allViewersOnTeam && privateMeetings.length > 0) {
+        const view = RunView.FromMetadataProvider(provider);
+        const quotedIds = privateMeetings
+            .map((m) => parseUuid(m.ID) ?? m.ID)
+            .map((id) => `'${id}'`)
+            .join(', ');
+        const attendeesRes = await view.RunView<{
+            MeetingID: string;
+            UserID?: string | null;
+        }>(
+            {
+                EntityName: 'MJ_BizApps_Tasks: Meeting Attendees',
+                ExtraFilter: `MeetingID IN (${quotedIds})`,
+                Fields: ['MeetingID', 'UserID'],
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        if (attendeesRes.Success) {
+            for (const row of attendeesRes.Results ?? []) {
+                const mId = (parseUuid(row.MeetingID) ?? row.MeetingID).toUpperCase();
+                const uId = row.UserID ? (parseUuid(row.UserID) ?? row.UserID.trim()).toUpperCase() : null;
+                if (!uId) continue;
+                const set = attendeesByMeetingId.get(mId) ?? new Set<string>();
+                set.add(uId);
+                attendeesByMeetingId.set(mId, set);
+            }
+        }
+    }
+
+    const visibleMeetings = loaded.meetings.filter((m) => {
+        if (m.Visibility === 'Standard') return true;
+        if (!allViewersOnTeam || viewerUserIds.length === 0) return false;
+        const mKey = (parseUuid(m.ID) ?? m.ID).toUpperCase();
+        const attendees = attendeesByMeetingId.get(mKey);
+        if (!attendees) return false;
+        return viewerUserIds.every((uid) => attendees.has(uid));
+    });
 
     if (visibleMeetings.length === 0) {
         return { instructions: [], contextData: {} };
@@ -490,7 +510,10 @@ export async function buildSpaceMeetingsAgentContext(
     };
 }
 
-@RegisterClass(BaseAgendaProvider, 'SpaceMeetingsAgendaProvider')
+@RegisterClassEx(BaseAgendaProvider, {
+    key: 'collaboration:meetings-agenda-provider',
+    metadata: { spaceTypes: ['*'] },
+})
 export class SpaceMeetingsAgendaProvider extends BaseAgendaProvider {
     public override async getItemsForSpaces(context: SpaceBatchContext): Promise<AgendaItem[]> {
         const provider = context.provider as IMetadataProvider | undefined;

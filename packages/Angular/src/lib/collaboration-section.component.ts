@@ -154,7 +154,12 @@ import {
     type WorkstreamLinkedItem,
     type WorkstreamLinkTaskOption,
     type WorkstreamLinkFileOption,
+    SpaceMeetingsTabComponent,
+    SpaceComingUpCardComponent,
+    SpaceMeetingsWidgetAgendaProvider,
+    collectSpaceAgendaItems,
 } from '@mj-biz-apps/collaboration-ng-widgets';
+import type { AgendaItem } from '@mj-biz-apps/collaboration-core';
 import { MJReactModule } from '@memberjunction/ng-react';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { notesVisibleTo } from './logic/visible-notes.js';
@@ -2170,6 +2175,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             sortKey: meta.sortKey,
             component: reg.SubClass as SpaceTabDescriptor['component'],
         });
+        void SpaceMeetingsTabComponent;
+        void SpaceComingUpCardComponent;
+        void SpaceMeetingsWidgetAgendaProvider;
         const panels = { MessagingPanel: type?.MessagingPanel ?? true, LibraryPanel: type?.LibraryPanel ?? true, WorkPanel: type?.WorkPanel ?? true };
         // A driver or a contribution that throws must not take the space down: log it, and fall back to the built-in parts
         this.spaceTabModel = buildSpaceTabsSafely({
@@ -2307,11 +2315,24 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public homeNeedsYouCards: HomeNeedsYouCardModel[] = [];
     public homeTaskRows: HomeListRow[] = [];
     public homePinRows: HomeListRow[] = [];
+    public homeAgendaItems: AgendaItem[] = [];
 
     private refreshHomeListRows(): void {
         const date = (iso: string | null | undefined): string => (iso ? formatDateLocale(iso) : '');
         this.homeNeedsYouCards = needsYouCards(this.homeInvitations, date);
-        this.homeTaskRows = taskRows(this.homeOpenTaskList, date);
+        const agendaRows: HomeListRow[] = this.homeAgendaItems.map((item) => {
+            const space = this.rawSpaces.find((s) => UUIDsEqual(s.ID, item.spaceId));
+            const when = item.date instanceof Date ? date(item.date.toISOString()) : date(String(item.date));
+            return {
+                key: item.id,
+                title: item.title,
+                detail: [item.context ?? 'Meeting', when].filter(Boolean).join(' · '),
+                spaceName: item.spaceName ?? space?.Name ?? 'Space',
+                iconClass: item.typeIcon ?? 'fa-solid fa-calendar-check',
+                actionLabel: 'Open in Meetings',
+            };
+        });
+        this.homeTaskRows = [...taskRows(this.homeOpenTaskList, date), ...agendaRows];
         this.homePinRows = pinRows(this.homePins);
         const rows: HomeRowModel[] = this.homeList === 'pins'
             ? this.homePinRows
@@ -2351,6 +2372,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             } else {
                 this.homeInvitations = res.Invitations;
                 this.homeOpenTaskList = res.OpenTasks;
+                try {
+                    const activeSpaceIds = this.rawSpaces.filter((s) => !s.ClosedAt).map((s) => s.ID);
+                    this.homeAgendaItems = activeSpaceIds.length > 0
+                        ? await collectSpaceAgendaItems({
+                              spaceIds: activeSpaceIds,
+                              viewerId: this.currentUser?.ID ?? '',
+                              provider: this.RunViewToUse,
+                          })
+                        : [];
+                } catch {
+                    this.homeAgendaItems = [];
+                }
+                if (token !== this.homeListLoadToken) return;
                 this.refreshHomeListRows();
             }
         } catch (err) {
@@ -2371,6 +2405,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onHomeTaskSelected(taskId: string): void {
+        if (taskId.startsWith('meeting:')) {
+            const agenda = this.homeAgendaItems.find((a) => a.id === taskId);
+            if (agenda?.spaceId) {
+                this.openSpaceOnTab(agenda.spaceId, 'meetings');
+                return;
+            }
+        }
         const task = this.homeOpenTaskList.find((t) => UUIDsEqual(t.TaskID, taskId));
         if (task) this.openSpaceOnTab(task.SpaceID, 'Work');
     }

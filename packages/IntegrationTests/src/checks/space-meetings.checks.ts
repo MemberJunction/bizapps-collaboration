@@ -95,25 +95,36 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'space-meetings.SM2',
-        Name: 'SM2 — Space-linked Meeting with ensureMeetingSpaceChat surfaces in loadSpaceMeetings and buildSpaceMeetingsAgentContext, and fnCollaborationMeetingAccess enforces one-walk reach',
+        Name: 'SM2 — Space-linked Standard and Private Meetings enforce attendee-only private visibility across fnCollaborationMeetingAccess, loadSpaceMeetings, and buildSpaceMeetingsAgentContext',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const [northwind] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, "Name = 'Northwind relationship'", ['ID']);
             Assert(!!northwind, 'Northwind relationship space exists');
             const ada = await GetPersonaUser(ctx, 'ada');
+            const sam = await GetPersonaUser(ctx, 'sam');
+            const nora = await GetPersonaUser(ctx, 'nora');
             const startsAt = new Date(Date.now() + 2 * 86_400_000);
             const endsAt = new Date(startsAt.getTime() + 3_600_000);
 
-            const people = await FindRows<{ ID: string }>(ctx, 'MJ_BizApps_Common: People', 'ID IS NOT NULL', ['ID']);
+            const people = await FindRows<{ ID: string; Email?: string | null }>(
+                ctx,
+                'MJ_BizApps_Common: People',
+                'ID IS NOT NULL',
+                ['ID', 'Email'],
+            );
             Assert(people.length > 0, 'At least one Person exists in MJ_BizApps_Common: People');
+            const adaPerson = people.find((p) => (p.Email ?? '').toLowerCase() === (ada.Email ?? '').toLowerCase());
+            const organizerPersonId = adaPerson?.ID ?? people[0].ID;
 
             let meetingId: string | null = null;
+            let privateMeetingId: string | null = null;
             let spaceChatId: string | null = null;
             try {
+                // 1. Standard meeting linked to Northwind relationship
                 const meeting = await ctx.Provider.GetEntityObject(MEETING_ENTITY, ctx.User);
                 meeting.NewRecord();
                 meeting.Set('Name', 'COLLAB-CHECK Northwind Architecture Sync');
-                meeting.Set('OrganizerPersonID', people[0].ID);
+                meeting.Set('OrganizerPersonID', organizerPersonId);
                 meeting.Set('StartsAt', startsAt);
                 meeting.Set('EndsAt', endsAt);
                 meeting.Set('TimeZone', 'America/Chicago');
@@ -130,12 +141,44 @@ const checks: NamedCheck[] = [
                 link.Set('RecordID', northwind.ID);
                 Assert(await link.Save(), `Save MeetingLink: ${link.LatestResult?.CompleteMessage ?? ''}`);
 
+                // 2. Private meeting linked to Northwind relationship where only Ada is an attendee (Sam is on Team band but not an attendee)
+                const privMeeting = await ctx.Provider.GetEntityObject(MEETING_ENTITY, ctx.User);
+                privMeeting.NewRecord();
+                privMeeting.Set('Name', 'COLLAB-CHECK Northwind Executive Session');
+                privMeeting.Set('OrganizerPersonID', organizerPersonId);
+                privMeeting.Set('StartsAt', startsAt);
+                privMeeting.Set('EndsAt', endsAt);
+                privMeeting.Set('TimeZone', 'America/Chicago');
+                privMeeting.Set('Status', 'Scheduled');
+                privMeeting.Set('LocationType', 'Virtual');
+                privMeeting.Set('Visibility', 'Private');
+                Assert(await privMeeting.Save(), `Save private meeting: ${privMeeting.LatestResult?.CompleteMessage ?? ''}`);
+                privateMeetingId = String(privMeeting.Get('ID'));
+
+                const privLink = await ctx.Provider.GetEntityObject(MEETING_LINK_ENTITY, ctx.User);
+                privLink.NewRecord();
+                privLink.Set('MeetingID', privateMeetingId);
+                privLink.Set('EntityID', COLLABORATION_SPACES_ENTITY_ID);
+                privLink.Set('RecordID', northwind.ID);
+                Assert(await privLink.Save(), `Save Private MeetingLink: ${privLink.LatestResult?.CompleteMessage ?? ''}`);
+
+                const adaAttendee = await ctx.Provider.GetEntityObject(MEETING_ATTENDEE_ENTITY, ctx.User);
+                adaAttendee.NewRecord();
+                adaAttendee.Set('MeetingID', privateMeetingId);
+                adaAttendee.Set('UserID', ada.ID);
+                adaAttendee.Set('Email', ada.Email || 'ada@example.com');
+                adaAttendee.Set('Role', 'Required');
+                adaAttendee.Set('ResponseStatus', 'Accepted');
+                adaAttendee.Set('AttendanceStatus', 'Unknown');
+                Assert(await adaAttendee.Save(), `Save Ada attendee on private meeting: ${adaAttendee.LatestResult?.CompleteMessage ?? ''}`);
+
+                // 3. ensureMeetingSpaceChat as persona Ada (routes through createSpaceConversation & driver gate)
                 const chatRes = await ensureMeetingSpaceChat(ctx.Provider, {
                     spaceId: northwind.ID,
                     meetingId,
                     meetingName: 'COLLAB-CHECK Northwind Architecture Sync',
                     visibility: 'Standard',
-                    contextUser: ctx.User,
+                    contextUser: ada,
                 });
                 Assert(chatRes.ok, `ensureMeetingSpaceChat ok: ${!chatRes.ok ? chatRes.message : ''}`);
                 if (chatRes.ok) {
@@ -151,30 +194,60 @@ const checks: NamedCheck[] = [
                 );
                 Assert(chats.length === 1 && chats[0].Subject.toLowerCase() === `${MEETING_SUBJECT_PREFIX}${meetingId.toLowerCase()}`, 'SpaceChat Subject is bound to meeting:<MeetingID>');
 
-                // Verify loadSpaceMeetings
-                const loaded = await loadSpaceMeetings(ctx.Provider, northwind.ID, ctx.User, { includeDetails: true });
-                Assert(loaded.upcoming.some((m) => m.ID.toLowerCase() === meetingId!.toLowerCase()), 'Meeting appears in loadSpaceMeetings.upcoming');
+                // Verify loadSpaceMeetings as persona Ada
+                const loaded = await loadSpaceMeetings(ctx.Provider, northwind.ID, ada, { includeDetails: true });
+                Assert(loaded.upcoming.some((m) => m.ID.toLowerCase() === meetingId!.toLowerCase()), 'Standard meeting appears in loadSpaceMeetings.upcoming for Ada');
 
-                // Verify buildSpaceMeetingsAgentContext
-                const agentCtx = await buildSpaceMeetingsAgentContext(ctx.Provider, northwind.ID, { [ada.ID]: 'Team' }, ctx.User);
-                Assert((agentCtx.instructions ?? []).some((line) => line.includes('Northwind Architecture Sync')), 'buildSpaceMeetingsAgentContext includes the bound meeting title');
+                // Verify buildSpaceMeetingsAgentContext as persona Ada:
+                // - When Ada is the only viewer (attendee of Private meeting), both Standard and Private meetings are included
+                const adaSoloCtx = await buildSpaceMeetingsAgentContext(ctx.Provider, northwind.ID, { [ada.ID]: 'Team' }, ada);
+                Assert((adaSoloCtx.instructions ?? []).some((line) => line.includes('Northwind Architecture Sync')), 'Ada solo agent context includes Standard meeting');
+                Assert((adaSoloCtx.instructions ?? []).some((line) => line.includes('Northwind Executive Session')), 'Ada solo agent context includes Private meeting where Ada is attendee');
 
-                // Verify fnCollaborationMeetingAccess SQL one-walk function directly
+                // - Negative case: when Sam (Team member, NOT an attendee of Private meeting) is also in viewerBands, Private meeting is excluded
+                const adaAndSamCtx = await buildSpaceMeetingsAgentContext(ctx.Provider, northwind.ID, { [ada.ID]: 'Team', [sam.ID]: 'Team' }, ada);
+                Assert((adaAndSamCtx.instructions ?? []).some((line) => line.includes('Northwind Architecture Sync')), 'Ada+Sam agent context includes Standard meeting');
+                Assert(
+                    !(adaAndSamCtx.instructions ?? []).some((line) => line.includes('Northwind Executive Session')),
+                    `Ada+Sam agent context excludes Private meeting because Sam is not an attendee (loaded=${JSON.stringify(loaded.meetings.map((m) => ({ Name: m.Name, Visibility: m.Visibility })))} instructions=${JSON.stringify(adaAndSamCtx.instructions)})`,
+                );
+
+                // Verify fnCollaborationMeetingAccess SQL one-walk function directly for positive and negative persona cases
                 const pool = (ctx as unknown as { Pool?: { request(): { query(sql: string): Promise<{ recordset: Array<{ MeetingID: string; CanSeeTeam: boolean }> }> } } }).Pool;
                 if (pool) {
                     const adaAccess = await pool
                         .request()
-                        .query(`SELECT MeetingID, CanSeeTeam FROM __mj_BizAppsCollaboration.fnCollaborationMeetingAccess('${ada.ID}') WHERE MeetingID = '${meetingId}'`);
-                    Assert(adaAccess.recordset.length === 1 && adaAccess.recordset[0].CanSeeTeam === true, 'Ada (active Team space member) reaches meeting with CanSeeTeam=1 via fnCollaborationMeetingAccess');
+                        .query(`SELECT MeetingID, CanSeeTeam FROM __mj_BizAppsCollaboration.fnCollaborationMeetingAccess('${ada.ID}') WHERE MeetingID IN ('${meetingId}', '${privateMeetingId}')`);
+                    Assert(adaAccess.recordset.length === 2, `Ada (attendee) reaches both Standard and Private meetings via fnCollaborationMeetingAccess (got ${adaAccess.recordset.length})`);
+
+                    const samAccess = await pool
+                        .request()
+                        .query(`SELECT MeetingID, CanSeeTeam FROM __mj_BizAppsCollaboration.fnCollaborationMeetingAccess('${sam.ID}') WHERE MeetingID IN ('${meetingId}', '${privateMeetingId}')`);
+                    Assert(
+                        samAccess.recordset.length === 1 && samAccess.recordset[0].MeetingID.toLowerCase() === meetingId.toLowerCase(),
+                        `Sam (Team member but non-attendee) reaches Standard meeting only and NOT Private meeting via fnCollaborationMeetingAccess (got ${JSON.stringify(samAccess.recordset)})`,
+                    );
+
+                    const noraAccess = await pool
+                        .request()
+                        .query(`SELECT MeetingID FROM __mj_BizAppsCollaboration.fnCollaborationMeetingAccess('${nora.ID}') WHERE MeetingID IN ('${meetingId}', '${privateMeetingId}')`);
+                    Assert(noraAccess.recordset.length === 0, `Nora (non-member of Northwind) reaches neither meeting via fnCollaborationMeetingAccess (got ${noraAccess.recordset.length})`);
                 }
             } finally {
                 if (spaceChatId) {
+                    const chats = await FindRows<{ ConversationID: string }>(ctx, SPACE_CHAT_ENTITY, `ID = '${spaceChatId}'`, ['ConversationID']);
                     await deleteWhere(ctx.Provider, ctx.User, SPACE_CHAT_ENTITY, `ID = '${spaceChatId}'`, 'SM2 space chat');
+                    if (chats[0]?.ConversationID) {
+                        await deleteWhere(ctx.Provider, ctx.User, 'MJ: Resource Permissions', `ResourceRecordID = '${chats[0].ConversationID}'`, 'SM2 chat permissions');
+                        await deleteWhere(ctx.Provider, ctx.User, 'MJ: Conversations', `ID = '${chats[0].ConversationID}'`, 'SM2 conversation');
+                    }
                 }
-                if (meetingId) {
-                    await deleteWhere(ctx.Provider, ctx.User, MEETING_LINK_ENTITY, `MeetingID = '${meetingId}'`, 'SM2 meeting link');
-                    await deleteWhere(ctx.Provider, ctx.User, MEETING_ATTENDEE_ENTITY, `MeetingID = '${meetingId}'`, 'SM2 meeting attendees');
-                    await deleteWhere(ctx.Provider, ctx.User, MEETING_ENTITY, `ID = '${meetingId}'`, 'SM2 meeting');
+                for (const mId of [meetingId, privateMeetingId]) {
+                    if (mId) {
+                        await deleteWhere(ctx.Provider, ctx.User, MEETING_LINK_ENTITY, `MeetingID = '${mId}'`, 'SM2 meeting link');
+                        await deleteWhere(ctx.Provider, ctx.User, MEETING_ATTENDEE_ENTITY, `MeetingID = '${mId}'`, 'SM2 meeting attendees');
+                        await deleteWhere(ctx.Provider, ctx.User, MEETING_ENTITY, `ID = '${mId}'`, 'SM2 meeting');
+                    }
                 }
             }
         },

@@ -1,15 +1,100 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import {
+    ChangeDetectionStrategy,
+    ChangeDetectorRef,
+    Component,
+    EventEmitter,
+    Input,
+    OnChanges,
+    Optional,
+    Output,
+    SimpleChanges,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RegisterClass } from '@memberjunction/global';
+import { type IRunViewProvider } from '@memberjunction/core';
+import { MJGlobal, RegisterClassEx } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import {
+    type AgendaItem,
+    BaseAgendaProvider,
+    mergeAgenda,
+    type SpaceBatchContext,
+} from '@mj-biz-apps/collaboration-core';
 import { BaseSpaceOverviewCard } from './base-space-overview-card';
-import type { SpaceMeetingCardItem } from './space-meetings-tab.component';
+import { loadSpaceMeetingCards, type SpaceMeetingCardItem } from './space-meetings-tab.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
+
+@RegisterClassEx(BaseAgendaProvider, {
+    key: 'collaboration:meetings-agenda-provider',
+    metadata: { spaceTypes: ['*'] },
+})
+export class SpaceMeetingsWidgetAgendaProvider extends BaseAgendaProvider {
+    public override async getItemsForSpaces(context: SpaceBatchContext): Promise<AgendaItem[]> {
+        const items: AgendaItem[] = [];
+        const provider = context.provider as IRunViewProvider | undefined;
+        const now = Date.now();
+        for (const spaceId of context.spaceIds) {
+            const meetings = await loadSpaceMeetingCards(spaceId, provider);
+            for (const m of meetings) {
+                const done = m.Status === 'Completed' || m.Status === 'Cancelled';
+                const end = new Date(m.EndsAt).getTime();
+                if (done || (Number.isFinite(end) && end < now)) continue;
+                items.push({
+                    id: `meeting:${m.ID}`,
+                    spaceId,
+                    title: m.Name,
+                    context: m.Location ?? m.LocationType,
+                    date: new Date(m.StartsAt),
+                    typeIcon: 'fa-solid fa-calendar-check',
+                    sourceProvider: 'SpaceMeetingsWidgetAgendaProvider',
+                    metadata: {
+                        meetingId: m.ID,
+                        status: m.Status,
+                        videoJoinUrl: m.VideoJoinURL ?? null,
+                    },
+                });
+            }
+        }
+        return items;
+    }
+}
+
+/**
+ * Queries all registered `BaseAgendaProvider` implementations and merges their items chronologically.
+ */
+export async function collectSpaceAgendaItems(context: SpaceBatchContext): Promise<AgendaItem[]> {
+    void SpaceMeetingsWidgetAgendaProvider;
+    const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseAgendaProvider);
+    const arrays: AgendaItem[][] = [];
+    for (const reg of registrations) {
+        try {
+            const Ctor = reg.SubClass as new () => BaseAgendaProvider;
+            const instance = new Ctor();
+            const items = await instance.getItemsForSpaces(context);
+            if (Array.isArray(items) && items.length > 0) {
+                arrays.push(items);
+            }
+        } catch {
+            // A faulty agenda provider never breaks the view
+        }
+    }
+    return mergeAgenda(arrays);
+}
 
 /**
  * Overview card showing the next upcoming meetings in the space (*Coming up*, B23).
  */
-@RegisterClass(BaseSpaceOverviewCard, 'SpaceComingUpCardComponent')
+@RegisterClassEx(BaseSpaceOverviewCard, {
+    key: 'collaboration:coming-up',
+    priority: -1,
+    metadata: {
+        spaceTypes: ['*'],
+        slot: 'card',
+        side: 'Shared',
+        sortKey: 25,
+        contributionKey: 'coming-up',
+        title: 'Coming up',
+    },
+})
 @Component({
     selector: 'mjc-space-coming-up-card',
     standalone: true,
@@ -126,12 +211,71 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         `,
     ],
 })
-export class SpaceComingUpCardComponent extends BaseSpaceOverviewCard {
+export class SpaceComingUpCardComponent extends BaseSpaceOverviewCard implements OnChanges {
     @Input() public Title = 'Coming up';
     @Input() public UpcomingMeetings: SpaceMeetingCardItem[] = [];
 
     @Output() public OpenMeetingRequested = new EventEmitter<SpaceMeetingCardItem>();
     @Output() public ViewAllRequested = new EventEmitter<string>();
+
+    private hasExplicitMeetings = false;
+    private loadToken = 0;
+
+    constructor(@Optional() private readonly cdr?: ChangeDetectorRef) {
+        super();
+    }
+
+    public ngOnChanges(changes: SimpleChanges): void {
+        if (changes['UpcomingMeetings'] && changes['UpcomingMeetings'].currentValue !== undefined) {
+            this.hasExplicitMeetings = true;
+        }
+        if (changes['SpaceId'] && !this.hasExplicitMeetings) {
+            void this.loadForSpace(this.SpaceId);
+        }
+    }
+
+    public async loadForSpace(spaceId: string): Promise<void> {
+        const cleanId = (spaceId ?? '').trim();
+        if (!cleanId) {
+            this.UpcomingMeetings = [];
+            this.cdr?.markForCheck();
+            return;
+        }
+        const token = ++this.loadToken;
+        try {
+            const [cards, agendaItems] = await Promise.all([
+                loadSpaceMeetingCards(cleanId, this.RunViewToUse),
+                collectSpaceAgendaItems({ spaceIds: [cleanId], viewerId: '', provider: this.RunViewToUse }),
+            ]);
+            if (token !== this.loadToken) return;
+            const now = Date.now();
+            const upcomingCards = cards.filter((m) => {
+                const done = m.Status === 'Completed' || m.Status === 'Cancelled';
+                const end = new Date(m.EndsAt).getTime();
+                return !done && (!Number.isFinite(end) || end >= now);
+            });
+            const cardMeetingIds = new Set(upcomingCards.map((c) => c.ID.toLowerCase()));
+            for (const item of agendaItems) {
+                const rawMeetingId = typeof item.metadata?.['meetingId'] === 'string'
+                    ? item.metadata['meetingId']
+                    : item.id.replace(/^meeting:/i, '');
+                if (cardMeetingIds.has(rawMeetingId.toLowerCase())) continue;
+                upcomingCards.push({
+                    ID: rawMeetingId,
+                    Name: item.title,
+                    StartsAt: item.date instanceof Date ? item.date.toISOString() : String(item.date),
+                    EndsAt: item.date instanceof Date ? item.date.toISOString() : String(item.date),
+                    Status: typeof item.metadata?.['status'] === 'string' ? item.metadata['status'] : 'Scheduled',
+                    Location: item.context ?? null,
+                    VideoJoinURL: typeof item.metadata?.['videoJoinUrl'] === 'string' ? item.metadata['videoJoinUrl'] : null,
+                });
+            }
+            this.UpcomingMeetings = upcomingCards;
+            this.cdr?.markForCheck();
+        } catch {
+            // Non-fatal
+        }
+    }
 
     public formatStart(startsAt: string): string {
         const d = new Date(startsAt);

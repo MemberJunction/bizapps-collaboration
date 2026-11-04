@@ -11,6 +11,8 @@ import {
 } from '../dist/space-meetings.js';
 
 const USER = { ID: '11111111-1111-4111-8111-111111111111', Name: 'Ada' } as UserInfo;
+const ATTENDEE_2 = '11111111-1111-4111-8111-111111111112';
+const NON_ATTENDEE_TEAM = '11111111-1111-4111-8111-111111111119';
 const SPACE_ID = '22222222-2222-4222-8222-222222222222';
 const MEETING_STD = '33333333-3333-4333-8333-333333333331';
 const MEETING_PRIV = '33333333-3333-4333-8333-333333333332';
@@ -139,6 +141,15 @@ function createMeetingsProvider() {
                     ],
                 };
             }
+            if (params.EntityName === 'MJ_BizApps_Tasks: Meeting Attendees') {
+                return {
+                    Success: true,
+                    Results: [
+                        { ID: 'att-1', MeetingID: MEETING_PRIV, UserID: USER.ID },
+                        { ID: 'att-2', MeetingID: MEETING_PRIV, UserID: ATTENDEE_2 },
+                    ],
+                };
+            }
             return { Success: true, Results: [] };
         },
         GetEntityObject: async (entityName: string) => {
@@ -216,7 +227,7 @@ describe('space-meetings (B23)', () => {
         assert.equal(std.Notes?.length, 1);
     });
 
-    it('reuses an existing SpaceChat for a meeting or creates one with Kind matching Visibility', async () => {
+    it('reuses an existing SpaceChat for a meeting or routes creation through createSpaceConversation (respecting driver refusal)', async () => {
         const { provider, savedChats } = createMeetingsProvider();
 
         // Existing chat for MEETING_STD
@@ -234,13 +245,23 @@ describe('space-meetings (B23)', () => {
             created: false,
         });
 
-        // New chat for MEETING_PRIV -> Kind = 'Private'
+        // New chat for MEETING_PRIV -> Kind = 'Private', Subject = meeting:<id>
         const created = await ensureMeetingSpaceChat(provider, {
             spaceId: SPACE_ID,
             meetingId: MEETING_PRIV,
             meetingName: 'Executive Session',
             visibility: 'Private',
             contextUser: USER,
+            createConversation: async (_p, _u, input) => {
+                savedChats.push({ ...input });
+                return {
+                    ok: true,
+                    spaceChatId: 'chat-new-1',
+                    conversationId: 'conv-new-1',
+                    name: input.Name,
+                    kind: input.Kind,
+                };
+            },
         });
         assert.deepEqual(created, {
             ok: true,
@@ -251,27 +272,56 @@ describe('space-meetings (B23)', () => {
         assert.equal(savedChats.length, 1);
         assert.equal(savedChats[0].Kind, 'Private');
         assert.equal(savedChats[0].Subject, meetingChatSubject(MEETING_PRIV));
+
+        // Space type driver refuses chat creation via createSpaceConversation
+        const refused = await ensureMeetingSpaceChat(provider, {
+            spaceId: SPACE_ID,
+            meetingId: MEETING_PRIV,
+            meetingName: 'Executive Session',
+            visibility: 'Private',
+            contextUser: USER,
+            createConversation: async () => ({
+                ok: false,
+                message: 'This space type does not allow private meeting threads.',
+            }),
+        });
+        assert.deepEqual(refused, {
+            ok: false,
+            message: 'This space type does not allow private meeting threads.',
+        });
     });
 
-    it('hides Private meetings from agent context whenever any viewer is on the Shared band (Decision A4)', async () => {
+    it('includes a Private meeting in agent context only when all viewers are Team-band attendees of that meeting', async () => {
         const { provider } = createMeetingsProvider();
 
-        // Team-only chat: sees both Standard and Private meetings (3 total)
-        const teamCtx = await buildSpaceMeetingsAgentContext(
+        // Chat where all viewers are Team-band attendees of MEETING_PRIV -> sees all 3 meetings
+        const attendeeCtx = await buildSpaceMeetingsAgentContext(
             provider,
             SPACE_ID,
-            { 'USER-1': 'Team', 'USER-2': 'Team' },
+            { [USER.ID]: 'Team', [ATTENDEE_2]: 'Team' },
             USER
         );
-        const teamMeetings = (teamCtx.contextData?.spaceMeetings ?? []) as Array<{ ID: string; Visibility: string }>;
-        assert.equal(teamMeetings.length, 3);
-        assert.ok(teamMeetings.some((m) => m.ID === MEETING_PRIV));
+        const attendeeMeetings = (attendeeCtx.contextData?.spaceMeetings ?? []) as Array<{ ID: string; Visibility: string }>;
+        assert.equal(attendeeMeetings.length, 3);
+        assert.ok(attendeeMeetings.some((m) => m.ID === MEETING_PRIV));
 
-        // Mixed chat with a Shared-band participant: Private meeting is hidden (2 Standard meetings only)
+        // Chat with a Team-band member who is NOT an attendee of MEETING_PRIV -> Private meeting is hidden
+        const nonAttendeeTeamCtx = await buildSpaceMeetingsAgentContext(
+            provider,
+            SPACE_ID,
+            { [USER.ID]: 'Team', [NON_ATTENDEE_TEAM]: 'Team' },
+            USER
+        );
+        const nonAttendeeMeetings = (nonAttendeeTeamCtx.contextData?.spaceMeetings ?? []) as Array<{ ID: string; Visibility: string }>;
+        assert.equal(nonAttendeeMeetings.length, 2);
+        assert.ok(nonAttendeeMeetings.every((m) => m.Visibility === 'Standard'));
+        assert.ok(!nonAttendeeTeamCtx.instructions?.[0]?.includes('Executive Session'));
+
+        // Mixed chat with a Shared-band participant -> Private meeting is hidden
         const sharedCtx = await buildSpaceMeetingsAgentContext(
             provider,
             SPACE_ID,
-            { 'USER-1': 'Team', 'USER-2': 'Shared' },
+            { [USER.ID]: 'Team', [ATTENDEE_2]: 'Shared' },
             USER
         );
         const sharedMeetings = (sharedCtx.contextData?.spaceMeetings ?? []) as Array<{ ID: string; Visibility: string }>;

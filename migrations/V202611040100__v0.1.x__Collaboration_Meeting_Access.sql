@@ -72,7 +72,6 @@ BEGIN
             d.MeetingID IS NOT NULL
             AND (
                 m.Visibility = N'Standard'
-                OR d.CanSeeTeam = 1
                 OR EXISTS (
                     SELECT 1
                     FROM [__mj_BizAppsTasks].[MeetingAttendee] AS ma
@@ -87,12 +86,17 @@ BEGIN
             AND d.SeriesID IS NOT NULL
             AND (
                 ms.Visibility = N'Standard'
-                OR d.CanSeeTeam = 1
                 OR EXISTS (
                     SELECT 1
                     FROM [__mj_BizAppsTasks].[MeetingSeriesAttendee] AS msa
                     WHERE msa.SeriesID = d.SeriesID
                       AND msa.UserID = @UserID
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM [__mj_BizAppsCommon].[Person] AS p
+                    WHERE p.ID = ms.OrganizerPersonID
+                      AND p.LinkedUserID = @UserID
                 )
             )
         )

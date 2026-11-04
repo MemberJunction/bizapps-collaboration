@@ -473,7 +473,7 @@ async function runClaimedTurn(
             }
         }
         const built = await driver.call.driver.BuildAgentContext({ ...driver.call.base, chatId: foundChat.ID, viewerBands });
-        const meetingsContext = await buildSpaceMeetingsAgentContext(provider, spaceId, viewerBands, system);
+        const meetingsContext = await buildSpaceMeetingsAgentContext(provider, spaceId, viewerBands, user);
         typeContext = {
             instructions: [...(built?.instructions ?? []), ...(meetingsContext.instructions ?? [])],
             contextData: { ...(built?.contextData ?? {}), ...(meetingsContext.contextData ?? {}) },

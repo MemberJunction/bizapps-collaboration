@@ -1,9 +1,22 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import {
+    ChangeDetectionStrategy,
+    ChangeDetectorRef,
+    Component,
+    EventEmitter,
+    Input,
+    OnChanges,
+    Optional,
+    Output,
+    SimpleChanges,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RegisterClass } from '@memberjunction/global';
+import { type IRunViewProvider, RunView } from '@memberjunction/core';
+import { RegisterClassEx } from '@memberjunction/global';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { BaseSpaceTab } from './base-space-tab';
 import { COLLAB_TOKENS_CSS } from './tokens';
+
+const COLLABORATION_SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 
 export interface SpaceMeetingCardItem {
     ID: string;
@@ -23,11 +36,140 @@ export interface SpaceMeetingCardItem {
 }
 
 /**
+ * Loads meetings linked to `spaceId` via `MJ_BizApps_Tasks: Meeting Links` and attaches
+ * bound `SpaceChat` threads (`Subject = 'meeting:<MeetingID>'`).
+ */
+export async function loadSpaceMeetingCards(
+    spaceId: string,
+    provider?: IRunViewProvider | null
+): Promise<SpaceMeetingCardItem[]> {
+    const cleanSpaceId = (spaceId ?? '').trim();
+    if (!cleanSpaceId) return [];
+
+    try {
+        const rv = new RunView(provider ?? undefined);
+        const candidates = [
+            `'${cleanSpaceId}'`,
+            `'${cleanSpaceId.toUpperCase()}'`,
+            `'ID|${cleanSpaceId}'`,
+            `'ID|${cleanSpaceId.toUpperCase()}'`,
+        ].join(', ');
+
+        const linksRes = await rv.RunView<{
+            ID: string;
+            MeetingID: string | null;
+            SeriesID: string | null;
+        }>({
+            EntityName: 'MJ_BizApps_Tasks: Meeting Links',
+            ExtraFilter: `EntityID = '${COLLABORATION_SPACES_ENTITY_ID}' AND RecordID IN (${candidates})`,
+            ResultType: 'simple',
+        });
+        if (!linksRes.Success || (linksRes.Results?.length ?? 0) === 0) {
+            return [];
+        }
+
+        const meetingIds = new Set<string>();
+        const seriesIds = new Set<string>();
+        for (const link of linksRes.Results ?? []) {
+            if (link.MeetingID?.trim()) meetingIds.add(link.MeetingID.trim());
+            if (link.SeriesID?.trim()) seriesIds.add(link.SeriesID.trim());
+        }
+
+        const clauses: string[] = [];
+        if (meetingIds.size > 0) {
+            clauses.push(`ID IN (${[...meetingIds].map((id) => `'${id}'`).join(', ')})`);
+        }
+        if (seriesIds.size > 0) {
+            clauses.push(`SeriesID IN (${[...seriesIds].map((id) => `'${id}'`).join(', ')})`);
+        }
+        if (clauses.length === 0) return [];
+
+        const [meetingsRes, chatsRes] = await Promise.all([
+            rv.RunView<{
+                ID: string;
+                Name: string;
+                StartsAt: string | Date;
+                EndsAt: string | Date;
+                TimeZone?: string;
+                Status: string;
+                LocationType?: string;
+                Location?: string | null;
+                VideoJoinURL?: string | null;
+                Visibility?: 'Standard' | 'Private';
+            }>({
+                EntityName: 'MJ_BizApps_Tasks: Meetings',
+                ExtraFilter: clauses.join(' OR '),
+                OrderBy: 'StartsAt ASC',
+                ResultType: 'simple',
+            }),
+            rv.RunView<{
+                ID: string;
+                ConversationID: string;
+                Subject?: string | null;
+            }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                ExtraFilter: `SpaceID = '${cleanSpaceId}' AND Status = 'Active' AND Subject LIKE 'meeting:%'`,
+                Fields: ['ID', 'ConversationID', 'Subject'],
+                ResultType: 'simple',
+            }),
+        ]);
+
+        if (!meetingsRes.Success || (meetingsRes.Results?.length ?? 0) === 0) {
+            return [];
+        }
+
+        const chatByMeetingId = new Map<string, { spaceChatId: string; conversationId: string }>();
+        if (chatsRes.Success) {
+            for (const c of chatsRes.Results ?? []) {
+                const sub = (c.Subject ?? '').trim();
+                if (sub.toLowerCase().startsWith('meeting:')) {
+                    const mId = sub.slice('meeting:'.length).trim().toLowerCase();
+                    if (mId) {
+                        chatByMeetingId.set(mId, { spaceChatId: c.ID, conversationId: c.ConversationID });
+                    }
+                }
+            }
+        }
+
+        return (meetingsRes.Results ?? []).map((row) => {
+            const chat = chatByMeetingId.get(row.ID.toLowerCase());
+            return {
+                ID: row.ID,
+                Name: row.Name,
+                StartsAt: row.StartsAt instanceof Date ? row.StartsAt.toISOString() : String(row.StartsAt),
+                EndsAt: row.EndsAt instanceof Date ? row.EndsAt.toISOString() : String(row.EndsAt),
+                TimeZone: row.TimeZone ?? 'UTC',
+                Status: row.Status ?? 'Scheduled',
+                LocationType: row.LocationType ?? 'Virtual',
+                Location: row.Location ?? null,
+                VideoJoinURL: row.VideoJoinURL ?? null,
+                Visibility: row.Visibility === 'Private' ? 'Private' : 'Standard',
+                SpaceChatID: chat?.spaceChatId ?? null,
+                ConversationID: chat?.conversationId ?? null,
+            };
+        });
+    } catch {
+        return [];
+    }
+}
+
+/**
  * The Meetings tab in a space (B23): displays upcoming and past meetings linked to the space,
  * with quick actions to join video (`VideoJoinURL`), open the meeting's bound `SpaceChat` thread,
  * or open the full meeting record.
  */
-@RegisterClass(BaseSpaceTab, 'SpaceMeetingsTabComponent')
+@RegisterClassEx(BaseSpaceTab, {
+    key: 'collaboration:meetings',
+    priority: -1,
+    metadata: {
+        spaceTypes: ['*'],
+        slot: 'tab',
+        sortKey: 45,
+        contributionKey: 'meetings',
+        label: 'Meetings',
+        icon: 'fa-solid fa-calendar-days',
+    },
+})
 @Component({
     selector: 'mjc-space-meetings-tab',
     standalone: true,
@@ -247,7 +389,7 @@ export interface SpaceMeetingCardItem {
         `,
     ],
 })
-export class SpaceMeetingsTabComponent extends BaseSpaceTab {
+export class SpaceMeetingsTabComponent extends BaseSpaceTab implements OnChanges {
     @Input() public Title = 'Meetings';
     @Input() public Subtitle = 'Agendas, live sessions, notes, and follow-up discussions in this space';
     @Input() public CanSchedule = false;
@@ -257,6 +399,44 @@ export class SpaceMeetingsTabComponent extends BaseSpaceTab {
     @Output() public ScheduleMeetingRequested = new EventEmitter<string>();
     @Output() public OpenMeetingRequested = new EventEmitter<SpaceMeetingCardItem>();
     @Output() public OpenMeetingChatRequested = new EventEmitter<SpaceMeetingCardItem>();
+
+    private hasExplicitMeetings = false;
+    private loadToken = 0;
+
+    constructor(@Optional() private readonly cdr?: ChangeDetectorRef) {
+        super();
+    }
+
+    public ngOnChanges(changes: SimpleChanges): void {
+        if (changes['Meetings'] && changes['Meetings'].currentValue !== undefined) {
+            this.hasExplicitMeetings = true;
+        }
+        if (changes['SpaceId'] && !this.hasExplicitMeetings) {
+            void this.loadForSpace(this.SpaceId);
+        }
+    }
+
+    public async loadForSpace(spaceId: string): Promise<void> {
+        const cleanId = (spaceId ?? '').trim();
+        if (!cleanId) {
+            this.Meetings = [];
+            this.cdr?.markForCheck();
+            return;
+        }
+        const token = ++this.loadToken;
+        this.IsLoading = true;
+        this.cdr?.markForCheck();
+        try {
+            const loaded = await loadSpaceMeetingCards(cleanId, this.RunViewToUse);
+            if (token !== this.loadToken) return;
+            this.Meetings = loaded;
+        } finally {
+            if (token === this.loadToken) {
+                this.IsLoading = false;
+                this.cdr?.markForCheck();
+            }
+        }
+    }
 
     public get UpcomingMeetings(): SpaceMeetingCardItem[] {
         const now = Date.now();

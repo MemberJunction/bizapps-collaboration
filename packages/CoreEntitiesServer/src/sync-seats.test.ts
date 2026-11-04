@@ -34,6 +34,7 @@ interface SeatRecord {
 function createMockProvider(options: {
     existingSeats?: SeatRecord[];
     refuseRemoveSeatIds?: Set<string>;
+    refuseInviteSave?: boolean;
 }) {
     const seats = new Map<string, SeatRecord>();
     for (const s of options.existingSeats ?? []) {
@@ -140,16 +141,26 @@ function createMockProvider(options: {
             if (entityName === 'MJ: Magic Link Invites') {
                 const invite: Record<string, unknown> = {};
                 return {
-                    ...invite,
+                    get ID() { return invite.ID as string; },
                     NewRecord() {
                         invite.ID = 'invite-1';
                     },
+                    set TokenHash(v: string) { invite.TokenHash = v; },
                     set Email(v: string) { invite.Email = v; },
+                    set ApplicationID(v: string) { invite.ApplicationID = v; },
+                    set RoleID(v: string) { invite.RoleID = v; },
+                    set ExpiresAt(v: Date) { invite.ExpiresAt = v; },
+                    set MaxUses(v: number) { invite.MaxUses = v; },
+                    set UseCount(v: number) { invite.UseCount = v; },
                     set Status(v: string) { invite.Status = v; },
                     set CreatedByUserID(v: string) { invite.CreatedByUserID = v; },
                     set IdentityMode(v: string) { invite.IdentityMode = v; },
                     set Kind(v: string) { invite.Kind = v; },
+                    LatestResult: { CompleteMessage: 'Invite save refused.' },
                     async Save() {
+                        if (options.refuseInviteSave) {
+                            return false;
+                        }
                         savedInvites.push({ ...invite });
                         return true;
                     },
@@ -254,9 +265,36 @@ describe('BaseSpaceTypeServerDriver.SyncSeats', () => {
         // Manual and other-source seats untouched
         assert.equal(seats.get('seat-manual')?.Status, 'Active');
         assert.equal(seats.get('seat-other')?.Status, 'Active');
-        // Carol invited by email
+        // Carol invited by email with complete Magic Link Invite fields
         assert.equal(savedInvites.length, 1);
         assert.equal(savedInvites[0]?.Email, 'carol@example.org');
+        assert.equal(typeof savedInvites[0]?.TokenHash, 'string');
+        assert.ok((savedInvites[0]?.TokenHash as string).length > 10);
+        assert.equal(savedInvites[0]?.ApplicationID, '94F5906B-38AB-4A9F-BFCA-3D395BBBC198');
+        assert.equal(savedInvites[0]?.RoleID, 'AAF434FD-EF58-4857-854E-2607ACAF763B');
+        assert.ok(savedInvites[0]?.ExpiresAt instanceof Date);
+        assert.equal(savedInvites[0]?.MaxUses, 1);
+        assert.equal(savedInvites[0]?.UseCount, 0);
+    });
+
+    it('does not increment invited and records an error when saving a magic link invite fails', async () => {
+        const { provider, space, savedInvites } = createMockProvider({
+            existingSeats: [],
+            refuseInviteSave: true,
+        });
+        const driver = new BaseSpaceTypeServerDriver();
+        const result = await driver.SyncSeats(
+            space,
+            'roster:main',
+            [{ PersonID: PERSON_CAROL, RoleTypeName: 'Participant' }],
+            ACTING_USER,
+            provider
+        );
+
+        assert.equal(result.invited, 0);
+        assert.equal(savedInvites.length, 0);
+        assert.equal(result.errors.length, 1);
+        assert.match(result.errors[0], /Invite save refused/);
     });
 
     it('adds a new seat when the person resolves to an MJ User not yet seated in the space', async () => {
