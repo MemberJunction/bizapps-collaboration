@@ -538,5 +538,15 @@
       "Description": "Forks whose conversation is a space conversation the caller reaches: the same reach as Conversation Details In Reach, so MJ's chat area can load a conversation's branches for a participant.",
       "FilterText": "(ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "9ABACC6B-8DF5-4574-B9BF-308106D868B2"
+    },
+    "fields": {
+      "Name": "Collaboration: Resource Type Catalog",
+      "Description": "The resource-type catalog: MJ's Explorer shell reads it at startup (it needs the Custom type's ID to open an app's landing page). It names types, not records. The filter is present so the participant is not exempt from row-level security, as All Application Roles is.",
+      "FilterText": "(1 = 1)"
+    }
   }
 ]
