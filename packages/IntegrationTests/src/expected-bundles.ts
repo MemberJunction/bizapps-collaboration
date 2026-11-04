@@ -6,7 +6,7 @@ export const EXPECTED_BUNDLES: Record<string, number> = {
     'write-gates': 10,
     'extensions': 12,
     'subtypes': 7,
-    'row-filters': 7,
+    'row-filters': 8,
     'library': 7,
     'agent': 14,
     'features': 5,

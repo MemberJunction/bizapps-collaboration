@@ -528,5 +528,15 @@
     "primaryKey": {
       "ID": "45BE6600-7F68-4E45-8C25-41BD49B2E0E1"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "09A26A42-C582-4DB4-9576-2C7780F29774"
+    },
+    "fields": {
+      "Name": "Collaboration: Conversation Branches In Reach",
+      "Description": "Forks whose conversation is a space conversation the caller reaches: the same reach as Conversation Details In Reach, so MJ's chat area can load a conversation's branches for a participant.",
+      "FilterText": "(ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+    }
   }
 ]

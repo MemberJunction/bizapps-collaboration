@@ -3,12 +3,14 @@ import { MJConversationEntity, MJFileEntity } from '@memberjunction/core-entitie
 import { mjBizAppsCollaborationSpacePageEntity } from '@mj-biz-apps/collaboration-entities';
 import { SPACE_CHAT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_PAGE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
+import sql from 'mssql';
 import { deleteRowAndConfirm, registerChecks } from './cleanup-helpers.js';
 import { COLLABORATION_STORAGE_PROVIDER_ID } from '../world/local-storage-account.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const HARBOR_SPACE_ID = 'C1000001-0000-4000-8000-000000000006';
 const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
+const CONVERSATION_BRANCH_ENTITY = 'MJ: Conversation Branches';
 
 const checks: NamedCheck[] = [
     {
@@ -277,6 +279,48 @@ const checks: NamedCheck[] = [
                 Assert(stored.comments?.[0]?.authorName === (ada.FirstLast || ada.Name), `The comment's author is '${stored.comments?.[0]?.authorName}', not the saver`);
             } finally {
                 if (pageId) await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_PAGE_ENTITY, pageId, 'RF7 Shared Space Page');
+            }
+        },
+    },
+    {
+        Id: 'row-filters.RF8',
+        Name: "RF8 — Bea reads the forks of Discovery's conversations and none of the Committee's (MJ: Conversation Branches In Reach)",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const chatOf = async (spaceId: string): Promise<string | undefined> =>
+                (await FindRows<{ ConversationID: string }>(ctx, SPACE_CHAT_ENTITY, `SpaceID = '${spaceId}' AND Kind IN ('General', 'Topic')`, ['ConversationID']))[0]?.ConversationID;
+            const discoveryConversation = await chatOf(DISCOVERY_SPACE_ID);
+            const committeeConversation = await chatOf(COMMITTEE_SPACE_ID);
+            Assert(!!discoveryConversation && !!committeeConversation, 'Discovery and the Committee each hold a shared chat');
+            // The fork rows are fixtures, written to the table: MJ's entity lets only a holder of `Conversations: Fork` create one, and
+            // the check is about who may READ a fork, not who may start one
+            const { DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD, MJ_CORE_SCHEMA } = process.env;
+            const pool = await new sql.ConnectionPool({
+                server: DB_HOST ?? 'localhost', port: Number(DB_PORT ?? 1433), database: DB_DATABASE, user: DB_USERNAME, password: DB_PASSWORD,
+                options: { trustServerCertificate: true, encrypt: false },
+            }).connect();
+            const table = `[${MJ_CORE_SCHEMA || '__mj'}].[ConversationBranch]`;
+            const made: string[] = [];
+            const fork = async (conversationId: string, name: string): Promise<string> => {
+                const res = await pool.request()
+                    .input('conversationId', sql.UniqueIdentifier, conversationId)
+                    .input('name', sql.NVarChar(255), name)
+                    .input('userId', sql.UniqueIdentifier, ctx.User.ID)
+                    .query(`INSERT INTO ${table} (ConversationID, Kind, Name, UserID) OUTPUT inserted.ID VALUES (@conversationId, N'Fork', @name, @userId)`);
+                const id = String(res.recordset[0].ID);
+                made.push(id);
+                return id;
+            };
+            try {
+                const discoveryFork = await fork(discoveryConversation!, 'RF8 Discovery fork');
+                const committeeFork = await fork(committeeConversation!, 'RF8 Committee fork');
+                const seen = new Set((await FindRows<{ ID: string }>(ctx, CONVERSATION_BRANCH_ENTITY, `ID IN ('${discoveryFork}', '${committeeFork}')`, ['ID'], bea, { BypassCache: true })).map((r) => r.ID.toLowerCase()));
+                Assert(seen.has(discoveryFork.toLowerCase()), "Bea reads a fork of Discovery's chat");
+                Assert(!seen.has(committeeFork.toLowerCase()), "Bea reads no fork of the Committee's chat");
+            } finally {
+                for (const id of made) await pool.request().input('id', sql.UniqueIdentifier, id).query(`DELETE FROM ${table} WHERE ID = @id`);
+                await pool.close();
             }
         },
     },
