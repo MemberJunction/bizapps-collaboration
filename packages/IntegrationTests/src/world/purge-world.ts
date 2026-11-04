@@ -237,7 +237,9 @@ export async function purgeWorld(): Promise<void> {
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE UserID IN (SELECT ID FROM #invitees);
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE UserID IN (SELECT ID FROM #invitees);
             IF OBJECT_ID('__mj_BizAppsCommon.Person') IS NOT NULL
-                DELETE FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (SELECT ID FROM #invitees);
+                DELETE FROM __mj_BizAppsCommon.Person
+                WHERE LinkedUserID IN (SELECT ID FROM #invitees)
+                   OR ID IN (SELECT TRY_CAST(LinkedEntityRecordID AS UNIQUEIDENTIFIER) FROM [${core}].[User] WHERE ID IN (SELECT ID FROM #invitees));
             DELETE FROM [${core}].UserRole WHERE UserID IN (SELECT ID FROM #invitees);
             DELETE FROM [${core}].UserApplication WHERE UserID IN (SELECT ID FROM #invitees);
             DELETE FROM [${core}].MagicLinkInviteRole WHERE InviteID IN (SELECT ID FROM [${core}].MagicLinkInvite WHERE Email LIKE '%@${INVITEE_EMAIL_DOMAIN.replace(/'/g, "''")}');

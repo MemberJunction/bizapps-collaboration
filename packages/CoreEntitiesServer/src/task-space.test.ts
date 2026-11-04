@@ -97,6 +97,51 @@ describe('assigneeSeatMessage', () => {
         }
     });
 
+    it('seats a Person assignee through the user that links to a People subtype, with LinkedUserID empty', async () => {
+        const PERSON_ID = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
+        const PEOPLE_ENTITY_ID = 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB';
+        const PLATFORM_PEOPLE_ID = 'CCCCCCCC-CCCC-4CCC-8CCC-CCCCCCCCCCCC';
+        const peopleEntity = { ID: PEOPLE_ENTITY_ID, Name: 'MJ_BizApps_Common: People', ParentChain: [] };
+        const platformPeople = { ID: PLATFORM_PEOPLE_ID, Name: 'Platform: People', ParentChain: [peopleEntity] };
+        const base = createMockProvider(true);
+        const peopleReads: string[] = [];
+        const provider = {
+            ...base,
+            Entities: [peopleEntity, platformPeople],
+            EntityByID(id: string) { return [peopleEntity, platformPeople].find((e) => e.ID.toLowerCase() === id.toLowerCase()) ?? null; },
+            async RunView(params: { EntityName: string; ExtraFilter?: string }) {
+                if (params.EntityName === 'MJ: Users') {
+                    return { Success: true, Results: params.ExtraFilter?.includes(PERSON_ID.toLowerCase()) ? [{ ID: ASSIGNEE_USER_ID, LinkedEntityRecordID: PERSON_ID }] : [] };
+                }
+                if (params.EntityName === 'MJ_BizApps_Common: People') {
+                    peopleReads.push(params.ExtraFilter ?? '');
+                    return { Success: true, Results: [] };
+                }
+                return base.RunView(params);
+            },
+        };
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as UserInfo;
+        try {
+            const assignment = {
+                IsSaved: false,
+                Fields: [],
+                ProviderToUse: provider,
+                RunViewProviderToUse: provider,
+                ContextCurrentUser: { ID: CALLER_USER_ID, UserRoles: [{ Role: 'Space Participant' }] } as unknown as UserInfo,
+                TaskID: TASK_ID,
+                AssigneeEntityID: PEOPLE_ENTITY_ID,
+                AssigneeRecordID: PERSON_ID,
+            } as unknown as mjBizAppsTasksTaskAssignmentEntity;
+
+            assert.equal(await assigneeSeatMessage(assignment), null);
+            assert.deepEqual(peopleReads, []);
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
     it('refuses participant assigning an ancestor member when AllowParentAssignees is false', async () => {
         const source = WellKnownUserSource.Instance;
         const orig = source.GetSystemUser.bind(source);

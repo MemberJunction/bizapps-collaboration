@@ -119,7 +119,7 @@ export async function deleteInvitee(provider: IMetadataProvider, user: UserInfo,
         }
         for (const account of await readAll(rv, user, USER_ENTITY, `Email = '${quoted}'`)) {
             await removeAll(SPACE_MEMBER_ENTITY, `UserID = '${account.ID}'`, "the invitee's seat");
-            await removeAll(PERSON_ENTITY, `LinkedUserID = '${account.ID}'`, "the invitee's person record");
+            await removeAll(PERSON_ENTITY, `LinkedUserID = '${account.ID}' OR Email = '${quoted}'`, "the invitee's person record");
             await removeAll(USER_ROLE_ENTITY, `UserID = '${account.ID}'`, "the invitee's role grant");
             await removeAll('MJ: User Applications', `UserID = '${account.ID}'`, "the invitee's application grant");
             // The account itself, and its notifications, stay until the purge: the system user may not delete a notification
