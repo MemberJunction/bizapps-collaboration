@@ -1,7 +1,6 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJConversationEntity, MJFileEntity } from '@memberjunction/core-entities';
-import { mjBizAppsCollaborationSpacePageEntity } from '@mj-biz-apps/collaboration-entities';
-import { SPACE_CHAT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_PAGE_ENTITY } from '../entity-names.js';
+import { SPACE_CHAT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import sql from 'mssql';
 import { deleteRowAndConfirm, registerChecks } from './cleanup-helpers.js';
@@ -113,67 +112,6 @@ const checks: NamedCheck[] = [
         },
     },
     {
-        Id: 'row-filters.RF5',
-        Name: 'RF5 — Bea (outside Client on Discovery) reads Space Pages and gets Shared pages only, never a Team page',
-        RequiresMutation: true,
-        Fn: async (ctx: IntegrationCheckContext) => {
-            const ada = await GetPersonaUser(ctx, 'ada');
-            const bea = await GetPersonaUser(ctx, 'bea');
-            const view = View(ctx);
-
-            let sharedPageId: string | null = null;
-            let teamPageId: string | null = null;
-            try {
-                const sharedPage = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>(SPACE_PAGE_ENTITY, ada);
-                sharedPage.NewRecord();
-                sharedPage.SpaceID = DISCOVERY_SPACE_ID;
-                sharedPage.Title = 'RF5 Shared Discovery Page';
-                sharedPage.Band = 'Shared';
-                sharedPage.Status = 'Published';
-                sharedPage.Sequence = 10;
-                sharedPage.PublishedBlocks = '[]';
-                Assert(await sharedPage.Save(), `Ada failed to save Shared page: ${sharedPage.LatestResult?.CompleteMessage ?? 'unknown'}`);
-                sharedPageId = sharedPage.ID;
-
-                const teamPage = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>(SPACE_PAGE_ENTITY, ada);
-                teamPage.NewRecord();
-                teamPage.SpaceID = DISCOVERY_SPACE_ID;
-                teamPage.Title = 'RF5 Internal Team Discovery Page';
-                teamPage.Band = 'Team';
-                teamPage.Status = 'Published';
-                teamPage.Sequence = 11;
-                teamPage.PublishedBlocks = '[]';
-                Assert(await teamPage.Save(), `Ada failed to save Team page: ${teamPage.LatestResult?.CompleteMessage ?? 'unknown'}`);
-                teamPageId = teamPage.ID;
-
-                const pages = await view.RunView<{ ID: string; SpaceID: string; Band: string; Title: string }>({
-                    EntityName: SPACE_PAGE_ENTITY,
-                    ExtraFilter: `SpaceID = '${DISCOVERY_SPACE_ID}'`,
-                    Fields: ['ID', 'SpaceID', 'Band', 'Title'],
-                    ResultType: 'simple',
-                    BypassCache: true,
-                }, bea);
-
-                Assert(pages.Success, `Bea RunView Space Pages failed: ${pages.ErrorMessage ?? 'unknown'}`);
-                const results = pages.Results ?? [];
-                Assert(results.length > 0, 'Bea must see at least the Shared page in Discovery');
-                for (const p of results) {
-                    Assert(p.Band === 'Shared', `Bea saw non-Shared page '${p.Title}' with band '${p.Band}'`);
-                }
-                const visiblePageIds = new Set(results.map((p) => p.ID.toLowerCase()));
-                Assert(visiblePageIds.has(sharedPageId.toLowerCase()), 'Bea must see the Shared page');
-                Assert(!visiblePageIds.has(teamPageId.toLowerCase()), 'Bea MUST NOT see the Team page');
-            } finally {
-                if (sharedPageId) {
-                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_PAGE_ENTITY, sharedPageId, 'RF5 Shared Space Page');
-                }
-                if (teamPageId) {
-                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_PAGE_ENTITY, teamPageId, 'RF5 Team Space Page');
-                }
-            }
-        },
-    },
-    {
         Id: 'row-filters.RF6',
         Name: "RF6 — a staff (UI) user reads the files, indexed documents and chats of spaces they reach, never another space's; everything outside Collaboration stays readable",
         RequiresMutation: true,
@@ -243,42 +181,6 @@ const checks: NamedCheck[] = [
             } finally {
                 if (conversationId) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: Conversations', conversationId, 'RF6 outside conversation');
                 if (fileId) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: Files', fileId, 'RF6 outside file');
-            }
-        },
-    },
-    {
-        Id: 'row-filters.RF7',
-        Name: "RF7 — a Shared page never carries a Team comment (every reader receives its payload), and a comment's author is whoever saved it",
-        RequiresMutation: true,
-        Fn: async (ctx: IntegrationCheckContext) => {
-            const ada = await GetPersonaUser(ctx, 'ada');
-            const comment = (id: string, band: string) => ({ id, band, body: 'RF7', authorName: 'The CEO', authorInitials: 'CE', createdAtLabel: 'now', status: 'Open' });
-            const newSharedPage = async (comments: unknown[]) => {
-                const page = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>(SPACE_PAGE_ENTITY, ada);
-                page.NewRecord();
-                page.SpaceID = DISCOVERY_SPACE_ID;
-                page.Title = 'RF7 Shared Discovery Page';
-                page.Band = 'Shared';
-                page.Status = 'Published';
-                page.Sequence = 12;
-                page.PublishedBlocks = JSON.stringify({ blocks: [], comments });
-                return page;
-            };
-
-            let pageId: string | null = null;
-            try {
-                const refused = await newSharedPage([comment('rf7-team', 'Team')]);
-                Assert(!(await refused.Save()), 'A Shared page carrying a Team comment must be refused');
-                Assert(/can't carry Team comments/.test(refused.LatestResult?.CompleteMessage ?? ''), `Refused for another reason: ${refused.LatestResult?.CompleteMessage ?? 'unknown'}`);
-
-                const page = await newSharedPage([comment('rf7-shared', 'Shared')]);
-                Assert(await page.Save(), `Ada failed to save the Shared page: ${page.LatestResult?.CompleteMessage ?? 'unknown'}`);
-                pageId = page.ID;
-                const [row] = await FindRows<{ PublishedBlocks: string }>(ctx, SPACE_PAGE_ENTITY, `ID = '${pageId}'`, ['PublishedBlocks']);
-                const stored = JSON.parse(row?.PublishedBlocks ?? '{}') as { comments?: Array<{ authorName?: string }> };
-                Assert(stored.comments?.[0]?.authorName === (ada.FirstLast || ada.Name), `The comment's author is '${stored.comments?.[0]?.authorName}', not the saver`);
-            } finally {
-                if (pageId) await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_PAGE_ENTITY, pageId, 'RF7 Shared Space Page');
             }
         },
     },

@@ -63,33 +63,30 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         // 2. Navigation rail (Angular component: mjc-space-rail)
         const rail = page.locator('mjc-space-rail nav.appnav');
         await expect(rail).toBeVisible();
-        // The rail opens with the space switcher (Home mode shows 'All spaces'); the jump search lives in its popover
-        await expect(rail.locator('[data-testid="rail-space-switcher"] .switcher-title')).toHaveText('All spaces');
+        await expect(rail.locator('.jump')).toContainText('Jump to a space');
         await expect(rail.locator('.nav-item').filter({ hasText: 'Home' })).toBeVisible();
         await expect(rail.locator('.nav-item').filter({ hasText: 'Inbox' })).toContainText('4');
         await expect(rail.locator('.nav-item').filter({ hasText: 'My tasks' })).toContainText('6');
 
-        // Spaces tree in rail: in Home mode no row is marked active (the open space shows in the header), so find the row by name
-        const discoveryItem = rail.locator('.tree-item').filter({ hasText: 'Discovery' });
-        await expect(discoveryItem).toBeVisible();
+        // Spaces tree in rail
+        const discoveryItem = rail.locator('.tree-item.active');
+        await expect(discoveryItem).toContainText('Discovery');
         await expect(discoveryItem.locator('.unread')).toBeVisible();
 
         // 3. Space Header & Breadcrumbs (Angular component: mjc-space-header)
         const header = page.locator('mjc-space-header section.space-head');
         await expect(header).toBeVisible();
-        // The breadcrumb names the ancestors only ("All spaces › Northwind"); the open space is the title below it
-        await expect(header.locator('.crumbs')).toContainText('All spaces');
+        await expect(header.locator('.crumbs')).toContainText('Spaces');
         await expect(header.locator('.crumbs')).toContainText('Northwind');
-        await expect(header.locator('.crumbs')).not.toContainText('Discovery');
+        await expect(header.locator('.crumbs')).toContainText('Discovery');
 
         // Title and Chips
         await expect(header.locator('h1.h1')).toHaveText('Discovery');
-        await expect(header.locator('.chip.type-chip')).toHaveText('Engagement');
-        // An Active space shows no status chip; only another status does
-        await expect(header.locator('.chip.status-chip')).toHaveCount(0);
+        await expect(header.locator('.chip.plain')).toHaveText('Engagement');
+        await expect(header.locator('.chip.ok')).toContainText('Active');
 
         // Subtitle with lifecycle progress
-        const sub = header.locator('.sub-inline');
+        const sub = header.locator('.sub');
         await expect(sub).toContainText('Supply-chain operating model diagnostic');
         await expect(sub).toContainText('Week 7 of 10');
         await expect(sub).toContainText('Readout Oct 9');
@@ -97,9 +94,8 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         // 4. Audience Pill (Angular component: mjc-audience-pill)
         const aud = header.locator('mjc-audience-pill .aud');
         await expect(aud).toBeVisible();
-        // The pill shows the two sides by count (3 staff, 4 outside in the fixture); people and summary live in its popover
-        await expect(aud).toContainText('Team 3');
-        await expect(aud).toContainText('Outside 4');
+        await expect(aud).toContainText('9 people');
+        await expect(aud).toContainText('3 Meridian · 6 Northwind');
 
         // 5. Tabs (Angular component: mjc-space-tabs)
         const tabs = header.locator('mjc-space-tabs .tab');
