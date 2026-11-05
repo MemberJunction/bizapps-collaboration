@@ -112,5 +112,6 @@ export {
 } from './turn-tools.js';
 export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant } from './turn-tools.js';
 export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction.js';
+export { CollaborationScopedSearchAction, LoadCollaborationScopedSearchAction, unquoteSpaceSearch, unwrapPhraseQuotes } from './CollaborationScopedSearchAction.js';
 export type { TurnToolsGiven } from './execute-space-chat-turn.js';
 export { IsPeopleEntity, PEOPLE_ENTITY, ResolvePersonIDForUser, ResolveUserIDForPerson, ResolveUserIDsForPeople } from '@mj-biz-apps/common-entities';
