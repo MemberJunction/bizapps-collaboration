@@ -457,6 +457,10 @@
       "Name": "Collaboration: Visible Pages",
       "Description": "A space's pages by band, as notes and items are (Team for a seat that sees Team, Shared for any seat that reaches the space).",
       "FilterText": "((SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR (Band = N'Shared' AND CAST(SpaceID AS NVARCHAR(450)) = '{{ScopeResourceID}}'))"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-11-05T21:13:49.197Z"
     }
   },
   {
@@ -467,6 +471,10 @@
       "Name": "Collaboration: Pages The Caller May Change",
       "Description": "Pages of a space where the caller is the owner or reaches the space: the coarse gate for a create, update, or delete. SpacePageEntityServer enforces the fine rule via pageEditVerdict.",
       "FilterText": "(SpaceID IN (SELECT ID FROM [__mj_BizAppsCollaboration].[Space] WHERE OwnerID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-11-05T21:13:49.218Z"
     }
   },
   {

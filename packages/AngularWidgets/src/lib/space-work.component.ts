@@ -14,58 +14,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, CollabAvatarComponent, CollabBandChipComponent, MJButtonDirective, MJClickableDirective, MJDropdownComponent, MJEmptyStateComponent, MJFilterChipComponent],
   template: `
-    @if (Compact) {
-      <div class="work-compact-card" data-testid="space-work-compact">
-        <div class="work-compact-head">
-          <span class="work-compact-title">{{ CustomTitle || 'Open tasks' }}</span>
-          <span class="work-compact-badge" data-testid="space-work-compact-count">{{ openVisibleTasks.length }}</span>
-          <div class="spacer"></div>
-          @if (ShowWorkLink) {
-            <a class="work-compact-link" [mjClickable]="'Open Work'" (click)="onOpenWork($event)">Open Work</a>
-          }
-        </div>
-        @if (openVisibleTasks.length === 0) {
-          <p class="work-compact-empty" data-testid="space-work-compact-empty">No open tasks</p>
-        } @else {
-          <div class="work-compact-list">
-            @for (task of openVisibleTasks; track task.id) {
-              <div
-                class="task-row compact-row"
-                data-testid="space-work-compact-row"
-                [class.is-done]="task.status === 'Completed'"
-                (click)="onTaskClick(task)">
-                <div class="td-check" (click)="$event.stopPropagation()">
-                  <input
-                    type="checkbox"
-                    [checked]="task.status === 'Completed'"
-                    [disabled]="ReadOnly"
-                    [attr.aria-label]="'Mark ' + task.name + ' as ' + (task.status === 'Completed' ? 'not done' : 'done')"
-                    (change)="onToggleTask(task)"
-                    class="task-checkbox"
-                  />
-                </div>
-                <div class="td-title" [mjClickable]="task.name">
-                  <span class="task-name">{{ task.name }}</span>
-                </div>
-                <div class="td-band" (click)="$event.stopPropagation()">
-                  <mjc-band-chip [Band]="task.band" />
-                </div>
-                <div class="td-priority">
-                  <span class="priority-badge" [class]="priorityClass(task.priority)">
-                    {{ priorityLabel(task.priority) }}
-                  </span>
-                </div>
-                @if (task.dueDate) {
-                  <div class="td-date">
-                    <span class="due-text">{{ task.dueDate }}</span>
-                  </div>
-                }
-              </div>
-            }
-          </div>
-        }
-      </div>
-    } @else {
     <div class="work-container">
       <!-- Header stats -->
       <div class="work-stats">
@@ -245,77 +193,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </div>
       </div>
     </div>
-    }
   `,
   styles: [
     COLLAB_TOKENS_CSS,
     `
-      .work-compact-card {
-        background: var(--mj-bg-surface-card);
-        border: 1px solid var(--mj-border-default);
-        border-radius: var(--mj-radius-lg);
-        padding: 14px 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-      .work-compact-head {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .work-compact-title {
-        font-size: 13px;
-        font-weight: 700;
-        color: var(--mj-text-primary);
-      }
-      .work-compact-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 20px;
-        height: 18px;
-        padding: 0 6px;
-        border-radius: var(--mj-radius-full);
-        font-size: 11px;
-        font-weight: 700;
-        background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface-card));
-        color: var(--mj-brand-primary);
-      }
-      .work-compact-link {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--mj-brand-primary);
-        cursor: pointer;
-        text-decoration: none;
-      }
-      .work-compact-link:hover {
-        text-decoration: underline;
-      }
-      .work-compact-empty {
-        margin: 0;
-        font-size: 12.5px;
-        color: var(--mj-text-muted);
-      }
-      .work-compact-list {
-        display: flex;
-        flex-direction: column;
-      }
-      .compact-row {
-        padding: 8px 4px;
-        gap: 8px;
-      }
-      .compact-row .td-title {
-        flex: 1 1 auto;
-        min-width: 0;
-      }
-      .compact-row .td-band,
-      .compact-row .td-priority,
-      .compact-row .td-date {
-        width: auto;
-        flex-shrink: 0;
-      }
-
       .work-container {
         padding: 24px 32px;
         display: flex;
@@ -332,8 +213,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         gap: 16px;
       }
       .stat-card {
-        background: var(--mj-bg-surface);
-        border: 1px solid var(--mj-border-subtle);
+        background: var(--mj-bg-surface, #ffffff);
+        border: 1px solid var(--mj-border-subtle, #e2e8f0);
         border-radius: 8px;
         padding: 16px 20px;
         display: flex;
@@ -343,14 +224,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       .stat-num {
         font-size: 24px;
         font-weight: 700;
-        color: var(--mj-text-primary);
+        color: var(--mj-text-primary, #0f172a);
       }
       .stat-num.in-progress { color: var(--mj-status-info); }
       .stat-num.completed { color: var(--mj-status-success); }
-      .stat-num.shared { color: var(--mjc-shared); }
+      .stat-num.shared { color: var(--mjc-shared, #0076b6); }
       .stat-lbl {
         font-size: 13px;
-        color: var(--mj-text-secondary);
+        color: var(--mj-text-secondary, #64748b);
       }
 
       .filter-bar {
@@ -367,7 +248,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       .search-ic {
         position: absolute;
         left: 10px;
-        color: var(--mj-text-muted);
+        color: var(--mj-text-muted, #94a3b8);
         font-size: 13px;
       }
       /* MJ's .mj-input draws the field; this keeps room for the search icon and a width */
@@ -385,8 +266,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: flex;
         align-items: center;
         gap: 10px;
-        background: var(--mj-bg-surface);
-        border: 1px solid var(--mj-border-strong);
+        background: var(--mj-bg-surface, #ffffff);
+        border: 1px solid var(--mj-border-strong, #cbd5e1);
         border-radius: 6px;
         padding: 10px 14px;
         box-shadow: var(--mj-shadow-md);
@@ -399,8 +280,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
 
       .tasks-table-card {
-        background: var(--mj-bg-surface);
-        border: 1px solid var(--mj-border-subtle);
+        background: var(--mj-bg-surface, #ffffff);
+        border: 1px solid var(--mj-border-subtle, #e2e8f0);
         border-radius: 8px;
         overflow: hidden;
       }
@@ -408,11 +289,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: flex;
         align-items: center;
         padding: 10px 16px;
-        background: var(--mj-bg-surface-card);
-        border-bottom: 1px solid var(--mj-border-subtle);
+        background: var(--mj-bg-surface-card, #f8fafc);
+        border-bottom: 1px solid var(--mj-border-subtle, #e2e8f0);
         font-size: 12px;
         font-weight: 600;
-        color: var(--mj-text-muted);
+        color: var(--mj-text-muted, #94a3b8);
         text-transform: uppercase;
         letter-spacing: 0.04em;
       }
@@ -432,13 +313,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: flex;
         align-items: center;
         padding: 12px 16px;
-        border-bottom: 1px solid var(--mj-border-subtle);
+        border-bottom: 1px solid var(--mj-border-subtle, #f1f5f9);
         transition: background 0.15s ease;
         cursor: pointer;
       }
       .task-row:last-child { border-bottom: none; }
       .task-row:hover {
-        background: var(--mj-bg-surface-hover);
+        background: var(--mj-bg-surface-hover, #f8fafc);
       }
       .task-row.is-done {
         opacity: 0.65;
@@ -450,17 +331,17 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         width: 16px;
         height: 16px;
         cursor: pointer;
-        accent-color: var(--mj-brand-primary);
+        accent-color: var(--mj-brand-primary, #0076b6);
       }
       .task-name {
         font-size: 14px;
         font-weight: 500;
-        color: var(--mj-text-primary);
+        color: var(--mj-text-primary, #0f172a);
         display: block;
       }
       .task-desc {
         font-size: 12px;
-        color: var(--mj-text-secondary);
+        color: var(--mj-text-secondary, #64748b);
         display: block;
         margin-top: 2px;
       }
@@ -497,15 +378,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .assignee-name {
         font-size: 12px;
-        color: var(--mj-text-secondary);
+        color: var(--mj-text-secondary, #475569);
       }
       .unassigned {
         font-size: 12px;
-        color: var(--mj-text-muted);
+        color: var(--mj-text-muted, #94a3b8);
       }
       .due-text {
         font-size: 12px;
-        color: var(--mj-text-secondary);
+        color: var(--mj-text-secondary, #64748b);
       }
 
     `,
@@ -515,9 +396,6 @@ export class CollabSpaceWorkComponent {
   @Input() Tasks: TaskItemModel[] = [];
   @Input() SpaceName = '';
   @Input() CanCreateTask = true;
-  @Input() Compact = false;
-  @Input() CustomTitle = '';
-  @Input() ShowWorkLink = true;
   /** A closed space, or a seat that may not contribute: the checkboxes are off, as they are on the board. */
   @Input() ReadOnly = false;
   /** The bands this seat may file a task on. With one, the choice isn't offered. */
@@ -536,7 +414,6 @@ export class CollabSpaceWorkComponent {
   @Output() TaskSelectRequested = new EventEmitter<TaskItemModel>();
   @Output() TaskToggleRequested = new EventEmitter<TaskItemModel>();
   @Output() CreateTaskRequested = new EventEmitter<{ name: string; band: SpaceBand; priority: string }>();
-  @Output() OpenWorkRequested = new EventEmitter<void>();
 
   public searchQuery = '';
   public statusFilter: 'all' | 'active' | 'completed' = 'all';
@@ -553,17 +430,6 @@ export class CollabSpaceWorkComponent {
     return this.AllowedBands.map((band) => ({ band, label: band === 'Shared' ? 'Shared with Outside' : 'Team only' }));
   }
   public newTaskPriority = 'Medium';
-
-  public get openVisibleTasks(): TaskItemModel[] {
-    return this.Tasks.filter(
-      (task) => !isTaskClosed(task.status) && (task.band === 'Shared' || this.CanSeeTeamSide),
-    );
-  }
-
-  public onOpenWork(event?: Event): void {
-    event?.stopPropagation();
-    this.OpenWorkRequested.emit();
-  }
 
   public openAddTask(): void {
     this.isAddingTask = !this.isAddingTask;

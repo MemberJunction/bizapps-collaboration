@@ -13,7 +13,6 @@ import {
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
     LoadSpaceNoteEntityServer,
-    LoadSpacePageEntityServer,
     LoadCollaborationTaskEntityServer,
     LoadTaskAttributionEntityServer,
     LoadSpaceMeetingsAgendaProvider,
@@ -53,7 +52,6 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceItemEntityServer();
     LoadSpaceMemberEntityServer();
     LoadSpaceNoteEntityServer();
-    LoadSpacePageEntityServer();
     LoadTaskAttributionEntityServer();
     LoadCollaborationTaskEntityServer();
     LoadSpaceMeetingsAgendaProvider();

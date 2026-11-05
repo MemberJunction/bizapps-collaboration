@@ -6,7 +6,7 @@ import { type BaseEntity, CompositeKey, LogError, Metadata, RunView, type UserIn
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormResolverService } from '@memberjunction/ng-base-forms';
-import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
@@ -15,7 +15,7 @@ import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, GrantsForViewer, noteDocument, notePromotionVerdict, pageEditVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, GrantsForViewer, noteDocument, notePromotionVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
@@ -24,19 +24,7 @@ import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
 import { resolveDriverSafely } from './logic/ui-driver-safe.js';
 import { settingsAccess, type SettingsAccess } from './logic/settings-access.js';
-import {
-    countLabel,
-    countText,
-    invitationRows,
-    needsYouCards,
-    pinRows,
-    spaceSignal,
-    taskRows,
-    type HomeListKind,
-    type HomeNeedsYouCardModel,
-    type HomeRowModel,
-    type HomeSpaceSignal,
-} from './logic/home-lists.js';
+import { countLabel, countText, invitationRows, taskRows, type HomeListKind, type HomeRowModel } from './logic/home-lists.js';
 import { NewSpaceDraft, SpaceDetails } from './logic/space-details.js';
 import { planDetailsView, type DetailsViewModel } from './logic/details-view.js';
 import { NewSpacePicks } from './logic/new-space-picks.js';
@@ -62,7 +50,6 @@ import {
     type mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationItemUseEntity,
     mjBizAppsCollaborationSpaceNoteEntity,
-    mjBizAppsCollaborationSpacePageEntity,
     mjBizAppsCollaborationSpaceMemberPinEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
@@ -89,9 +76,6 @@ import {
     CollabSpaceLibraryComponent,
     CollabShareCheckDialogComponent,
     CollabAudiencePillComponent,
-    CollabAvatarStackComponent,
-    CollabTypeTileComponent,
-    CollabNeedsYouCardComponent,
     CollabUploadDialogComponent,
     CollabSpaceWorkComponent,
     CollabSpaceChatComponent,
@@ -105,7 +89,6 @@ import {
     type NewSpaceSubmitPayload,
     type TabItem,
     assembleSpaceContributions,
-    assembleSpacePageBlocks,
     BaseSpaceOverviewCard,
     BaseSpaceTab,
     BaseSpaceTypeUIDriver,
@@ -140,12 +123,8 @@ import {
     type SpaceDetailsFormDescriptor,
     type SpaceConversationItem,
     CollabSpaceNotesComponent,
-    CollabSpacePagesComponent,
     CollabPinnedStripComponent,
     CollabSpaceDataComponent,
-    type CollabPageModel,
-    type SpacePageBlockContext,
-    type SpaceRailCustomPage,
     type NoteModel,
     type NoteDraft,
     type PinModel,
@@ -163,13 +142,7 @@ import type { AgendaItem } from '@mj-biz-apps/collaboration-core';
 import { MJReactModule } from '@memberjunction/ng-react';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { notesVisibleTo } from './logic/visible-notes.js';
-import {
-    applyCollabPageToEntity,
-    buildStarterPagesForSpace,
-    mapSpacePageRowToModel,
-    mergeSpacePagesWithDefaults,
-    type SpacePageRow,
-} from './logic/space-pages.js';
+import { pinRows } from './logic/home-lists.js';
 
 /** The Space Notes entity's id on this host, which a pin names as its target entity. */
 const notesEntityId = (): string => Metadata.Provider.EntityByName('MJ_BizApps_Collaboration: Space Notes')?.ID ?? '';
@@ -226,15 +199,15 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         MJButtonDirective,
         MJAlertComponent,
         MJClickableDirective,
+        MJEmptyStateComponent,
         MJViewToggleComponent,
         CollabSpaceRailComponent,
         CollabSpaceHeaderComponent,
+        CollabSpaceTabsComponent,
+        CollabSpaceOverviewComponent,
         CollabSpaceLibraryComponent,
         CollabShareCheckDialogComponent,
         CollabAudiencePillComponent,
-        CollabAvatarStackComponent,
-        CollabTypeTileComponent,
-        CollabNeedsYouCardComponent,
         CollabUploadDialogComponent,
         CollabSpaceWorkComponent,
         CollabSpaceChatComponent,
@@ -244,7 +217,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabNewSpaceDialogComponent,
         CollabHomeListComponent,
         CollabSpaceNotesComponent,
-        CollabSpacePagesComponent,
+        CollabPinnedStripComponent,
         CollabSpaceDataComponent,
         MJReactModule,
         CollaborationNoAccessComponent,
@@ -282,7 +255,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            background: var(--mj-bg-page);
+            background: var(--mj-bg-page, #ffffff);
         }
         .content-area {
             flex: 1 1 auto;
@@ -293,7 +266,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         }
         .tab-placeholder {
             padding: 32px;
-            color: var(--mj-text-secondary);
+            color: var(--mj-text-secondary, #64748b);
             font-size: 14px;
         }
         .row { display: flex; align-items: center; }
@@ -302,268 +275,181 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         .collab-home-view {
             display: flex;
             flex-direction: column;
-            gap: 20px;
             height: 100%;
             overflow-y: auto;
-            background: var(--mj-bg-surface-sunken);
-            padding: 20px 28px;
+            background: var(--mj-bg-surface-sunken, #f8fafc);
+            padding: 24px;
             box-sizing: border-box;
         }
-        .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-        .home-section {
+        .home-header {
+            background: var(--mj-bg-surface-card, #ffffff);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .home-greeting {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .home-hero-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-active) 100%);
+            color: var(--mj-text-inverse);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+        }
+        .home-title {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--mj-text-primary, #0f172a);
+        }
+        .home-subtitle {
+            margin: 4px 0 0;
+            font-size: 13.5px;
+            color: var(--mj-text-secondary, #64748b);
+        }
+        .home-quick-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+        .stat-pill {
+            background: var(--mj-bg-surface-sunken, #f8fafc);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .stat-pill:hover {
+            background: var(--mj-bg-surface-hover, #f1f5f9);
+            border-color: var(--mj-brand-primary, #0284c7);
+            transform: translateY(-1px);
+        }
+        .stat-pill.active {
+            border-color: var(--mj-brand-primary, #0284c7);
+            background: var(--mj-bg-surface-hover, #f1f5f9);
+        }
+        .home-list-wrap {
+            padding: 0 32px 8px;
+        }
+        .stat-val {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--mj-brand-primary, #0284c7);
+        }
+        .stat-lbl {
+            font-size: 12px;
+            color: var(--mj-text-secondary, #64748b);
+            font-weight: 500;
+        }
+        .spaces-directory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .space-directory-card {
+            background: var(--mj-bg-surface-card, #ffffff);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
+            border-radius: 10px;
+            padding: 18px;
+            cursor: pointer;
+            transition: all 0.15s ease;
             display: flex;
             flex-direction: column;
             gap: 10px;
+        }
+        .space-directory-card.closed { opacity: 0.7; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        .space-directory-card:hover {
+            border-color: var(--mj-brand-primary, #0284c7);
+            box-shadow: var(--mj-shadow-md);
+            transform: translateY(-2px);
+        }
+        .card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .space-icon-box {
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        .space-type-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--mj-bg-surface-sunken, #f1f5f9);
+            color: var(--mj-text-secondary, #475569);
+        }
+        .space-name {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--mj-text-primary, #0f172a);
+        }
+        .space-desc {
+            margin: 0;
+            font-size: 12.5px;
+            color: var(--mj-text-secondary, #64748b);
+            line-height: 1.4;
+            flex: 1;
+        }
+        .space-footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            border-top: 1px solid var(--mj-border-default, #f1f5f9);
+            padding-top: 8px;
+        }
+        .open-link {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--mj-brand-primary, #0284c7);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
         .section-title-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
-        }
-        .section-title-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 0;
+            margin-bottom: 14px;
         }
         .section-title {
-            margin: 0;
-            display: inline-flex;
+            display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 700;
-            color: var(--mj-text-primary);
+            color: var(--mj-text-primary, #0f172a);
         }
-        .section-count-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 20px;
-            height: 20px;
-            padding: 0 7px;
-            border-radius: 999px;
-            font-size: 11.5px;
-            font-weight: 700;
-            color: var(--mj-brand-primary);
-            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
-        }
-        .section-count-badge.warn {
-            color: var(--mj-status-warning-text);
-            background: var(--mj-status-warning-bg);
-        }
-        .home-quiet-line {
-            margin: 0;
-            font-size: 13px;
-            color: var(--mj-text-secondary);
-            padding: 2px 0;
-        }
-        .home-inline-error {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 13px;
-            color: var(--mj-status-error-text);
-        }
-        .home-needs-you-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .home-lists-row {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            gap: 16px;
-        }
-        .home-lists-row.has-pins {
-            grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-        }
-        @media (max-width: 960px) {
-            .home-lists-row.has-pins {
-                grid-template-columns: minmax(0, 1fr);
-            }
-        }
-        .space-status-seg {
-            display: inline-flex;
-            align-items: center;
-            gap: 2px;
-            padding: 2px;
-            border-radius: 8px;
-            background: var(--mj-bg-surface);
-            border: 1px solid var(--mj-border-default);
-            margin-left: 4px;
-        }
-        .seg-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 3px 10px;
-            border: none;
-            border-radius: 6px;
-            background: transparent;
-            font: inherit;
+        .section-badge {
             font-size: 12px;
-            font-weight: 600;
-            color: var(--mj-text-secondary);
-            cursor: pointer;
-        }
-        .seg-btn:hover {
-            color: var(--mj-text-primary);
-        }
-        .seg-btn.active {
-            background: var(--mj-bg-surface-sunken);
-            color: var(--mj-text-primary);
-        }
-        .seg-count {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--mj-text-muted);
-        }
-        .seg-btn.active .seg-count {
-            color: var(--mj-brand-primary);
-        }
-        .recent-spaces-card {
-            display: flex;
-            flex-direction: column;
-            border: 1px solid var(--mj-border-default);
-            border-radius: 10px;
-            background: var(--mj-bg-surface);
-            overflow: hidden;
-        }
-        .recent-space-row {
-            display: grid;
-            grid-template-columns: auto minmax(0, 1fr) auto auto 14px;
-            align-items: center;
-            gap: 14px;
-            width: 100%;
-            padding: 10px 16px;
-            border: none;
-            border-bottom: 1px solid var(--mj-border-subtle);
-            background: transparent;
-            font: inherit;
-            color: inherit;
-            text-align: left;
-            cursor: pointer;
-            transition: background-color 0.15s ease;
-        }
-        .recent-space-row:last-child {
-            border-bottom: none;
-        }
-        .recent-space-row:hover {
-            background: var(--mj-bg-surface-hover);
-        }
-        .recent-space-row:focus-visible {
-            outline: 2px solid var(--mj-brand-primary);
-            outline-offset: -2px;
-        }
-        .recent-space-row.closed {
-            opacity: 0.72;
-        }
-        .recent-space-main {
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-        }
-        .recent-space-name {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13.5px;
-            font-weight: 650;
-            color: var(--mj-text-primary);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .recent-space-star {
-            font-size: 11px;
-            color: var(--mj-status-warning);
-            flex-shrink: 0;
-        }
-        .recent-spaces-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 16px;
-            border-top: 1px solid var(--mj-border-subtle);
-            background: var(--mj-bg-surface-sunken);
-            font-size: 12px;
-            color: var(--mj-text-secondary);
-        }
-        .recent-spaces-toggle-btn {
-            border: none;
-            background: transparent;
-            color: var(--mj-brand-primary);
-            font: inherit;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            padding: 2px 6px;
-            border-radius: 6px;
-        }
-        .recent-spaces-toggle-btn:hover {
-            background: var(--mj-bg-surface-hover);
-        }
-        .recent-space-meta {
-            font-size: 12px;
-            color: var(--mj-text-secondary);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .recent-space-people {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            flex: none;
-        }
-        .recent-space-aud-div {
-            width: 1px;
-            height: 14px;
-            background: var(--mj-border-default);
-        }
-        .recent-space-signal {
-            display: inline-flex;
-            justify-content: flex-end;
-            min-width: 92px;
-            flex: none;
-        }
-        .signal-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 11px;
-            font-weight: 700;
-            border-radius: 999px;
-            padding: 2px 8px;
-            white-space: nowrap;
-        }
-        .signal-pill.brand {
-            color: var(--mj-brand-primary);
-            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-        }
-        .signal-pill.warn {
-            color: var(--mj-status-warning-text);
-            background: var(--mj-status-warning-bg);
-        }
-        .signal-pill.team {
-            color: var(--mj-text-secondary);
-            background: var(--mj-bg-surface-sunken);
-            border: 1px solid var(--mj-border-default);
-        }
-        .signal-pill.plain {
-            color: var(--mj-text-secondary);
-            background: var(--mj-bg-surface-sunken);
-        }
-        .signal-pill.muted {
-            color: var(--mj-text-muted);
-            background: var(--mj-bg-surface-sunken);
-        }
-        .recent-space-chev {
-            font-size: 12px;
-            color: var(--mj-text-muted);
-            justify-self: end;
+            color: var(--mj-text-muted, #64748b);
         }
         .collab-inbox-view, .collab-tasks-view, .collab-files-view {
             display: flex;
@@ -572,15 +458,15 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             overflow-y: auto;
             padding: 20px 24px;
             box-sizing: border-box;
-            background: var(--mj-bg-surface-sunken);
+            background: var(--mj-bg-surface-sunken, #f8fafc);
             gap: 16px;
         }
         .section-view-header {
             display: flex;
             align-items: center;
             gap: 14px;
-            background: var(--mj-bg-surface-card);
-            border: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface-card, #ffffff);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
             border-radius: 10px;
             padding: 16px 20px;
         }
@@ -608,16 +494,16 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             margin: 0;
             font-size: 19px;
             font-weight: 700;
-            color: var(--mj-text-primary);
+            color: var(--mj-text-primary, #0f172a);
         }
         .view-subtitle {
             margin: 3px 0 0;
             font-size: 13px;
-            color: var(--mj-text-secondary);
+            color: var(--mj-text-secondary, #64748b);
         }
         .inbox-content, .tasks-content, .files-content {
-            background: var(--mj-bg-surface-card);
-            border: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface-card, #ffffff);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
             border-radius: 10px;
             padding: 16px;
             min-height: 480px;
@@ -625,18 +511,18 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             flex: 1;
         }
         .pinned-wrap { padding: 12px 16px 0; }
-        .config-card { margin: 16px; padding: 14px 16px; border: 1px solid var(--mj-border-default); border-radius: 10px; background: var(--mj-bg-surface-card); }
+        .config-card { margin: 16px; padding: 14px 16px; border: 1px solid var(--mj-border-default, #e5e7eb); border-radius: 10px; background: var(--mj-bg-surface-card, #fff); }
         .config-title { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-        .config-sub { margin: 4px 0 12px; font-size: 12px; color: var(--mj-text-muted); }
+        .config-sub { margin: 4px 0 12px; font-size: 12px; color: var(--mj-text-muted, #6b7280); }
         .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-        .config-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 6px; }
+        .config-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted, #6b7280); margin-bottom: 6px; }
         .config-row { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
         .config-row.static { cursor: default; }
-        .config-row:not(.static):hover { background: var(--mj-bg-surface-sunken); }
-        .config-kind { font-size: 11px; font-weight: 700; color: var(--mj-brand-primary); align-self: center; }
+        .config-row:not(.static):hover { background: var(--mj-bg-surface-sunken, #f3f4f6); }
+        .config-kind { font-size: 11px; font-weight: 700; color: var(--mj-brand-primary, #2563eb); align-self: center; }
         .config-main { font-weight: 600; overflow-wrap: anywhere; }
-        .config-meta { grid-column: 2; font-size: 11px; color: var(--mj-text-muted); overflow-wrap: anywhere; }
-        .config-empty { font-size: 12px; color: var(--mj-text-muted); }
+        .config-meta { grid-column: 2; font-size: 11px; color: var(--mj-text-muted, #6b7280); overflow-wrap: anywhere; }
+        .config-empty { font-size: 12px; color: var(--mj-text-muted, #6b7280); }
         .work-tab-container {
             display: flex;
             flex-direction: column;
@@ -649,8 +535,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             align-items: center;
             justify-content: flex-end;
             padding: 8px 16px;
-            border-bottom: 1px solid var(--mj-border-default);
-            background: var(--mj-bg-surface);
+            border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+            background: var(--mj-bg-surface, #ffffff);
         }
         .work-view-body {
             flex: 1 1 auto;
@@ -667,34 +553,32 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         }
 
         .home-search-bar {
+            margin-bottom: 16px;
             position: relative;
-            width: 220px;
-            margin: 0;
         }
         .home-search-input {
             width: 100%;
-            height: 32px;
-            padding: 0 10px 0 32px;
+            padding: 10px 14px 10px 38px;
             border-radius: 8px;
-            border: 1px solid var(--mj-border-default);
-            background: var(--mj-bg-surface);
-            font-size: 12.5px;
-            color: var(--mj-text-primary);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
+            background: var(--mj-bg-surface, #ffffff);
+            font-size: 13.5px;
+            color: var(--mj-text-primary, #0f172a);
             box-sizing: border-box;
             outline: none;
             transition: border-color 0.15s ease;
         }
         .home-search-input:focus {
-            border-color: var(--mj-brand-primary);
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+            border-color: var(--mj-brand-primary, #0076b6);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary, #0076b6) 20%, transparent);
         }
         .home-search-icon {
             position: absolute;
-            left: 10px;
+            left: 12px;
             top: 50%;
             transform: translateY(-50%);
-            color: var(--mj-text-muted);
-            font-size: 12.5px;
+            color: var(--mj-text-muted, #94a3b8);
+            font-size: 14px;
         }
 
         .collab-loading-state {
@@ -712,19 +596,19 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             height: 100%;
             min-height: 400px;
             gap: 12px;
-            color: var(--mj-text-secondary);
+            color: var(--mj-text-secondary, #64748b);
             padding: 40px;
             text-align: center;
         }
         .collab-error-state i {
             font-size: 32px;
-            color: var(--mj-status-warning);
+            color: var(--mj-status-warning, #f59e0b);
         }
         .collab-error-state h3 {
             margin: 0;
             font-size: 16px;
             font-weight: 600;
-            color: var(--mj-text-primary);
+            color: var(--mj-text-primary, #0f172a);
         }
         .collab-error-state p {
             margin: 0;
@@ -738,30 +622,24 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             justify-content: center;
             padding: 48px 24px;
             text-align: center;
-            color: var(--mj-text-muted);
+            color: var(--mj-text-muted, #64748b);
             gap: 8px;
         }
         .no-person-state i {
             font-size: 28px;
-            color: var(--mj-text-muted);
+            color: var(--mj-text-muted, #94a3b8);
             margin-bottom: 8px;
         }
         .no-person-state h3 {
             margin: 0;
             font-size: 15px;
             font-weight: 600;
-            color: var(--mj-text-primary);
+            color: var(--mj-text-primary, #0f172a);
         }
         .no-person-state p {
             margin: 0;
             font-size: 13px;
             max-width: 360px;
-        }
-        @media (prefers-reduced-motion: reduce) {
-            .recent-space-row,
-            .home-search-input {
-                transition: none;
-            }
         }
     `],
     template: `
@@ -786,39 +664,26 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [Mode]="railMode"
                             [ActiveNav]="activeView"
                             [Spaces]="spaces"
-                            [ActiveSpaceId]="railMode === 'space' ? activeSpaceId : ''"
+                            [ActiveSpaceId]="activeSpaceId"
                             [SpaceTitle]="spaceTitle"
                             [SpaceIcon]="headerTypeIcon"
-                            [SpaceColor]="headerTypeColor"
-                            [SpaceIsClosed]="isSpaceClosed"
                             [SpaceBand]="spaceAudienceBand"
                             [ActiveTab]="activeTab"
                             [Tabs]="tabs"
-                            [CustomPages]="railCustomPages"
-                            [CanEditPages]="canCustomizePages"
-                            [IsCustomizingPages]="isCustomizingPages"
                             [Conversations]="spaceConversations"
                             [CanConfigure]="showsSettings"
                             [ActiveConversationId]="activeConversationId"
                             [CanStartConversation]="canStartConversation"
-                            [SubSpaces]="overviewSubSpaces"
-                            [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
-                            [ParentSpaceId]="activeParentSpaceId"
-                            [ParentSpaceName]="activeParentSpaceName"
-                            [PagesCount]="spacePages.length"
-                            [LibraryCount]="railMode === 'home' ? homeSharedFiles : libraryTotalCount"
-                            [TaskCount]="railMode === 'home' ? myTasksCount : taskCount"
+                            [LibraryCount]="libraryTotalCount"
+                            [TaskCount]="taskCount"
                             [MemberCount]="headerTotalPeople"
-                            [InboxCount]="inboxApprovalCount"
+                            [InboxCount]="0"
                             [CanCreateSpace]="canCreateSpace"
                             (SpaceCreateRequested)="openNewSpaceDialog()"
-                            (SubSpaceCreateRequested)="openNewSpaceDialog(activeSpaceId)"
                             (SpaceOpenRequested)="onSpaceOpenRequested($event)"
                             (SpaceToggleRequested)="onSpaceToggleRequested($event)"
                             (NavSelectRequested)="onNavSelectRequested($event)"
                             (TabSelectRequested)="onTabSelectRequested($event)"
-                            (NewPageRequested)="onNewPageRequestedFromRail()"
-                            (CustomizePagesToggleRequested)="onToggleCustomizePages()"
                             (ConversationSelectRequested)="onSpaceConversationSelected($event)"
                             (NewConversationRequested)="openNewConversationDialog()"
                             (BackToSpacesRequested)="onBackToSpacesRequested()"
@@ -827,188 +692,118 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                         <main class="main">
                             @switch (activeView) {
                                 @case ('home') {
-                                    <div class="collab-home-view" data-testid="collab-home-view">
-                                        <section class="home-section" data-testid="home-needs-you" aria-labelledby="home-needs-you-heading">
-                                            <div class="section-title-row">
-                                                <div class="section-title-group">
-                                                    <h2 class="section-title" id="home-needs-you-heading">Needs you</h2>
-                                                    @if (homeAwaitingApproval > 0 || homeCountsFailed) {
-                                                        <span class="section-count-badge warn" [attr.aria-label]="homeCountLabel('approvals')">{{ homeCountValue('approvals') }}</span>
-                                                    }
+                                    <div class="collab-home-view">
+                                        <header class="home-header">
+                                            <div class="home-greeting">
+                                                <div class="home-hero-icon">
+                                                    <i class="fa-solid fa-shapes"></i>
+                                                </div>
+                                                <div class="home-hero-text">
+                                                    <h1 class="home-title">Welcome to Collaboration</h1>
+                                                    <p class="home-subtitle">Unified spaces, documents, tasks, and communications across your teams and collaborators.</p>
                                                 </div>
                                             </div>
-                                            @if (isLoadingHomeList && homeNeedsYouCards.length === 0) {
-                                                <p class="home-quiet-line" role="status">Reading…</p>
-                                            } @else if (homeListError && homeNeedsYouCards.length === 0) {
-                                                <div class="home-inline-error" role="alert">
-                                                    <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
-                                                    <span>{{ homeListError }}</span>
-                                                    <button type="button" mjButton Variant="secondary" Size="sm" (click)="loadHomeLists()">Try again</button>
+                                            <div class="home-quick-stats">
+                                                <div class="stat-pill" [mjClickable]="homeCountLabel('spaces')" (click)="onHomeSpacesRequested()">
+                                                    <span class="stat-val">{{ activeSpacesCount }}</span>
+                                                    <span class="stat-lbl">Active Spaces</span>
                                                 </div>
-                                            } @else if (homeNeedsYouCards.length === 0) {
-                                                <p class="home-quiet-line" data-testid="home-needs-you-empty" role="status">Nothing needs your attention right now.</p>
-                                            } @else {
-                                                <div class="home-needs-you-list">
-                                                    @for (card of homeNeedsYouCards; track card.id) {
-                                                        <mjc-needs-you-card
-                                                            [Item]="card"
-                                                            [Variant]="card.variant"
-                                                            [IconClass]="card.iconClass || 'fa-solid fa-user-plus'"
-                                                            [IsSpark]="!!card.isSpark"
-                                                            [Title]="card.title"
-                                                            [Subtitle]="card.subtitle"
-                                                            [ActionLabel]="card.actionLabel"
-                                                            (ActionRequested)="onHomeInvitationSelected(card.id)"
-                                                        />
-                                                    }
+                                                <div class="stat-pill" [class.active]="homeList === 'tasks'" [mjClickable]="homeCountLabel('tasks')" (click)="onHomeListRequested('tasks')">
+                                                    <span class="stat-val">{{ homeCountValue('tasks') }}</span>
+                                                    <span class="stat-lbl">Open Tasks</span>
                                                 </div>
-                                            }
-                                        </section>
+                                                <div class="stat-pill" [class.active]="homeList === 'approvals'" [mjClickable]="homeCountLabel('approvals')" (click)="onHomeListRequested('approvals')">
+                                                    <span class="stat-val">{{ homeCountValue('approvals') }}</span>
+                                                    <span class="stat-lbl">Invitations Waiting</span>
+                                                </div>
+                                                <div class="stat-pill" [mjClickable]="homeCountLabel('files')" (click)="onNavSelectRequested('files')">
+                                                    <span class="stat-val">{{ homeCountValue('files') }}</span>
+                                                    <span class="stat-lbl">Shared Files</span>
+                                                </div>
+                                                <div class="stat-pill" [class.active]="homeList === 'pins'" [mjClickable]="homePinsLabel" (click)="onHomeListRequested('pins')">
+                                                    <span class="stat-val">{{ homePins.length }}</span>
+                                                    <span class="stat-lbl">My Pins</span>
+                                                </div>
+                                            </div>
+                                        </header>
 
-                                        <div class="home-lists-row" [class.has-pins]="homePins.length > 0 || !!homePinsError">
-                                            <mjc-home-list
-                                                Id="coming-up"
-                                                Title="Coming up"
-                                                [Badge]="homeCountValue('tasks')"
-                                                [BadgeLabel]="homeCountLabel('tasks')"
-                                                [ShowClose]="false"
-                                                [ShowActionLabel]="false"
-                                                [Rows]="homeTaskRows"
-                                                [TotalCount]="homeOpenTasks"
-                                                [IsLoading]="isLoadingHomeList"
-                                                [ErrorMessage]="homeListError"
-                                                EmptyMessage="No open tasks in your spaces."
-                                                (RowSelected)="onHomeTaskSelected($event)"
-                                                (RetryRequested)="loadHomeLists()"
-                                            />
-                                            @if (homePins.length > 0 || homePinsError) {
+                                        @if (homeList) {
+                                            <div class="home-list-wrap">
                                                 <mjc-home-list
-                                                    Id="pins"
-                                                    Title="Pinned"
-                                                    [Badge]="'' + homePins.length"
-                                                    [BadgeLabel]="homePinsLabel"
-                                                    [ShowClose]="false"
-                                                    [ShowActionLabel]="false"
-                                                    [Rows]="homePinRows"
-                                                    [TotalCount]="homePins.length"
-                                                    [IsLoading]="isLoadingHomePins"
-                                                    [ErrorMessage]="homePinsError"
-                                                    EmptyMessage="Nothing pinned yet."
-                                                    (RowSelected)="onHomePinSelected($event)"
-                                                    (RetryRequested)="loadHomePins()"
+                                                    [Id]="homeList"
+                                                    [Title]="homeListTitle"
+                                                    [Rows]="homeListRows"
+                                                    [TotalCount]="homeListTotal"
+                                                    [IsLoading]="isLoadingHomeList"
+                                                    [ErrorMessage]="homeListError"
+                                                    [EmptyMessage]="homeListEmpty"
+                                                    (RowSelected)="onHomeRowSelected($event)"
+                                                    (RetryRequested)="loadHomeLists()"
+                                                    (CloseRequested)="closeHomeList()"
                                                 />
-                                            }
-                                        </div>
+                                            </div>
+                                        }
 
-                                        <section class="home-section" data-testid="home-recent-spaces" aria-labelledby="home-recent-spaces-heading">
-                                            <div class="section-title-row">
-                                                <div class="section-title-group">
-                                                    <h2 class="section-title" id="home-recent-spaces-heading">Your recent spaces</h2>
-                                                    <div class="space-status-seg" role="group" aria-label="Filter spaces by status">
-                                                        <button
-                                                            type="button"
-                                                            class="seg-btn"
-                                                            [class.active]="homeSpacesFilter === 'active'"
-                                                            [attr.aria-pressed]="homeSpacesFilter === 'active'"
-                                                            (click)="setHomeSpacesFilter('active')">
-                                                            <span>Active</span>
-                                                            <span class="seg-count">{{ activeSpacesCount }}</span>
-                                                        </button>
-                                                        @if (closedSpacesCount > 0) {
-                                                            <button
-                                                                type="button"
-                                                                class="seg-btn"
-                                                                [class.active]="homeSpacesFilter === 'closed'"
-                                                                [attr.aria-pressed]="homeSpacesFilter === 'closed'"
-                                                                (click)="setHomeSpacesFilter('closed')">
-                                                                <span>Closed</span>
-                                                                <span class="seg-count">{{ closedSpacesCount }}</span>
-                                                            </button>
-                                                        }
+                                        <div class="home-body">
+                                            <section class="home-section">
+                                                <div class="section-title-row">
+                                                    <div class="section-title">
+                                                        <i class="fa-solid fa-layer-group"></i>
+                                                        <span>All spaces</span>
                                                     </div>
+                                                    <span class="section-badge">{{ filteredSpaces.length }} spaces</span>
                                                 </div>
                                                 <div class="home-search-bar">
-                                                    <i class="fa-solid fa-magnifying-glass home-search-icon" aria-hidden="true"></i>
+                                                    <i class="fa-solid fa-magnifying-glass home-search-icon"></i>
                                                     <input
                                                         type="text"
                                                         class="home-search-input"
                                                         [(ngModel)]="spaceSearchQuery"
-                                                        aria-label="Filter spaces"
-                                                        placeholder="Filter spaces…"
+                                                        placeholder="Search spaces by name, description, or type..."
                                                     />
                                                 </div>
-                                            </div>
-                                            @if (filteredSpaces.length === 0) {
-                                                @if (spaceSearchQuery) {
-                                                    <p class="home-quiet-line" role="status">No spaces match "{{ spaceSearchQuery }}".</p>
-                                                } @else {
-                                                    <p class="home-quiet-line" role="status">No spaces to show.</p>
-                                                }
-                                            } @else {
-                                                <div class="recent-spaces-card">
-                                                    @for (space of displayedRecentSpaces; track space.id) {
-                                                        <button
-                                                            type="button"
-                                                            class="recent-space-row"
-                                                            data-testid="recent-space-row"
-                                                            [class.closed]="space.isClosed"
-                                                            (click)="onSpaceOpenRequested(space.id)">
-                                                            <mjc-type-tile
-                                                                [IconClass]="space.iconClass"
-                                                                [Color]="space.color"
-                                                                [IsClosed]="space.isClosed"
-                                                                Size="md">
-                                                            </mjc-type-tile>
-                                                            <span class="recent-space-main">
-                                                                <span class="recent-space-name">
-                                                                    <span>{{ space.name }}</span>
-                                                                    @if (space.isStarred) {
-                                                                        <i class="fa-solid fa-star recent-space-star" aria-hidden="true" title="Starred space"></i>
-                                                                    }
-                                                                </span>
-                                                                <span class="recent-space-meta">
-                                                                    {{ space.type }}@if (space.parentName) { · in {{ space.parentName }} }@if (space.description) { · {{ space.description }} }
-                                                                </span>
-                                                            </span>
-                                                            <span class="recent-space-people">
-                                                                @if (space.staffAvatars.length > 0) {
-                                                                    <mjc-avatar-stack [Avatars]="space.staffAvatars" Size="xs"></mjc-avatar-stack>
-                                                                }
-                                                                @if (space.staffAvatars.length > 0 && space.outsideAvatars.length > 0) {
-                                                                    <span class="recent-space-aud-div" aria-hidden="true"></span>
-                                                                }
-                                                                @if (space.outsideAvatars.length > 0) {
-                                                                    <mjc-avatar-stack [Avatars]="space.outsideAvatars" Size="xs"></mjc-avatar-stack>
-                                                                }
-                                                            </span>
-                                                            <span class="recent-space-signal">
-                                                                @if (space.signal; as sig) {
-                                                                    <span class="signal-pill" [class]="sig.variant">
-                                                                        @if (sig.iconClass) {
-                                                                            <i [class]="sig.iconClass" aria-hidden="true"></i>
-                                                                        }
-                                                                        <span>{{ sig.label }}</span>
-                                                                    </span>
-                                                                }
-                                                            </span>
-                                                            <i class="fa-solid fa-chevron-right recent-space-chev" aria-hidden="true"></i>
-                                                        </button>
+                                                @if (filteredSpaces.length === 0) {
+                                                    @if (spaceSearchQuery) {
+                                                        <mj-empty-state Icon="fa-solid fa-magnifying-glass" Title="No spaces match" Message="Try another search."></mj-empty-state>
+                                                    } @else {
+                                                        <mj-empty-state Icon="fa-solid fa-compass" Title="No spaces yet" Message="Spaces you belong to will appear here."></mj-empty-state>
                                                     }
-                                                    @if (!spaceSearchQuery.trim() && filteredSpaces.length > 5) {
-                                                        <div class="recent-spaces-footer">
-                                                            <span>Showing {{ displayedRecentSpaces.length }} of {{ filteredSpaces.length }}</span>
-                                                            <button
-                                                                type="button"
-                                                                class="recent-spaces-toggle-btn"
-                                                                data-testid="recent-spaces-toggle-all"
-                                                                (click)="toggleShowAllRecentSpaces()">
-                                                                {{ showAllRecentSpaces ? 'Show fewer' : 'Show all ' + filteredSpaces.length }}
-                                                            </button>
+                                                }
+                                                <div class="spaces-directory-grid">
+                                                    @for (space of filteredSpaces; track space.id) {
+                                                        <div class="space-directory-card" [class.closed]="space.isClosed" [mjClickable]="space.name" (click)="onSpaceOpenRequested(space.id)">
+                                                            <div class="card-top">
+                                                                <div class="space-icon-box" [style.background-color]="space.color || null">
+                                                                    <i [class]="space.iconClass"></i>
+                                                                </div>
+                                                                <div class="space-type-badge">
+                                                                    @if (space.parentName) {
+                                                                        <span>{{ space.parentName }} / </span>
+                                                                    }
+                                                                    {{ space.type }}
+                                                                </div>
+                                                            </div>
+                                                            <h3 class="space-name">
+                                                                {{ space.name }}
+                                                                @if (space.isClosed) {
+                                                                    <i class="fa-solid fa-lock" title="Closed" aria-hidden="true"></i>
+                                                                    <span class="visually-hidden">(closed)</span>
+                                                                }
+                                                            </h3>
+                                                            @if (space.description) {
+                                                                <p class="space-desc">{{ space.description }}</p>
+                                                            }
+                                                            <div class="space-footer">
+                                                                <span class="open-link">
+                                                                    <span>Open Space</span>
+                                                                    <i class="fa-solid fa-arrow-right"></i>
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     }
                                                 </div>
-                                            }
-                                        </section>
+                                            </section>
+                                        </div>
                                     </div>
                                 }
 
@@ -1027,7 +822,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             @if (currentPersonId) {
                                                 <bizapps-approval-inbox
                                                     [ApproverPersonID]="currentPersonId"
-                                                    (DecisionRecorded)="loadGlobalNavCounts()"
                                                 />
                                             } @else {
                                                 <div class="no-person-state">
@@ -1057,7 +851,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [PersonID]="currentPersonId"
                                                     [ShowCreateButton]="false"
                                                     (TaskDoubleClicked)="onTaskDoubleClicked($event.ID)"
-                                                    (TaskUpdated)="loadGlobalNavCounts()"
                                                 />
                                             } @else {
                                                 <div class="no-person-state">
@@ -1083,13 +876,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         </header>
                                         <div class="files-content">
                                             <mjc-space-library
-                                                [TotalCount]="allSharedFilesRows.length"
-                                                [SharedCount]="allSharedFilesRows.length"
+                                                [TotalCount]="librarySharedCount"
+                                                [SharedCount]="librarySharedCount"
                                                 [TeamCount]="0"
-                                                [CanSeeTeamSide]="false"
-                                                [Collections]="allSharedFilesCollections"
-                                                [SmartViews]="allSharedFilesSmartViews"
-                                                [Rows]="allSharedFilesRows"
+                                                [CanSeeTeamSide]="canSeeTeamSide"
+                                                [Collections]="libraryCollections"
+                                                [SmartViews]="librarySmartViews"
+                                                [Rows]="homeSharedRows"
                                                 [SelectedRowId]="selectedItemId || ''"
                                                 [ShowDrawer]="isDrawerOpen"
                                                 [PreviewMeta]="previewMeta"
@@ -1134,44 +927,43 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         [ShowStar]="!!currentUser"
                                         [IsStarred]="isSpaceStarred"
                                         [StarBusy]="isTogglingStar"
-                                        [SubSpaces]="overviewSubSpaces"
-                                        [CanInvite]="canInviteHere"
-                                        [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
-                                        [CanEditPages]="canCustomizePages"
-                                        [CanEditCurrentPage]="canEditCurrentTabPage"
-                                        [CanConfigure]="showsSettings"
                                         (BreadcrumbSelectRequested)="onBreadcrumbSelected($event)"
                                         (StarToggleRequested)="onStarToggle()"
-                                        (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
-                                        (InviteRequested)="onInviteClicked()"
-                                        (NewSubSpaceRequested)="openNewSpaceDialog(activeSpaceId)"
-                                        (EditPageRequested)="onToggleCustomizePages()"
-                                        (NewPageRequested)="onNewPageRequestedFromRail()"
-                                        (SpaceSettingsRequested)="onTabSelectRequested('Settings')"
                                     >
                                         <div actions class="row gap8">
                                             <mjc-audience-pill
                                                 [StaffAvatars]="headerStaffAvatars"
                                                 [OutsideAvatars]="headerOutsideAvatars"
-                                                [Members]="spaceMembers"
-                                                [CanInvite]="canInviteHere"
                                                 [TotalPeople]="headerTotalPeople"
                                                 [Summary]="headerAudienceSummary"
-                                                (ManagePeopleRequested)="onTabSelectRequested('People')"
-                                                (InviteRequested)="onInviteClicked()"
                                             />
+                                            @if (canAddHere && hasTab('Notes') && activeTab !== 'Notes') {
+                                                <button mjButton Variant="secondary" Size="md" (click)="onQuickNoteClicked()" title="Write a note in this space">
+                                                    <i class="fa-solid fa-note-sticky"></i>Note
+                                                </button>
+                                            }
                                             @if (activeTab === 'Overview') {
+                                                @if (canInviteHere) {
+                                                    <button mjButton Variant="secondary" Size="md" (click)="onInviteClicked()">
+                                                        <i class="fa-solid fa-user-plus"></i>Invite
+                                                    </button>
+                                                }
                                                 @if (canAddHere && hasTab('Work')) {
-                                                    <button mjButton Variant="primary" Size="sm" (click)="onNewClicked()">
+                                                    <button mjButton Variant="primary" Size="md" (click)="onNewClicked()">
                                                         <i class="fa-solid fa-plus"></i>New
                                                     </button>
                                                 }
                                             } @else if (canAddHere && hasTab('Library') && !contributedTabComponent) {
-                                                <button mjButton Variant="primary" Size="sm" (click)="onUploadClicked()">
+                                                <button mjButton Variant="primary" Size="md" (click)="onUploadClicked()">
                                                     <i class="fa-solid fa-arrow-up-from-bracket"></i>Upload
                                                 </button>
                                             }
                                         </div>
+                                        <mjc-space-tabs
+                                            [Tabs]="tabs"
+                                            [ActiveTab]="activeTab"
+                                            (TabSelectRequested)="onTabSelectRequested($event)"
+                                        />
                                     </mjc-space-header>
 
                                     <div class="content-area">
@@ -1180,34 +972,43 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         } @else {
                                         @switch (activeTab) {
                                             @case ('Overview') {
-                                                <mjc-space-pages
-                                                    #spacePagesHost
+                                                @if (spacePins.length > 0) {
+                                                    <div class="pinned-wrap">
+                                                        <mjc-pinned-strip [Pins]="spacePins" [Title]="pinnedLabel" (OpenRequested)="onPinOpen($event)" (UnpinRequested)="onUnpin($event)" />
+                                                    </div>
+                                                }
+                                                <mjc-space-overview
+                                                    #spaceOverview
                                                     [SpaceId]="activeSpaceId"
-                                                    [SpaceTypeCode]="activeSpaceTypeCode"
                                                     [ContributedCards]="overviewContributedCards"
-                                                    [BlockContext]="spacePageBlockContext"
-                                                    [Pages]="spacePages"
-                                                    [BuiltInTabId]="'Overview'"
-                                                    [LibraryRows]="libraryRows"
-                                                    [SpaceMembers]="spaceMembers"
-                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
-                                                    [CurrentUserInitials]="currentUserInitials"
-                                                    [CanWrite]="canCustomizePages"
-                                                    [(IsCustomizing)]="isCustomizingPages"
-                                                    [CanSeeTeam]="canSeeTeamSide"
-                                                    [IsReadOnly]="isSpaceClosed"
-                                                    [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="pagesError || notesError"
-                                                    [SaveError]="pageSaveError"
-                                                    [DefaultBand]="noteDefaultBand"
-                                                    [SharedLabel]="sharedBandLabel"
-                                                    [TeamLabel]="teamBandLabel"
-                                                    (PageSelectRequested)="onPageSelected($event)"
-                                                    (PageSaveRequested)="onPageSave($event)"
-                                                    (PageDeleteRequested)="onPageDelete($event)"
-                                                    (PageReorderRequested)="onPageReorder($event)"
-                                                    (PromotePageRequested)="onPagePromote($event)"
-                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
+                                                    [ShowLibraryLink]="hasTab('Library')"
+                                                    [ShowChatLink]="hasTab('Chat')"
+                                                    [SpaceName]="spaceTitle"
+                                                    [FirmName]="firmName"
+                                                    [ClientOrgName]="clientOrgName"
+                                                    [AudienceCount]="discussionAudienceCount"
+                                                    [SharedAudienceCount]="headerTotalPeople"
+                                                    [NeedsYouItems]="overviewNeedsYou"
+                                                    [SharedItems]="overviewSharedItems"
+                                                    [TeamItems]="overviewTeamItems"
+                                                    [TeamTotalCount]="libraryTeamCount"
+                                                    [RoomMessages]="overviewRoomMessages"
+                                                    [SubSpaces]="overviewSubSpaces"
+                                                    [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
+                                                    [CanStartConversation]="canStartConversation && !isSpaceClosed && hasTab('Chat')"
+                                                    [CanSeeTeamSide]="canSeeTeamSide"
+                                                    [AgentAvailable]="chatDefaultAgentId !== null"
+                                                    [IsSubmittingAsk]="isSubmittingAsk"
+                                                    [DiscussionBand]="chatAudienceBand"
+                                                    [HasAbout]="hasDetails"
+                                                    [AboutTitle]="aboutTitle"
+                                                    (OpenLibraryRequested)="onOpenLibraryRequested()"
+                                                    (OpenChatRequested)="onOpenChatRequested()"
+                                                    (ItemSelectRequested)="onItemSelected($event)"
+                                                    (ShareRequested)="onShareRequested($event)"
+                                                    (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
+                                                    (NewSubSpaceRequested)="openNewSpaceDialog(activeSpaceId)"
+                                                    (AskRequested)="onOverviewAskRequested($event)"
                                                 >
                                                     <div mjcAbout style="display: contents">
                                                         @if (spaceDetails; as details) {
@@ -1216,146 +1017,86 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                             }
                                                         }
                                                     </div>
-                                                </mjc-space-pages>
+                                                </mjc-space-overview>
                                             }
                                             @case ('Library') {
-                                                <mjc-space-pages
-                                                    #spacePagesHost
-                                                    [SpaceId]="activeSpaceId"
-                                                    [SpaceTypeCode]="activeSpaceTypeCode"
-                                                    [ContributedCards]="overviewContributedCards"
-                                                    [BlockContext]="spacePageBlockContext"
-                                                    [Pages]="spacePages"
-                                                    [BuiltInTabId]="'Library'"
-                                                    [LibraryRows]="libraryRows"
-                                                    [SpaceMembers]="spaceMembers"
-                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
-                                                    [CurrentUserInitials]="currentUserInitials"
-                                                    [CanWrite]="canCustomizePages"
-                                                    [(IsCustomizing)]="isCustomizingPages"
-                                                    [CanSeeTeam]="canSeeTeamSide"
-                                                    [IsReadOnly]="isSpaceClosed"
-                                                    [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="pagesError || notesError"
-                                                    [SaveError]="pageSaveError"
-                                                    [DefaultBand]="noteDefaultBand"
-                                                    [SharedLabel]="sharedBandLabel"
-                                                    [TeamLabel]="teamBandLabel"
-                                                    (PageSelectRequested)="onPageSelected($event)"
-                                                    (PageSaveRequested)="onPageSave($event)"
-                                                    (PageDeleteRequested)="onPageDelete($event)"
-                                                    (PageReorderRequested)="onPageReorder($event)"
-                                                    (PromotePageRequested)="onPagePromote($event)"
-                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                >
-                                                    <mjc-space-library
-                                                        [TotalCount]="libraryTotalCount"
-                                                        [SharedCount]="librarySharedCount"
-                                                        [TeamCount]="libraryTeamCount"
-                                                        [Collections]="libraryCollections"
-                                                        [SmartViews]="librarySmartViews"
-                                                        [CanSeeTeamSide]="canSeeTeamSide"
-                                                        [CanShareItems]="canShareItems"
-                                                        [Rows]="libraryRows"
-                                                        [SelectedRowId]="selectedItemId || ''"
-                                                        [ShowDrawer]="isDrawerOpen"
-                                                        [PreviewMeta]="previewMeta"
-                                                        [PreviewParagraphs]="previewParagraphs"
-                                                        [PreviewBandLabel]="previewBandLabel"
-                                                        [PreviewAudienceSub]="previewAudienceSub"
-                                                        [PreviewStaffAvatars]="previewStaffAvatars"
-                                                        [PreviewFlagTitle]="previewFlagTitle"
-                                                        [PreviewFlagDescription]="previewFlagDescription"
-                                                        [PreviewRecentUses]="previewRecentUses"
-                                                        [IsOpeningFile]="isOpeningFile"
-                                                        [OpeningLabel]="openingFileLabel"
-                                                        (RowSelectRequested)="onRowSelected($event)"
-                                                        (ShareRequested)="onShareRequested($event)"
-                                                        (CloseDrawerRequested)="onCloseDrawerRequested()"
-                                                        (OpenFileRequested)="onOpenFileRequested($event)"
-                                                    />
-                                                </mjc-space-pages>
+                                                <mjc-space-library
+                                                    [TotalCount]="libraryTotalCount"
+                                                    [SharedCount]="librarySharedCount"
+                                                    [TeamCount]="libraryTeamCount"
+                                                    [Collections]="libraryCollections"
+                                                    [SmartViews]="librarySmartViews"
+                                                    [CanSeeTeamSide]="canSeeTeamSide"
+                                                    [CanShareItems]="canShareItems"
+                                                    [Rows]="libraryRows"
+                                                    [SelectedRowId]="selectedItemId || ''"
+                                                    [ShowDrawer]="isDrawerOpen"
+                                                    [PreviewMeta]="previewMeta"
+                                                    [PreviewParagraphs]="previewParagraphs"
+                                                    [PreviewBandLabel]="previewBandLabel"
+                                                    [PreviewAudienceSub]="previewAudienceSub"
+                                                    [PreviewStaffAvatars]="previewStaffAvatars"
+                                                    [PreviewFlagTitle]="previewFlagTitle"
+                                                    [PreviewFlagDescription]="previewFlagDescription"
+                                                    [PreviewRecentUses]="previewRecentUses"
+                                                    [IsOpeningFile]="isOpeningFile"
+                                                    [OpeningLabel]="openingFileLabel"
+                                                    (RowSelectRequested)="onRowSelected($event)"
+                                                    (ShareRequested)="onShareRequested($event)"
+                                                    (CloseDrawerRequested)="onCloseDrawerRequested()"
+                                                    (OpenFileRequested)="onOpenFileRequested($event)"
+                                                />
                                             }
                                             @case ('Work') {
-                                                <mjc-space-pages
-                                                    #spacePagesHost
-                                                    [SpaceId]="activeSpaceId"
-                                                    [SpaceTypeCode]="activeSpaceTypeCode"
-                                                    [ContributedCards]="overviewContributedCards"
-                                                    [BlockContext]="spacePageBlockContext"
-                                                    [Pages]="spacePages"
-                                                    [BuiltInTabId]="'Work'"
-                                                    [LibraryRows]="libraryRows"
-                                                    [SpaceMembers]="spaceMembers"
-                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
-                                                    [CurrentUserInitials]="currentUserInitials"
-                                                    [CanWrite]="canCustomizePages"
-                                                    [(IsCustomizing)]="isCustomizingPages"
-                                                    [CanSeeTeam]="canSeeTeamSide"
-                                                    [IsReadOnly]="isSpaceClosed"
-                                                    [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="pagesError || notesError"
-                                                    [SaveError]="pageSaveError"
-                                                    [DefaultBand]="noteDefaultBand"
-                                                    [SharedLabel]="sharedBandLabel"
-                                                    [TeamLabel]="teamBandLabel"
-                                                    (PageSelectRequested)="onPageSelected($event)"
-                                                    (PageSaveRequested)="onPageSave($event)"
-                                                    (PageDeleteRequested)="onPageDelete($event)"
-                                                    (PageReorderRequested)="onPageReorder($event)"
-                                                    (PromotePageRequested)="onPagePromote($event)"
-                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                >
-                                                    <div class="work-tab-container">
-                                                        <div class="work-view-toolbar">
-                                                            <mj-view-toggle
-                                                                [Options]="workViewOptions"
-                                                                [ActiveKey]="workViewMode"
-                                                                (KeyChange)="onWorkViewModeChanged($event)"
-                                                            />
-                                                        </div>
-                                                        <div class="work-view-body">
-                                                            @switch (workViewMode) {
-                                                                @case ('list') {
-                                                                    <mjc-space-work
-                                                                        [Tasks]="spaceTasks"
-                                                                        [SpaceName]="spaceTitle"
-                                                                        [DefaultBand]="bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand"
-                                                                        [CanCreateTask]="!isSpaceClosed && canContribute"
-                                                                        [ReadOnly]="isSpaceClosed || !canContribute"
-                                                                        [AllowedBands]="bandChoice?.allowed ?? bothBands"
-                                                                        [CanSeeTeamSide]="canSeeTeamSide"
-                                                                        (TaskSelectRequested)="onTaskSelected($event)"
-                                                                        (TaskToggleRequested)="onTaskToggled($event)"
-                                                                        (CreateTaskRequested)="onCreateTask($event)"
-                                                                    />
-                                                                }
-                                                                @case ('kanban') {
-                                                                    <div class="work-kanban-pane">
-                                                                        <bizapps-task-kanban
-                                                                            [ExtraFilter]="taskScopeFilter"
-                                                                            [ReadOnly]="isSpaceClosed || !canContribute"
-                                                                            (BeforeStatusChange)="onBeforeKanbanStatusChange($event)"
-                                                                            (TaskClicked)="onTaskDoubleClicked($event)"
-                                                                            (TaskDoubleClicked)="onTaskDoubleClicked($event)"
-                                                                        />
-                                                                    </div>
-                                                                }
-                                                                @case ('gantt') {
-                                                                    <div class="work-gantt-pane">
-                                                                        <bizapps-task-gantt
-                                                                            [ExtraFilter]="taskScopeFilter"
-                                                                            [Height]="'620px'"
-                                                                            [ReadOnly]="isSpaceClosed || !canContribute"
-                                                                            (TaskClicked)="onTaskDoubleClicked($event)"
-                                                                            (TaskDoubleClicked)="onTaskDoubleClicked($event)"
-                                                                        />
-                                                                    </div>
-                                                                }
-                                                            }
-                                                        </div>
+                                                <div class="work-tab-container">
+                                                    <div class="work-view-toolbar">
+                                                        <mj-view-toggle
+                                                            [Options]="workViewOptions"
+                                                            [ActiveKey]="workViewMode"
+                                                            (KeyChange)="onWorkViewModeChanged($event)"
+                                                        />
                                                     </div>
-                                                </mjc-space-pages>
+                                                    <div class="work-view-body">
+                                                        @switch (workViewMode) {
+                                                            @case ('list') {
+                                                                <mjc-space-work
+                                                                    [Tasks]="spaceTasks"
+                                                                    [SpaceName]="spaceTitle"
+                                                                    [DefaultBand]="bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand"
+                                                                    [CanCreateTask]="!isSpaceClosed && canContribute"
+                                                                    [ReadOnly]="isSpaceClosed || !canContribute"
+                                                                    [AllowedBands]="bandChoice?.allowed ?? bothBands"
+                                                                    [CanSeeTeamSide]="canSeeTeamSide"
+                                                                    (TaskSelectRequested)="onTaskSelected($event)"
+                                                                    (TaskToggleRequested)="onTaskToggled($event)"
+                                                                    (CreateTaskRequested)="onCreateTask($event)"
+                                                                />
+                                                            }
+                                                            @case ('kanban') {
+                                                                <div class="work-kanban-pane">
+                                                                    <bizapps-task-kanban
+                                                                        [ExtraFilter]="taskScopeFilter"
+                                                                        [ReadOnly]="isSpaceClosed || !canContribute"
+                                                                        (BeforeStatusChange)="onBeforeKanbanStatusChange($event)"
+                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
+                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                                    />
+                                                                </div>
+                                                            }
+                                                            @case ('gantt') {
+                                                                <div class="work-gantt-pane">
+                                                                    <bizapps-task-gantt
+                                                                        [ExtraFilter]="taskScopeFilter"
+                                                                        [Height]="'620px'"
+                                                                        [ReadOnly]="isSpaceClosed || !canContribute"
+                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
+                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                                    />
+                                                                </div>
+                                                            }
+                                                        }
+                                                    </div>
+                                                </div>
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
@@ -1399,157 +1140,67 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 />
                                             }
                                             @case ('Data') {
-                                                <mjc-space-pages
-                                                    #spacePagesHost
-                                                    [SpaceId]="activeSpaceId"
-                                                    [SpaceTypeCode]="activeSpaceTypeCode"
-                                                    [ContributedCards]="overviewContributedCards"
-                                                    [BlockContext]="spacePageBlockContext"
-                                                    [Pages]="spacePages"
-                                                    [BuiltInTabId]="'Data'"
-                                                    [LibraryRows]="libraryRows"
-                                                    [SpaceMembers]="spaceMembers"
-                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
-                                                    [CurrentUserInitials]="currentUserInitials"
-                                                    [CanWrite]="canCustomizePages"
-                                                    [(IsCustomizing)]="isCustomizingPages"
-                                                    [CanSeeTeam]="canSeeTeamSide"
-                                                    [IsReadOnly]="isSpaceClosed"
-                                                    [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="pagesError || notesError"
-                                                    [SaveError]="pageSaveError"
-                                                    [DefaultBand]="noteDefaultBand"
+                                                <mjc-space-data
+                                                    [Entries]="dataEntries"
+                                                    [SelectedGrantId]="selectedDataGrantId"
+                                                    [SelectedLabel]="selectedDataLabel"
+                                                    [Run]="dataRun"
+                                                    [CanPin]="!!currentUser"
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
-                                                    (PageSelectRequested)="onPageSelected($event)"
-                                                    (PageSaveRequested)="onPageSave($event)"
-                                                    (PageDeleteRequested)="onPageDelete($event)"
-                                                    (PageReorderRequested)="onPageReorder($event)"
-                                                    (PromotePageRequested)="onPagePromote($event)"
-                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
+                                                    [EmptyMessage]="dataEmptyMessage"
+                                                    (EntrySelectRequested)="onDataEntrySelected($event)"
+                                                    (PinToggleRequested)="onDataPinToggle($event)"
+                                                    (RerunRequested)="rerunDataEntry()"
                                                 >
-                                                    <mjc-space-data
-                                                        [Entries]="dataEntries"
-                                                        [SelectedGrantId]="selectedDataGrantId"
-                                                        [SelectedLabel]="selectedDataLabel"
-                                                        [Run]="dataRun"
-                                                        [CanPin]="!!currentUser"
-                                                        [SharedLabel]="sharedBandLabel"
-                                                        [TeamLabel]="teamBandLabel"
-                                                        [EmptyMessage]="dataEmptyMessage"
-                                                        (EntrySelectRequested)="onDataEntrySelected($event)"
-                                                        (PinToggleRequested)="onDataPinToggle($event)"
-                                                        (RerunRequested)="rerunDataEntry()"
-                                                    >
-                                                        @if (dataEmbedded; as embedded) {
-                                                            <mj-react-component [Component]="embedded.spec" [ComponentProps]="embedded.props" />
-                                                        }
-                                                    </mjc-space-data>
-                                                </mjc-space-pages>
+                                                    @if (dataEmbedded; as embedded) {
+                                                        <mj-react-component [Component]="embedded.spec" [ComponentProps]="embedded.props" />
+                                                    }
+                                                </mjc-space-data>
                                             }
                                             @case ('Notes') {
-                                                <mjc-space-pages
-                                                    #spacePagesHost
-                                                    [SpaceId]="activeSpaceId"
-                                                    [SpaceTypeCode]="activeSpaceTypeCode"
-                                                    [ContributedCards]="overviewContributedCards"
-                                                    [BlockContext]="spacePageBlockContext"
-                                                    [Pages]="spacePages"
-                                                    [BuiltInTabId]="'Notes'"
-                                                    [LibraryRows]="libraryRows"
-                                                    [SpaceMembers]="spaceMembers"
-                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
-                                                    [CurrentUserInitials]="currentUserInitials"
-                                                    [CanWrite]="canCustomizePages"
-                                                    [(IsCustomizing)]="isCustomizingPages"
+                                                <mjc-space-notes
+                                                    #notesPanel
+                                                    [Title]="notesLabel"
+                                                    [Notes]="spaceNotes"
+                                                    [IsLoading]="isLoadingNotes"
+                                                    [ErrorMessage]="notesError"
+                                                    [IsSaving]="isSavingNote"
+                                                    [SaveError]="noteSaveError"
+                                                    [CanWrite]="canContribute"
                                                     [CanSeeTeam]="canSeeTeamSide"
                                                     [IsReadOnly]="isSpaceClosed"
-                                                    [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="pagesError || notesError"
-                                                    [SaveError]="pageSaveError"
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
-                                                    (PageSelectRequested)="onPageSelected($event)"
-                                                    (PageSaveRequested)="onPageSave($event)"
-                                                    (PageDeleteRequested)="onPageDelete($event)"
-                                                    (PageReorderRequested)="onPageReorder($event)"
-                                                    (PromotePageRequested)="onPagePromote($event)"
-                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                >
-                                                    <mjc-space-notes
-                                                        #notesPanel
-                                                        [Title]="notesLabel"
-                                                        [Notes]="spaceNotes"
-                                                        [IsLoading]="isLoadingNotes"
-                                                        [ErrorMessage]="notesError"
-                                                        [IsSaving]="isSavingNote"
-                                                        [SaveError]="noteSaveError"
-                                                        [CanWrite]="canContribute"
-                                                        [CanSeeTeam]="canSeeTeamSide"
-                                                        [IsReadOnly]="isSpaceClosed"
-                                                        [DefaultBand]="noteDefaultBand"
-                                                        [SharedLabel]="sharedBandLabel"
-                                                        [TeamLabel]="teamBandLabel"
-                                                        [PromotionConsequence]="notePromotionConsequence"
-                                                        [AutoOpen]="notesAutoOpen"
-                                                        (ComposerOpenChanged)="onNotesComposerOpenChanged($event)"
-                                                        (SaveRequested)="onNoteSave($event)"
-                                                        (DeleteRequested)="onNoteDelete($event)"
-                                                        (PromoteRequested)="onNotePromote($event)"
-                                                        (TurnIntoDocumentRequested)="onNoteTurnIntoDocument($event)"
-                                                        (PinToggleRequested)="onNotePinToggle($event)"
-                                                    />
-                                                </mjc-space-pages>
+                                                    [PromotionConsequence]="notePromotionConsequence"
+                                                    [AutoOpen]="notesAutoOpen"
+                                                    (ComposerOpenChanged)="onNotesComposerOpenChanged($event)"
+                                                    (SaveRequested)="onNoteSave($event)"
+                                                    (DeleteRequested)="onNoteDelete($event)"
+                                                    (PromoteRequested)="onNotePromote($event)"
+                                                    (TurnIntoDocumentRequested)="onNoteTurnIntoDocument($event)"
+                                                    (PinToggleRequested)="onNotePinToggle($event)"
+                                                />
                                             }
                                             @case ('People') {
-                                                <mjc-space-pages
-                                                    #spacePagesHost
-                                                    [SpaceId]="activeSpaceId"
-                                                    [SpaceTypeCode]="activeSpaceTypeCode"
-                                                    [ContributedCards]="overviewContributedCards"
-                                                    [BlockContext]="spacePageBlockContext"
-                                                    [Pages]="spacePages"
-                                                    [BuiltInTabId]="'People'"
-                                                    [LibraryRows]="libraryRows"
-                                                    [SpaceMembers]="spaceMembers"
-                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
-                                                    [CurrentUserInitials]="currentUserInitials"
-                                                    [CanWrite]="canCustomizePages"
-                                                    [(IsCustomizing)]="isCustomizingPages"
-                                                    [CanSeeTeam]="canSeeTeamSide"
-                                                    [IsReadOnly]="isSpaceClosed"
-                                                    [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="pagesError || notesError"
-                                                    [SaveError]="pageSaveError"
-                                                    [DefaultBand]="noteDefaultBand"
-                                                    [SharedLabel]="sharedBandLabel"
-                                                    [TeamLabel]="teamBandLabel"
-                                                    (PageSelectRequested)="onPageSelected($event)"
-                                                    (PageSaveRequested)="onPageSave($event)"
-                                                    (PageDeleteRequested)="onPageDelete($event)"
-                                                    (PageReorderRequested)="onPageReorder($event)"
-                                                    (PromotePageRequested)="onPagePromote($event)"
-                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                >
-                                                    <mjc-space-people
-                                                        [Members]="spaceMembers"
-                                                        [SpaceName]="spaceTitle"
-                                                        [IsSendingInvite]="isSendingInvite"
-                                                        [InviteOutcome]="inviteOutcome"
-                                                        [RedemptionUrl]="inviteRedemptionUrl"
-                                                        [CanInvite]="canInviteHere"
-                                                        [CanSeeTeamSide]="canSeeTeamSide"
-                                                        [RoleOptions]="grantableRoleOptions"
-                                                        [CanManageSeats]="canInviteHere"
-                                                        [IsBusy]="isChangingSeat"
-                                                        (InviteMemberRequested)="onInviteMember($event)"
-                                                        (InviteOutcomeDismissed)="inviteOutcome = null; inviteRedemptionUrl = null"
-                                                        (ApproveMemberRequested)="onApproveMember($event)"
-                                                        (RemoveMemberRequested)="onRemoveMember($event)"
-                                                        (ChangeRoleRequested)="onChangeMemberRole($event)"
-                                                    />
-                                                </mjc-space-pages>
+                                                <mjc-space-people
+                                                    [Members]="spaceMembers"
+                                                    [SpaceName]="spaceTitle"
+                                                    [IsSendingInvite]="isSendingInvite"
+                                                    [InviteOutcome]="inviteOutcome"
+                                                    [RedemptionUrl]="inviteRedemptionUrl"
+                                                    [CanInvite]="canInviteHere"
+                                                    [CanSeeTeamSide]="canSeeTeamSide"
+                                                    [RoleOptions]="grantableRoleOptions"
+                                                    [CanManageSeats]="canInviteHere"
+                                                    [IsBusy]="isChangingSeat"
+                                                    (InviteMemberRequested)="onInviteMember($event)"
+                                                    (InviteOutcomeDismissed)="inviteOutcome = null; inviteRedemptionUrl = null"
+                                                    (ApproveMemberRequested)="onApproveMember($event)"
+                                                    (RemoveMemberRequested)="onRemoveMember($event)"
+                                                    (ChangeRoleRequested)="onChangeMemberRole($event)"
+                                                />
                                             }
                                             @case ('Settings') {
                                                 <mjc-space-settings
@@ -1637,37 +1288,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 }
                                             }
                                             @default {
-                                                @if (activeTab.startsWith('page:')) {
-                                                    <mjc-space-pages
-                                                        #spacePagesHost
-                                                        [SpaceId]="activeSpaceId"
-                                                        [SpaceTypeCode]="activeSpaceTypeCode"
-                                                        [ContributedCards]="overviewContributedCards"
-                                                        [BlockContext]="spacePageBlockContext"
-                                                        [Pages]="spacePages"
-                                                        [ActivePageId]="activeCustomPageId"
-                                                        [LibraryRows]="libraryRows"
-                                                        [SpaceMembers]="spaceMembers"
-                                                        [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
-                                                        [CurrentUserInitials]="currentUserInitials"
-                                                        [CanWrite]="canCustomizePages"
-                                                        [(IsCustomizing)]="isCustomizingPages"
-                                                        [CanSeeTeam]="canSeeTeamSide"
-                                                        [IsReadOnly]="isSpaceClosed"
-                                                        [IsSaving]="isSavingPage"
-                                                        [ErrorMessage]="pagesError || notesError"
-                                                        [SaveError]="pageSaveError"
-                                                        [DefaultBand]="noteDefaultBand"
-                                                        [SharedLabel]="sharedBandLabel"
-                                                        [TeamLabel]="teamBandLabel"
-                                                        (PageSelectRequested)="onPageSelected($event)"
-                                                        (PageSaveRequested)="onPageSave($event)"
-                                                        (PageDeleteRequested)="onPageDelete($event)"
-                                                        (PageReorderRequested)="onPageReorder($event)"
-                                                        (PromotePageRequested)="onPagePromote($event)"
-                                                        (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                    />
-                                                } @else if (contributedTabComponent; as tabComponent) {
+                                                @if (contributedTabComponent; as tabComponent) {
                                                     <ng-container *ngComponentOutlet="tabComponent; inputs: { SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode }"></ng-container>
                                                 }
                                             }
@@ -2054,16 +1675,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     /** Opens a tab of the space shown. A tab the space doesn't have (its type turned the panel off) opens the Overview instead. */
     private setTab(id: string): void {
-        if (id.startsWith('page:')) {
-            if (this.activeTab === 'Settings' && this.spaceDetails?.Dirty) {
-                this.spaceDetails.Discard();
-                this.detailsMessage = '';
-                this.detailsError = '';
-            }
-            this.activeTab = id;
-            this.activePageId = id.slice(5);
-            return;
-        }
         const resolved = this.spaceTabModel ? resolveTabId(this.spaceTabModel, id) : id;
         // Details changed in Settings and not saved are not carried to the Overview's About card
         if (this.activeTab === 'Settings' && resolved !== 'Settings' && this.spaceDetails?.Dirty) {
@@ -2215,18 +1826,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return this.rawSpaces.filter(s => !s.ClosedAt).length;
     }
 
-    public get closedSpacesCount(): number {
-        return this.rawSpaces.filter(s => !!s.ClosedAt).length;
-    }
-
-    public homeSpacesFilter: 'active' | 'closed' = 'active';
-    public homeSpaceAvatarsBySpaceId = new Map<string, { staffAvatars: AvatarItem[]; outsideAvatars: AvatarItem[] }>();
-
-    public setHomeSpacesFilter(filter: 'active' | 'closed'): void {
-        this.homeSpacesFilter = filter;
-        this.RefreshView();
-    }
-
     public librarySharedCount = 0;
     public libraryTeamCount = 0;
 
@@ -2266,9 +1865,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** The latest Home list read; a read that was superseded (the other list, or a reload) does not clear the flag or set the rows. */
     private homeListLoadToken = 0;
     public homeListError = '';
-    public isLoadingHomePins = false;
-    private homePinsLoadToken = 0;
-    public homePinsError = '';
 
     private homeCountOf(which: 'tasks' | 'approvals' | 'files' | 'spaces'): { count: number; singular: string; plural: string } {
         switch (which) {
@@ -2310,16 +1906,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return `${this.homePins.length} ${this.homePins.length === 1 ? 'pin' : 'pins'}`;
     }
 
-    /** The rows of Home's inline sections, worked out when read and not on every change-detection pass. */
+    /** The rows of the list that is open, worked out when the list is opened or read and not on every change-detection pass. */
     public homeListRows: HomeListRow[] = [];
-    public homeNeedsYouCards: HomeNeedsYouCardModel[] = [];
-    public homeTaskRows: HomeListRow[] = [];
-    public homePinRows: HomeListRow[] = [];
     public homeAgendaItems: AgendaItem[] = [];
 
     private refreshHomeListRows(): void {
         const date = (iso: string | null | undefined): string => (iso ? formatDateLocale(iso) : '');
-        this.homeNeedsYouCards = needsYouCards(this.homeInvitations, date);
         const agendaRows: HomeListRow[] = this.homeAgendaItems.map((item) => {
             const space = this.rawSpaces.find((s) => UUIDsEqual(s.ID, item.spaceId));
             const when = item.date instanceof Date ? date(item.date.toISOString()) : date(String(item.date));
@@ -2332,11 +1924,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 actionLabel: 'Open in Meetings',
             };
         });
-        this.homeTaskRows = [...taskRows(this.homeOpenTaskList, date), ...agendaRows];
-        this.homePinRows = pinRows(this.homePins);
         const rows: HomeRowModel[] = this.homeList === 'pins'
-            ? this.homePinRows
-            : this.homeList === 'approvals' ? invitationRows(this.homeInvitations, date) : this.homeTaskRows;
+            ? pinRows(this.homePins)
+            : this.homeList === 'approvals'
+                ? invitationRows(this.homeInvitations, date)
+                : [...taskRows(this.homeOpenTaskList, date), ...agendaRows];
         this.homeListRows = rows;
     }
 
@@ -2399,38 +1991,26 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    public onHomeInvitationSelected(seatId: string): void {
-        const invitation = this.homeInvitations.find((i) => UUIDsEqual(i.SeatID, seatId));
-        if (invitation) this.openSpaceOnTab(invitation.SpaceID, 'People');
-    }
-
-    public onHomeTaskSelected(taskId: string): void {
-        if (taskId.startsWith('meeting:')) {
-            const agenda = this.homeAgendaItems.find((a) => a.id === taskId);
-            if (agenda?.spaceId) {
-                this.openSpaceOnTab(agenda.spaceId, 'meetings');
-                return;
-            }
-        }
-        const task = this.homeOpenTaskList.find((t) => UUIDsEqual(t.TaskID, taskId));
-        if (task) this.openSpaceOnTab(task.SpaceID, 'Work');
-    }
-
-    public onHomePinSelected(pinId: string): void {
-        const pin = this.homePins.find((p) => UUIDsEqual(p.id, pinId));
-        if (pin) this.openPin(pin);
-    }
-
-    /** A row of a list opens its space on the tab where the thing is handled: People for an invitation, Work for a task. */
+    /** A row of a list opens its space on the tab where the thing is handled: People for an invitation, Work for a task, Meetings for a meeting. */
     public onHomeRowSelected(key: string): void {
         if (this.homeList === 'pins') {
-            this.onHomePinSelected(key);
+            const pin = this.homePins.find((p) => UUIDsEqual(p.id, key));
+            if (pin) this.openPin(pin);
             return;
         }
         if (this.homeList === 'approvals') {
-            this.onHomeInvitationSelected(key);
+            const invitation = this.homeInvitations.find((i) => UUIDsEqual(i.SeatID, key));
+            if (invitation) this.openSpaceOnTab(invitation.SpaceID, 'People');
         } else {
-            this.onHomeTaskSelected(key);
+            if (key.startsWith('meeting:')) {
+                const agenda = this.homeAgendaItems.find((a) => a.id === key);
+                if (agenda?.spaceId) {
+                    this.openSpaceOnTab(agenda.spaceId, 'meetings');
+                    return;
+                }
+            }
+            const task = this.homeOpenTaskList.find((t) => UUIDsEqual(t.TaskID, key));
+            if (task) this.openSpaceOnTab(task.SpaceID, 'Work');
         }
     }
 
@@ -2659,62 +2239,24 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     // Home spaces search
     public spaceSearchQuery = '';
-    public showAllRecentSpaces = false;
-    public starredSpaceIds = new Set<string>();
-    public inboxApprovalCount = 0;
-    public myTasksCount = 0;
-    public allSharedFilesRows: LibraryRowModel[] = [];
-    public allSharedFilesCollections: LibraryCollection[] = [];
-    public allSharedFilesSmartViews: LibrarySmartView[] = [
-        { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: 0 },
-        { id: 'shared', name: 'Shared with everyone', iconClass: 'fa-solid fa-eye', count: 0 },
-    ];
 
     public get activeConversationName(): string {
         const found = this.spaceConversations.find(c => UUIDsEqual(c.id, this.activeConversationId));
         return found ? found.name : '';
     }
 
-    public get filteredSpaces(): {
-        id: string;
-        name: string;
-        description: string;
-        type: string;
-        iconClass: string;
-        color: string;
-        parentName?: string;
-        isClosed: boolean;
-        isStarred: boolean;
-        staffAvatars: AvatarItem[];
-        outsideAvatars: AvatarItem[];
-        signal: HomeSpaceSignal | null;
-    }[] {
+    public get filteredSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string; parentName?: string; isClosed: boolean }[] {
         const query = this.spaceSearchQuery.trim().toLowerCase();
         const spaceMap = new Map<string, RawSpaceRecord>();
         this.rawSpaces.forEach(s => spaceMap.set(s.ID, s));
 
-        return [...this.rawSpaces]
+        return this.rawSpaces
             .filter(s => {
-                const isClosed = !!s.ClosedAt;
-                if (this.homeSpacesFilter === 'closed' ? !isClosed : isClosed) return false;
-                if (!query) return true;
-                const parentName = s.ParentID ? (spaceMap.get(s.ParentID)?.Name ?? '') : '';
+                if (!query) return !s.ParentID;
                 const matchesName = s.Name.toLowerCase().includes(query);
                 const matchesDesc = (s.Description || '').toLowerCase().includes(query);
                 const matchesType = (s.SpaceType || '').toLowerCase().includes(query);
-                const matchesParent = parentName.toLowerCase().includes(query);
-                return matchesName || matchesDesc || matchesType || matchesParent;
-            })
-            .sort((a, b) => {
-                const aStar = this.starredSpaceIds.has(a.ID.toLowerCase()) ? 1 : 0;
-                const bStar = this.starredSpaceIds.has(b.ID.toLowerCase()) ? 1 : 0;
-                if (aStar !== bStar) return bStar - aStar;
-                const aRec = (a as unknown as { __mj_UpdatedAt?: string | Date }).__mj_UpdatedAt;
-                const bRec = (b as unknown as { __mj_UpdatedAt?: string | Date }).__mj_UpdatedAt;
-                const aTime = aRec ? new Date(aRec).getTime() : 0;
-                const bTime = bRec ? new Date(bRec).getTime() : 0;
-                if (aTime !== bTime) return bTime - aTime;
-                return a.Name.localeCompare(b.Name);
+                return matchesName || matchesDesc || matchesType;
             })
             .map(s => {
                 const t = this.spaceTypeMap.get(s.SpaceTypeID);
@@ -2723,50 +2265,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 if (!typeName) {
                     LogError(`Missing space type for space ID: ${s.ID}`);
                 }
-                const avatars = this.homeSpaceAvatarsBySpaceId.get(s.ID.toLowerCase()) ?? {
-                    staffAvatars: [],
-                    outsideAvatars: [],
-                };
-                const invitationsWaiting = this.homeInvitations.filter(inv => UUIDsEqual(inv.SpaceID, s.ID)).length;
-                const openTasks = this.homeOpenTaskList.filter(task => UUIDsEqual(task.SpaceID, s.ID)).length;
-                const pinsCount = this.homePins.filter(pin => UUIDsEqual(pin.spaceId, s.ID)).length;
-                const childCount = this.rawSpaces.filter(child => !child.ClosedAt && child.ParentID && UUIDsEqual(child.ParentID, s.ID)).length;
-                const isClosed = !!s.ClosedAt;
-                const isSealed = s.InheritsMembership === false && !!s.ParentID;
-                const isStarred = this.starredSpaceIds.has(s.ID.toLowerCase());
                 return {
                     id: s.ID,
-                    isClosed,
-                    isStarred,
+                    isClosed: !!s.ClosedAt,
                     name: s.Name,
                     description: s.Description || '',
                     type: typeName || 'Unknown Type',
                     iconClass: s.IconClass || t?.icon || 'fa-solid fa-compass',
                     color: s.Color || t?.color || '',
                     parentName: parent?.Name,
-                    staffAvatars: avatars.staffAvatars,
-                    outsideAvatars: avatars.outsideAvatars,
-                    signal: spaceSignal({
-                        isClosed,
-                        isSealed,
-                        invitationsWaiting,
-                        openTasks,
-                        pinsCount,
-                        childCount,
-                    }),
                 };
             });
-    }
-
-    public get displayedRecentSpaces(): typeof this.filteredSpaces {
-        const all = this.filteredSpaces;
-        if (this.spaceSearchQuery.trim() || this.showAllRecentSpaces) return all;
-        return all.slice(0, 5);
-    }
-
-    public toggleShowAllRecentSpaces(): void {
-        this.showAllRecentSpaces = !this.showAllRecentSpaces;
-        this.RefreshView();
     }
 
     // Chat tab state
@@ -2899,12 +2408,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     this.rawSpaces = spacesRes.Results;
                     this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
                     void this.loadHomeCounts();
-                    void this.loadHomeLists();
+                    // The pins count is the viewer's own list, read here so Home shows it before the list is opened
                     void this.loadHomePins();
-                    void this.loadHomeSpaceAvatars();
-                    void this.loadGlobalNavCounts();
-                    void this.loadAllSharedFiles();
-                    void this.loadStarredSpaces();
 
                     const params = this._pendingQueryParams ?? this.GetQueryParams();
                     this._pendingQueryParams = null;
@@ -2930,234 +2435,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    /** Loads the global Home rail badge counts for Inbox (`bizapps-approval-inbox`) and My tasks (`bizapps-my-tasks`) without cross-view SQL that RLS rejects. */
-    public async loadGlobalNavCounts(): Promise<void> {
-        if (!this.currentPersonId) {
-            this.inboxApprovalCount = 0;
-            this.myTasksCount = 0;
-            this.RefreshView();
-            return;
-        }
-        try {
-            const rv = new RunView(this.RunViewToUse);
-            const personID = this.currentPersonId.replace(/'/g, "''");
-            const assignRes = await rv.RunView<{ TaskID: string }>({
-                EntityName: 'MJ_BizApps_Tasks: Task Assignments',
-                ExtraFilter: `AssigneeRecordID = '${personID}'`,
-                Fields: ['TaskID'],
-                ResultType: 'simple',
-                MaxRows: 200,
-            });
-            const taskIds = Array.from(
-                new Set(
-                    (assignRes?.Success && assignRes.Results ? assignRes.Results : [])
-                        .map((r) => r.TaskID)
-                        .filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
-                ),
-            );
-            if (taskIds.length === 0) {
-                this.inboxApprovalCount = 0;
-                this.myTasksCount = 0;
-                this.RefreshView();
-                return;
-            }
-            const quotedIds = taskIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
-            const [tasksRes, approvalTypesRes, decisionsRes, outcomesRes] = await Promise.all([
-                rv.RunView<{ ID: string; TypeID: string | null; Status: string | null }>({
-                    EntityName: 'MJ_BizApps_Tasks: Tasks',
-                    ExtraFilter: `ID IN (${quotedIds})`,
-                    Fields: ['ID', 'TypeID', 'Status'],
-                    ResultType: 'simple',
-                    MaxRows: 200,
-                }),
-                rv.RunView<{ ID: string }>({
-                    EntityName: 'MJ_BizApps_Tasks: Task Types',
-                    ExtraFilter: `IsApproval = 1`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                    MaxRows: 200,
-                }),
-                rv.RunView<{ TaskID: string; OutcomeID: string }>({
-                    EntityName: 'MJ_BizApps_Tasks: Task Decisions',
-                    ExtraFilter: `TaskID IN (${quotedIds})`,
-                    Fields: ['TaskID', 'OutcomeID'],
-                    ResultType: 'simple',
-                    MaxRows: 500,
-                }),
-                rv.RunView<{ ID: string }>({
-                    EntityName: 'MJ_BizApps_Tasks: Task Decision Outcomes',
-                    ExtraFilter: `IsTerminal = 1`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                    MaxRows: 200,
-                }),
-            ]);
-            const tasks = tasksRes?.Success && tasksRes.Results ? tasksRes.Results : [];
-            const approvalTypeIds = new Set(
-                (approvalTypesRes?.Success && approvalTypesRes.Results ? approvalTypesRes.Results : []).map((t) =>
-                    t.ID.toLowerCase(),
-                ),
-            );
-            const terminalOutcomeIds = new Set(
-                (outcomesRes?.Success && outcomesRes.Results ? outcomesRes.Results : []).map((o) => o.ID.toLowerCase()),
-            );
-            const terminalTaskIds = new Set(
-                (decisionsRes?.Success && decisionsRes.Results ? decisionsRes.Results : [])
-                    .filter((d) => terminalOutcomeIds.has((d.OutcomeID ?? '').toLowerCase()))
-                    .map((d) => (d.TaskID ?? '').toLowerCase()),
-            );
-            this.myTasksCount = tasks.length;
-            this.inboxApprovalCount = tasks.filter((t) => {
-                const status = t.Status ?? '';
-                if (status === 'Completed' || status === 'Cancelled') return false;
-                if (!t.TypeID || !approvalTypeIds.has(t.TypeID.toLowerCase())) return false;
-                return !terminalTaskIds.has(t.ID.toLowerCase());
-            }).length;
-            this.RefreshView();
-        } catch (err) {
-            this.logOnce('global-nav-counts', `Global nav counts could not be read: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    }
-
-    /** Loads shared files across all visible spaces for the Home rail's "Recent files" view so its rows match `homeSharedFiles`. */
-    public async loadAllSharedFiles(): Promise<void> {
-        if (this.rawSpaces.length === 0) {
-            this.allSharedFilesRows = [];
-            this.allSharedFilesCollections = [];
-            this.allSharedFilesSmartViews = [
-                { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: 0 },
-                { id: 'shared', name: 'Shared with everyone', iconClass: 'fa-solid fa-eye', count: 0 },
-            ];
-            return;
-        }
-        try {
-            const rv = new RunView(this.RunViewToUse);
-            const fileEntityId = '29248F34-2837-EF11-86D4-6045BDEE16E6';
-            const itemsRes = await rv.RunView<{
-                ID: string;
-                SpaceID: string;
-                EntityID: string;
-                Entity?: string;
-                RecordID: string;
-                Band: SpaceBand;
-                Folder?: string | null;
-                PromotedAt?: string | null;
-                PromotedByUser?: string | null;
-                __mj_CreatedAt: string;
-                __mj_UpdatedAt: string;
-            }>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Items',
-                ExtraFilter: `Band = 'Shared'`,
-                OrderBy: '__mj_UpdatedAt DESC',
-                ResultType: 'simple',
-                MaxRows: 100,
-            });
-            if (!itemsRes?.Success || !itemsRes.Results) return;
-            const fileItems = itemsRes.Results.filter(
-                (item) => UUIDsEqual(item.EntityID, fileEntityId) || item.Entity === 'MJ: Files',
-            );
-            const fileRecordIds: string[] = [];
-            for (const item of fileItems) {
-                const rawId = (item.RecordID ?? '').replace(/^ID\|/i, '');
-                if (rawId && isValidUuid(rawId)) {
-                    fileRecordIds.push(rawId);
-                }
-            }
-            const fileMap = new Map<string, { ID: string; Name: string; ProviderKey?: string; ContentType?: string | null }>();
-            if (fileRecordIds.length > 0) {
-                const uniqueFileIds = [...new Set(fileRecordIds)];
-                const filesRes = await rv.RunView<{ ID: string; Name: string; ProviderKey?: string; ContentType?: string | null }>({
-                    EntityName: 'MJ: Files',
-                    ExtraFilter: `ID IN ('${uniqueFileIds.join("','")}')`,
-                    ResultType: 'simple',
-                    MaxRows: 100,
-                });
-                if (filesRes?.Success && filesRes.Results) {
-                    for (const f of filesRes.Results) {
-                        fileMap.set(f.ID.toLowerCase(), f);
-                    }
-                }
-            }
-            const spaceNameById = new Map<string, string>();
-            for (const sp of this.rawSpaces) {
-                spaceNameById.set(sp.ID.toLowerCase(), sp.Name);
-            }
-            const rows: LibraryRowModel[] = [];
-            const folderCounts = new Map<string, number>();
-            const seenFileIds = new Set<string>();
-            for (const item of fileItems) {
-                const cleanRecordId = (item.RecordID ?? '').replace(/^ID\|/i, '');
-                const fileRec = fileMap.get(cleanRecordId.toLowerCase());
-                if (!fileRec || seenFileIds.has(cleanRecordId.toLowerCase())) {
-                    continue;
-                }
-                seenFileIds.add(cleanRecordId.toLowerCase());
-                const title = fileRec.Name || `Item ${cleanRecordId.slice(0, 8)}`;
-                const kind = this.detectFileKind(title, fileRec.ProviderKey, fileRec.ContentType ?? undefined);
-                const spaceName = spaceNameById.get(item.SpaceID.toLowerCase());
-                const folder = item.Folder || spaceName || 'Shared';
-                folderCounts.set(folder, (folderCounts.get(folder) ?? 0) + 1);
-                const who = item.PromotedByUser || 'Shared';
-                const when = this.formatDate(item.PromotedAt || item.__mj_UpdatedAt);
-                rows.push({
-                    id: item.ID,
-                    fileId: cleanRecordId,
-                    kind,
-                    name: title,
-                    folder,
-                    band: 'Shared',
-                    who,
-                    when,
-                    updatedAt: item.__mj_UpdatedAt,
-                });
-            }
-            this.allSharedFilesRows = rows;
-            this.allSharedFilesCollections = Array.from(folderCounts.entries()).map(([name, count], idx) => ({
-                id: 'folder-' + idx,
-                name,
-                band: 'Shared' as SpaceBand,
-                count,
-            }));
-            this.allSharedFilesSmartViews = [
-                { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: rows.length },
-                { id: 'shared', name: 'Shared with everyone', iconClass: 'fa-solid fa-eye', count: rows.length },
-            ];
-            this.RefreshView();
-        } catch (err) {
-            this.logOnce('all-shared-files', `Recent shared files could not be read: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    }
-
-    /** Loads all starred space IDs for the current user from `MJ: User Favorites` so the rail, switcher, and Home reflect starred spaces. */
-    public async loadStarredSpaces(): Promise<void> {
-        if (!this.currentUser?.ID || !this.spaceEntityId) return;
-        try {
-            const rv = new RunView(this.RunViewToUse);
-            const res = await rv.RunView<{ RecordID: string }>({
-                EntityName: 'MJ: User Favorites',
-                ExtraFilter: `UserID = '${this.currentUser.ID}' AND EntityID = '${this.spaceEntityId}'`,
-                Fields: ['RecordID'],
-                ResultType: 'simple',
-                MaxRows: 200,
-                BypassCache: true,
-            });
-            if (!res?.Success || !res.Results) return;
-            const next = new Set<string>();
-            for (const row of res.Results) {
-                const id = bareRecordId(row.RecordID ?? '').toLowerCase();
-                if (id) next.add(id);
-            }
-            this.starredSpaceIds = next;
-            if (this.activeSpaceId) {
-                this.isSpaceStarred = next.has(this.activeSpaceId.toLowerCase());
-            }
-            this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
-            this.RefreshView();
-        } catch (err) {
-            this.logOnce('starred-spaces', `Starred spaces could not be read: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    }
-
     private buildSpaceRailNodes(rawSpaces: RawSpaceRecord[]): RailSpaceNode[] {
         const nodes: RailSpaceNode[] = [];
         const spaceMap = new Map<string, RawSpaceRecord>();
@@ -3176,7 +2453,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 level,
                 hasChildren: children.length > 0,
                 isExpanded: true,
-                isStarred: this.starredSpaceIds.has(space.ID.toLowerCase()),
                 ...railFlags(space),
             });
             for (const child of children) {
@@ -3233,20 +2509,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             lineage.unshift({ label: curr.Name, spaceId: curr.ID });
             curr = curr.ParentID ? this.rawSpaces.find(s => UUIDsEqual(s.ID, curr!.ParentID)) : undefined;
         }
-        this.breadcrumbs = [{ label: 'All spaces' }, ...lineage];
+        this.breadcrumbs = [{ label: 'Spaces' }, ...lineage];
     }
 
     /** Everything the last space left on screen goes, and the header shows the new space's own name at once, from what is already loaded. */
-    // ── Stage 4 (B19, B21, B22): the data surface, notes, customizable pages, pins and the star ─────────────────────────
+    // ── Stage 4 (B19, B21, B22): the data surface, notes, pins and the star ─────────────────────────────────────────────
     /** The server's whole configuration document per space, cut to the viewer, kept beside its rules for the data surface and Settings. */
     private readonly serverConfigurationBySpace = new Map<string, { configuration: EffectiveSpaceConfiguration; full: boolean }>();
     public spaceNotes: NoteModel[] = [];
-    public persistedPages: CollabPageModel[] = [];
-    public activePageId = '';
-    public isSavingPage = false;
-    public pageSaveError = '';
-    /** Why the space's pages could not be read, shown on the page host; empty when they loaded. */
-    public pagesError = '';
     public isLoadingNotes = false;
     public notesError = '';
     public isSavingNote = false;
@@ -3263,250 +2533,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isTogglingStar = false;
     public spaceAnchors: AnchorRow[] = [];
     @ViewChild('notesPanel') private notesPanel?: CollabSpaceNotesComponent;
-    @ViewChild('spacePagesHost') private spacePagesHost?: CollabSpacePagesComponent;
-
-    public get activeParentSpaceId(): string {
-        const parentId = this.activeSpaceRecord?.ParentID;
-        if (!parentId) return '';
-        const parent = this.rawSpaces.find((s) => UUIDsEqual(s.ID, parentId));
-        return parent?.ID ?? '';
-    }
-
-    public get activeParentSpaceName(): string {
-        const parentId = this.activeSpaceRecord?.ParentID;
-        if (!parentId) return '';
-        const parent = this.rawSpaces.find((s) => UUIDsEqual(s.ID, parentId));
-        return parent?.Name ?? '';
-    }
-
-    public get currentUserInitials(): string {
-        const name = this.currentUser?.FirstLast || this.currentUser?.Name || 'ME';
-        return name
-            .split(' ')
-            .filter(Boolean)
-            .map((w) => w[0])
-            .join('')
-            .slice(0, 2)
-            .toUpperCase();
-    }
-
-    private cachedSpacePages: {
-        spaceId: string;
-        spaceTitle: string;
-        spaceSubtitle: string;
-        spaceTypeName: string;
-        spaceTypeCode: string;
-        hasWork: boolean;
-        contributedCards: readonly SpaceOverviewCardDescriptor[];
-        libraryRows: LibraryRowModel[];
-        spaceMembers: SpaceMemberModel[];
-        defaultBand: SpaceBand;
-        persistedPages: CollabPageModel[];
-        pages: CollabPageModel[];
-    } | null = null;
-
-    public get spacePages(): CollabPageModel[] {
-        const spaceId = this.activeSpaceId || 'default';
-        const spaceTitle = this.spaceTitle || 'Workspace';
-        const spaceSubtitle = this.spaceSubtitle || '';
-        const spaceTypeName = this.spaceTypeName || 'Workspace';
-        const spaceTypeCode = this.activeSpaceTypeCode || '';
-        const hasWork = this.hasTab('Work');
-        const contributedCards = this.overviewContributedCards;
-        const libraryRows = this.libraryRows;
-        const spaceMembers = this.spaceMembers;
-        const defaultBand = this.noteDefaultBand;
-        const persistedPages = this.persistedPages;
-        const cached = this.cachedSpacePages;
-        if (
-            cached &&
-            cached.spaceId === spaceId &&
-            cached.spaceTitle === spaceTitle &&
-            cached.spaceSubtitle === spaceSubtitle &&
-            cached.spaceTypeName === spaceTypeName &&
-            cached.spaceTypeCode === spaceTypeCode &&
-            cached.hasWork === hasWork &&
-            cached.contributedCards === contributedCards &&
-            cached.libraryRows === libraryRows &&
-            cached.spaceMembers === spaceMembers &&
-            cached.defaultBand === defaultBand &&
-            cached.persistedPages === persistedPages
-        ) {
-            return cached.pages;
-        }
-        const starters = buildStarterPagesForSpace({
-            spaceId,
-            spaceTitle,
-            spaceSubtitle,
-            spaceTypeName,
-            spaceTypeCode,
-            contributedCards,
-            descriptors: assembleSpacePageBlocks(spaceTypeCode || '*', contributedCards),
-            hasWork,
-            libraryRows,
-            spaceMembers,
-            defaultBand,
-        });
-        const pages = mergeSpacePagesWithDefaults(persistedPages, starters);
-        this.cachedSpacePages = {
-            spaceId,
-            spaceTitle,
-            spaceSubtitle,
-            spaceTypeName,
-            spaceTypeCode,
-            hasWork,
-            contributedCards,
-            libraryRows,
-            spaceMembers,
-            defaultBand,
-            persistedPages,
-            pages,
-        };
-        return pages;
-    }
-
-    public isCustomizingPages = false;
-
-    /**
-     * Only space administrators, space owners, or leads with promotion/publishing rights
-     * may customize page layouts, add/edit/remove blocks, or publish page changes.
-     */
-    public get canCustomizePages(): boolean {
-        const isSpaceOwner =
-            !!this.activeSpaceRecord &&
-            !!this.currentUser &&
-            UUIDsEqual(this.activeSpaceRecord.OwnerID, this.currentUser.ID);
-        return pageEditVerdict(
-            {
-                userId: this.currentUser?.ID ?? '',
-                isSpaceOwner,
-                role: this.callerSeat?.role ?? null,
-                canEditSpaceSettings: this.settingsAccessNow.canEdit,
-                administers: this.mayAdministerSpaces,
-            },
-            {
-                closedAt: this.activeSpaceRecord?.ClosedAt ?? null,
-                isReadOnly: this.isSpaceClosed,
-            },
-        ).ok;
-    }
-
-    public get canEditCurrentTabPage(): boolean {
-        return (
-            this.canCustomizePages &&
-            this.activeTab !== 'Chat' &&
-            this.activeTab !== 'Settings' &&
-            !this.contributedTabComponent
-        );
-    }
-
-    public get spacePageBlockContext(): SpacePageBlockContext {
-        const canChat = this.canStartConversation && !this.isSpaceClosed && this.hasTab('Chat');
-        return {
-            spaceId: this.activeSpaceId,
-            spaceName: this.spaceTitle,
-            spaceTypeCode: this.activeSpaceTypeCode,
-            firmName: this.firmName,
-            clientOrgName: this.clientOrgName,
-            canSeeTeam: this.canSeeTeamSide,
-            canWrite: this.canCustomizePages,
-            canAddHere: this.canAddHere,
-            isReadOnly: this.isSpaceClosed,
-            sharedLabel: this.sharedBandLabel,
-            teamLabel: this.teamBandLabel,
-            pins: this.spacePins,
-            pinnedTitle: this.pinnedLabel,
-            needsYouItems: this.overviewNeedsYou,
-            sharedItems: this.overviewSharedItems,
-            sharedAudienceCount: this.headerTotalPeople,
-            showLibraryLink: this.hasTab('Library'),
-            showWorkLink: this.hasTab('Work'),
-            teamItems: this.overviewTeamItems,
-            teamTotalCount: this.libraryTeamCount,
-            tasks: this.spaceTasks,
-            canStartConversation: canChat,
-            agentAvailable: this.chatDefaultAgentId !== null,
-            isSubmittingAsk: this.isSubmittingAsk,
-            showChatLink: this.hasTab('Chat'),
-            discussionAudienceCount: this.discussionAudienceCount,
-            roomMessages: this.overviewRoomMessages,
-            discussionBand: this.chatAudienceBand,
-            contributedCards: this.overviewContributedCards,
-            hasAbout: this.hasDetails,
-            aboutTitle: this.aboutTitle,
-            subSpaces: this.overviewSubSpaces,
-            canAddSubSpace: this.canCreateSpace && !this.isSpaceClosed,
-            onPinOpen: (pin) => this.onPinOpen(pin),
-            onUnpin: (pin) => this.onUnpin(pin),
-            onItemSelected: (item) => this.onItemSelected(item),
-            onOpenLibraryRequested: () => this.onOpenLibraryRequested(),
-            onUploadFileRequested: () => this.onUploadClicked(),
-            onShareRequested: (item) => this.onShareRequested(item),
-            onTaskSelected: (task) => this.onTaskSelected(task),
-            onTaskToggled: (task) => void this.onTaskToggled(task),
-            onOpenWorkRequested: () => this.onTabSelectRequested('Work'),
-            onAskRequested: (msg) => this.onOverviewAskRequested(msg),
-            onOpenChatRequested: () => this.onOpenChatRequested(),
-            onSubSpaceSelected: (sub) => this.onSpaceOpenRequested(sub.id),
-            onNewSubSpaceRequested: () => this.openNewSpaceDialog(this.activeSpaceId),
-        };
-    }
-
-    public get railCustomPages(): SpaceRailCustomPage[] {
-        return this.spacePages
-            .filter((p) => !p.builtInTabId && (p.band === 'Shared' || this.canSeeTeamSide))
-            .map((p) => ({
-                id: p.id,
-                title: p.draftTitle || p.title,
-                iconClass: p.iconClass || 'fa-regular fa-file-lines',
-                band: p.band,
-                isDraft: p.status === 'Draft',
-            }));
-    }
-
-    public get activeCustomPageId(): string {
-        if (this.activeTab.startsWith('page:')) {
-            return this.activeTab.slice(5);
-        }
-        return this.activePageId;
-    }
-
-    public onToggleCustomizePages(): void {
-        if (!this.canCustomizePages) return;
-        if (!this.spacePagesHost) {
-            this.activeView = 'space';
-            this.setTab('Overview');
-            this.isCustomizingPages = true;
-            this.RefreshView();
-            return;
-        }
-        this.isCustomizingPages = !this.isCustomizingPages;
-        this.RefreshView();
-    }
-
-    public onNewPageRequestedFromRail(): void {
-        if (!this.canCustomizePages) return;
-        if (this.spacePagesHost) {
-            this.spacePagesHost.openNewPageModal();
-            this.RefreshView();
-            return;
-        }
-        this.activeView = 'space';
-        this.setTab('Overview');
-        this.RefreshView();
-        setTimeout(() => {
-            this.spacePagesHost?.openNewPageModal();
-            this.RefreshView();
-        }, 0);
-    }
 
     private resetStage4(_spaceId: string): void {
         this.spaceNotes = [];
-        this.persistedPages = [];
-        this.activePageId = '';
-        this.isCustomizingPages = false;
-        this.isSavingPage = false;
-        this.pageSaveError = '';
         this.isLoadingNotes = false;
         this.notesError = '';
         this.isSavingNote = false;
@@ -3523,11 +2552,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceAnchors = [];
     }
 
-    /** The stage 4 reads for the space shown: notes, pages, pins, the star and (for Settings) the anchors. The data entries follow the server's document. */
+    /** The stage 4 reads for the space shown: notes, pins, the star and (for Settings) the anchors. The data entries follow the server's document. */
     private async loadStage4(spaceId: string, isCurrent: () => boolean): Promise<void> {
         await Promise.all([
             this.loadSpaceNotes(spaceId, isCurrent),
-            this.loadSpacePages(spaceId, isCurrent),
             this.loadSpacePins(spaceId, isCurrent),
             this.loadStar(spaceId, isCurrent),
             this.loadSpaceAnchors(spaceId, isCurrent),
@@ -3595,7 +2623,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             : `This space's type offers no views, queries, dashboards or components.`;
     }
 
-    // ── notes & customizable pages (B21) ─────────────────────────────────────────
+    // ── notes (B21) ──────────────────────────────────────────────────────────────
 
     private noteModel(row: NoteRow): NoteModel {
         const me = this.currentUser?.ID ?? '';
@@ -3639,8 +2667,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
             // Another person's private note is never shown, whatever the viewer's roles read on the server
-            const visibleRows = notesVisibleTo(res.Results ?? [], this.currentUser?.ID);
-            this.spaceNotes = visibleRows.map((row) => this.noteModel(row));
+            this.spaceNotes = notesVisibleTo(res.Results ?? [], this.currentUser?.ID).map((row) => this.noteModel(row));
         } catch (err) {
             if (!isCurrent()) return;
             this.notesError = `The notes could not be read: ${err instanceof Error ? err.message : String(err)}`;
@@ -3649,182 +2676,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.isLoadingNotes = false;
                 this.RefreshView();
             }
-        }
-    }
-
-    private async loadSpacePages(spaceId: string, isCurrent: () => boolean): Promise<void> {
-        if (!isValidUuid(spaceId)) return;
-        try {
-            const res = await new RunView(this.RunViewToUse).RunView<SpacePageRow>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Pages',
-                BypassCache: true,
-                ExtraFilter: `SpaceID = '${spaceId}'`,
-                OrderBy: 'Sequence ASC, __mj_UpdatedAt DESC',
-                ResultType: 'simple',
-                MaxRows: 200,
-            });
-            if (!isCurrent()) return;
-            if (!res?.Success) {
-                this.persistedPages = [];
-                this.pagesError = res?.ErrorMessage || 'The pages of this space could not be read.';
-                return;
-            }
-            this.pagesError = '';
-            const me = this.currentUser?.ID ?? '';
-            const pageModels = (res.Results ?? []).map((row) => {
-                const author = this.spaceMembers.find((m) => UUIDsEqual(m.userId, row.PublishedByUserID ?? ''));
-                const authorName =
-                    row.PublishedByUser ||
-                    author?.name ||
-                    (row.PublishedByUserID && UUIDsEqual(row.PublishedByUserID, me) ? 'You' : 'Space Team');
-                const updatedLabel = formatDateLocale(
-                    row.__mj_UpdatedAt ?? (row.PublishedAt ? String(row.PublishedAt) : ''),
-                );
-                return mapSpacePageRowToModel(row, {
-                    authorName,
-                    updatedLabel,
-                    canPromote: row.Band === 'Team' && this.canCustomizePages,
-                });
-            });
-            pageModels.sort((a, b) => a.sequence - b.sequence || a.title.localeCompare(b.title));
-            this.persistedPages = pageModels;
-            if (!this.activePageId && this.spacePages.length > 0) {
-                this.activePageId = this.spacePages[0].id;
-            }
-        } catch (err) {
-            if (!isCurrent()) return;
-            this.pagesError = 'The pages of this space could not be read.';
-            LogError(`The pages of space ${spaceId} could not be read: ${err instanceof Error ? err.message : String(err)}`);
-        } finally {
-            if (isCurrent()) {
-                this.RefreshView();
-            }
-        }
-    }
-
-    public onPageSelected(pageId: string): void {
-        this.activePageId = pageId;
-        const page = this.spacePages.find((p) => p.id === pageId);
-        if (page?.builtInTabId) {
-            this.onTabSelectRequested(page.builtInTabId);
-            return;
-        }
-        this.onTabSelectRequested(`page:${pageId}`);
-    }
-
-    public async onPageSave(page: CollabPageModel): Promise<void> {
-        const spaceId = this.activeSpaceId;
-        this.isSavingPage = true;
-        this.pageSaveError = '';
-        this.RefreshView();
-        try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>('MJ_BizApps_Collaboration: Space Pages');
-            const existingByBuiltIn = page.builtInTabId
-                ? this.persistedPages.find((p) => p.builtInTabId === page.builtInTabId && isValidUuid(p.id))
-                : undefined;
-            const targetId =
-                !page.isSeed && isValidUuid(page.id)
-                    ? page.id
-                    : existingByBuiltIn?.id ?? '';
-            if (targetId) {
-                if (!(await entity.Load(targetId))) throw new Error('The page could not be loaded.');
-            } else {
-                entity.NewRecord();
-                entity.SpaceID = spaceId;
-            }
-            applyCollabPageToEntity(entity, page, this.currentUser?.ID);
-            if (!(await entity.Save())) throw new Error(entity.LatestResult?.CompleteMessage || 'The page was not saved.');
-            this.activePageId = entity.ID;
-            await this.loadSpacePages(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
-            if (!page.builtInTabId) {
-                this.setTab(`page:${entity.ID}`);
-                this.UpdateQueryParams({ view: 'space', tab: this.activeTab });
-            }
-            SharedService.Instance.CreateSimpleNotification(`Page "${entity.Title}" saved.`, 'info', 2500);
-        } catch (err) {
-            this.pageSaveError = err instanceof Error ? err.message : String(err);
-            LogError(`Page save failed: ${this.pageSaveError}`);
-        } finally {
-            this.isSavingPage = false;
-            this.RefreshView();
-        }
-    }
-
-    public async onPageDelete(page: CollabPageModel): Promise<void> {
-        if (!page.id || page.isSeed || page.builtInTabId || !isValidUuid(page.id)) return;
-        const spaceId = this.activeSpaceId;
-        this.isSavingPage = true;
-        this.pageSaveError = '';
-        this.RefreshView();
-        try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>('MJ_BizApps_Collaboration: Space Pages');
-            if (!(await entity.Load(page.id))) throw new Error('The page could not be loaded.');
-            if (!(await entity.Delete())) throw new Error(entity.LatestResult?.CompleteMessage || 'The page was not deleted.');
-            this.activePageId = '';
-            if (this.activeTab === `page:${page.id}`) {
-                this.setTab('Overview');
-                this.UpdateQueryParams({ view: 'space', tab: 'overview' });
-            }
-            await this.loadSpacePages(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
-            SharedService.Instance.CreateSimpleNotification(`Page "${page.title}" deleted.`, 'info', 2500);
-        } catch (err) {
-            this.pageSaveError = err instanceof Error ? err.message : String(err);
-            LogError(`Page delete failed: ${this.pageSaveError}`);
-        } finally {
-            this.isSavingPage = false;
-            this.RefreshView();
-        }
-    }
-
-    public async onPageReorder(pages: CollabPageModel[]): Promise<void> {
-        const spaceId = this.activeSpaceId;
-        this.isSavingPage = true;
-        this.pageSaveError = '';
-        this.RefreshView();
-        try {
-            const md = new Metadata();
-            for (const page of pages) {
-                if (!page.id || page.isSeed || !isValidUuid(page.id)) continue;
-                const entity = await md.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>('MJ_BizApps_Collaboration: Space Pages');
-                if (await entity.Load(page.id)) {
-                    entity.Sequence = page.sequence ?? 0;
-                    if (!(await entity.Save())) {
-                        this.pageSaveError = entity.LatestResult?.CompleteMessage || `"${page.title}" could not be moved.`;
-                    }
-                }
-            }
-            await this.loadSpacePages(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
-        } catch (err) {
-            this.pageSaveError = err instanceof Error ? err.message : String(err);
-            LogError(`Page reorder failed: ${this.pageSaveError}`);
-        } finally {
-            this.isSavingPage = false;
-            this.RefreshView();
-        }
-    }
-
-    public async onPagePromote(page: CollabPageModel): Promise<void> {
-        if (!page.id || page.isSeed || !isValidUuid(page.id)) return;
-        const spaceId = this.activeSpaceId;
-        this.isSavingPage = true;
-        this.pageSaveError = '';
-        this.RefreshView();
-        try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>('MJ_BizApps_Collaboration: Space Pages');
-            if (!(await entity.Load(page.id))) throw new Error('The page could not be loaded.');
-            entity.Band = 'Shared';
-            if (!(await entity.Save())) throw new Error(entity.LatestResult?.CompleteMessage || 'The page was not shared.');
-            SharedService.Instance.CreateSimpleNotification(`"${page.title}" is now shared with ${this.sharedBandLabel}.`, 'success', 4000);
-            await this.loadSpacePages(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
-        } catch (err) {
-            this.pageSaveError = err instanceof Error ? err.message : String(err);
-            LogError(`Page promote failed: ${this.pageSaveError}`);
-        } finally {
-            this.isSavingPage = false;
-            this.RefreshView();
         }
     }
 
@@ -4091,9 +2942,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** *My pins* on Home: the viewer's pins across the spaces they reach, each named by its space. */
     public async loadHomePins(): Promise<void> {
         if (!this.currentUser) return;
-        const token = ++this.homePinsLoadToken;
-        this.isLoadingHomePins = true;
-        this.homePinsError = '';
+        const token = ++this.homeListLoadToken;
+        this.isLoadingHomeList = true;
+        this.homeListError = '';
         this.RefreshView();
         try {
             const res = await new RunView(this.RunViewToUse).RunView<PinRow>({
@@ -4104,7 +2955,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ResultType: 'simple',
                 MaxRows: 200,
             });
-            if (token !== this.homePinsLoadToken) return;
+            if (token !== this.homeListLoadToken) return;
             if (!res?.Success) throw new Error(res?.ErrorMessage ?? 'unknown error');
             const noteIds = (res.Results ?? []).filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntityId())).map((p) => bareRecordId(p.TargetRecordID ?? ''));
             const noteTitles = new Map<string, string>();
@@ -4142,7 +2993,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     itemNames.set(fileId, { title: names.get(fileId) ?? 'A file', itemId: item.ID });
                 }
             }
-            if (token !== this.homePinsLoadToken) return;
+            if (token !== this.homeListLoadToken) return;
             this.homePins = (res.Results ?? []).map((pin): PinModel => {
                 const space = this.rawSpaces.find((s) => UUIDsEqual(s.ID, pin.SpaceID));
                 const base = { id: pin.ID, spaceId: pin.SpaceID, spaceName: space?.Name ?? 'A space' };
@@ -4154,103 +3005,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             });
             this.refreshHomeListRows();
         } catch (err) {
-            if (token !== this.homePinsLoadToken) return;
-            this.homePinsError = `Your pins could not be read: ${err instanceof Error ? err.message : String(err)}`;
-            this.logOnce('home-pins', this.homePinsError);
+            if (token !== this.homeListLoadToken) return;
+            this.homeListError = `Your pins could not be read: ${err instanceof Error ? err.message : String(err)}`;
+            this.logOnce('home-pins', this.homeListError);
         } finally {
-            if (token === this.homePinsLoadToken) {
-                this.isLoadingHomePins = false;
+            if (token === this.homeListLoadToken) {
+                this.isLoadingHomeList = false;
                 this.RefreshView();
             }
-        }
-    }
-
-    /** Batch-loads active space seats and user profiles so Home's recent spaces list renders staff and outside avatar stacks. */
-    private async loadHomeSpaceAvatars(): Promise<void> {
-        if (this.rawSpaces.length === 0) {
-            this.homeSpaceAvatarsBySpaceId = new Map();
-            return;
-        }
-        try {
-            const rv = new RunView(this.RunViewToUse);
-            const spaceIds = this.rawSpaces.map((sp) => `'${sp.ID}'`).join(',');
-            const membersRes = await rv.RunView<{
-                ID: string;
-                SpaceID: string;
-                UserID: string;
-                User?: string | null;
-                Band: SpaceBand;
-                Status: string;
-            }>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Members',
-                ExtraFilter: `Status = 'Active' AND SpaceID IN (${spaceIds})`,
-                ResultType: 'simple',
-                MaxRows: 1000,
-            });
-            if (!membersRes?.Success || !membersRes.Results) return;
-            const allMembers = membersRes.Results;
-            const userIds = [...new Set(allMembers.map((m) => m.UserID).filter(Boolean))];
-            const userProfileMap = new Map<string, { name?: string; avatarUrl?: string; iconClass?: string }>();
-            if (userIds.length > 0) {
-                const userRes = await rv.RunView<{
-                    ID: string;
-                    Name?: string | null;
-                    UserImageURL?: string | null;
-                    UserImageIconClass?: string | null;
-                }>({
-                    EntityName: 'MJ: Users',
-                    ExtraFilter: `ID IN (${userIds.map((id) => `'${id}'`).join(',')})`,
-                    Fields: ['ID', 'Name', 'UserImageURL', 'UserImageIconClass'],
-                    ResultType: 'simple',
-                    MaxRows: userIds.length,
-                });
-                if (userRes?.Success && userRes.Results) {
-                    for (const u of userRes.Results) {
-                        userProfileMap.set((u.ID ?? '').toLowerCase(), {
-                            name: u.Name || undefined,
-                            avatarUrl: u.UserImageURL || undefined,
-                            iconClass: u.UserImageIconClass || undefined,
-                        });
-                    }
-                }
-            }
-            const spaceRows = this.rawSpaces.map((sp) => ({
-                ID: sp.ID,
-                Name: sp.Name,
-                ParentID: sp.ParentID ?? null,
-                InheritsMembership: !!sp.InheritsMembership,
-                ClosedAt: sp.ClosedAt,
-                Status: CollaborationEngineBase.Instance.StatusReachForSpace(sp),
-            }));
-            const nextMap = new Map<string, { staffAvatars: AvatarItem[]; outsideAvatars: AvatarItem[] }>();
-            for (const sp of this.rawSpaces) {
-                const chain = accessChain(sp.ID, spaceRows);
-                if (chain.length === 0) chain.push({ id: sp.ID, name: sp.Name });
-                const reached = nearestSeats(allMembers, chain);
-                const seatInputs = reached.map(({ row: m }) => {
-                    const profile = userProfileMap.get((m.UserID ?? '').toLowerCase());
-                    const name = m.User || profile?.name || 'Member';
-                    const initials = name.split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '??';
-                    return {
-                        id: m.ID,
-                        name,
-                        initials,
-                        band: m.Band || 'Team',
-                        status: m.Status || 'Active',
-                        avatarUrl: profile?.avatarUrl,
-                        iconClass: profile?.iconClass,
-                    };
-                });
-                const summary = summarizeSeats(seatInputs);
-                nextMap.set(sp.ID.toLowerCase(), {
-                    staffAvatars: summary.staffAvatars,
-                    outsideAvatars: summary.outsideAvatars,
-                });
-            }
-            this.homeSpaceAvatarsBySpaceId = nextMap;
-            this.RefreshView();
-        } catch (err) {
-            this.logOnce('home-space-avatars', `Home space avatars could not be read: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -4259,17 +3021,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private async loadStar(spaceId: string, isCurrent: () => boolean): Promise<void> {
         if (!this.currentUser) return;
         try {
-            const provider = this.ProviderToUse ?? Metadata.Provider;
-            const starred = await provider.GetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId));
+            const starred = await Metadata.Provider.GetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId));
             if (!isCurrent()) return;
             this.isSpaceStarred = starred;
-            const lower = spaceId.toLowerCase();
-            if (starred) {
-                this.starredSpaceIds.add(lower);
-            } else {
-                this.starredSpaceIds.delete(lower);
-            }
-            this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
         } catch (err) {
             this.logOnce(`star:${spaceId}`, `The star could not be read: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -4282,15 +3036,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.isTogglingStar = true;
         this.RefreshView();
         try {
-            const provider = this.ProviderToUse ?? Metadata.Provider;
-            await provider.SetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId), wanted, this.currentUser);
-            const lower = spaceId.toLowerCase();
-            if (wanted) {
-                this.starredSpaceIds.add(lower);
-            } else {
-                this.starredSpaceIds.delete(lower);
-            }
-            this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
+            await Metadata.Provider.SetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId), wanted, this.currentUser);
             if (UUIDsEqual(this.activeSpaceId, spaceId)) this.isSpaceStarred = wanted;
         } catch (err) {
             SharedService.Instance.CreateSimpleNotification(`The star could not be saved: ${err instanceof Error ? err.message : String(err)}`, 'error', 6000);
@@ -4526,7 +3272,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 iconClass: c.IconClass || cType?.icon || 'fa-solid fa-compass',
                 color: c.Color || cType?.color || '',
                 description: c.Description || '',
-                ...railFlags(c),
             };
         });
 
@@ -5068,7 +3813,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         percentComplete: t.PercentComplete || 0,
                     };
                 });
-                this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
+                this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed').length;
             }
         } catch (err) {
             LogError('Error loading space tasks: ' + (err instanceof Error ? err.message : String(err)));
@@ -5167,33 +3912,23 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (membersRes.Results) {
                 const reached = nearestSeats(membersRes.Results, chain);
                 const userIds = [...new Set(reached.map(r => r.row.UserID).filter(Boolean))];
-                const userProfileMap = new Map<string, { email: string; avatarUrl?: string; iconClass?: string }>();
+                const userEmailMap = new Map<string, string>();
                 if (userIds.length > 0) {
                     try {
                         const userFilter = userIds.map(id => `'${id}'`).join(',');
-                        const userRes = await rv.RunView<{
-                            ID: string;
-                            Email?: string | null;
-                            UserImageURL?: string | null;
-                            UserImageIconClass?: string | null;
-                        }>({
+                        const userRes = await rv.RunView<{ ID: string; Email: string }>({
                             EntityName: 'MJ: Users',
                             ExtraFilter: `ID IN (${userFilter})`,
-                            Fields: ['ID', 'Email', 'UserImageURL', 'UserImageIconClass'],
                             ResultType: 'simple',
                             MaxRows: userIds.length,
                         });
                         if (userRes?.Success && userRes.Results) {
                             for (const u of userRes.Results) {
-                                userProfileMap.set((u.ID ?? '').toLowerCase(), {
-                                    email: u.Email || '',
-                                    avatarUrl: u.UserImageURL || undefined,
-                                    iconClass: u.UserImageIconClass || undefined,
-                                });
+                                userEmailMap.set(u.ID, u.Email || '');
                             }
                         }
                     } catch (userErr) {
-                        LogError('Error loading user profiles for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
+                        LogError('Error loading user emails for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
                     }
                 }
 
@@ -5206,15 +3941,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         : null;
                     const roleCode = roleType?.Code || 'member';
                     const canContribute = roleType ? roleType.CanContribute : false;
-                    const profile = userProfileMap.get((m.UserID ?? '').toLowerCase());
                     return {
                         id: m.ID,
                         userId: m.UserID,
                         name,
-                        email: profile?.email || '',
+                        email: userEmailMap.get(m.UserID) || '',
                         initials,
-                        avatarUrl: profile?.avatarUrl,
-                        iconClass: profile?.iconClass,
                         roleName: roleType?.Name || m.SpaceRoleType || 'Member',
                         roleCode,
                         roleId: m.SpaceRoleTypeID || undefined,
@@ -5422,16 +4154,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
         // A tab the type or another app contributed can only be resolved once the space's tabs are built
         if (this.spaceTabModel) {
-            if (params['tab']?.startsWith('page:')) {
-                this.activeTab = params['tab'];
-                this.activePageId = params['tab'].slice(5);
-            } else {
-                const named = params['tab'] ? resolveTabId(this.spaceTabModel, params['tab']) : null;
-                if (named) this.activeTab = named;
-                else if (!this.activeTab.startsWith('page:') && !resolveTabId(this.spaceTabModel, this.activeTab)) this.activeTab = 'Overview';
-                // A link to a tab the space doesn't have: the URL says the tab that opened
-                if (params['tab'] && !named) this.UpdateQueryParams({ tab: this.activeTab.toLowerCase() });
-            }
+            const named = params['tab'] ? resolveTabId(this.spaceTabModel, params['tab']) : null;
+            if (named) this.activeTab = named;
+            else if (!resolveTabId(this.spaceTabModel, this.activeTab)) this.activeTab = 'Overview';
+            // A link to a tab the space doesn't have: the URL says the tab that opened
+            if (params['tab'] && !named) this.UpdateQueryParams({ tab: this.activeTab.toLowerCase() });
         }
 
         if (params['item'] && isValidUuid(params['item'])) {
@@ -5478,7 +4205,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.settingsSaveSuccess = '';
         this.settingsInfoMessage = '';
         // The URL names the tab that opened, which is the Overview when the type has no such tab
-        this.UpdateQueryParams({ view: 'space', tab: this.activeTab.startsWith('page:') ? this.activeTab : this.activeTab.toLowerCase() });
+        this.UpdateQueryParams({ view: 'space', tab: this.activeTab.toLowerCase() });
         this.syncStateWithAgent();
         this.RefreshView();
     }
@@ -5506,7 +4233,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onBreadcrumbSelected(crumb: BreadcrumbItem): void {
         if (crumb.spaceId) {
             this.onSpaceOpenRequested(crumb.spaceId);
-        } else if (crumb.label === 'All spaces' || crumb.label === 'Spaces') {
+        } else if (crumb.label === 'Spaces') {
             this.onBackToSpacesRequested();
         }
     }
@@ -5585,7 +4312,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private async showPreviewFor(itemId: string): Promise<void> {
         const isLatest = this.previewReads.Begin();
         this.previewRecentUses = [];
-        const row = this.libraryRows.find((r) => UUIDsEqual(r.id, itemId)) ?? this.allSharedFilesRows.find((r) => UUIDsEqual(r.id, itemId));
+        const row = this.libraryRows.find((r) => UUIDsEqual(r.id, itemId));
         this.previewMeta = row ? `${row.folder} · ${row.who}, ${row.when}` : '';
         this.previewBandLabel = row?.band === 'Team' ? 'Team only' : 'Shared';
         this.previewAudienceSub = row?.band === 'Team'
@@ -5624,9 +4351,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public async onOpenFileRequested(fileId?: string): Promise<void> {
         if (!fileId) return;
-        const targetItem =
-            this.libraryRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId)) ??
-            this.allSharedFilesRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId));
+        const targetItem = this.libraryRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId));
         if (!targetItem) {
             SharedService.Instance.CreateSimpleNotification('File not found in this space library.', 'error', 5000);
             return;
@@ -5728,7 +4453,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 initials: m.initials || m.name?.slice(0, 2).toUpperCase() || '??',
                 name: m.name,
                 avatarUrl: m.avatarUrl,
-                iconClass: m.iconClass,
                 colorClass: m.colorClass,
             },
         }));
@@ -6281,7 +5005,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const newEntityStatus: TaskEntity['Status'] = isCompleted ? 'InProgress' : 'Completed';
         const previousStatus = task.status;
         task.status = newEntityStatus;
-        this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
         this.RefreshView();
         try {
             const md = this.ProviderToUse;
@@ -6294,21 +5017,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 const saved = await taskEntity.Save();
                 if (!saved) {
                     task.status = previousStatus;
-                    this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
                     this.RefreshView();
                     SharedService.Instance.CreateSimpleNotification('Failed to update task: ' + (taskEntity.LatestResult?.CompleteMessage ?? ''), 'error', 5000);
-                } else {
-                    void this.loadGlobalNavCounts();
                 }
             } else {
                 task.status = previousStatus;
-                this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
                 this.RefreshView();
                 SharedService.Instance.CreateSimpleNotification('Failed to load task for status update.', 'error', 5000);
             }
         } catch (err) {
             task.status = previousStatus;
-            this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
             this.RefreshView();
             const msg = err instanceof Error ? err.message : String(err);
             LogError('Error toggling task: ' + msg);
@@ -6556,15 +5274,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onChangeMemberRole(change: { member: SpaceMemberModel; roleCode: string }): Promise<void> {
-        const role = CollaborationEngineBase.Instance.SpaceRoleTypeByCode(change.roleCode);
-        if (!role) {
+        const roleId = CollaborationEngineBase.Instance.SpaceRoleTypeByCode(change.roleCode)?.ID;
+        if (!roleId) {
             SharedService.Instance.CreateSimpleNotification(`There is no role called ${change.roleCode}.`, 'error', 5000);
             return Promise.resolve();
         }
-        return this.changeSeat(change.member, (seat) => {
-            seat.SpaceRoleTypeID = role.ID;
-            seat.Band = role.CanSeeTeamBand ? 'Team' : 'Shared';
-        }, 'change the role');
+        return this.changeSeat(change.member, (seat) => { seat.SpaceRoleTypeID = roleId; }, 'change the role');
     }
 
     /** True while a close or reopen is with the server. */
