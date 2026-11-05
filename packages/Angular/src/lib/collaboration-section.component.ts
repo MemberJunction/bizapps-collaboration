@@ -130,9 +130,6 @@ import {
     type PinModel,
     type DataEntryModel,
     type DataRunModel,
-    type WorkstreamLinkedItem,
-    type WorkstreamLinkTaskOption,
-    type WorkstreamLinkFileOption,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJReactModule } from '@memberjunction/ng-react';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -1108,15 +1105,12 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [AudienceBand]="chatAudienceBand"
                                                     [ParticipantCount]="conversationParticipantCount"
                                                     [DefaultAgentId]="chatDefaultAgentId"
-                                                    [DefaultAgentName]="chatDefaultAgentName || ''"
-                                                    [LinkedWorkstreamItem]="activeConversationLinkedItem"
                                                     [AgentReplyMode]="chatAgentReplyMode"
                                                     [AllowedAgentIDs]="chatAllowedAgentIds"
                                                     [EnableDecisionRouting]="chatDecisionRoutingAvailable"
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed"
                                                     [HasConversations]="spaceConversations.length > 0"
                                                     [MentionPeople]="chatMentionPeople"
-                                                    [SpaceMembers]="spaceMembers"
                                                     [AgentHistoryFrom]="chatAgentHistoryFrom"
                                                     [AgentTurnHandler]="handleAgentTurn"
                                                     [RetrievalScope]="chatRetrievalScope"
@@ -1130,7 +1124,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [PendingMessage]="pendingChatMessage"
                                                     [PendingMessageConversationId]="pendingChatMessageConversationId"
                                                     (PendingMessageConsumed)="pendingChatMessage = null; pendingChatMessageConversationId = null"
-                                                    (LinkedItemOpenRequested)="onOpenLinkedWorkstreamItem($event)"
                                                     (NewConversationRequested)="openNewConversationDialog()"
                                                 />
                                             }
@@ -1367,8 +1360,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [SpaceName]="spaceTitle"
                                 [AllowedKinds]="canStartConversationKinds"
                                 [IsSubmitting]="isCreatingConversation"
-                                [Tasks]="workstreamTaskOptions"
-                                [Files]="workstreamFileOptions"
                                 (CancelRequested)="closeNewConversationDialog()"
                                 (SubmitRequested)="onSubmitNewConversation($event)"
                             />
@@ -4711,61 +4702,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    public workstreamLinks = new Map<string, WorkstreamLinkedItem>();
-
-    public get workstreamTaskOptions(): WorkstreamLinkTaskOption[] {
-        return this.spaceTasks.map((t) => ({
-            id: t.id,
-            name: t.name,
-            status: t.status,
-            priority: t.priority,
-        }));
-    }
-
-    public get workstreamFileOptions(): WorkstreamLinkFileOption[] {
-        return this.libraryRows.map((r) => ({
-            id: r.id,
-            title: r.name,
-            kind: r.kind,
-        }));
-    }
-
-    public get activeConversationLinkedItem(): WorkstreamLinkedItem | null {
-        const convId = (this.activeConversationId ?? '').trim().toLowerCase();
-        if (!convId) return null;
-        const stored = this.workstreamLinks.get(convId);
-        if (stored) {
-            if (stored.kind === 'task') {
-                const liveTask = this.spaceTasks.find((t) => UUIDsEqual(t.id, stored.id));
-                if (liveTask) {
-                    return { ...stored, title: liveTask.name, status: liveTask.status };
-                }
-            }
-            return stored;
-        }
-        const convName = (this.activeConversationName ?? '').trim().toLowerCase();
-        if (convName) {
-            const matchedTask = this.spaceTasks.find((t) => t.name.trim().toLowerCase() === convName);
-            if (matchedTask) {
-                return { kind: 'task', id: matchedTask.id, title: matchedTask.name, status: matchedTask.status };
-            }
-        }
-        return null;
-    }
-
-    public onOpenLinkedWorkstreamItem(item: WorkstreamLinkedItem): void {
-        if (item.kind === 'task') {
-            this.onTabSelectRequested('Work');
-            this.onTaskDoubleClicked(item.id);
-        } else if (item.kind === 'file') {
-            this.onTabSelectRequested('Library');
-            const row = this.libraryRows.find((r) => UUIDsEqual(r.id, item.id));
-            if (row) {
-                this.onRowSelected(row);
-            }
-        }
-    }
-
     public async onSubmitNewConversation(payload: NewConversationSubmitPayload): Promise<void> {
         // The space and the selection this conversation is for, taken before the first await: the person may move on while it is created
         const spaceId = this.activeSpaceId;
@@ -4793,47 +4729,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 LogError('Failed to create space conversation: ' + msg);
                 SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
                 return;
-            }
-
-            if (res.ConversationID && payload.kind === 'Topic' && payload.linkedAction) {
-                const convKey = res.ConversationID.trim().toLowerCase();
-                const link = payload.linkedAction;
-                if (link.mode === 'task' && link.targetId) {
-                    const matched = this.spaceTasks.find((t) => UUIDsEqual(t.id, link.targetId!));
-                    this.workstreamLinks.set(convKey, {
-                        kind: 'task',
-                        id: link.targetId,
-                        title: matched?.name ?? link.targetTitle ?? payload.name,
-                        status: matched?.status ?? 'Open',
-                    });
-                } else if (link.mode === 'file' && link.targetId) {
-                    const matched = this.libraryRows.find((r) => UUIDsEqual(r.id, link.targetId!));
-                    this.workstreamLinks.set(convKey, {
-                        kind: 'file',
-                        id: link.targetId,
-                        title: matched?.name ?? link.targetTitle ?? payload.name,
-                    });
-                } else if (link.mode === 'new-task') {
-                    const taskTitle = link.newTaskTitle?.trim() || payload.name;
-                    try {
-                        const taskRes = await client.CreateSpaceTask({
-                            SpaceID: spaceId,
-                            Name: taskTitle,
-                            Band: this.bandChoice?.start ?? this.typeDefaultBand ?? this.spaceAudienceBand,
-                        });
-                        if (taskRes.Success && taskRes.TaskID) {
-                            this.workstreamLinks.set(convKey, {
-                                kind: 'task',
-                                id: taskRes.TaskID,
-                                title: taskTitle,
-                                status: 'Open',
-                            });
-                            await this.loadSpaceTasks(spaceId, isCurrent);
-                        }
-                    } catch (taskErr) {
-                        LogError('Could not create linked task for workstream: ' + (taskErr instanceof Error ? taskErr.message : String(taskErr)));
-                    }
-                }
             }
 
             SharedService.Instance.CreateSimpleNotification('Conversation created.', 'info', 3000);

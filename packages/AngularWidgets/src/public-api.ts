@@ -50,24 +50,11 @@ export { CollabSpaceOverviewComponent, RoomMiniMessage, SubSpaceSummary } from '
 export { CollabSpaceLibraryComponent, LibraryCollection, LibrarySmartView } from './lib/space-library.component';
 export { CollabShareCheckDialogComponent } from './lib/share-check-dialog.component';
 export { CollabUploadDialogComponent, CollabUploadSubmitPayload } from './lib/upload-dialog.component';
-export {
-    CollabNewConversationDialogComponent,
-    NewConversationSubmitPayload,
-    type WorkstreamLinkTaskOption,
-    type WorkstreamLinkFileOption,
-    type WorkstreamActionLinkPayload,
-} from './lib/new-conversation-dialog.component';
+export { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './lib/new-conversation-dialog.component';
 export { CollabNewSpaceDialogComponent, NewSpaceTypeOption, NewSpaceSubmitPayload } from './lib/new-space-dialog.component';
 export { CollabHomeListComponent, HomeListRow } from './lib/home-list.component';
 export { CollabSpaceWorkComponent } from './lib/space-work.component';
-export {
-    CollabSpaceChatComponent,
-    CollabChatScopeBarComponent,
-    type SpaceChatCitationModel,
-    type WorkstreamLinkedItem,
-    type ChatThreadMessageLike,
-    type PendingAgentPromptState,
-} from './lib/space-chat.component';
+export { CollabSpaceChatComponent, CollabChatScopeBarComponent, type SpaceChatCitationModel } from './lib/space-chat.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';
 export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';

@@ -1,7 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { avatarColorClass } from '@mj-biz-apps/collaboration-core';
-import { COLLAB_TOKENS_CSS } from './tokens';
 import type { AvatarItem } from './types';
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -12,13 +11,11 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   imports: [CommonModule],
   template: `
     <span
-      class="av {{ isAi ? 'ai-av' : computedColorClass }} {{ Size }} {{ isOutside ? 'ext' : '' }} {{ Stacked ? 'stacked' : '' }} {{ isAi && avatarUrl ? 'has-img' : '' }}"
+      class="av {{ computedColorClass }} {{ Size }} {{ isOutside ? 'ext' : '' }} {{ Stacked ? 'stacked' : '' }}"
       [attr.title]="name || null"
       [attr.aria-label]="name || initials">
       @if (avatarUrl) {
         <img [src]="avatarUrl" [alt]="name || initials" class="av-img" />
-      } @else if (iconClass) {
-        <i [class]="iconClass" aria-hidden="true"></i>
       } @else {
         {{ initials }}
       }
@@ -27,7 +24,7 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       }
     </span>
   `,
-  styles: [COLLAB_TOKENS_CSS, `
+  styles: [`
     :host {
       display: inline-flex;
       vertical-align: middle;
@@ -46,7 +43,7 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       border-radius: 99px;
       font-size: 11px;
       font-weight: 650;
-      color: var(--mj-brand-on-primary);
+      color: var(--mj-brand-on-primary, #ffffff);
       letter-spacing: .01em;
       background: var(--mj-text-muted);
       user-select: none;
@@ -57,22 +54,6 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
     .av.md { width: 32px; height: 32px; font-size: 12px; }
     .av.lg { width: 40px; height: 40px; font-size: 14px; }
     .av.xl { width: 56px; height: 56px; font-size: 19px; }
-
-    /* Assistant rounded-square mark (storyboard rule) */
-    .av.ai-av {
-      border-radius: 8px;
-      background: linear-gradient(135deg, var(--mjc-ai-from), var(--mjc-ai-to));
-      color: var(--mj-brand-on-primary);
-    }
-    .av.ai-av.xs { border-radius: 5px; }
-    .av.ai-av.sm { border-radius: 6px; }
-    .av.ai-av.md { border-radius: 9px; }
-    .av.ai-av.lg { border-radius: 11px; }
-    .av.ai-av.xl { border-radius: 14px; }
-    .av.ai-av.has-img {
-      background: transparent;
-      overflow: hidden;
-    }
 
     /* Outside people carry a cyan ring everywhere */
     .av.ext {
@@ -105,9 +86,6 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       border-radius: 99px;
       object-fit: cover;
     }
-    .av.ai-av .av-img {
-      border-radius: inherit;
-    }
 
     .presence {
       position: absolute;
@@ -116,8 +94,8 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       width: 9px;
       height: 9px;
       border-radius: 9px;
-      background: var(--mj-status-success);
-      box-shadow: 0 0 0 2px var(--mj-bg-surface);
+      background: var(--mj-status-success, #22c55e);
+      box-shadow: 0 0 0 2px var(--mj-bg-surface, #ffffff);
     }
   `]
 })
@@ -126,11 +104,9 @@ export class CollabAvatarComponent {
   @Input() public Initials = '';
   @Input() public Name = '';
   @Input() public AvatarUrl = '';
-  @Input() public IconClass = '';
   @Input() public ColorClass = '';
   @Input() public PersonId = '';
   @Input() public Size: AvatarSize = 'md';
-  @Input() public IsAi = false;
   @Input() public IsOutside = false;
   @Input() public IsOnline = false;
   /** Drawn in an `mjc-avatar-stack`, overlapping its neighbours: the avatar wears a ring of the surface so each stays legible. */
@@ -146,14 +122,6 @@ export class CollabAvatarComponent {
 
   public get avatarUrl(): string {
     return this.Avatar?.avatarUrl || this.AvatarUrl;
-  }
-
-  public get iconClass(): string {
-    return this.Avatar?.iconClass || this.IconClass;
-  }
-
-  public get isAi(): boolean {
-    return this.Avatar?.isAi ?? this.IsAi;
   }
 
   public get isOutside(): boolean {

@@ -7,9 +7,7 @@ export interface AvatarItem {
   initials: string;
   name?: string;
   avatarUrl?: string;
-  iconClass?: string;
   colorClass?: string;
-  isAi?: boolean;
   isOutside?: boolean;
   isOnline?: boolean;
 }
@@ -36,7 +34,6 @@ export interface RailSpaceNode {
   level?: 0 | 1 | 2;
   unread?: boolean;
   isLocked?: boolean;
-  isStarred?: boolean;
   meta?: string | number;
   isDim?: boolean;
   hasChildren?: boolean;
@@ -229,7 +226,6 @@ export interface SpaceMemberModel {
   email: string;
   initials: string;
   avatarUrl?: string;
-  iconClass?: string;
   colorClass?: string;
   roleName: string;
   roleCode: string;
