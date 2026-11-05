@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, HostBinding, Input, Output, ViewChild } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { normalizeContributionKey } from '@mj-biz-apps/collaboration-core';
 import type { SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
@@ -33,7 +33,19 @@ export interface SubSpaceSummary {
   iconClass: string;
   color?: string;
   description: string;
+  isLocked?: boolean;
+  isDim?: boolean;
 }
+
+export type OverviewSectionKind =
+  | 'NeedsYou'
+  | 'SharedFiles'
+  | 'TeamFiles'
+  | 'AskBox'
+  | 'Discussion'
+  | 'ContributedCards'
+  | 'About'
+  | 'SubSpaces';
 
 @Component({
   selector: 'mjc-space-overview',
@@ -52,6 +64,7 @@ export interface SubSpaceSummary {
     NgComponentOutlet,
   ],
   template: `
+    @if (!Section) {
     <div class="page ov">
       <div class="ov-grid">
         <div class="col">
@@ -256,6 +269,209 @@ export interface SubSpaceSummary {
         </div>
       </div>
     </div>
+    } @else {
+      <div class="ov-section-widget">
+        @switch (Section) {
+          @case ('NeedsYou') {
+            @if (NeedsYouItems && NeedsYouItems.length > 0) {
+              <div class="attn">
+                @for (item of NeedsYouItems; track item.id) {
+                  <mjc-needs-you-card
+                    [Item]="item"
+                    [Variant]="item.variant"
+                    [IconClass]="item.iconClass || ''"
+                    [IsSpark]="item.isSpark || false"
+                    [Title]="item.title"
+                    [Subtitle]="item.subtitle"
+                    [ActionLabel]="item.actionLabel"
+                    (ActionRequested)="onNeedsYouAction(item)"
+                  />
+                }
+              </div>
+            }
+          }
+          @case ('SharedFiles') {
+              <div class="card band-card shared-band">
+                <div class="band-h">
+                  <span class="band-ic">
+                    <i class="fa-solid fa-eye"></i>
+                  </span>
+                  <div class="grow">
+                    <div class="fw7 fs14">{{ CustomTitle || SharedTitle }}</div>
+                    <div class="fs12 band-sub">{{ SharedSubtitle }}</div>
+                  </div>
+                  @if (ShowPreviewAs && ClientPersonaName) {
+                    <a class="link fs12 preview-link" [mjClickable]="'Preview as ' + ClientPersonaName" (click)="onPreviewAsPersona($event)">
+                      <i class="fa-solid fa-eye"></i>&nbsp;Preview as {{ ClientPersonaName }}
+                    </a>
+                  }
+                </div>
+                @if (SharedItems.length === 0) {
+                  <mj-empty-state Icon="fa-solid fa-folder-open" Title="Nothing shared yet" Message="Files shared to everyone in this space appear here."></mj-empty-state>
+                }
+                <div class="deliv-grid">
+                  @for (item of SharedItems; track item.id) {
+                    <mjc-item-card
+                      [Item]="item"
+                      [Title]="item.title"
+                      [Meta]="item.meta"
+                      [Stamp]="item.stamp"
+                      [Kind]="item.kind"
+                      [Openers]="item.openers"
+                      [CitationCount]="item.citationCount"
+                      [IsImage]="item.isImage || false"
+                      (ItemSelectRequested)="onItemSelected(item)"
+                    />
+                  }
+                </div>
+              </div>
+          }
+          @case ('TeamFiles') {
+            @if (CanSeeTeamSide) {
+              <div class="card band-card team-band">
+                <div class="band-h">
+                  <span class="band-ic team">
+                    <i class="fa-solid fa-lock"></i>
+                  </span>
+                  <div class="grow">
+                    <div class="fw7 fs14">{{ CustomTitle || 'Team only' }}</div>
+                    <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Only the team can see these' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }} · never quoted to {{ ClientOrgName || 'outside participants' }}</div>
+                  </div>
+                  @if (ShowLibraryLink) {
+                    <a class="link fs12 open-lib-link" [mjClickable]="'Open library'" (click)="onOpenLibrary($event)">Open library</a>
+                  }
+                </div>
+                @if (TeamItems.length === 0) {
+                  <mj-empty-state Icon="fa-solid fa-lock" Title="No team files yet" Message="Files only the team can see appear here."></mj-empty-state>
+                }
+                <div class="trows">
+                  @for (item of TeamItems; track item.id) {
+                    <mjc-item-row
+                      [Item]="item"
+                      [Title]="item.title"
+                      [Author]="item.author"
+                      [Timestamp]="item.timestamp"
+                      [Kind]="item.kind"
+                      [FlagCount]="item.flagCount"
+                      [StatusLabel]="item.statusLabel"
+                      [CanShare]="item.canShare !== false"
+                      (RowSelectRequested)="onItemSelected(item)"
+                      (ShareRequested)="onShareRequested(item)"
+                    />
+                  }
+                </div>
+              </div>
+            }
+          }
+          @case ('AskBox') {
+            @if (CanStartConversation && AgentAvailable) {
+              <mjc-ask-box
+                #askBox
+                [Title]="CustomTitle || ('Ask about ' + SpaceName)"
+                [Suggestions]="AskSuggestions"
+                [IsSubmitting]="IsSubmittingAsk"
+                (AskRequested)="onAskRequested($event)"
+              />
+            } @else if (CanStartConversation) {
+              <div class="card ask-unavailable" role="status">No assistant is available in this space right now.</div>
+            }
+          }
+          @case ('Discussion') {
+            @if (ShowChatLink) {
+              <div class="card room-card">
+                <div class="card-h">
+                  <span class="h3">{{ CustomTitle || 'Discussion' }}</span>
+                  <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Team only' : 'Everyone') + ' · ' + AudienceCount" />
+                  @if (ShowChatLink) {
+                    <a class="link open-chat-link" [mjClickable]="'Open chat'" (click)="onOpenChat($event)">Open chat</a>
+                  }
+                </div>
+                @if (RoomMessages.length === 0) {
+                  <mj-empty-state Icon="fa-solid fa-comments" Title="No messages yet" [Message]="CanStartConversation ? 'Start a conversation from the ask box or the Chat tab.' : 'No messages yet.'"></mj-empty-state>
+                }
+                <div class="mini-msgs">
+                  @for (msg of RoomMessages; track msg.id || $index) {
+                    <div class="mm">
+                      @if (msg.isAssistant) {
+                        <span class="ai-av sm">
+                          <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true">
+                            <path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/>
+                            <path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/>
+                          </svg>
+                        </span>
+                      } @else {
+                        <mjc-avatar
+                          [Avatar]="{ initials: msg.senderInitials || '', colorClass: msg.senderColorClass || 'c1', isOutside: msg.isOutside }"
+                          Size="sm"
+                        />
+                      }
+                      <div class="grow">
+                        <div class="fs12">
+                          <b>{{ msg.senderName }}</b>
+                          <span class="muted timestamp">&nbsp;{{ msg.timestamp }}</span>
+                        </div>
+                        <div class="fs12-5 secondary clamp">
+                          @if (msg.hasMention) {
+                            <span class="mention">{{ msg.mentionText }}</span><span>&nbsp;</span>
+                          }
+                          <span>{{ msg.text }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          }
+          @case ('ContributedCards') {
+            <div class="col">
+              @for (card of UniqueContributedCards; track card.key) {
+                @if (card.component) {
+                  <ng-container *ngComponentOutlet="card.component; inputs: { SpaceId: SpaceId, Sequence: card.sortKey ?? 0 }"></ng-container>
+                }
+              }
+            </div>
+          }
+          @case ('About') {
+            @if (HasAbout) {
+              <div class="card about-card">
+                <div class="card-h">
+                  <span class="h3">{{ CustomTitle || AboutTitle || 'About' }}</span>
+                </div>
+                <div class="about-fields">
+                  <ng-content select="[mjcAbout]"></ng-content>
+                </div>
+              </div>
+            }
+          }
+          @case ('SubSpaces') {
+            @if ((SubSpaces && SubSpaces.length > 0) || CanAddSubSpace) {
+              <div class="card sub-card">
+                <div class="card-h">
+                  <span class="h3">{{ CustomTitle || ('Inside ' + SpaceName) }}</span>
+                  @if (CanAddSubSpace) {
+                    <a class="link add-sub-link" [mjClickable]="'Add a sub-space'" (click)="onNewSubSpace($event)">+ Sub-space</a>
+                  }
+                </div>
+                @if (!SubSpaces || SubSpaces.length === 0) {
+                  <div class="fs12 muted" style="padding: 0 16px 14px;">No sub-spaces yet.</div>
+                }
+                @for (sub of SubSpaces; track sub.id) {
+                  <div class="sub-row" [mjClickable]="sub.name" (click)="onSubSpaceSelected(sub)">
+                    <mjc-type-tile [IconClass]="sub.iconClass" [Color]="sub.color" Size="lg" />
+                    <div class="grow">
+                      <div class="fw6 fs13">{{ sub.name }}</div>
+                      <div class="fs12 muted">{{ sub.description }}</div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right muted fs12"></i>
+                  </div>
+                }
+              </div>
+            }
+          }
+        }
+      </div>
+    }
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
@@ -267,6 +483,11 @@ export interface SubSpaceSummary {
       font-family: var(--mj-font-family, Inter, sans-serif);
       font-size: 14px;
       line-height: var(--mjc-line-height);
+    }
+
+    :host(.ov-host-section) {
+      flex: none;
+      overflow: visible;
     }
 
     .ov {
@@ -414,8 +635,8 @@ export interface SubSpaceSummary {
     }
 
     .mention {
-      color: var(--mj-brand-primary, #0076b6);
-      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+      color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
       padding: 1px 5px;
       border-radius: 4px;
       font-weight: 600;
@@ -466,12 +687,19 @@ export interface SubSpaceSummary {
   `],
 })
 export class CollabSpaceOverviewComponent {
+  /** Optional single section to render when mounted inside a customizable page block. */
+  @Input() public Section: OverviewSectionKind | null = null;
+  @HostBinding('class.ov-host-section')
+  public get isSectionHost(): boolean {
+    return !!this.Section;
+  }
+  /** Optional custom heading title configured on the block. */
+  @Input() public CustomTitle = '';
   @Input() public SpaceName = '';
   @Input() public SpaceId = '';
   /** False when the space's type has no Library (or Chat): the entry points to it aren't offered. */
   @Input() public ShowLibraryLink = true;
   @Input() public ShowChatLink = true;
-  /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
   /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
   @Input() public ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
 
