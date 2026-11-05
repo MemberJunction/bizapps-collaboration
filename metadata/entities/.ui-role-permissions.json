@@ -226,6 +226,33 @@
   },
   {
     "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Pages"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Pages"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Pages&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "CanRead": 1,
+            "CanCreate": 1,
+            "CanUpdate": 1,
+            "CanDelete": 1,
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Pages",
+            "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Pages The Caller May Change",
+            "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Pages The Caller May Change",
+            "DeleteRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Pages The Caller May Change"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Member Pins"
     },
     "fields": {
