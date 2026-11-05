@@ -5,25 +5,9 @@ import { NgTemplateOutlet } from '@angular/common';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import {
-  MJButtonDirective,
-  MJConfirmService,
-  MJDialogComponent,
-  MJMenuComponent,
-  MJMenuItemComponent,
-  MJMenuTriggerDirective,
-} from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
-import {
-  type AfterAgentTurnEventArgs,
-  type AgentTurnRoute,
-  type BeforeAgentTurnEventArgs,
-  ChatSlotDirective,
-  ConversationStreamingService,
-  ResolveAgentTurn,
-} from '@memberjunction/ng-conversations';
-import { CollabAvatarComponent } from './avatar.component.ts';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ChatSlotDirective, ConversationStreamingService, ResolveAgentTurn } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
@@ -420,70 +404,33 @@ function declareComponent(target: Type<unknown>, metadata: Component): void {
 
 /** Stands in for MJ's chat area and keeps what the space bound to it, so a test can read the bindings that decide what the composer offers. */
 class ChatAreaStub {
-  /** The slots the space projects, by MJ's own directive: header, agentPresence, and messageExtra are drawn as MJ's chat area draws them. */
+  /** The slots the space projects, by MJ's own directive: only one marked `mjChatSlot="header"` is drawn, as MJ's chat area draws it. */
   @ContentChildren(ChatSlotDirective) public slots?: QueryList<ChatSlotDirective>;
   public get header(): TemplateRef<unknown> | null {
     return this.slots?.find((slot) => slot.SlotName === 'header')?.Template ?? null;
-  }
-  public get agentPresence(): TemplateRef<unknown> | null {
-    return this.slots?.find((slot) => slot.SlotName === 'agentPresence')?.Template ?? null;
-  }
-  public get messageExtra(): TemplateRef<unknown> | null {
-    return this.slots?.find((slot) => slot.SlotName === 'messageExtra')?.Template ?? null;
-  }
-  public get composerExtra(): TemplateRef<unknown> | null {
-    return this.slots?.find((slot) => slot.SlotName === 'composerExtra')?.Template ?? null;
   }
   public AllowRealtime = true;
   /** MJ's chat area: when true, its own banner with `ReadOnlyMessage` replaces the composer, and pin, edit and delete follow. */
   public ReadOnly = false;
   public ReadOnlyMessage: string | null = null;
   public EnableDecisionRouting = false;
-  public CollapseThreadReplies = false;
-  public ShowAgentCharacter = false;
-  public DisplayMessages: Record<string, unknown>[] = [];
   /** MJ's chat area names a reply after the agent that made it when this is null. */
   public assistantDisplayName: string | null = null;
-  public BeforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
-  public AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
   public ComposerDraftConsumed = new EventEmitter<void>();
   public PendingMessageConsumed = new EventEmitter<void>();
 }
 declareComponent(ChatAreaStub, {
   selector: 'mj-conversation-chat-area',
   imports: [NgTemplateOutlet],
-  template: `
-    <ng-content></ng-content>
-    <ng-container *ngTemplateOutlet="header"></ng-container>
-    @for (m of DisplayMessages; track $index) {
-      <ng-container *ngTemplateOutlet="messageExtra; context: { message: m }"></ng-container>
-    }
-    @if (ShowAgentCharacter && agentPresence) {
-      <ng-container *ngTemplateOutlet="agentPresence"></ng-container>
-    }
-    <ng-container *ngTemplateOutlet="composerExtra"></ng-container>
-  `,
+  template: '<ng-content></ng-content><ng-container *ngTemplateOutlet="header"></ng-container>',
   inputs: [
     'EnvironmentId', 'CurrentUser', 'ConversationId', 'ApplicationScope', 'ApplicationId', 'LinkedEntityId', 'LinkedRecordId', 'DefaultAgentId',
     'assistantDisplayName', 'ReadOnly', 'ReadOnlyMessage', 'AllowMentions', 'AllowEntityMentions', 'AllowSkillCommands', 'AllowAttachments', 'AllowRealtime',
-    'CollapseThreadReplies', 'ShowAgentCharacter', 'AgentReplyMode', 'AllowedAgentIDs', 'EnableDecisionRouting', 'MentionPeople', 'AgentHistoryFrom',
+    'AgentReplyMode', 'AllowedAgentIDs', 'EnableDecisionRouting', 'MentionPeople', 'AgentHistoryFrom',
     'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
   ],
-  outputs: ['BeforeAgentTurn', 'AfterAgentTurn', 'ComposerDraftConsumed', 'PendingMessageConsumed'],
+  outputs: ['ComposerDraftConsumed', 'PendingMessageConsumed'],
 });
-
-const chatTestImports = [
-  CollabAvatarComponent,
-  CollabBandChipComponent,
-  CollabChatScopeBarComponent,
-  MJButtonDirective,
-  MJMenuComponent,
-  MJMenuItemComponent,
-  MJMenuTriggerDirective,
-  SharedGenericModule,
-  ChatSlotDirective,
-  ChatAreaStub,
-];
 
 /** MJ's status-push subscription, as the space's chat starts it. */
 const streamingStub = { initialize: vi.fn() };
@@ -492,7 +439,7 @@ const provideStreamingStub = () => TestBed.overrideProvider(ConversationStreamin
 describe("a space's conversation, rendered", () => {
   it("offers no voice call: a call doesn't go through the turn that holds an agent to the conversation's audience", async () => {
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -504,8 +451,6 @@ describe("a space's conversation, rendered", () => {
     expect(area.injector.get(ChatAreaStub).AllowRealtime).toBe(false);
     // Multi-party space chats default Jev decision routing to off until a decision model and labelled corpus are configured
     expect(area.injector.get(ChatAreaStub).EnableDecisionRouting).toBe(false);
-    // Space chats opt into collapsing thread replies under their parent message
-    expect(area.injector.get(ChatAreaStub).CollapseThreadReplies).toBe(true);
   });
 
   it('exercises MJ client-side ResolveAgentTurn for thread replies under MentionOnly and person-only suppression under Always', () => {
@@ -836,7 +781,7 @@ describe('the conversation of a space, read-only', () => {
     // A test may render twice: each render starts from a fresh test module
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -860,7 +805,7 @@ describe('the conversation of a space, read-only', () => {
     const note = 'This space is closed. Conversations are read-only.';
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -900,7 +845,7 @@ describe('the conversation of a space, read-only', () => {
     const note = 'You can read this conversation, but you have no seat that lets you post.';
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', null);
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -937,7 +882,7 @@ describe('the conversation of a space, read-only', () => {
   it('toggles the reason on the first Enter after tabbing to the lock, closes it on Escape without moving focus, and on a tap outside', async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', null);
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -985,7 +930,7 @@ describe('the conversation of a space, read-only', () => {
   it("closes one chat's reason on a tap on another chat's lock: a tap that moves no focus (Safari) is outside the first chat", async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const chats = [1, 2].map(() => {
       const fixture = TestBed.createComponent(CollabSpaceChatComponent);
       fixture.componentRef.setInput('ConversationId', null);
@@ -1028,7 +973,7 @@ describe('the conversation of a space, read-only', () => {
   it("leaves the reply's name to MJ's chat area, so the agent that answered is the one named", async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -1043,371 +988,4 @@ describe('the conversation of a space, read-only', () => {
     await render({});
     expect(streamingStub.initialize).toHaveBeenCalledTimes(1);
   });
-
-  it('renders the linked workstream pill in the header and binds BeforeAgentTurn / AfterAgentTurn typed outputs for the agentPresence indicator', async () => {
-    TestBed.resetTestingModule();
-    provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
-    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
-    fixture.componentRef.setInput('ConversationId', 'c1');
-    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
-    fixture.componentRef.setInput('LinkedWorkstreamItem', { kind: 'task', id: 'task-1', title: 'Audit Charter Review', status: 'InProgress' });
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    const host = fixture.nativeElement as HTMLElement;
-    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
-
-    // Emit typed BeforeAgentTurn from chat area
-    area.BeforeAgentTurn.emit({
-      AgentId: 'agent-1',
-      AgentName: 'Sage',
-      Route: 'ThreadReply',
-      ConversationId: 'c1',
-      UserMessageId: 'm1',
-      ParentMessageId: 'm0',
-      MessageText: 'Follow up',
-      Cancel: false,
-    });
-    fixture.componentInstance.activeAgentStatusText = 'Drafting audit summary…';
-    fixture.detectChanges();
-    expect(area.ShowAgentCharacter).toBe(true);
-
-    const pill = host.querySelector('[data-testid="linked-workstream-pill"]');
-    expect(pill?.textContent).toContain('Audit Charter Review');
-    expect(pill?.textContent).toContain('InProgress');
-
-    // Indicator renders in agentPresence (not inside the header slot)
-    expect(host.querySelector('.space-chat-header-slot [data-testid="agent-working-progress-bar"]')).toBeNull();
-    const progress = host.querySelector('[data-testid="agent-working-progress-bar"]');
-    expect(progress?.textContent).toContain('Sage is answering');
-    expect(progress?.textContent).toContain('Replying in the thread');
-    expect(progress?.textContent).toContain('Drafting audit summary…');
-
-    // Emitting AfterAgentTurn resets ShowAgentCharacter and clears activeAgentRoute to null so it never sticks across turns
-    area.AfterAgentTurn.emit({
-      AgentId: 'agent-1',
-      AgentName: 'Sage',
-      Route: 'ThreadReply',
-      ConversationId: 'c1',
-      UserMessageId: 'm1',
-      AgentMessage: null,
-      Success: true,
-    });
-    fixture.detectChanges();
-    expect(area.ShowAgentCharacter).toBe(false);
-    expect(fixture.componentInstance.activeAgentRoute).toBeNull();
-    expect(host.querySelector('[data-testid="agent-working-progress-bar"]')).toBeNull();
-
-    // A null route shows no route badge label
-    fixture.componentInstance.onAgentTurnStarted({ agentName: 'Sage', route: null });
-    fixture.detectChanges();
-    expect(host.querySelector('[data-testid="agent-working-progress-bar"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="agent-route-badge"]')).toBeNull();
-  });
-
-  it('formats AgentTurnRoute values in plain words and hides obvious or null routes', () => {
-    TestBed.resetTestingModule();
-    provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
-    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
-    const comp = fixture.componentInstance;
-    comp.activeAgentName = 'Sage';
-
-    const cases: Array<[AgentTurnRoute | null, string]> = [
-      ['ThreadReply', 'Replying in the thread'],
-      ['DecisionRouted', 'Following up'],
-      ['Continuity', 'Following up'],
-      ['Redirect', 'Handed to Sage'],
-      ['Mention', ''],
-      ['ConversationDefault', ''],
-      ['HostDefault', ''],
-      ['ConversationManager', ''],
-      [null, ''],
-    ];
-    for (const [route, expected] of cases) {
-      expect(comp.formatRouteBadge(route)).toBe(expected);
-    }
-  });
-
-  it('renders a member with a UserImageURL as an <img> in the thread bar and thread drawer, preserves outside ring, and opens the people menu via mj-menu', async () => {
-    TestBed.resetTestingModule();
-    provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
-    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
-    const rootMsg = { ID: 'msg-root', ParentID: null, UserID: 'u1', User: 'Colin Brockman', Message: 'Root question about Q3 variances', __mj_CreatedAt: new Date() };
-    const memberPhotoReply = { ID: 'msg-r0', ParentID: 'msg-root', UserID: 'u1', User: 'Colin Brockman', Role: 'User', Message: 'Adding context in thread', __mj_CreatedAt: new Date() };
-    const outsideReply = { ID: 'msg-r1', ParentID: 'msg-root', UserID: 'u-ext', User: 'Priya Nair', Role: 'User', Message: 'External client perspective on Q3', __mj_CreatedAt: new Date() };
-    const aiReply = { ID: 'msg-r2', ParentID: 'msg-r1', UserID: null, User: 'Sage', Role: 'AI', Message: 'Here is the variance breakdown.', __mj_CreatedAt: new Date() };
-
-    fixture.componentRef.setInput('ConversationId', 'c1');
-    fixture.componentRef.setInput('DefaultAgentName', 'Sage');
-    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Colin Brockman', Email: 'colin@acme.com' } as unknown as UserInfo);
-    fixture.componentRef.setInput('ParticipantCount', 3);
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
-    area.DisplayMessages = [rootMsg];
-    fixture.componentRef.setInput('SpaceMembers', [
-      {
-        id: 'm1',
-        userId: 'u1',
-        name: 'Colin Brockman',
-        email: 'colin@acme.com',
-        initials: 'CB',
-        avatarUrl: 'https://example.com/colin-photo.jpg',
-        roleName: 'Lead',
-        roleCode: 'Lead',
-        band: 'Team',
-        status: 'Active',
-      },
-      {
-        id: 'm2',
-        userId: 'u-ext',
-        name: 'Priya Nair',
-        email: 'priya@partner.org',
-        initials: 'PN',
-        roleName: 'Client',
-        roleCode: 'Client',
-        band: 'Shared',
-        status: 'Active',
-      },
-    ]);
-    fixture.componentRef.setInput('ThreadMessages', [rootMsg, memberPhotoReply, outsideReply, aiReply]);
-    fixture.detectChanges();
-
-    const host = fixture.nativeElement as HTMLElement;
-    // Collapsed: thread bar shows reply count & last reply, one Reply action button, and an <img> for the member with UserImageURL
-    const threadBar = host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-replies"]')!;
-    expect(threadBar.textContent).toContain('3 replies');
-    expect(threadBar.textContent).toContain('Last reply from Sage');
-    const threadBarImg = threadBar.querySelector<HTMLImageElement>('mjc-avatar img.av-img');
-    expect(threadBarImg).not.toBeNull();
-    expect(threadBarImg?.getAttribute('src')).toBe('https://example.com/colin-photo.jpg');
-    expect(host.querySelectorAll('[data-message-id="msg-root"] [data-testid="message-reply-btn"]').length).toBe(1);
-    expect(host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-drawer"]')).toBeNull();
-
-    // Open thread: Reply action button disappears and one reply box appears at the bottom of the open thread
-    fixture.componentInstance.toggleThreadExpanded('msg-root');
-    fixture.detectChanges();
-    expect(host.querySelector('[data-message-id="msg-root"] [data-testid="message-reply-btn"]')).toBeNull();
-    const threadContainer = host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-drawer"]')!;
-    expect(threadContainer).not.toBeNull();
-    expect(threadContainer.querySelectorAll('[data-testid="thread-reply-box"]').length).toBe(1);
-
-    // Thread replies use <mjc-avatar>, render <img> for member with avatarUrl, and preserve the outside ring (.ext)
-    const avatars = threadContainer.querySelectorAll('.thread-reply-item mjc-avatar .av');
-    expect(avatars.length).toBe(3);
-    expect(avatars[0].querySelector('img.av-img')?.getAttribute('src')).toBe('https://example.com/colin-photo.jpg');
-    expect(avatars[1].classList.contains('ext')).toBe(true);
-    expect(avatars[2].classList.contains('ext')).toBe(false);
-
-    // AI reply shows Assistant mark; human reply has no "Participant" tag
-    const assistantMarks = threadContainer.querySelectorAll('[data-testid="thread-reply-assistant-mark"]');
-    expect(assistantMarks.length).toBe(1);
-    expect(assistantMarks[0].textContent?.trim()).toBe('Assistant');
-    expect(threadContainer.textContent).not.toContain('Participant');
-
-    // People popover uses mj-menu opened by [mjMenuTriggerFor] and mentions a participant when triggered
-    const participantsPill = host.querySelector<HTMLButtonElement>('[data-testid="chat-participants-pill"]')!;
-    expect(participantsPill).not.toBeNull();
-    participantsPill.click();
-    fixture.detectChanges();
-    const menu = document.body.querySelector('[data-testid="chat-participants-popover"]');
-    expect(menu).not.toBeNull();
-    const firstMenuItemBtn = document.body.querySelector<HTMLElement>('[data-testid="chat-participant-mention-btn"] button, [data-testid="chat-participant-mention-btn"]')!;
-    firstMenuItemBtn.click();
-    fixture.detectChanges();
-    expect(fixture.componentInstance.ComposerDraft).toBe('@Colin Brockman ');
-  });
-});
-
-describe('the explicit ask and thread replies, rendered', () => {
-  it('executes a Route: Redirect agent turn when clicking "Ask <Agent> to answer?" and renders Replying to <Person> + excerpt from the parent message while AI reply UserID stays system (F7, R5-B1, R5-S2)', async () => {
-    vi.useFakeTimers();
-    TestBed.resetTestingModule();
-    provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
-    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
-    const userMsg = { ID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Can someone check Q3 variance?' };
-    const aiMsg = { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', UserID: '00000000-0000-0000-0000-000000000000', User: 'System', Message: 'Variance is +4.2%.' };
-    fixture.componentRef.setInput('ConversationId', 'conv-1');
-    fixture.componentRef.setInput('ConversationName', 'General');
-    fixture.componentRef.setInput('SpaceId', 'space-1');
-    fixture.componentRef.setInput('DefaultAgentId', 'agent-sage');
-    fixture.componentRef.setInput('DefaultAgentName', 'Sage');
-    fixture.componentRef.setInput('CurrentUser', { ID: 'user-colin', Name: 'Colin Brockman', Email: 'colin@example.com' } as unknown as UserInfo);
-    const turnCalls: unknown[] = [];
-    fixture.componentRef.setInput('AgentTurnHandler', async (req: unknown) => {
-      turnCalls.push(req);
-      return { Success: true, ReplyDetailIds: ['reply-100'] };
-    });
-    fixture.detectChanges();
-    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
-    area.DisplayMessages = [userMsg, aiMsg];
-    fixture.componentRef.setInput('ThreadMessages', [userMsg, aiMsg]);
-    fixture.detectChanges();
-
-    const host = fixture.nativeElement as HTMLElement;
-    const replyParent = host.querySelector<HTMLElement>('[data-testid="message-thread-parent"]');
-    expect(replyParent).not.toBeNull();
-    expect(replyParent?.textContent).toContain('Replying to Ada Lovelace');
-    expect(replyParent?.textContent).toContain('Can someone check Q3 variance?');
-    expect(replyParent?.getAttribute('title')).toBe('Can someone check Q3 variance?');
-    expect(host.querySelector('[data-testid="message-asked-by"]')).toBeNull();
-
-    // Trigger a reply to Ada without @mentioning an agent -> prompt appears
-    fixture.componentInstance.onUserMessageSent(
-      { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'user-colin', Message: 'Let us ask Sage on this.' },
-      fixture.componentInstance.ThreadMessages[0],
-    );
-    vi.advanceTimersByTime(150);
-    fixture.detectChanges();
-
-    const askBtn = host.querySelector<HTMLButtonElement>('[data-testid="ask-agent-go-confirm"]')!;
-    expect(askBtn).not.toBeNull();
-    expect(askBtn.textContent).toContain('Ask Sage');
-    askBtn.click();
-    await Promise.resolve();
-    fixture.detectChanges();
-
-    expect(turnCalls).toEqual([
-      {
-        ConversationId: 'conv-1',
-        BranchID: null,
-        UserMessageId: 'msg-3',
-        MessageText: 'Let us ask Sage on this.',
-        AgentId: 'agent-sage',
-        AgentName: 'Sage',
-        Route: 'Redirect',
-        ApplicationId: null,
-        AppContext: null,
-        AgentHistoryFrom: null,
-        ConfigurationPresetId: null,
-        RequestedSkillIDs: [],
-        PlanMode: false,
-        TargetArtifactVersionId: null,
-      },
-    ]);
-    vi.useRealTimers();
-  });
-  it('renders Replying to <author> + excerpt with full hover text on every reply, AI agent rounded-square marks with cached MJ: AI Agents LogoURL/IconClass, and matching People & Agents list + button count that update live without reload (R5-S2, G1, G2, R6-S1)', () => {
-    const agentsSpy = vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue([
-      {
-        ID: 'agent-sage',
-        Name: 'Sage',
-        LogoURL: null,
-        IconClass: 'fa-brands fa-superpowers',
-        Description: 'Ambient assistant',
-      },
-      {
-        ID: 'agent-codesmith',
-        Name: 'Codesmith',
-        LogoURL: 'https://cdn.example.com/codesmith.png',
-        IconClass: 'fa-solid fa-code',
-        Description: 'Coding specialist',
-      },
-    ] as unknown as typeof AIEngineBase.Instance.Agents);
-    try {
-
-      TestBed.resetTestingModule();
-      provideStreamingStub();
-      TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
-      const fixture = TestBed.createComponent(CollabSpaceChatComponent);
-
-      const fullRootText =
-        'Can someone verify the Q3 variance schedule on page 4 and confirm whether the revenue adjustment was booked in September?';
-      const msg1 = { ID: 'msg-1', Role: 'User', UserID: 'user-colin', User: 'Colin Brockman', Message: fullRootText };
-      const msg2 = { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', Message: 'I verified page 4 — the variance is +4.2%.' };
-      const msg3 = { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Thanks Colin, checking the September journal entry now.' };
-      const msg4 = { ID: 'msg-4', ParentID: 'msg-3', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', Message: 'Journal entry #418 matches the September adjustment.' };
-
-      fixture.componentRef.setInput('ConversationId', 'conv-r6');
-      fixture.componentRef.setInput('ConversationName', 'Variance Review');
-      fixture.componentRef.setInput('SpaceId', 'space-1');
-      fixture.componentRef.setInput('DefaultAgentId', 'agent-sage');
-      fixture.componentRef.setInput('DefaultAgentName', 'Sage');
-      fixture.componentRef.setInput('CurrentUser', { ID: 'user-colin', Name: 'Colin Brockman', Email: 'colin@example.com' } as unknown as UserInfo);
-      fixture.componentRef.setInput('SpaceMembers', [
-        { id: 'm1', userId: 'user-colin', name: 'Colin Brockman', email: 'colin@example.com', initials: 'CB', roleName: 'Owner', roleCode: 'Owner', band: 'Team', status: 'Active' },
-        { id: 'm2', userId: 'user-ada', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
-        { id: 'm3', userId: 'user-client', name: 'Client Partner', email: 'client@partner.org', initials: 'CP', roleName: 'Reviewer', roleCode: 'Reviewer', band: 'Shared', status: 'Active' },
-      ]);
-      fixture.detectChanges();
-
-      const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
-      area.DisplayMessages = [msg1, msg2];
-      fixture.componentRef.setInput('ThreadMessages', [msg1, msg2, msg3, msg4]);
-      fixture.detectChanges();
-
-      const host = fixture.nativeElement as HTMLElement;
-
-      // R5-S2: Main-flow reply (msg-2) shows "Replying to Colin Brockman" + truncated excerpt + full hover title
-      const mainReplyCue = host.querySelector<HTMLElement>('[data-testid="message-thread-parent"]')!;
-      expect(mainReplyCue).not.toBeNull();
-      expect(mainReplyCue.textContent).toContain('Replying to Colin Brockman');
-      expect(mainReplyCue.textContent).toContain('Can someone verify the Q3 variance schedule on page 4');
-      expect(mainReplyCue.getAttribute('title')).toBe(fullRootText);
-      expect(host.querySelector('[data-testid="message-asked-by"]')).toBeNull();
-
-      // G1: Thread bar shows AI agent avatar with rounded-square .ai-av and Sage's IconClass from cached MJ: AI Agents (not plain "AI" text)
-      const threadToggleBtn = host.querySelector<HTMLButtonElement>('[data-testid="message-thread-replies"]')!;
-      expect(threadToggleBtn).not.toBeNull();
-      const threadBarAiAv = threadToggleBtn.querySelector<HTMLElement>('.av.ai-av')!;
-      expect(threadBarAiAv).not.toBeNull();
-      expect(threadBarAiAv.querySelector('i.fa-brands.fa-superpowers')).not.toBeNull();
-      expect(threadBarAiAv.textContent?.trim()).toBe('');
-
-      // Expand the thread drawer and verify R5-S2 + G1 inside the thread
-      threadToggleBtn.click();
-      fixture.detectChanges();
-
-      const drawer = host.querySelector<HTMLElement>('[data-testid="message-thread-drawer"]')!;
-      expect(drawer).not.toBeNull();
-      const drawerAiAv = drawer.querySelector<HTMLElement>('.av.ai-av')!;
-      expect(drawerAiAv).not.toBeNull();
-      expect(drawerAiAv.querySelector('i.fa-brands.fa-superpowers')).not.toBeNull();
-
-      const nestedTargetCue = drawer.querySelector<HTMLElement>('[data-testid="thread-reply-target"]')!;
-      expect(nestedTargetCue).not.toBeNull();
-      expect(nestedTargetCue.textContent).toContain('Replying to Ada Lovelace');
-      expect(nestedTargetCue.textContent).toContain('Thanks Colin, checking the September journal entry now.');
-      expect(nestedTargetCue.getAttribute('title')).toBe('Thanks Colin, checking the September journal entry now.');
-
-      // G2: Header participants button count matches the menu items (3 people + 1 agent = 4)
-      const partBtn = host.querySelector<HTMLButtonElement>('[data-testid="chat-participants-pill"]')!;
-      expect(partBtn).not.toBeNull();
-      expect(partBtn.textContent?.trim()).toBe('4');
-
-      partBtn.click();
-      fixture.detectChanges();
-      const popover = document.body.querySelector<HTMLElement>('[data-testid="chat-participants-popover"]')!;
-      expect(popover).not.toBeNull();
-      expect(popover.querySelector('[data-testid="chat-participants-people-heading"]')?.textContent?.trim()).toBe('People (3)');
-      expect(popover.querySelector('[data-testid="chat-participants-agents-heading"]')?.textContent?.trim()).toBe('Agents (1)');
-      const menuRows = popover.querySelectorAll('.chat-participant-row');
-      expect(menuRows.length).toBe(Number(partBtn.textContent?.trim()));
-      const agentMenuAv = popover.querySelector<HTMLElement>('.av.ai-av')!;
-      expect(agentMenuAv).not.toBeNull();
-      expect(agentMenuAv.querySelector('i.fa-brands.fa-superpowers')).not.toBeNull();
-
-      // Live update without reload when a new person posts and a second agent (with LogoURL) answers
-      const msg5 = { ID: 'msg-5', ParentID: 'msg-1', Role: 'User', UserID: 'user-riku', User: 'Riku Sato', Message: '@Codesmith please check the SQL script.' };
-      const msg6 = { ID: 'msg-6', ParentID: 'msg-5', Role: 'AI', AgentID: 'agent-codesmith', Agent: 'Codesmith', Message: 'SQL script looks clean.' };
-      fixture.componentRef.setInput('ThreadMessages', [msg1, msg2, msg3, msg4, msg5, msg6]);
-      fixture.detectChanges();
-
-      expect(partBtn.textContent?.trim()).toBe('6');
-      expect(popover.querySelector('[data-testid="chat-participants-people-heading"]')?.textContent?.trim()).toBe('People (4)');
-      expect(popover.querySelector('[data-testid="chat-participants-agents-heading"]')?.textContent?.trim()).toBe('Agents (2)');
-      expect(popover.querySelectorAll('.chat-participant-row').length).toBe(6);
-      const logoImg = popover.querySelector<HTMLImageElement>('.av.ai-av img.av-img')!;
-      expect(logoImg).not.toBeNull();
-      expect(logoImg.getAttribute('src')).toBe('https://cdn.example.com/codesmith.png');
-    } finally {
-      agentsSpy.mockRestore();
-    }
-  });
-
 });
