@@ -761,6 +761,77 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             ContentUploadIngestor.Remove = origRemove;
         }
     });
+
+    it('Delete() detaches again and retries the file row when an ingest attaches a Content Item after the first detach', async () => {
+        const { ContentPipelineStartup, ContentUploadIngestor } = await import('@memberjunction/content-pipeline');
+        const origStartup = ContentPipelineStartup.Instance.HandleStartup;
+        const origRemove = ContentUploadIngestor.Remove;
+        ContentPipelineStartup.Instance.HandleStartup = async () => {};
+        ContentUploadIngestor.Remove = async () => ({ DeletedItemCount: 0, ProcessRunIDs: [], ContentItemIDs: [], DependentsMarked: 0 });
+
+        // The upload's ingest lands its Content Item between the first detach and the first row delete
+        let lateItemAttached = false;
+        const detached: string[] = [];
+        let rowDeletes = 0;
+        try {
+            const provider = createDeleteMockProvider({ itemsRunViewResult: [] });
+            const origEntityByName = provider.EntityByName.bind(provider);
+            provider.EntityByName = ((name: string) => {
+                if (name === 'MJ: Content Items') return { ID: 'CONTENT-ITEMS-ID', Name: 'MJ: Content Items' } as never;
+                return origEntityByName(name);
+            }) as IMetadataProvider['EntityByName'];
+            const rvProvider = provider as unknown as { RunView: (params: { EntityName: string }) => Promise<unknown> };
+            const origRunView = rvProvider.RunView.bind(provider);
+            rvProvider.RunView = async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: Content Items') {
+                    return { Success: true, Results: lateItemAttached ? [{ ID: 'CI-LATE' }] : [] };
+                }
+                return origRunView(params);
+            };
+            const origGetEntityObject = provider.GetEntityObject.bind(provider);
+            provider.GetEntityObject = (async (entityName: string, contextUser?: UserInfo) => {
+                if (entityName === 'MJ: Content Items') {
+                    return {
+                        FileID: FILE_ID as string | null,
+                        async InnerLoad() { return true; },
+                        async Save() { detached.push('CI-LATE'); lateItemAttached = false; return true; },
+                    } as unknown as BaseEntity;
+                }
+                if (entityName === 'MJ: Files') {
+                    return {
+                        IsSaved: true,
+                        ProviderKey: null,
+                        async Load() { return true; },
+                        async Delete() {
+                            rowDeletes++;
+                            if (rowDeletes === 1) {
+                                lateItemAttached = true;
+                                return false;
+                            }
+                            return !lateItemAttached;
+                        },
+                    } as unknown as BaseEntity;
+                }
+                return origGetEntityObject(entityName, contextUser);
+            }) as IMetadataProvider['GetEntityObject'];
+
+            const item = createMockItem(provider);
+            const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+                return true;
+            };
+            try {
+                assert.equal(await SpaceItemEntityServer.prototype.Delete.call(item), true);
+                assert.equal(rowDeletes, 2, 'the file row is tried again after the first delete fails');
+                assert.deepEqual(detached, ['CI-LATE'], 'the late Content Item is detached before the retry');
+            } finally {
+                Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+            }
+        } finally {
+            ContentPipelineStartup.Instance.HandleStartup = origStartup;
+            ContentUploadIngestor.Remove = origRemove;
+        }
+    });
 });
 
 

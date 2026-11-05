@@ -11,6 +11,7 @@ import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
 import { rulesForSpace, rulesFromServerDocument, sameRules } from './logic/space-rules';
+import { recordLinkKeyPairs } from './logic/record-link.js';
 import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
@@ -131,6 +132,7 @@ import {
     type DataEntryModel,
     type DataRunModel,
     type WorkstreamLinkedItem,
+    type ChatRecordLink,
     type WorkstreamLinkTaskOption,
     type WorkstreamLinkFileOption,
 } from '@mj-biz-apps/collaboration-ng-widgets';
@@ -1131,6 +1133,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [PendingMessageConversationId]="pendingChatMessageConversationId"
                                                     (PendingMessageConsumed)="pendingChatMessage = null; pendingChatMessageConversationId = null"
                                                     (LinkedItemOpenRequested)="onOpenLinkedWorkstreamItem($event)"
+                                                    (RecordLinkOpenRequested)="onOpenRecordLink($event)"
                                                     (NewConversationRequested)="openNewConversationDialog()"
                                                 />
                                             }
@@ -4764,6 +4767,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.onRowSelected(row);
             }
         }
+    }
+
+    /** Opens the record a thread reply links to, its key read against the entity's own primary key; a link that does not fit opens nothing. */
+    public onOpenRecordLink(link: ChatRecordLink): void {
+        const pairs = recordLinkKeyPairs(link.keys, this.ProviderToUse.EntityByName(link.entityName)?.PrimaryKeys.map((pk) => pk.Name) ?? []);
+        if (!pairs) {
+            LogError(`Record link: ${link.entityName} is not an entity here, or the link lacks part of its primary key`);
+            return;
+        }
+        SharedService.Instance.OpenEntityRecord(link.entityName, new CompositeKey(pairs));
     }
 
     public async onSubmitNewConversation(payload: NewConversationSubmitPayload): Promise<void> {

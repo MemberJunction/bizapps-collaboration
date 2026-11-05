@@ -10,6 +10,7 @@ import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/
 import { storedContentType } from '@mj-biz-apps/collaboration-core';
 import { collaborationFileStore, decideUploadBand, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
 import { readCsv } from './csv.js';
+import { makePdf } from './make-pdf.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, readStoredFile } from './local-storage-account.js';
 
 const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
@@ -21,7 +22,8 @@ const PNG = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAGAAAABACAIAAABqVuVZAAAAh0lEQVR42u3QQQ2AMBAAwepBBU9EoIUXgvpGSPXUAa9LLr1OsgZ22tOHfmoIAAECBAgQIECABAgQIECAAAECJECAAAEqDPTdR1aAAAECBAgQIECAAAECBAjQBkDne4WXCBT+AggQIECAAAECBAgQIECAigBVChAgQIAAAQIECJAAAQIECNBqTVdS6uldYnvGAAAAAElFTkSuQmCC',
     'base64',
 );
-const PDF = Buffer.from(
+/** The empty PDF worlds were seeded with before the PDFs carried text. Reloading such a world still passes. */
+const LEGACY_PDF = Buffer.from(
     '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n',
     'utf8',
 );
@@ -107,11 +109,16 @@ export function worldStorageRoot(): string {
 }
 
 function bytesFor(row: CatalogFile): Uint8Array {
-    if (row.Kind === 'pdf') return PDF;
+    if (row.Kind === 'pdf') return makePdf(`${titleFor(row.FileName)}. A ${row.Folder.toLowerCase()} document for the ${row.Space} space.`);
     if (row.Kind === 'png') return PNG;
     if (row.Kind === 'text') return Buffer.from(`Field notes for ${row.FileName}.\n`, 'utf8');
     if (row.Kind === 'html') return Buffer.from('<!doctype html><html><body><p>Welcome to the spring cohort.</p></body></html>', 'utf8');
     throw new Error(`${row.Key} has unknown kind ${row.Kind}.`);
+}
+
+/** `executive-roadmap.pdf` → `Executive Roadmap`. */
+function titleFor(fileName: string): string {
+    return fileName.replace(/\.[^.]+$/, '').split('-').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
 async function findSeeded(
@@ -168,7 +175,10 @@ async function assertFile(
     const storedType = storedContentType(row.MimeType);
     if (placed.contentType !== storedType) throw new Error(`${row.Key} is stored as ${placed.contentType}. It should be ${storedType}.`);
     const bytes = await readStoredFile(input.provider, input.system, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath || placed.storagePath);
-    if (Buffer.compare(Buffer.from(bytes), Buffer.from(content)) !== 0) throw new Error(`${row.Key} did not read back the bytes that were stored.`);
+    const readBack = Buffer.from(bytes);
+    const legacy = row.Kind === 'pdf' && Buffer.compare(readBack, LEGACY_PDF) === 0;
+    if (legacy) console.warn(`${row.Key} is the empty PDF an older world seeded, so agents find no text in it. A world loaded on a new database has the text.`);
+    if (!legacy && Buffer.compare(readBack, Buffer.from(content)) !== 0) throw new Error(`${row.Key} did not read back the bytes that were stored.`);
     const view = RunView.FromMetadataProvider(input.provider);
     const uses = await view.RunView<{ ID: string }>({
         EntityName: USES,
