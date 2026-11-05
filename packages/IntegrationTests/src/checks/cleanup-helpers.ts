@@ -11,6 +11,7 @@ import {
     SPACE_ANCHOR_ENTITY,
     SPACE_GRANT_ENTITY,
     SPACE_NOTE_ENTITY,
+    SPACE_PAGE_ENTITY,
     SPACE_MEMBER_PIN_ENTITY,
     PERSON_ENTITY,
     SPACE_MEMBER_ENTITY,
@@ -219,6 +220,7 @@ async function cleanupSpaceUnguarded(
     // Stage 1 child rows go first: a pin hangs on an item and a seat, the rest on the space alone
     for (const [entityName, what] of [
         [SPACE_MEMBER_PIN_ENTITY, 'Space Member Pin'],
+        [SPACE_PAGE_ENTITY, 'Space Page'],
         [SPACE_NOTE_ENTITY, 'Space Note'],
         [SPACE_GRANT_ENTITY, 'Space Grant'],
         [SPACE_ANCHOR_ENTITY, 'Space Anchor'],

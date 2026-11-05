@@ -56,6 +56,12 @@
             "Fields": ["\bID\b","\bSpaceID\b","\bTitle\b","\bBody\b","\bBand\b","\bVisibility\b","\bAuthorUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bAuthorUser\b"]
         },
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bPages\b",
+            "Description": "\bA\b \bcustomizable\b \bblock\b-\bcanvas\b \bpage\b \bin\b \ba\b \bspace\b: \beither\b \bthe\b \bsaved\b \bblock\b \blayout\b \bfor\b \ba\b \bbuilt\b-\bin\b \btab\b (\bBuiltInTab\b \bset\b) \bor\b \ba\b \bcustom\b \bpage\b \bin\b \bthe\b \bspace\b'\bs\b \bPages\b \btab\b (\bBuiltInTab\b \bnull\b).",
+            "BaseView": "\bvwSpacePages\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bBuiltInTab\b","\bTitle\b","\bIconClass\b","\bBand\b","\bStatus\b","\bSequence\b","\bPublishedBlocks\b","\bDraftBlocks\b","\bDraftTitle\b","\bPublishedByUserID\b","\bPublishedAt\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bPublishedByUser\b"]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bRole\b \bTypes\b",
             "Description": "\bWhat\b \ba\b \bspace\b \bmember\b \bis\b \ballowed\b \bto\b \bdo\b. \bThe\b \bengine\b \breads\b \bLevel\b \band\b \bthe\b \bBIT\b \bflags\b. \bIt\b \bnever\b \bcompares\b \bCode\b \bor\b \bName\b.",
             "BaseView": "\bvwSpaceRoleTypes\b", 
