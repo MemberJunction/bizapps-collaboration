@@ -66,6 +66,8 @@ export {
     type SpaceChatCitationModel,
     type WorkstreamLinkedItem,
     type ChatThreadMessageLike,
+    type ChatRecordLink,
+    type ChatMessagePart,
     type PendingAgentPromptState,
 } from './lib/space-chat.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';

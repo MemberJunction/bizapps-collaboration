@@ -517,44 +517,61 @@ async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo
         LogError(`Space item artifact cleanup: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    if (typeof provider.EntityByName === 'function' && provider.EntityByName('MJ: Content Items')) {
-        try {
-            const rv = RunView.FromMetadataProvider(provider);
-            const linked = await rv.RunView<{ ID: string }>(
-                {
-                    EntityName: 'MJ: Content Items',
-                    ExtraFilter: `FileID = '${fileId}'`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                    BypassCache: true,
-                },
-                user,
-            );
-            for (const row of linked.Success ? linked.Results ?? [] : []) {
-                const ci = await provider.GetEntityObject<BaseEntity & { FileID?: string | null }>('MJ: Content Items', user);
-                if (await ci.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: row.ID }]))) {
-                    ci.FileID = null;
-                    if (typeof ci.Set === 'function') {
-                        ci.Set('FileID', null);
-                    }
-                    await ci.Save();
-                }
-            }
-        } catch (error) {
-            LogError(`Space item content item file detachment: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
+    await detachContentItemsFromFile(provider, user, fileId);
 
     let rowGone = false;
     if (fileEntity && fileEntity.IsSaved) {
-        try {
-            rowGone = await fileEntity.Delete();
-        } catch (error) {
-            LogError(`Space item file row cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        rowGone = await deleteFileRow(fileEntity);
+        if (!rowGone) {
+            // The upload's ingest runs alongside this delete and can attach its Content Item after the detach above, which
+            // blocks the row (FK_ContentItem_File). Detach again and try once more.
+            await detachContentItemsFromFile(provider, user, fileId);
+            rowGone = await deleteFileRow(fileEntity);
         }
     }
     if ((storagePath && !objectGone) || !rowGone) {
         LogError(`Space item file cleanup incomplete for ${fileId}: object=${objectGone} row=${rowGone}.`);
+    }
+}
+
+/** Clears FileID on the Content Items that name this file, so the file row can be deleted; the items stay as tombstones. */
+async function detachContentItemsFromFile(provider: IMetadataProvider, user: UserInfo, fileId: string): Promise<void> {
+    if (typeof provider.EntityByName !== 'function' || !provider.EntityByName('MJ: Content Items')) {
+        return;
+    }
+    try {
+        const rv = RunView.FromMetadataProvider(provider);
+        const linked = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `FileID = '${fileId}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            user,
+        );
+        for (const row of linked.Success ? linked.Results ?? [] : []) {
+            const ci = await provider.GetEntityObject<BaseEntity & { FileID?: string | null }>('MJ: Content Items', user);
+            if (await ci.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: row.ID }]))) {
+                ci.FileID = null;
+                if (typeof ci.Set === 'function') {
+                    ci.Set('FileID', null);
+                }
+                await ci.Save();
+            }
+        }
+    } catch (error) {
+        LogError(`Space item content item file detachment: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+async function deleteFileRow(fileEntity: MJFileEntity): Promise<boolean> {
+    try {
+        return await fileEntity.Delete();
+    } catch (error) {
+        LogError(`Space item file row cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        return false;
     }
 }
 

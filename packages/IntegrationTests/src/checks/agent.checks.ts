@@ -2094,6 +2094,9 @@ const checks: NamedCheck[] = [
                 Assert(unhosted.Success === false && unhosted.Result?.ResultCode === 'ACCESS_DENIED', `Without the space's scope, Research Agent may not search (got ${unhosted.Result?.ResultCode ?? unhosted.Message})`);
                 Assert(finds(await search(general.spaceChatId!, sharedName!), sharedId), `Research Agent in a General chat finds the Shared task "${sharedName}"`);
                 Assert(!finds(await search(general.spaceChatId!, teamName!), teamId), `Research Agent in a General chat never finds the Team task "${teamName}"`);
+                // Agents quote their searches; the space's search still finds the words, and quoting widens nothing (INTERIM, CollaborationScopedSearchAction)
+                Assert(finds(await search(general.spaceChatId!, `"${sharedName}"`), sharedId), `A quoted search in a General chat finds the Shared task "${sharedName}"`);
+                Assert(!finds(await search(general.spaceChatId!, `"${teamName}"`), teamId), `A quoted search in a General chat never finds the Team task "${teamName}"`);
                 // The negative control: the same words find the Team task in a staff member's Private chat, so its absence above is the audience's doing
                 Assert(finds(await search(privateChat.spaceChatId!, teamName!), teamId), `Research Agent in a Private chat finds the Team task "${teamName}"`);
             } finally {
