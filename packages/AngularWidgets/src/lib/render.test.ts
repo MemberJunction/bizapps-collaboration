@@ -1224,6 +1224,63 @@ describe('the conversation of a space, read-only', () => {
 });
 
 describe('the explicit ask and thread replies, rendered', () => {
+  it('shows an agent\'s record link in a thread reply as an open link, icon-only when the link carries no name, as MJ\'s chat does', async () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    const taskLink = '@{"_mode":"mention","type":"record","entityName":"MJ_BizApps_Tasks: Tasks","ID":"task-9"}';
+    const namedLink = '@{"_mode":"mention","type":"record","name":"Kickoff notes","entityName":"MJ: Files","ID":"file-3"}';
+    const rootMsg = { ID: 'msg-root', ParentID: null, UserID: 'u1', User: 'Colin Brockman', Message: 'Where is the SOW task?', __mj_CreatedAt: new Date() };
+    const personReply = { ID: 'msg-r0', ParentID: 'msg-root', UserID: 'u1', User: 'Colin Brockman', Role: 'User', Message: 'Sage, can you link it?', __mj_CreatedAt: new Date() };
+    const aiReply = { ID: 'msg-r1', ParentID: 'msg-r0', UserID: null, User: 'Sage', Role: 'AI', Message: `The SOW 2026 Extension ${taskLink} task is due Friday. See ${namedLink}.`, __mj_CreatedAt: new Date() };
+    fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Colin Brockman', Email: 'colin@acme.com' } as unknown as UserInfo);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+    area.DisplayMessages = [rootMsg];
+    fixture.componentRef.setInput('ThreadMessages', [rootMsg, personReply, aiReply]);
+    fixture.detectChanges();
+    const opened: unknown[] = [];
+    fixture.componentInstance.RecordLinkOpenRequested.subscribe((link) => opened.push(link));
+    fixture.componentInstance.toggleThreadExpanded('msg-root');
+    fixture.detectChanges();
+
+    const body = (fixture.nativeElement as HTMLElement).querySelectorAll('[data-message-id="msg-root"] .thread-reply-body')[1];
+    expect(body.textContent).not.toContain('@mention');
+    const links = body.querySelectorAll<HTMLButtonElement>('[data-testid="thread-record-link"]');
+    expect(links.length).toBe(2);
+    expect(links[0].textContent?.trim()).toBe('');
+    expect(links[0].getAttribute('aria-label')).toBe('Open MJ_BizApps_Tasks: Tasks');
+    expect(links[1].textContent?.trim()).toBe('Kickoff notes');
+    links[0].click();
+    expect(opened).toEqual([{ entityName: 'MJ_BizApps_Tasks: Tasks', keys: { ID: 'task-9' } }]);
+    expect(fixture.componentInstance.getFormattedMessageBody(aiReply)).toBe('The SOW 2026 Extension task is due Friday. See Kickoff notes.');
+  });
+
+  it('reads record links as MJ\'s ConversationUtility does: composite and lowercase keys, braces in a name, double braces, an empty _mode, and the in-progress placeholder', () => {
+    const chat = new CollabSpaceChatComponent();
+    const parts = (message: string, status?: string) => chat.getMessageParts({ ID: 'm', Message: message, Status: status });
+
+    const composite = parts('Line @{"_mode":"mention","type":"record","entityName":"Order Lines","OrderID":"ord-1","LineNumber":4} ships.');
+    expect(composite.map((p) => p.text)).toEqual(['Line ', '', ' ships.']);
+    expect(composite[1].record).toEqual({ entityName: 'Order Lines', keys: { OrderID: 'ord-1', LineNumber: 4 } });
+
+    const lowercase = parts('@{"_mode":"mention","type":"record","entityName":"MJ: Files","id":"f1"}');
+    expect(lowercase[0].record).toEqual({ entityName: 'MJ: Files', keys: { ID: 'f1' } });
+
+    const braces = parts('See @{"_mode":"mention","type":"record","name":"Plan {v2}","entityName":"MJ: Files","ID":"f2"} now.');
+    expect(braces.map((p) => p.text)).toEqual(['See ', 'Plan {v2}', ' now.']);
+    expect(braces[1].record?.keys).toEqual({ ID: 'f2' });
+
+    const doubleBraces = parts('@{{"_mode":"","type":"record","entityName":"MJ: Files","keys":{"id":"f3"}}}');
+    expect(doubleBraces[0].record).toEqual({ entityName: 'MJ: Files', keys: { id: 'f3' } });
+
+    expect(parts('', 'In-Progress')).toEqual([{ text: 'Answering…' }]);
+    expect(chat.getFormattedMessageBody({ ID: 'm', Message: 'Hi @{"_mode":"mention","type":"agent","id":"a1","name":"Sage"}' })).toBe('Hi @Sage');
+  });
+
   it('executes a Route: Redirect agent turn when clicking "Ask <Agent> to answer?" and renders Replying to <Person> + excerpt from the parent message while AI reply UserID stays system (F7, R5-B1, R5-S2)', async () => {
     vi.useFakeTimers();
     TestBed.resetTestingModule();

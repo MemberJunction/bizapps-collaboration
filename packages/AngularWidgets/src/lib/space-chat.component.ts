@@ -49,6 +49,77 @@ export interface WorkstreamLinkedItem {
   status?: string;
 }
 
+/**
+ * A record link in a message: `@{"_mode":"mention","type":"record","entityName":...,"ID":...}`. `keys` are its key values as MJ
+ * reads them (`ConversationUtility.RecordLinkKeyMap`); the host matches them to the entity's primary key.
+ */
+export interface ChatRecordLink {
+  entityName: string;
+  keys: Record<string, string | number>;
+}
+
+/** Token fields that are not key values, as MJ's `ConversationUtility.RECORD_LINK_RESERVED_KEYS`. */
+const RECORD_LINK_RESERVED_KEYS = new Set(['_mode', 'type', 'name', 'entityName', 'configurationId', 'configurationName', 'configId', 'config', 'keys', 'id']);
+
+/**
+ * The `@{...}` tokens in a message, found as MJ's `ConversationUtility.ParseSpecialContent` finds them: by brace depth, so a
+ * name holding `{v2}` or a nested `keys` object stays inside its token. `content` is null when the token is not a JSON object.
+ * A copy because `@memberjunction/ai-core-plus` is not a dependency here; MJ's is the reference.
+ */
+function parseMessageTokens(text: string): Array<{ start: number; end: number; content: Record<string, unknown> | null }> {
+  const tokens: Array<{ start: number; end: number; content: Record<string, unknown> | null }> = [];
+  let index = 0;
+  while (index < text.length) {
+    const at = text.indexOf('@{', index);
+    if (at === -1) break;
+    let depth = 0;
+    let close = -1;
+    for (let i = at + 2; i < text.length && close === -1; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') {
+        if (depth === 0) close = i;
+        else depth--;
+      }
+    }
+    if (close === -1) break;
+    // As MJ's parseToken: the text inside `@{ }` is the object's body, unless it is itself an object (`@{{...}}`)
+    const inner = text.slice(at + 2, close);
+    let content: Record<string, unknown> | null = null;
+    try {
+      const parsed: unknown = JSON.parse(inner.trim().startsWith('{') ? inner : `{${inner}}`);
+      content = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      content = null;
+    }
+    tokens.push({ start: at, end: close + 1, content });
+    index = close + 1;
+  }
+  return tokens;
+}
+
+/** A record link's key values, as MJ's `ConversationUtility.RecordLinkKeyMap`: nested `keys`, sibling fields, and `id` for `ID`. */
+function recordLinkKeys(content: Record<string, unknown>): Record<string, string | number> {
+  const keys: Record<string, string | number> = {};
+  const nested = content['keys'];
+  if (nested && typeof nested === 'object') {
+    for (const [k, v] of Object.entries(nested as Record<string, unknown>)) {
+      if ((typeof v === 'string' || typeof v === 'number') && v !== '') keys[k] = v;
+    }
+  }
+  for (const [k, v] of Object.entries(content)) {
+    if (!RECORD_LINK_RESERVED_KEYS.has(k) && (typeof v === 'string' || typeof v === 'number')) keys[k] = v;
+  }
+  const id = content['id'];
+  if (keys['ID'] == null && (typeof id === 'string' || typeof id === 'number') && id !== '') keys['ID'] = id;
+  return keys;
+}
+
+/** One run of a message body: plain text, or a record link labelled `text` ('' when the link carries no name). */
+export interface ChatMessagePart {
+  text: string;
+  record?: ChatRecordLink;
+}
+
 export interface ChatThreadMessageLike {
   ID: string;
   ParentID?: string | null;
@@ -618,7 +689,7 @@ export class CollabChatScopeBarComponent {
                               }
                             </div>
                           </div>
-                          <div class="thread-reply-body">{{ getFormattedMessageBody(reply) }}</div>
+                          <div class="thread-reply-body">@for (part of getMessageParts(reply); track $index) {@if (part.record; as record) {<button type="button" class="thread-record-link" data-testid="thread-record-link" [title]="'Open ' + (part.text || record.entityName)" [attr.aria-label]="'Open ' + (part.text || record.entityName)" (click)="RecordLinkOpenRequested.emit(record)"><i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>{{ part.text }}</button>} @else {{{ part.text }}}}</div>
                         </div>
                       </div>
                     }
@@ -1286,6 +1357,22 @@ export class CollabChatScopeBarComponent {
         word-break: break-word;
       }
 
+      .thread-record-link {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-1);
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: var(--mj-brand-primary);
+        cursor: pointer;
+      }
+
+      .thread-record-link:hover {
+        text-decoration: underline;
+      }
+
       .thread-reply-box {
         display: flex;
         align-items: center;
@@ -1663,6 +1750,8 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   @Input() public SpaceMembers: readonly SpaceMemberModel[] = [];
 
   @Output() public LinkedItemOpenRequested = new EventEmitter<WorkstreamLinkedItem>();
+  /** A record link in a thread reply was clicked. */
+  @Output() public RecordLinkOpenRequested = new EventEmitter<ChatRecordLink>();
 
   /** Active message being replied to in a thread (`ParentID`). */
   public replyToMessage: ChatThreadMessageLike | null = null;
@@ -2316,20 +2405,36 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   }
 
   public getFormattedMessageBody(message: ChatThreadMessageLike | null | undefined): string {
-    const cleaned = (message?.Message ?? '')
-      .replace(/@\{[^}]+\}/g, (match) => {
-        try {
-          const parsed = JSON.parse(match.slice(1)) as { name?: string };
-          return parsed.name ? `@${parsed.name}` : '@mention';
-        } catch {
-          return '@mention';
-        }
-      })
-      .trim();
-    if (!cleaned && (message?.Status ?? '').trim().toLowerCase() === 'in-progress') {
-      return 'Answering…';
+    // A nameless record link is an icon beside the name the agent already wrote, so as text it is dropped
+    return this.getMessageParts(message).map((part) => part.text).join('').replace(/ {2,}/g, ' ').trim();
+  }
+
+  /**
+   * The message body with each `@{...}` token read as MJ reads it: a mention becomes its `@name`, and a record link stays a link.
+   * Agents write the record's name and then a nameless link, which MJ's chat shows as an open icon, so a nameless link here is
+   * icon-only too. An empty reply still being written reads "Answering…".
+   */
+  public getMessageParts(message: ChatThreadMessageLike | null | undefined): ChatMessagePart[] {
+    const body = (message?.Message ?? '').trim();
+    if (!body && (message?.Status ?? '').trim().toLowerCase() === 'in-progress') return [{ text: 'Answering…' }];
+    const parts: ChatMessagePart[] = [];
+    let last = 0;
+    for (const token of parseMessageTokens(body)) {
+      if (token.start > last) parts.push({ text: body.slice(last, token.start) });
+      parts.push(this.tokenPart(token.content));
+      last = token.end;
     }
-    return cleaned;
+    if (last < body.length) parts.push({ text: body.slice(last) });
+    return parts;
+  }
+
+  private tokenPart(content: Record<string, unknown> | null): ChatMessagePart {
+    const name = typeof content?.['name'] === 'string' ? content['name'].trim() : '';
+    const entityName = content?.['entityName'];
+    if (content && (content['_mode'] || 'mention') === 'mention' && content['type'] === 'record' && typeof entityName === 'string' && entityName) {
+      return { text: name, record: { entityName, keys: recordLinkKeys(content) } };
+    }
+    return { text: name ? `@${name}` : '@mention' };
   }
 
   public getMessageExcerpt(message: ChatThreadMessageLike | null | undefined, maxLen = 80): string {
