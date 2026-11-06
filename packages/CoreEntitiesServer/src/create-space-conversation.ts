@@ -19,6 +19,7 @@ export interface CreateSpaceConversationInput {
     SpaceID: string;
     Name: string;
     Kind?: 'General' | 'Topic' | 'Private' | 'Assistant';
+    Subject?: string | null;
 }
 
 export interface CreateSpaceConversationResult {
@@ -161,6 +162,7 @@ export async function createSpaceConversation(
     spaceChat.ConversationID = conversation.ID;
     spaceChat.Name = cleanName;
     spaceChat.Kind = targetKind;
+    spaceChat.Subject = input.Subject?.trim() ? input.Subject.trim() : null;
     spaceChat.OwnerUserID = targetKind === 'Assistant' ? callerId : null;
     spaceChat.Status = 'Active';
 

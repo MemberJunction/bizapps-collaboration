@@ -6,7 +6,7 @@ import { type BaseEntity, CompositeKey, LogError, Metadata, RunView, type UserIn
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormResolverService } from '@memberjunction/ng-base-forms';
-import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJDialogComponent, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
@@ -55,13 +55,14 @@ import {
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
 import { CollaborationEngineBase } from '@mj-biz-apps/collaboration-engine-base';
-import { PEOPLE_ENTITY, ResolvePersonIDForUser } from '@mj-biz-apps/common-entities';
+import { PEOPLE_ENTITY, ResolvePersonIDForUser, ResolvePersonIDsForUsers } from '@mj-biz-apps/common-entities';
 import {
     TaskKanbanComponent,
     TaskGanttComponent,
     MyTasksComponent,
     ApprovalInboxComponent,
     type BeforeKanbanStatusChangeEvent,
+    TaskEditPanelComponent,
 } from '@mj-biz-apps/tasks-ng';
 import type {
     AgentReplyMode,
@@ -135,10 +136,20 @@ import {
     type ChatRecordLink,
     type WorkstreamLinkTaskOption,
     type WorkstreamLinkFileOption,
+    SpaceMeetingsTabComponent,
+    SpaceComingUpCardComponent,
+    SpaceMeetingsWidgetAgendaProvider,
+    collectSpaceAgendaItems,
+    type NewSpaceMeetingDraft,
+    type SpaceMeetingCardItem,
 } from '@mj-biz-apps/collaboration-ng-widgets';
+import type { AgendaItem } from '@mj-biz-apps/collaboration-core';
+import { CollabContributedTabHostDirective, type ContributedMeetingTabInstance } from './contributed-tab-host.directive';
 import { MJReactModule } from '@memberjunction/ng-react';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { notesVisibleTo } from './logic/visible-notes.js';
+import { chooseTaskSpace } from './logic/task-space.js';
+import { type AssignableSeat, assignableUsers, assigneeScopeFilter } from './logic/assignee-scope.js';
 import { pinRows } from './logic/home-lists.js';
 
 /** The Space Notes entity's id on this host, which a pin names as its target entity. */
@@ -216,6 +227,9 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabSpaceNotesComponent,
         CollabPinnedStripComponent,
         CollabSpaceDataComponent,
+        CollabContributedTabHostDirective,
+        MJDialogComponent,
+        TaskEditPanelComponent,
         MJReactModule,
         CollaborationNoAccessComponent,
         TaskKanbanComponent,
@@ -673,6 +687,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [CanStartConversation]="canStartConversation"
                             [LibraryCount]="libraryTotalCount"
                             [TaskCount]="taskCount"
+                            [MyTaskCount]="myTaskCount"
                             [MemberCount]="headerTotalPeople"
                             [InboxCount]="0"
                             [CanCreateSpace]="canCreateSpace"
@@ -847,6 +862,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 <bizapps-my-tasks
                                                     [PersonID]="currentPersonId"
                                                     [ShowCreateButton]="false"
+                                                    (AfterTaskSelected)="onMyTaskSelected($event.ID)"
                                                     (TaskDoubleClicked)="onTaskDoubleClicked($event.ID)"
                                                 />
                                             } @else {
@@ -1287,7 +1303,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             }
                                             @default {
                                                 @if (contributedTabComponent; as tabComponent) {
-                                                    <ng-container *ngComponentOutlet="tabComponent; inputs: { SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode }"></ng-container>
+                                                    <ng-container
+                                                        [mjcContributedTabHost]="tabComponent"
+                                                        [TabInputs]="{ SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode, SpaceName: spaceTitle, CanSchedule: canAddHere, DefaultBand: bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand, AllowedBands: bandChoice?.allowed ?? bothBands }"
+                                                        (CreateMeetingRequested)="onCreateSpaceMeeting($event.draft, $event.instance)"
+                                                        (OpenMeetingChatRequested)="onOpenMeetingChat($event)"
+                                                        (OpenMeetingRequested)="onOpenMeetingRecord($event)"
+                                                    ></ng-container>
                                                 }
                                             }
                                         }
@@ -1296,6 +1318,18 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 }
                             }
                         </main>
+
+                        @if (taskEditorTaskId) {
+                            <mj-dialog [Visible]="true" Title="Task details" [Width]="640" (Close)="closeTaskEditor()">
+                                <bizapps-task-edit-panel
+                                    [TaskID]="taskEditorTaskId"
+                                    [AssigneeScope]="taskEditorScope"
+                                    [ParentTaskFilter]="taskScopeFilter"
+                                    (Saved)="onTaskEditorSaved()"
+                                    (Cancel)="closeTaskEditor()"
+                                />
+                            </mj-dialog>
+                        }
 
                         @if (isShareDialogOpen) {
                             <mjc-share-check-dialog
@@ -1784,6 +1818,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             sortKey: meta.sortKey,
             component: reg.SubClass as SpaceTabDescriptor['component'],
         });
+        void SpaceMeetingsTabComponent;
+        void SpaceComingUpCardComponent;
+        void SpaceMeetingsWidgetAgendaProvider;
         const panels = { MessagingPanel: type?.MessagingPanel ?? true, LibraryPanel: type?.LibraryPanel ?? true, WorkPanel: type?.WorkPanel ?? true };
         // A driver or a contribution that throws must not take the space down: log it, and fall back to the built-in parts
         this.spaceTabModel = buildSpaceTabsSafely({
@@ -1847,6 +1884,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** What Home counts across every space the person reaches, from one approved MJ query the server runs for them. */
     public homeSharedFiles = 0;
     public homeOpenTasks = 0;
+    /** The seats that reach the space shown, each with its role's flags: who a task here may be given to. */
+    private memberSeats: AssignableSeat[] = [];
+    /** The task the details dialog edits after New files it, and the People its assignee picker may offer. */
+    public taskEditorTaskId: string | null = null;
+    public taskEditorScope = '1 = 0';
+    /** The viewer's own open tasks, as the My tasks page lists them: the rail's My tasks badge. */
+    public myTaskCount = 0;
     /** Invitations waiting on an owner: approved on a space's People tab, not in the approval inbox. */
     public homeAwaitingApproval = 0;
     /** True when the counts could not be read: the pills say so instead of showing a zero. */
@@ -1903,12 +1947,27 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     /** The rows of the list that is open, worked out when the list is opened or read and not on every change-detection pass. */
     public homeListRows: HomeListRow[] = [];
+    public homeAgendaItems: AgendaItem[] = [];
 
     private refreshHomeListRows(): void {
         const date = (iso: string | null | undefined): string => (iso ? formatDateLocale(iso) : '');
+        const agendaRows: HomeListRow[] = this.homeAgendaItems.map((item) => {
+            const space = this.rawSpaces.find((s) => UUIDsEqual(s.ID, item.spaceId));
+            const when = item.date instanceof Date ? date(item.date.toISOString()) : date(String(item.date));
+            return {
+                key: item.id,
+                title: item.title,
+                detail: [item.context ?? 'Meeting', when].filter(Boolean).join(' · '),
+                spaceName: item.spaceName ?? space?.Name ?? 'Space',
+                iconClass: item.typeIcon ?? 'fa-solid fa-calendar-check',
+                actionLabel: 'Open in Meetings',
+            };
+        });
         const rows: HomeRowModel[] = this.homeList === 'pins'
             ? pinRows(this.homePins)
-            : this.homeList === 'approvals' ? invitationRows(this.homeInvitations, date) : taskRows(this.homeOpenTaskList, date);
+            : this.homeList === 'approvals'
+                ? invitationRows(this.homeInvitations, date)
+                : [...taskRows(this.homeOpenTaskList, date), ...agendaRows];
         this.homeListRows = rows;
     }
 
@@ -1944,6 +2003,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             } else {
                 this.homeInvitations = res.Invitations;
                 this.homeOpenTaskList = res.OpenTasks;
+                try {
+                    const activeSpaceIds = this.rawSpaces.filter((s) => !s.ClosedAt).map((s) => s.ID);
+                    this.homeAgendaItems = activeSpaceIds.length > 0
+                        ? await collectSpaceAgendaItems({
+                              spaceIds: activeSpaceIds,
+                              viewerId: this.currentUser?.ID ?? '',
+                              provider: this.RunViewToUse,
+                          })
+                        : [];
+                } catch {
+                    this.homeAgendaItems = [];
+                }
+                if (token !== this.homeListLoadToken) return;
                 this.refreshHomeListRows();
             }
         } catch (err) {
@@ -1958,7 +2030,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    /** A row of a list opens its space on the tab where the thing is handled: People for an invitation, Work for a task. */
+    /** A row of a list opens its space on the tab where the thing is handled: People for an invitation, Work for a task, Meetings for a meeting. */
     public onHomeRowSelected(key: string): void {
         if (this.homeList === 'pins') {
             const pin = this.homePins.find((p) => UUIDsEqual(p.id, key));
@@ -1969,6 +2041,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const invitation = this.homeInvitations.find((i) => UUIDsEqual(i.SeatID, key));
             if (invitation) this.openSpaceOnTab(invitation.SpaceID, 'People');
         } else {
+            if (key.startsWith('meeting:')) {
+                const agenda = this.homeAgendaItems.find((a) => a.id === key);
+                if (agenda?.spaceId) {
+                    this.openSpaceOnTab(agenda.spaceId, 'meetings');
+                    return;
+                }
+            }
             const task = this.homeOpenTaskList.find((t) => UUIDsEqual(t.TaskID, key));
             if (task) this.openSpaceOnTab(task.SpaceID, 'Work');
         }
@@ -1987,6 +2066,58 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     /** Reads Home's three counts in one round trip. A read that fails shows a dash in each pill, and says so once. */
+    /**
+     * The viewer's own open tasks: the ones the My tasks page lists (assigned to their Person, the Tasks app's own filter), that
+     * are neither completed nor cancelled, Home's meaning of open. A failed read leaves the badge off and says so once.
+     */
+    private async loadMyTaskCount(): Promise<void> {
+        if (!this.currentPersonId) {
+            this.myTaskCount = 0;
+            return;
+        }
+        try {
+            // Two reads through the entities, not a subquery over the assignments view: an outside participant's reads are
+            // row-filtered, and the server refuses SQL that reaches a filtered entity's base view directly
+            const rv = new RunView(this.RunViewToUse);
+            const assigned = await rv.RunView<{ TaskID: string }>({
+                EntityName: 'MJ_BizApps_Tasks: Task Assignments',
+                ExtraFilter: `AssigneeRecordID = '${this.currentPersonId}'`,
+                Fields: ['TaskID'],
+                ResultType: 'simple',
+                MaxRows: 1000,
+            });
+            if (!assigned.Success) {
+                this.logOnce('my-task-count', `The My tasks badge could not read its count: ${assigned.ErrorMessage ?? 'unknown error'}`);
+                this.myTaskCount = 0;
+                this.RefreshView();
+                return;
+            }
+            const taskIds = [...new Set((assigned.Results ?? []).map((a) => a.TaskID).filter((id) => isValidUuid(id)))];
+            if (taskIds.length === 0) {
+                this.myTaskCount = 0;
+                this.RefreshView();
+                return;
+            }
+            const res = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ_BizApps_Tasks: Tasks',
+                ExtraFilter: `ID IN (${taskIds.map((id) => `'${id}'`).join(', ')}) AND Status NOT IN ('Completed', 'Cancelled')`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                MaxRows: taskIds.length,
+            });
+            if (!res.Success) {
+                this.logOnce('my-task-count', `The My tasks badge could not read its count: ${res.ErrorMessage ?? 'unknown error'}`);
+                this.myTaskCount = 0;
+            } else {
+                this.myTaskCount = res.Results?.length ?? 0;
+            }
+        } catch (err) {
+            this.logOnce('my-task-count', 'The My tasks badge could not read its count: ' + (err instanceof Error ? err.message : String(err)));
+            this.myTaskCount = 0;
+        }
+        this.RefreshView();
+    }
+
     private async loadHomeCounts(): Promise<void> {
         try {
             const res = await new CollaborationClient(this.graphQLExecutor).GetHomeCounts();
@@ -2331,6 +2462,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             } else {
                 this.currentPersonId = '';
             }
+            void this.loadMyTaskCount();
 
             const spEntity = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
             if (!spEntity) {
@@ -3893,6 +4025,22 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 }
 
                 if (!isCurrent()) return;
+                this.memberSeats = reached.map(({ row: m, from }) => {
+                    const roleType = m.SpaceRoleTypeID ? CollaborationEngineBase.Instance.SpaceRoleTypeById(m.SpaceRoleTypeID) : null;
+                    return {
+                        userId: m.UserID,
+                        seatSpaceId: from.id,
+                        role: {
+                            level: roleType?.Level ?? 0,
+                            maxGrantableLevel: roleType?.MaxGrantableLevel ?? 0,
+                            canInvite: !!roleType?.CanInvite,
+                            canPromoteBand: !!roleType?.CanPromoteBand,
+                            canSeeTeamBand: !!roleType?.CanSeeTeamBand,
+                            isOwnerRole: !!roleType?.IsOwnerRole,
+                            canContribute: !!roleType?.CanContribute,
+                        },
+                    };
+                });
                 this.spaceMembers = reached.map(({ row: m, from, inherited, ownSeat }, _i, all) => {
                     const name = m.User || 'Member';
                     const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -4181,6 +4329,127 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onTaskDoubleClicked(taskId: string): void {
         if (!taskId) return;
         SharedService.Instance.OpenEntityRecord('MJ_BizApps_Tasks: Tasks', CompositeKey.FromID(taskId));
+    }
+
+    /**
+     * A task clicked on My tasks opens the space it is filed in, on its Work tab, as a row of Home's Open tasks does. A task filed
+     * in more than one space opens the first by name, Home's order. One not filed in a space the person reaches says so.
+     */
+    public async onMyTaskSelected(taskId: string): Promise<void> {
+        if (!taskId || !isValidUuid(taskId)) return;
+        try {
+            const rv = new RunView(this.RunViewToUse);
+            const md = this.ProviderToUse;
+            const tasksEntityInfo = md.EntityByName('MJ_BizApps_Tasks: Tasks');
+            if (!tasksEntityInfo) return;
+            const candidates = [
+                `'${taskId}'`,
+                `'${taskId.toUpperCase()}'`,
+                `'ID|${taskId}'`,
+                `'ID|${taskId.toUpperCase()}'`,
+            ].join(', ');
+            const res = await rv.RunView<{ SpaceID: string; RecordID: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                ExtraFilter: `RecordID IN (${candidates}) AND (EntityID = '${tasksEntityInfo.ID}' OR Entity = 'MJ_BizApps_Tasks: Tasks')`,
+                Fields: ['SpaceID', 'RecordID'],
+                ResultType: 'simple',
+                MaxRows: 50,
+            });
+            if (!res.Success) {
+                LogError(`Failed to find the space of task ${taskId}: ${res.ErrorMessage ?? 'unknown error'}`);
+                SharedService.Instance.CreateSimpleNotification("That task's space couldn't be read.", 'error', 5000);
+                return;
+            }
+            const spaceId = chooseTaskSpace(res.Results ?? [], this.rawSpaces);
+            if (!spaceId) {
+                SharedService.Instance.CreateSimpleNotification("That task isn't filed in a space you can open here.", 'warning', 5000);
+                return;
+            }
+            this.openSpaceOnTab(spaceId, 'Work');
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError('Error opening the space of a task: ' + msg);
+            SharedService.Instance.CreateSimpleNotification("That task's space couldn't be opened: " + msg, 'error', 5000);
+        }
+    }
+
+    public onOpenMeetingRecord(meeting: SpaceMeetingCardItem): void {
+        if (!meeting?.ID) return;
+        SharedService.Instance.OpenEntityRecord('MJ_BizApps_Tasks: Meetings', CompositeKey.FromID(meeting.ID));
+    }
+
+    public async onCreateSpaceMeeting(draft: NewSpaceMeetingDraft, instance: ContributedMeetingTabInstance | null): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
+        try {
+            const client = new CollaborationClient(this.graphQLExecutor);
+            const res = await client.CreateSpaceMeeting({
+                SpaceID: spaceId,
+                Name: draft.Name,
+                Description: draft.Description || null,
+                StartsAt: draft.StartsAt,
+                EndsAt: draft.EndsAt,
+                TimeZone: draft.TimeZone,
+                LocationType: draft.LocationType,
+                Location: draft.Location || null,
+                VideoJoinURL: draft.VideoJoinURL || null,
+                Visibility: draft.Visibility,
+            });
+            if (!res.Success) {
+                const msg = res.ErrorMessage || 'Could not schedule the meeting.';
+                LogError('Failed to create space meeting: ' + msg);
+                instance?.failSchedule?.(msg);
+                this.RefreshView();
+                return;
+            }
+            instance?.completeSchedule?.();
+            SharedService.Instance.CreateSimpleNotification(`"${draft.Name}" scheduled.`, 'info', 3000);
+            if (isCurrent()) {
+                await instance?.loadForSpace?.(spaceId);
+                await this.loadSpaceItems(spaceId, isCurrent);
+                this.RefreshView();
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError('Error creating space meeting: ' + msg);
+            instance?.failSchedule?.(msg);
+            this.RefreshView();
+        }
+    }
+
+    public async onOpenMeetingChat(meeting: SpaceMeetingCardItem): Promise<void> {
+        if (!meeting?.ID) return;
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
+        try {
+            const client = new CollaborationClient(this.graphQLExecutor);
+            const res = await client.EnsureMeetingSpaceChat({
+                SpaceID: spaceId,
+                MeetingID: meeting.ID,
+                MeetingName: meeting.Name,
+                Visibility: meeting.Visibility,
+            });
+            if (!res.Success || !res.ConversationID) {
+                const msg = res.ErrorMessage || 'Could not open the meeting chat.';
+                LogError('Failed to ensure meeting space chat: ' + msg);
+                SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+                return;
+            }
+            if (!isCurrent()) return;
+            await this.loadSpaceConversations(spaceId, isCurrent, res.ConversationID);
+            if (!isCurrent()) return;
+            this.activeConversationId = res.ConversationID;
+            this.setTab('Chat');
+            this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
+            await this.loadSpaceChatHostRules(spaceId, res.ConversationID);
+            if (!isCurrent()) return;
+            this.syncStateWithAgent();
+            this.RefreshView();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError('Error opening meeting chat: ' + msg);
+            SharedService.Instance.CreateSimpleNotification('Failed to open meeting chat: ' + msg, 'error', 5000);
+        }
     }
 
     public onSpaceOpenRequested(spaceId: string): void {
@@ -5004,6 +5273,45 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
+    /**
+     * Opens the task details dialog on a task just filed here, so its description, due date and assignees can be set in one go.
+     * The assignee picker is scoped to the people the server would accept: every seat that reaches this space, put through the
+     * assignment rule for the task's band, then mapped to their People records. A failed read scopes the picker to nobody.
+     */
+    public async openTaskEditor(taskId: string, band: SpaceBand): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        const space = this.activeSpaceRecord as (RawSpaceRecord & { AllowParentAssignees?: boolean | null }) | null;
+        const allowParentAssignees = space?.AllowParentAssignees === undefined || space?.AllowParentAssignees === null ? true : !!space.AllowParentAssignees;
+        let scope = assigneeScopeFilter([]);
+        try {
+            const userIds = assignableUsers(this.memberSeats, {
+                taskSpaceId: spaceId,
+                taskBand: band,
+                allowParentAssignees,
+                callerMayAdminister: this.mayAdministerSpaces,
+            });
+            const persons = await ResolvePersonIDsForUsers(userIds, this.ProviderToUse, undefined, { ActiveOnly: true });
+            scope = assigneeScopeFilter([...persons.values()]);
+        } catch (err) {
+            LogError('Could not scope the task assignee picker: ' + (err instanceof Error ? err.message : String(err)));
+        }
+        if (!UUIDsEqual(spaceId, this.activeSpaceId)) return;
+        this.taskEditorScope = scope;
+        this.taskEditorTaskId = taskId;
+        this.RefreshView();
+    }
+
+    public closeTaskEditor(): void {
+        this.taskEditorTaskId = null;
+        this.RefreshView();
+    }
+
+    public async onTaskEditorSaved(): Promise<void> {
+        this.taskEditorTaskId = null;
+        await this.loadSpaceTasks(this.activeSpaceId, this.currentSelection());
+        this.RefreshView();
+    }
+
     public async onCreateTask(payload: { name: string; band: SpaceBand; priority: string }): Promise<void> {
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
@@ -5044,6 +5352,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             await this.loadSpaceTasks(this.activeSpaceId, this.currentSelection());
             SharedService.Instance.CreateSimpleNotification('Task created successfully.', 'info', 3000);
             this.RefreshView();
+            if (res.TaskID) await this.openTaskEditor(res.TaskID, payload.band);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             LogError('Error creating task: ' + msg);
