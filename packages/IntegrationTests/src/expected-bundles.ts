@@ -33,4 +33,5 @@ export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
     'stage2': 4,
     'stage3': 3,
     'stage4': 4,
+    'space-meetings': 2,
 };

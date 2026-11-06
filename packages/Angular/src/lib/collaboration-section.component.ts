@@ -139,8 +139,11 @@ import {
     SpaceComingUpCardComponent,
     SpaceMeetingsWidgetAgendaProvider,
     collectSpaceAgendaItems,
+    type NewSpaceMeetingDraft,
+    type SpaceMeetingCardItem,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import type { AgendaItem } from '@mj-biz-apps/collaboration-core';
+import { CollabContributedTabHostDirective, type ContributedMeetingTabInstance } from './contributed-tab-host.directive';
 import { MJReactModule } from '@memberjunction/ng-react';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { notesVisibleTo } from './logic/visible-notes.js';
@@ -221,6 +224,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabSpaceNotesComponent,
         CollabPinnedStripComponent,
         CollabSpaceDataComponent,
+        CollabContributedTabHostDirective,
         MJReactModule,
         CollaborationNoAccessComponent,
         TaskKanbanComponent,
@@ -1292,7 +1296,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             }
                                             @default {
                                                 @if (contributedTabComponent; as tabComponent) {
-                                                    <ng-container *ngComponentOutlet="tabComponent; inputs: { SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode }"></ng-container>
+                                                    <ng-container
+                                                        [mjcContributedTabHost]="tabComponent"
+                                                        [TabInputs]="{ SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode, SpaceName: spaceTitle, CanSchedule: canAddHere, DefaultBand: bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand, AllowedBands: bandChoice?.allowed ?? bothBands }"
+                                                        (CreateMeetingRequested)="onCreateSpaceMeeting($event.draft, $event.instance)"
+                                                        (OpenMeetingChatRequested)="onOpenMeetingChat($event)"
+                                                        (OpenMeetingRequested)="onOpenMeetingRecord($event)"
+                                                    ></ng-container>
                                                 }
                                             }
                                         }
@@ -4224,6 +4234,85 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onTaskDoubleClicked(taskId: string): void {
         if (!taskId) return;
         SharedService.Instance.OpenEntityRecord('MJ_BizApps_Tasks: Tasks', CompositeKey.FromID(taskId));
+    }
+
+    public onOpenMeetingRecord(meeting: SpaceMeetingCardItem): void {
+        if (!meeting?.ID) return;
+        SharedService.Instance.OpenEntityRecord('MJ_BizApps_Tasks: Meetings', CompositeKey.FromID(meeting.ID));
+    }
+
+    public async onCreateSpaceMeeting(draft: NewSpaceMeetingDraft, instance: ContributedMeetingTabInstance | null): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
+        try {
+            const client = new CollaborationClient(this.graphQLExecutor);
+            const res = await client.CreateSpaceMeeting({
+                SpaceID: spaceId,
+                Name: draft.Name,
+                Description: draft.Description || null,
+                StartsAt: draft.StartsAt,
+                EndsAt: draft.EndsAt,
+                TimeZone: draft.TimeZone,
+                LocationType: draft.LocationType,
+                Location: draft.Location || null,
+                VideoJoinURL: draft.VideoJoinURL || null,
+                Visibility: draft.Visibility,
+            });
+            if (!res.Success) {
+                const msg = res.ErrorMessage || 'Could not schedule the meeting.';
+                LogError('Failed to create space meeting: ' + msg);
+                instance?.failSchedule?.(msg);
+                this.RefreshView();
+                return;
+            }
+            instance?.completeSchedule?.();
+            SharedService.Instance.CreateSimpleNotification(`"${draft.Name}" scheduled.`, 'info', 3000);
+            if (isCurrent()) {
+                await instance?.loadForSpace?.(spaceId);
+                await this.loadSpaceItems(spaceId, isCurrent);
+                this.RefreshView();
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError('Error creating space meeting: ' + msg);
+            instance?.failSchedule?.(msg);
+            this.RefreshView();
+        }
+    }
+
+    public async onOpenMeetingChat(meeting: SpaceMeetingCardItem): Promise<void> {
+        if (!meeting?.ID) return;
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
+        try {
+            const client = new CollaborationClient(this.graphQLExecutor);
+            const res = await client.EnsureMeetingSpaceChat({
+                SpaceID: spaceId,
+                MeetingID: meeting.ID,
+                MeetingName: meeting.Name,
+                Visibility: meeting.Visibility,
+            });
+            if (!res.Success || !res.ConversationID) {
+                const msg = res.ErrorMessage || 'Could not open the meeting chat.';
+                LogError('Failed to ensure meeting space chat: ' + msg);
+                SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+                return;
+            }
+            if (!isCurrent()) return;
+            await this.loadSpaceConversations(spaceId, isCurrent, res.ConversationID);
+            if (!isCurrent()) return;
+            this.activeConversationId = res.ConversationID;
+            this.setTab('Chat');
+            this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
+            await this.loadSpaceChatHostRules(spaceId, res.ConversationID);
+            if (!isCurrent()) return;
+            this.syncStateWithAgent();
+            this.RefreshView();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError('Error opening meeting chat: ' + msg);
+            SharedService.Instance.CreateSimpleNotification('Failed to open meeting chat: ' + msg, 'error', 5000);
+        }
     }
 
     public onSpaceOpenRequested(spaceId: string): void {

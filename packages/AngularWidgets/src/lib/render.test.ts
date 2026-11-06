@@ -36,6 +36,7 @@ import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
 import { CollabSpaceRailComponent } from './space-rail.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabUploadDialogComponent } from './upload-dialog.component.ts';
+import { SpaceMeetingsTabComponent } from './space-meetings-tab.component.ts';
 import type { SpaceSettingsModel } from './types';
 
 const settings: SpaceSettingsModel = {
@@ -1467,4 +1468,86 @@ describe('the explicit ask and thread replies, rendered', () => {
     }
   });
 
+});
+
+describe('SpaceMeetingsTabComponent, rendered', () => {
+  it('hides Schedule meeting when CanSchedule is false, shows it when true, and emits chat, open, and create events', async () => {
+    const fixture = TestBed.createComponent(SpaceMeetingsTabComponent);
+    fixture.componentRef.setInput('SpaceId', 'space-audit');
+    fixture.componentRef.setInput('SpaceName', 'Audit Committee');
+    fixture.componentRef.setInput('CanSchedule', false);
+    fixture.componentRef.setInput('Meetings', [
+      {
+        ID: 'm-1',
+        Name: 'Internal controls walkthrough',
+        StartsAt: '2026-12-05T20:30:00.000Z',
+        EndsAt: '2026-12-05T21:45:00.000Z',
+        Status: 'Scheduled',
+        VideoJoinURL: 'https://zoom.us/j/123',
+        Visibility: 'Standard',
+        SpaceChatID: null,
+      },
+    ]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const findButton = (label: string) =>
+      Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+        b.textContent?.includes(label)
+      );
+
+    expect(findButton('Schedule meeting')).toBeUndefined();
+
+    // Enable CanSchedule and subscribe to outputs
+    const created = vi.fn();
+    const openChat = vi.fn();
+    const openRecord = vi.fn();
+    fixture.componentInstance.CreateMeetingRequested.subscribe(created);
+    fixture.componentInstance.OpenMeetingChatRequested.subscribe(openChat);
+    fixture.componentInstance.OpenMeetingRequested.subscribe(openRecord);
+
+    fixture.componentRef.setInput('CanSchedule', true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const scheduleBtn = findButton('Schedule meeting');
+    expect(scheduleBtn).toBeDefined();
+
+    // Click Start chat and Open on the rendered card
+    findButton('Start chat')!.click();
+    expect(openChat).toHaveBeenCalledTimes(1);
+    expect(openChat.mock.calls[0][0].ID).toBe('m-1');
+
+    findButton('Open')!.click();
+    expect(openRecord).toHaveBeenCalledTimes(1);
+    expect(openRecord.mock.calls[0][0].ID).toBe('m-1');
+
+    // Open the schedule dialog when AllowedBands is ['Team'] (Member without promote rights) -> defaults to Private
+    fixture.componentRef.setInput('AllowedBands', ['Team']);
+    fixture.componentRef.setInput('DefaultBand', 'Team');
+    fixture.detectChanges();
+
+    scheduleBtn!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(host.querySelector('.mj-dialog-title')?.textContent).toContain('Schedule meeting in Audit Committee');
+    expect(fixture.componentInstance.Draft.Visibility).toBe('Private');
+
+    fixture.componentInstance.Draft.Name = 'Q4 Follow-up';
+    fixture.componentInstance.Draft.StartsAt = '2026-12-12T10:00';
+    fixture.componentInstance.Draft.EndsAt = '2026-12-12T11:00';
+    fixture.componentInstance.Draft.TimeZone = 'America/Chicago';
+    fixture.detectChanges();
+
+    const modalSubmitBtn = host.querySelector<HTMLButtonElement>('mj-dialog-actions button[variant="primary"]') ??
+      Array.from(host.querySelectorAll<HTMLButtonElement>('mj-dialog-actions button')).find((b) =>
+        b.textContent?.includes('Schedule meeting')
+      );
+    modalSubmitBtn!.click();
+    expect(created).toHaveBeenCalledTimes(1);
+    expect(created.mock.calls[0][0].Name).toBe('Q4 Follow-up');
+    expect(created.mock.calls[0][0].Visibility).toBe('Private');
+  });
 });

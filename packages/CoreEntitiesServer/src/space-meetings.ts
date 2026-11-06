@@ -1,8 +1,24 @@
 import { type IMetadataProvider, LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { RegisterClassEx } from '@memberjunction/global';
-import { type AgendaItem, BaseAgendaProvider, type SpaceBatchContext } from '@mj-biz-apps/collaboration-core';
+import {
+    type AgendaItem,
+    authorizeItemWrite,
+    type Band,
+    BaseAgendaProvider,
+    membershipReaches,
+    type SpaceBatchContext,
+    spaceIsReadOnly,
+} from '@mj-biz-apps/collaboration-core';
+import type {
+    mjBizAppsTasksMeetingAttendeeEntity,
+    mjBizAppsTasksMeetingEntity,
+    mjBizAppsTasksMeetingLinkEntity,
+} from '@mj-biz-apps/tasks-entities';
 import type { AgentContextResult } from './base-space-type-server-driver.js';
 import { createSpaceConversation } from './create-space-conversation.js';
+import { loadWriteContext, requireSystemUser } from './load-graph.js';
+import { releaseStoredFile, SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
+import { callerPersonId } from './task-attribution.js';
 import { parseUuid } from './uuid.js';
 
 export const COLLABORATION_SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
@@ -351,10 +367,322 @@ export async function loadSpaceMeetings(
     return { meetings, upcoming, past };
 }
 
+export interface CreateSpaceMeetingInput {
+    spaceId: string;
+    name: string;
+    startsAt: string | Date;
+    endsAt: string | Date;
+    timeZone: string;
+    description?: string | null;
+    typeId?: string | null;
+    locationType?: 'Virtual' | 'InPerson' | 'Hybrid' | 'Phone';
+    location?: string | null;
+    videoJoinUrl?: string | null;
+    visibility?: 'Standard' | 'Private';
+}
+
+export type CreateSpaceMeetingResult =
+    | {
+          ok: true;
+          meetingId: string;
+          linkId: string;
+          itemId: string | null;
+          band: Band;
+      }
+    | {
+          ok: false;
+          message: string;
+      };
+
+/**
+ * Schedules a meeting in a space (`MJ_BizApps_Tasks: Meetings` + `MJ_BizApps_Tasks: Meeting Links`)
+ * as the system user after verifying the caller reaches the space with `canContribute`,
+ * lets `MeetingEntityServer` create the organizer's `MeetingAttendee` row, and files a
+ * non-fatal `MJ_BizApps_Collaboration: Space Items` row as the caller on `Shared` (`Standard`)
+ * or `Team` (`Private`).
+ */
+export async function createSpaceMeeting(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    input: CreateSpaceMeetingInput
+): Promise<CreateSpaceMeetingResult> {
+    const spaceId = parseUuid(input.spaceId);
+    if (!spaceId) {
+        return { ok: false, message: 'Meeting scheduling refused: a valid space ID is required.' };
+    }
+    const name = (input.name ?? '').trim();
+    if (!name) {
+        return { ok: false, message: 'Meeting scheduling refused: a meeting title is required.' };
+    }
+    const timeZone = (input.timeZone ?? '').trim();
+    if (!timeZone) {
+        return { ok: false, message: 'Meeting scheduling refused: a time zone is required.' };
+    }
+    const startsAt = input.startsAt instanceof Date ? input.startsAt : new Date(input.startsAt);
+    const endsAt = input.endsAt instanceof Date ? input.endsAt : new Date(input.endsAt);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+        return { ok: false, message: 'Meeting scheduling refused: start and end times must be valid dates.' };
+    }
+    if (endsAt.getTime() <= startsAt.getTime()) {
+        return { ok: false, message: 'Meeting scheduling refused: end time must be after start time.' };
+    }
+
+    const locationType = input.locationType ?? 'Virtual';
+    if (
+        locationType !== 'Virtual' &&
+        locationType !== 'InPerson' &&
+        locationType !== 'Hybrid' &&
+        locationType !== 'Phone'
+    ) {
+        return { ok: false, message: 'Meeting scheduling refused: invalid location type.' };
+    }
+
+    const visibility = input.visibility ?? 'Standard';
+    if (visibility !== 'Standard' && visibility !== 'Private') {
+        return { ok: false, message: 'Meeting scheduling refused: visibility must be Standard or Private.' };
+    }
+
+    const meetingsInfo = provider.EntityByName('MJ_BizApps_Tasks: Meetings');
+    const spacesInfo = provider.EntityByName('MJ_BizApps_Collaboration: Spaces');
+    if (!meetingsInfo || !spacesInfo) {
+        return { ok: false, message: 'Meeting scheduling refused: the meeting or space entity is not installed.' };
+    }
+
+    const probe = await provider.GetEntityObject<SpaceItemEntityServer>(
+        'MJ_BizApps_Collaboration: Space Items',
+        user
+    );
+    let context;
+    try {
+        context = await loadWriteContext(probe, user, spaceId, null);
+    } catch (error) {
+        return {
+            ok: false,
+            message: error instanceof Error ? error.message : 'Meeting scheduling refused: the space could not be read.',
+        };
+    }
+
+    const targetSpace = context.spaces.find((s) => s.id === spaceId);
+    if (!targetSpace) {
+        return {
+            ok: false,
+            message: 'Meeting scheduling refused: space not found or caller cannot access this space.',
+        };
+    }
+    if (spaceIsReadOnly(targetSpace)) {
+        return {
+            ok: false,
+            message: targetSpace.closedAt
+                ? 'Meeting scheduling refused: cannot schedule a meeting in a closed space.'
+                : 'Meeting scheduling refused: cannot schedule a meeting in a read-only space.',
+        };
+    }
+
+    const reach = membershipReaches(context.spaces, context.memberships, user.ID, spaceId);
+    if (!reach) {
+        return { ok: false, message: 'Meeting scheduling refused: the signer does not reach this space.' };
+    }
+    if (!reach.role.canContribute) {
+        return {
+            ok: false,
+            message: 'Meeting scheduling refused: this role cannot schedule meetings in this space.',
+        };
+    }
+    if (visibility === 'Private' && !reach.role.canSeeTeamBand) {
+        return {
+            ok: false,
+            message: 'Meeting scheduling refused: only team members can schedule a private meeting.',
+        };
+    }
+
+    const requestedBand: Band = visibility === 'Private' ? 'Team' : 'Shared';
+    const bandDecision = authorizeItemWrite({
+        callerUserId: user.ID,
+        previousSpaceId: null,
+        nextSpaceId: spaceId,
+        previousBand: null,
+        nextBand: requestedBand,
+        now: new Date(),
+        spaces: context.spaces,
+        memberships: context.memberships,
+    });
+    if (!bandDecision.ok) {
+        return { ok: false, message: bandDecision.message };
+    }
+    const band = bandDecision.band;
+
+    const system = await requireSystemUser(probe);
+    const organizerPersonId = await callerPersonId(probe, user);
+    if (!organizerPersonId) {
+        return { ok: false, message: 'Meeting scheduling refused: the signer has no person record.' };
+    }
+
+    const meeting = await provider.GetEntityObject<mjBizAppsTasksMeetingEntity>(
+        'MJ_BizApps_Tasks: Meetings',
+        system
+    );
+    meeting.NewRecord();
+    meeting.Name = name;
+    meeting.Description = input.description?.trim() ? input.description.trim() : null;
+    meeting.TypeID = input.typeId ? (parseUuid(input.typeId) ?? input.typeId) : null;
+    meeting.StartsAt = startsAt;
+    meeting.EndsAt = endsAt;
+    meeting.TimeZone = timeZone;
+    meeting.Status = 'Scheduled';
+    meeting.LocationType = locationType;
+    meeting.Location = input.location?.trim() ? input.location.trim() : null;
+    meeting.VideoJoinURL = input.videoJoinUrl?.trim() ? input.videoJoinUrl.trim() : null;
+    meeting.Visibility = visibility;
+    meeting.OrganizerPersonID = organizerPersonId;
+    meeting.CreatedByPersonID = organizerPersonId;
+
+    if (!(await meeting.Save()) || !meeting.ID) {
+        return {
+            ok: false,
+            message:
+                meeting.LatestResult?.CompleteMessage ??
+                'Meeting scheduling refused: the meeting could not be saved.',
+        };
+    }
+
+    const link = await provider.GetEntityObject<mjBizAppsTasksMeetingLinkEntity>(
+        'MJ_BizApps_Tasks: Meeting Links',
+        system
+    );
+    link.NewRecord();
+    link.MeetingID = meeting.ID;
+    link.EntityID = spacesInfo.ID || COLLABORATION_SPACES_ENTITY_ID;
+    link.RecordID = spaceId;
+    link.Description = 'Space';
+
+    if (!(await link.Save()) || !link.ID) {
+        await removeUnfiledMeeting(provider, system, meeting.ID);
+        return {
+            ok: false,
+            message:
+                link.LatestResult?.CompleteMessage ??
+                'Meeting scheduling refused: the meeting link could not be saved.',
+        };
+    }
+
+    const item = await provider.GetEntityObject<SpaceItemEntityServer>(
+        'MJ_BizApps_Collaboration: Space Items',
+        user
+    );
+    vouchStoredFile(item);
+    let itemSaved = false;
+    let itemRefusalMessage: string | undefined;
+    try {
+        item.NewRecord();
+        item.SpaceID = spaceId;
+        item.EntityID = meetingsInfo.ID;
+        item.RecordID = meeting.ID;
+        item.Band = band;
+        itemSaved = await item.Save();
+        if (!itemSaved) {
+            itemRefusalMessage = item.LatestResult?.CompleteMessage;
+        }
+    } finally {
+        releaseStoredFile(item);
+    }
+
+    if (!itemSaved || !item.ID) {
+        try {
+            await link.Delete();
+        } catch (linkDelErr) {
+            LogError(
+                `createSpaceMeeting link cleanup failed for meeting ${meeting.ID}: ${
+                    linkDelErr instanceof Error ? linkDelErr.message : String(linkDelErr)
+                }`
+            );
+        }
+        await removeUnfiledMeeting(provider, system, meeting.ID);
+        return {
+            ok: false,
+            message:
+                itemRefusalMessage ??
+                'Meeting scheduling refused: the space item could not be saved.',
+        };
+    }
+
+    return {
+        ok: true,
+        meetingId: meeting.ID,
+        linkId: link.ID,
+        itemId: item.ID,
+        band,
+    };
+}
+
+/**
+ * Removes any attendee rows created for an unfiled meeting (such as the organizer row
+ * written by `MeetingEntityServer`) and then deletes the meeting itself.
+ */
+export async function removeUnfiledMeeting(
+    provider: IMetadataProvider,
+    actor: UserInfo,
+    meetingId: string
+): Promise<boolean> {
+    const id = parseUuid(meetingId) ?? meetingId;
+    if (!id) return false;
+    try {
+        const view = RunView.FromMetadataProvider(provider);
+        const rows = await view.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ_BizApps_Tasks: Meeting Attendees',
+                ExtraFilter: `MeetingID = '${id}'`,
+                Fields: ['ID'],
+                MaxRows: 200,
+                ResultType: 'simple',
+            },
+            actor
+        );
+        if (rows.Success) {
+            for (const row of rows.Results ?? []) {
+                const attendeeKey = parseUuid(row.ID) ?? row.ID;
+                if (!attendeeKey) continue;
+                const attendee = await provider.GetEntityObject<mjBizAppsTasksMeetingAttendeeEntity>(
+                    'MJ_BizApps_Tasks: Meeting Attendees',
+                    actor
+                );
+                if (attendee && (await attendee.Load(attendeeKey))) {
+                    await attendee.Delete();
+                }
+            }
+        }
+    } catch (attErr) {
+        LogError(
+            `removeUnfiledMeeting attendee cleanup failed for meeting ${id}: ${
+                attErr instanceof Error ? attErr.message : String(attErr)
+            }`
+        );
+    }
+
+    try {
+        const meeting = await provider.GetEntityObject<mjBizAppsTasksMeetingEntity>(
+            'MJ_BizApps_Tasks: Meetings',
+            actor
+        );
+        if (!meeting) return false;
+        if (typeof meeting.Load === 'function') {
+            if (!(await meeting.Load(id))) return false;
+        }
+        return typeof meeting.Delete === 'function' ? await meeting.Delete() : false;
+    } catch (delErr) {
+        LogError(
+            `removeUnfiledMeeting failed for meeting ${id}: ${
+                delErr instanceof Error ? delErr.message : String(delErr)
+            }`
+        );
+        return false;
+    }
+}
+
 /**
  * Finds or creates a `SpaceChat` bound to a meeting via `Subject = 'meeting:<MeetingID>'`.
- * Routes creation through `createSpaceConversation` so the space type driver's
- * `ValidateChatChange` hook, `Chats.WhoCanStart` setting, and room edit grants are enforced.
+ * Verifies the meeting belongs to `spaceId` via `Meeting Links`, and routes creation
+ * through `createSpaceConversation` so the space type driver's `ValidateChatChange` hook,
+ * `Chats.WhoCanStart` setting, and room edit grants are enforced.
  */
 export async function ensureMeetingSpaceChat(
     provider: IMetadataProvider,
@@ -376,8 +704,66 @@ export async function ensureMeetingSpaceChat(
         return { ok: false, message: 'A valid space ID and meeting ID are required.' };
     }
 
-    const subject = meetingChatSubject(cleanMeetingId);
     const view = RunView.FromMetadataProvider(provider);
+    const recordKeyCandidates = [
+        `'${cleanSpaceId}'`,
+        `'${cleanSpaceId.toUpperCase()}'`,
+        `'ID|${cleanSpaceId}'`,
+        `'ID|${cleanSpaceId.toUpperCase()}'`,
+    ];
+    const linksRes = await view.RunView<{
+        ID: string;
+        MeetingID: string | null;
+        SeriesID: string | null;
+        RecordID: string;
+    }>(
+        {
+            EntityName: 'MJ_BizApps_Tasks: Meeting Links',
+            ExtraFilter: `EntityID = '${COLLABORATION_SPACES_ENTITY_ID}' AND RecordID IN (${recordKeyCandidates.join(', ')})`,
+            ResultType: 'simple',
+        },
+        params.contextUser
+    );
+    if (!linksRes.Success) {
+        return { ok: false, message: 'Meeting chat refused: meeting links could not be read.' };
+    }
+
+    const directLinked = (linksRes.Results ?? []).some(
+        (l) => parseUuid(l.MeetingID) === cleanMeetingId
+    );
+    let seriesLinked = false;
+    if (!directLinked) {
+        const linkedSeriesIds = new Set(
+            (linksRes.Results ?? [])
+                .map((l) => parseUuid(l.SeriesID))
+                .filter((id): id is string => id !== null)
+        );
+        if (linkedSeriesIds.size > 0) {
+            const meetingRes = await view.RunView<{ ID: string; SeriesID?: string | null }>(
+                {
+                    EntityName: 'MJ_BizApps_Tasks: Meetings',
+                    ExtraFilter: `ID = '${cleanMeetingId}'`,
+                    Fields: ['ID', 'SeriesID'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+                params.contextUser
+            );
+            const seriesId = meetingRes.Success
+                ? parseUuid(meetingRes.Results?.[0]?.SeriesID)
+                : null;
+            seriesLinked = seriesId !== null && linkedSeriesIds.has(seriesId);
+        }
+    }
+
+    if (!directLinked && !seriesLinked) {
+        return {
+            ok: false,
+            message: 'Meeting chat refused: this meeting does not belong to this space.',
+        };
+    }
+
+    const subject = meetingChatSubject(cleanMeetingId);
     const existingRes = await view.RunView<{ ID: string; ConversationID: string }>(
         {
             EntityName: 'MJ_BizApps_Collaboration: Space Chats',

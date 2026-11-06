@@ -3,6 +3,7 @@ import {
     ChangeDetectorRef,
     Component,
     EventEmitter,
+    Inject,
     Input,
     OnChanges,
     Optional,
@@ -239,7 +240,7 @@ export class SpaceComingUpCardComponent extends BaseSpaceOverviewCard implements
     private hasExplicitMeetings = false;
     private loadToken = 0;
 
-    constructor(@Optional() private readonly cdr?: ChangeDetectorRef) {
+    constructor(@Optional() @Inject(ChangeDetectorRef) private readonly cdr?: ChangeDetectorRef) {
         super();
     }
 

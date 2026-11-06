@@ -121,12 +121,16 @@ export {
     SpaceMeetingsAgendaProvider,
     LoadSpaceMeetingsAgendaProvider,
     buildSpaceMeetingsAgentContext,
+    createSpaceMeeting,
     ensureMeetingSpaceChat,
     loadSpaceMeetings,
     meetingChatSubject,
     parseMeetingIdFromSubject,
+    removeUnfiledMeeting,
 } from './space-meetings.js';
 export type {
+    CreateSpaceMeetingInput,
+    CreateSpaceMeetingResult,
     SpaceMeetingAgendaItemSummary,
     SpaceMeetingNoteSummary,
     SpaceMeetingSummary,

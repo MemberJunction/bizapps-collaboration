@@ -75,7 +75,11 @@ export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';
 export {
     SpaceMeetingsTabComponent,
+    createDefaultSpaceMeetingDraft,
     loadSpaceMeetingCards,
+    meetingVisibilityToSpaceBand,
+    validateNewSpaceMeetingDraft,
+    type NewSpaceMeetingDraft,
     type SpaceMeetingCardItem,
 } from './lib/space-meetings-tab.component';
 export {
