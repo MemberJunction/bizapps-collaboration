@@ -185,6 +185,19 @@ describe('the rail, rendered', () => {
   });
 
 
+  it("badges My tasks with the viewer's own count, never the open space's task count", async () => {
+    const fixture = TestBed.createComponent(CollabSpaceRailComponent);
+    fixture.componentRef.setInput('Mode', 'home');
+    fixture.componentRef.setInput('TaskCount', 3);
+    fixture.componentRef.setInput('MyTaskCount', 0);
+    fixture.detectChanges();
+    const myTasks = () => Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.nav-item')).find((b) => b.textContent?.includes('My tasks'))!;
+    expect(myTasks().querySelector('.count')).toBeNull();
+    fixture.componentRef.setInput('MyTaskCount', 1);
+    fixture.detectChanges();
+    expect(myTasks().querySelector('.count')?.textContent?.trim()).toBe('1');
+  });
+
   it('lets the collapsed space tile be operated from the keyboard', async () => {
     const fixture = TestBed.createComponent(CollabSpaceRailComponent);
     fixture.componentRef.setInput('SpaceTitle', 'Northwind');
