@@ -1,5 +1,5 @@
 import { type IMetadataProvider, LogError, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
-import type { CollaborationSettings } from '@mj-biz-apps/collaboration-core';
+import { reachableStatuses, type SpaceTypeStatusAttributes } from '@mj-biz-apps/collaboration-core';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { parseUuid } from './uuid.js';
 
@@ -7,22 +7,25 @@ const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 const USERS_ENTITY = 'MJ: Users';
 const USER_ROLES_ENTITY = 'MJ: User Roles';
 
-/** What closing a space would do, worked out as the close will stamp it. */
+/** What closing a space would do, worked out as the close will stamp it (stage 1: the status it moves to, and what that allows). */
 export interface CloseConsequence {
-    /** The post-close access the close would write to the row. */
-    access: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
-    days: number | null;
-    /** The person who keeps the row once its access has ended: the space's `OwnerID`. */
+    /** The status the close moves the space to: its type's first terminal status. Null when the type declares none (the space then reads as read-only and visible). */
+    status: SpaceTypeStatusAttributes | null;
+    /** Whether members may still read the space in that status. */
+    readOnly: boolean;
+    visible: boolean;
+    agentRetrieval: boolean;
+    /** The person who keeps the row once it is hidden: the space's `OwnerID`. */
     keeperUserId: string;
     keeperName: string;
-    /** Whether that person can reopen it: an owner seat (reached even past the space's end) and 'Close and Reopen Spaces'. Null when it could not be checked. */
+    /** Whether that person can reopen it: a status after the close that allows writes, and the owner seat and 'Close and Reopen Spaces' to move there. Null when it could not be checked. */
     keeperCanReopen: boolean | null;
 }
 
 /**
- * Works out what closing the space would do, the way `SpaceEntityServer` will stamp it (the space's own settings, then each
- * ancestor's, then the type's and the app's), who keeps the space once its access has ended, and whether that person can reopen it.
- * Read on the server because the page can't hold the ancestors the viewer can't read, or the keeper's seat and roles.
+ * Works out what closing the space would do, the way `SpaceEntityServer` will stamp it (the type's first terminal status and its
+ * attributes), who keeps the space once it is hidden, and whether that person can reopen it. Read on the server because the page
+ * can't hold the keeper's seat and roles.
  */
 export async function resolveCloseConsequence(provider: IMetadataProvider, viewer: UserInfo, spaceId: string): Promise<CloseConsequence> {
     const id = parseUuid(spaceId);
@@ -37,32 +40,26 @@ export async function resolveCloseConsequence(provider: IMetadataProvider, viewe
     if (!own.Success || !own.Results?.length) throw new Error('That space is not one you can read.');
     if (!(await CollaborationEngine.Instance.UserCanCloseSpace(viewer, id, provider))) throw new Error('Only someone who may close this space can ask what closing does.');
 
-    const spaces = await rv.RunView<{ ParentID: string | null; SpaceTypeID: string | null; OwnerID: string; Configuration: string | null }>({
+    const spaces = await rv.RunView<{ SpaceTypeID: string | null; OwnerID: string }>({
         EntityName: SPACES_ENTITY,
         ExtraFilter: `ID = '${id}'`,
-        Fields: ['ParentID', 'SpaceTypeID', 'OwnerID', 'Configuration'],
+        Fields: ['SpaceTypeID', 'OwnerID'],
         ResultType: 'simple',
     }, system);
     const space = spaces.Results?.[0];
     if (!spaces.Success || !space) throw new Error(`The space could not be read: ${spaces.ErrorMessage ?? 'not found'}.`);
 
-    let currentConfig: CollaborationSettings | null = null;
-    if (space.Configuration) {
-        try {
-            currentConfig = JSON.parse(space.Configuration) as CollaborationSettings;
-        } catch (error) {
-            throw new Error(`The space's configuration does not parse: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
     const engine = CollaborationEngine.Instance;
-    const stamped = await engine.ResolvePostCloseAccessForSpace({
-        spaceId: id,
-        currentConfig,
-        parentId: space.ParentID,
-        spaceTypeId: space.SpaceTypeID,
-        provider,
-        contextUser: system,
-    });
+    await engine.EnsureLoaded(system, provider);
+    const terminal = engine.FirstTerminalStatusForType(space.SpaceTypeID) ?? null;
+    const status: SpaceTypeStatusAttributes | null = terminal ? {
+        ID: terminal.ID, Code: terminal.Code, Name: terminal.Name, Sequence: terminal.Sequence, IsDefault: !!terminal.IsDefault,
+        ReadOnly: !!terminal.ReadOnly, Visible: !!terminal.Visible, AgentRetrieval: !!terminal.AgentRetrieval,
+        CanChangeAfter: !!terminal.CanChangeAfter, NotifyMembersOnEnter: !!terminal.NotifyMembersOnEnter, IsTerminal: !!terminal.IsTerminal,
+    } : null;
+    // Is there a writable status the space could move to after the close? A terminal status moves forward only
+    const all = engine.StatusesForType(space.SpaceTypeID);
+    const writableAfter = status ? reachableStatuses(status, all).some((s) => !s.ReadOnly) : false;
 
     const keeperId = parseUuid(space.OwnerID);
     if (!keeperId) throw new Error("The space's owner is not a valid user id.");
@@ -82,9 +79,17 @@ export async function resolveCloseConsequence(provider: IMetadataProvider, viewe
     // A check that fails answers null, not false: "could not check" is not "cannot"
     let keeperCanReopen: boolean | null = null;
     try {
-        keeperCanReopen = await engine.UserCanReopenSpace(keeper, id, provider);
+        keeperCanReopen = writableAfter && (await engine.UserCanChangeSpaceStatus(keeper, id, provider));
     } catch (error) {
         LogError(`resolveCloseConsequence: could not tell whether ${keeperName} can reopen space ${id}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    return { access: stamped.access, days: stamped.days, keeperUserId: keeperId, keeperName, keeperCanReopen };
+    return {
+        status,
+        readOnly: status ? status.ReadOnly : true,
+        visible: status ? status.Visible : true,
+        agentRetrieval: status ? status.AgentRetrieval : true,
+        keeperUserId: keeperId,
+        keeperName,
+        keeperCanReopen,
+    };
 }

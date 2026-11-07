@@ -18,9 +18,9 @@ export class mjBizAppsCollaborationSpaceTypeFormComponent extends BaseFormCompon
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'mJBizAppsCollaborationSpaces', sectionName: 'Spaces', isExpanded: false },
-            { sectionKey: 'mJBizAppsCollaborationSpaceKnowledgeSources', sectionName: 'Space Knowledge Sources', isExpanded: false },
-            { sectionKey: 'mJBizAppsCollaborationSpaceAgentSkills', sectionName: 'Space Agent Skills', isExpanded: false },
-            { sectionKey: 'mJBizAppsCollaborationSpaceAgents', sectionName: 'Space Agents', isExpanded: false }
+            { sectionKey: 'mJBizAppsCollaborationSpaceAnchors', sectionName: 'Space Anchors', isExpanded: false },
+            { sectionKey: 'mJBizAppsCollaborationSpaceTypeStatus', sectionName: 'Space Type Status', isExpanded: false },
+            { sectionKey: 'mJBizAppsCollaborationSpaceGrants', sectionName: 'Space Grants', isExpanded: false }
         ]);
     }
 }

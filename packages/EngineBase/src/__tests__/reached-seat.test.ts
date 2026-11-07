@@ -8,6 +8,9 @@ const DISCOVERY = 'C1000001-0000-4000-8000-000000000002';
 const SEALED = 'C1000001-0000-4000-8000-000000000003';
 const CLOSED_NONE = 'C1000001-0000-4000-8000-000000000009';
 const OTHER_ID = '22222222-2222-4222-8222-222222222222';
+const TYPE_ID = 'B0000000-0000-4000-8000-000000000001';
+const ACTIVE_STATUS = 'E0000000-0000-4000-8000-000000000001';
+const ARCHIVED_STATUS = 'E0000000-0000-4000-8000-000000000004';
 const OWNER_ROLE = 'A0000000-0000-4000-8000-000000000001';
 const MEMBER_ROLE = 'A0000000-0000-4000-8000-000000000002';
 
@@ -17,8 +20,8 @@ interface SpaceRow {
     InheritsMembership: boolean;
     OwnerID: string;
     ClosedAt: string | null;
-    PostCloseAccess?: 'None' | 'ReadOnly';
-    PostCloseAccessDays?: number | null;
+    SpaceTypeID?: string | null;
+    StatusID?: string | null;
 }
 interface SeatRow {
     SpaceID: string;
@@ -32,7 +35,13 @@ const spaces: SpaceRow[] = [
     { ID: NORTHWIND, ParentID: null, InheritsMembership: true, OwnerID: USER_ID, ClosedAt: null },
     { ID: DISCOVERY, ParentID: NORTHWIND, InheritsMembership: true, OwnerID: USER_ID, ClosedAt: null },
     { ID: SEALED, ParentID: NORTHWIND, InheritsMembership: false, OwnerID: USER_ID, ClosedAt: null },
-    { ID: CLOSED_NONE, ParentID: null, InheritsMembership: true, OwnerID: OTHER_ID, ClosedAt: '2026-01-01T00:00:00Z', PostCloseAccess: 'None', PostCloseAccessDays: null },
+    { ID: CLOSED_NONE, ParentID: null, InheritsMembership: true, OwnerID: OTHER_ID, ClosedAt: '2026-01-01T00:00:00Z', SpaceTypeID: TYPE_ID, StatusID: ARCHIVED_STATUS },
+];
+
+/** The type's statuses, as the engine would hold them: Archived hides the space. */
+const statuses = [
+    { ID: ACTIVE_STATUS, SpaceTypeID: TYPE_ID, Code: 'active', Sequence: 1, IsDefault: true, ReadOnly: false, Visible: true, AgentRetrieval: true, CanChangeAfter: true, IsTerminal: false },
+    { ID: ARCHIVED_STATUS, SpaceTypeID: TYPE_ID, Code: 'archived', Sequence: 4, IsDefault: false, ReadOnly: true, Visible: false, AgentRetrieval: false, CanChangeAfter: false, IsTerminal: true },
 ];
 
 /** A provider whose reads answer from `seats` and `spaces`, or fail on request. */
@@ -82,6 +91,10 @@ describe('CollaborationEngineBase.ReachedSeat', () => {
 
     beforeEach(() => {
         engine = CollaborationEngineBase.Instance;
+        const internals = engine as unknown as Record<string, unknown>;
+        internals['_spaceTypeStatuses'] = statuses;
+        internals['_statusesById'] = null;
+        internals['_statusesByType'] = null;
     });
 
     const seat = (spaceId: string, roleId: string): SeatRow => ({ SpaceID: spaceId, UserID: USER_ID, Status: 'Active', Band: 'Team', SpaceRoleTypeID: roleId });
@@ -136,7 +149,7 @@ describe('CollaborationEngineBase.ReachedSeat', () => {
         expect(await engine.UserCanCloseSpace(user, DISCOVERY, notWithIt, roleTypeOf)).toBe(false);
     });
 
-    it('gives no reopen right to a member who does not own the closed space, or to someone with no seat', async () => {
+    it('gives no reopen right to a member who does not own the archived space, or to someone with no seat', async () => {
         expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, providerOver([seat(CLOSED_NONE, MEMBER_ROLE)]), roleTypeOf)).toBe(false);
         expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, providerOver([]), roleTypeOf)).toBe(false);
     });

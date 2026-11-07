@@ -29,7 +29,7 @@ const checks: NamedCheck[] = [
                 "ID LIKE 'C1000001-0000-4000-8000-%'",
                 ['ID', 'Name', 'IconClass', 'Color', 'BackgroundImageURL'],
             );
-            Assert(spaces.length === 15, `Expected 15 world spaces, found ${spaces.length}`);
+            Assert(spaces.length === 19, `Expected 19 world spaces (15 and the four chapter spaces of stage 2), found ${spaces.length}`);
 
             const icons = new Set<string>();
             const colors = new Set<string>();
@@ -45,9 +45,9 @@ const checks: NamedCheck[] = [
                 backdrops.add(s.BackgroundImageURL!.trim());
             }
 
-            Assert(icons.size === 15, `World spaces must have pairwise-distinct IconClass values: expected 15, got ${icons.size}`);
-            Assert(colors.size === 15, `World spaces must have pairwise-distinct Color values: expected 15, got ${colors.size}`);
-            Assert(backdrops.size === 15, `World spaces must have pairwise-distinct BackgroundImageURL values: expected 15, got ${backdrops.size}`);
+            Assert(icons.size === 19, `World spaces must have pairwise-distinct IconClass values: expected 19, got ${icons.size}`);
+            Assert(colors.size === 19, `World spaces must have pairwise-distinct Color values: expected 19, got ${colors.size}`);
+            Assert(backdrops.size === 19, `World spaces must have pairwise-distinct BackgroundImageURL values: expected 19, got ${backdrops.size}`);
         },
     },
     {

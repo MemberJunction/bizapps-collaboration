@@ -97,10 +97,10 @@ export async function syncRoomEditGrantsForSpace(
     const rv = RunView.FromMetadataProvider(provider);
 
     // 1. Find all conversations for this space
-    const chatsRes = await rv.RunView<{ ID: string; ConversationID: string; Kind: string; Status: string }>({
+    const chatsRes = await rv.RunView<{ ID: string; ConversationID: string; Kind: string; Status: string; OwnerUserID?: string | null }>({
         EntityName: SPACE_CHATS_ENTITY,
         ExtraFilter: `SpaceID = '${spaceId}'`,
-        Fields: ['ID', 'ConversationID', 'Kind', 'Status'],
+        Fields: ['ID', 'ConversationID', 'Kind', 'Status', 'OwnerUserID'],
         MaxRows: 200,
     }, systemUser);
 
@@ -285,9 +285,19 @@ export async function syncRoomEditGrantsForSpace(
         if (!conversationId) continue;
 
         const isPrivate = chat.Kind === 'Private';
+        const isAssistant = chat.Kind === 'Assistant';
         const isChatActive = chat.Status === 'Active';
+        const ownerId = isAssistant ? parseUuid(chat.OwnerUserID) : null;
         const targetUserIds = new Set<string>(
-            !isChatActive ? [] : isPrivate ? teamContributingUserIds : allContributingUserIds
+            !isChatActive
+                ? []
+                : isAssistant
+                  ? ownerId && allContributingUserIds.has(ownerId)
+                      ? [ownerId]
+                      : []
+                  : isPrivate
+                    ? teamContributingUserIds
+                    : allContributingUserIds
         );
 
         const existingGrantsRes = await rv.RunView<ExistingGrantRow>({

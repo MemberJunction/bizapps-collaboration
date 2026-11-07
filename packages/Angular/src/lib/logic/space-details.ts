@@ -21,33 +21,43 @@ export class NewSpaceDraft {
     public readonly Space: mjBizAppsCollaborationSpaceEntity;
     public readonly Leaf: BaseEntity;
     public readonly DetailFields: readonly DetailField[];
-    /** The sections of the subtype's generated form that hold only its own columns, or null when the form can't be shown alone. */
-    public readonly FormSections: string[] | null;
+    /** The subtype the type attached to the space, when it names one. */
+    private readonly subtype: BaseEntity | null;
 
-    private constructor(space: mjBizAppsCollaborationSpaceEntity, leaf: BaseEntity, own: readonly DetailField[], sections: string[] | null) {
+    private constructor(space: mjBizAppsCollaborationSpaceEntity, leaf: BaseEntity, subtype: BaseEntity | null, own: readonly DetailField[]) {
         this.Space = space;
         this.Leaf = leaf;
+        this.subtype = subtype;
         this.DetailFields = own;
-        this.FormSections = sections;
+    }
+
+    /**
+     * The sections of the subtype's generated form that hold only its own, shown columns, or null when the form can't be shown alone.
+     * They depend on which columns the type's UI driver hides, so there is no way to ask for them without saying: a section of only
+     * hidden columns is left out, and one that mixes hidden and shown columns means the field list.
+     */
+    public FormSectionsHiding(hiddenFieldNames: readonly string[] | undefined): string[] | null {
+        return this.subtype ? ownFormSections(this.subtype, hiddenFieldNames) : null;
     }
 
     /** Makes the draft for a type. A type with no subtype gives a plain space and no detail fields. */
     public static async Start(
         provider: IMetadataProvider,
         user: UserInfo,
-        type: Pick<mjBizAppsCollaborationSpaceTypeEntity, 'ID' | 'DefaultInheritsMembership'>,
+        type: Pick<mjBizAppsCollaborationSpaceTypeEntity, 'ID'>,
+        inheritsMembership: boolean = true,
     ): Promise<NewSpaceDraft> {
         const space = await provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, user);
         space.NewRecord();
         space.SpaceTypeID = type.ID;
         space.OwnerID = user.ID;
-        space.InheritsMembership = type.DefaultInheritsMembership;
-        // The type names the subtype, and the resolver answers from it: the child is attached to this very object. Core logs a load
-        // error here for a row that can't exist yet (MemberJunction/MJ#4859); nothing is wrong.
+        // D22: the creator chooses whether the space inherits its parent's members; a top-level space has none to inherit
+        space.InheritsMembership = inheritsMembership;
+        // The type names the subtype, and the resolver answers from it: the child is attached to this very object
         const attached = await space.EnsureISAChild();
         const leaf: BaseEntity = attached ? space.LeafEntity : space;
         const own = attached ? ownDetailFields(attached) : [];
-        return new NewSpaceDraft(space, leaf, own, attached ? ownFormSections(attached) : null);
+        return new NewSpaceDraft(space, leaf, attached, own);
     }
 
     public get HasDetails(): boolean {
@@ -70,11 +80,16 @@ export class NewSpaceDraft {
     }
 
     /** Asks the server to make the space and seat the person as its owner, together. */
-    public async Create(creator: SpaceCreator, input: { name: string; description: string }): Promise<NewSpaceOutcome> {
+    public async Create(
+        creator: SpaceCreator,
+        input: { name: string; description: string; parentId?: string | null; inheritsMembership?: boolean },
+    ): Promise<NewSpaceOutcome> {
         const res = await creator.CreateSpace({
             TypeID: this.Space.SpaceTypeID,
             Name: input.name,
             Description: input.description || undefined,
+            // A sub-space names its parent and whether its members come from it (D22: the creator chooses; a top-level space has no parent)
+            ...(input.parentId ? { ParentID: input.parentId, InheritsMembership: input.inheritsMembership ?? false } : {}),
             ...(this.HasDetails ? { Details: this.Details() } : {}),
         });
         if (res.Success && res.SpaceID) return { status: 'created', spaceId: res.SpaceID };
@@ -92,13 +107,17 @@ export type SaveDetailsOutcome = { ok: true } | { ok: false; message: string };
 export class SpaceDetails {
     public readonly Leaf: BaseEntity;
     public readonly Fields: readonly DetailField[];
-    /** The sections of the subtype's generated form that hold only its own columns, or null when the form can't be shown alone. */
-    public readonly FormSections: string[] | null;
-
-    private constructor(leaf: BaseEntity, fields: readonly DetailField[], sections: string[] | null) {
+    private constructor(leaf: BaseEntity, fields: readonly DetailField[]) {
         this.Leaf = leaf;
         this.Fields = fields;
-        this.FormSections = sections;
+    }
+
+    /**
+     * The sections of the subtype's generated form that hold only its own, shown columns, or null when the form can't be shown alone.
+     * They depend on which columns the type's UI driver hides, so there is no way to ask for them without saying.
+     */
+    public FormSectionsHiding(hiddenFieldNames: readonly string[] | undefined): string[] | null {
+        return ownFormSections(this.Leaf, hiddenFieldNames);
     }
 
     /** Loads a space and returns its details, or null when the space is plain (its type names no subtype) or can't be read. */
@@ -107,7 +126,7 @@ export class SpaceDetails {
         if (!(await space.Load(spaceId))) return null;
         const leaf: BaseEntity = space.LeafEntity;
         if (leaf === space) return null;
-        return new SpaceDetails(leaf, ownDetailFields(leaf), ownFormSections(leaf));
+        return new SpaceDetails(leaf, ownDetailFields(leaf));
     }
 
     /** True while a detail was changed and not saved. */

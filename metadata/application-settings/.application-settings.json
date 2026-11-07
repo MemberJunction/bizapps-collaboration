@@ -6,7 +6,7 @@
     "fields": {
       "ApplicationID": "@lookup:MJ: Applications.Name=Collaboration",
       "Name": "CollaborationSettings",
-      "Value": "{\"PostCloseAccess\":\"ReadOnly\",\"PostCloseAccessDays\":null,\"Chats\":{\"WhoCanStart\":\"Anyone\",\"AgentReplyMode\":\"MentionOrOneToOne\",\"HistoryOnAdd\":\"None\"},\"Agents\":{\"ListMode\":\"Extend\"}}",
+      "Value": "{\"Chats\":{\"WhoCanStart\":\"Anyone\",\"AgentReplyMode\":\"MentionOrOneToOne\",\"HistoryOnAdd\":\"None\"},\"Agents\":{\"ListMode\":\"Extend\"}}",
       "Comments": "Default settings configuration for the BizApps Collaboration application."
     }
   }

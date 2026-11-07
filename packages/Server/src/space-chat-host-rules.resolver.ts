@@ -50,6 +50,10 @@ export class SpaceChatHostRulesPayload {
     /** The largest upload this host takes, so the browser can refuse a bigger file and state the limit. */
     @Field(() => Int, { nullable: true })
     UploadMaxBytes?: number;
+
+    /** True when the server has credentials configured to run a Decision model for multi-party chat routing. */
+    @Field({ nullable: true })
+    DecisionRoutingAvailable?: boolean;
 }
 
 /**
@@ -104,6 +108,7 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
                 CanStartConversation: result.canStartConversation,
                 AllowedConversationKinds: result.allowedConversationKinds,
                 UploadMaxBytes: configuredUploadMaxBytes(),
+                DecisionRoutingAvailable: result.decisionRoutingAvailable ?? false,
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

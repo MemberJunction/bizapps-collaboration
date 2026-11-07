@@ -14,16 +14,10 @@
             "Fields": ["\bID\b","\bSpaceID\b","\bItemID\b","\bRecipientUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bRecipientUser\b"]
         },
         { 
-            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bAgent\b \bSkills\b",
-            "Description": "",
-            "BaseView": "\bvwSpaceAgentSkills\b", 
-            "Fields": ["\bID\b","\bSkillID\b","\bSpaceTypeID\b","\bSpaceID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSkill\b","\bSpaceType\b","\bSpace\b"]
-        },
-        { 
-            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bAgents\b",
-            "Description": "",
-            "BaseView": "\bvwSpaceAgents\b", 
-            "Fields": ["\bID\b","\bAgentID\b","\bSpaceTypeID\b","\bSpaceID\b","\bIsDefault\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bAgent\b","\bSpaceType\b","\bSpace\b"]
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bAnchors\b",
+            "Description": "\bA\b \brecord\b \ba\b \bspace\b \bis\b \babout\b (\bD26\b: \ba\b \bspace\b \bmay\b \bhave\b \bseveral\b). \bThe\b \bprimary\b \banchor\b \bis\b \bthe\b \bone\b \bEnsureSpaceForRecord\b \bfinds\b \ba\b \bspace\b \bby\b; \bone\b \bper\b \bspace\b, \band\b \bone\b \bspace\b \bper\b (\btype\b, \brecord\b) \bas\b \bprimary\b.",
+            "BaseView": "\bvwSpaceAnchors\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bSpaceTypeID\b","\bEntityID\b","\bRecordID\b","\bRole\b","\bIsPrimary\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bSpaceType\b","\bEntity\b"]
         },
         { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bChats\b",
@@ -32,16 +26,22 @@
             "Fields": ["\bID\b","\bSpaceID\b","\bConversationID\b","\bName\b","\bSubject\b","\bKind\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bArchivedOnSpaceClose\b","\bSpace\b","\bConversation\b"]
         },
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bGrants\b",
+            "Description": "\bSomething\b \bthe\b \bapp\b, \ba\b \bspace\b \btype\b \bor\b \ba\b \bspace\b \boffers\b \bin\b \bits\b \bspaces\b (\bD27\b'\bs\b \bseven\b \bkinds\b): \ban\b \bagent\b, \ban\b \baction\b, \ba\b \bquery\b, \ba\b \bview\b, \ba\b \bdashboard\b, \ba\b \bcomponent\b \bor\b \ba\b \bknowledge\b \bsource\b, \bwith\b \bthe\b \bband\b \bthat\b \bmay\b \buse\b \bit\b, \bbindings\b \bfrom\b \bthe\b \bspace\b \bto\b \bthe\b \btarget\b'\bs\b \bparameters\b, \band\b \ban\b \bagent\b'\bs\b \bnarrowed\b \bsettings\b. \bReplaces\b \bSpaceAgent\b, \bSpaceAgentSkill\b \band\b \bSpaceKnowledgeSource\b.",
+            "BaseView": "\bvwSpaceGrants\b", 
+            "Fields": ["\bID\b","\bSpaceTypeID\b","\bSpaceID\b","\bKind\b","\bTargetEntityID\b","\bTargetRecordID\b","\bLabel\b","\bBand\b","\bIsDefault\b","\bBindings\b","\bSettings\b","\bMode\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpaceType\b","\bSpace\b","\bTargetEntity\b"]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bItems\b",
             "Description": "\bAn\b \bitem\b \bin\b \bexactly\b \bone\b \bspace\b: \bEntityID\b + \bRecordID\b, \bplus\b \bTeam\b \bor\b \bShared\b. \bUnique\b \bon\b (\bEntityID\b, \bRecordID\b) \bso\b \ban\b \bitem\b \bcannot\b \bhave\b \btwo\b \bparents\b.",
             "BaseView": "\bvwSpaceItems\b", 
-            "Fields": ["\bID\b","\bSpaceID\b","\bEntityID\b","\bRecordID\b","\bBand\b","\bPromotedAt\b","\bPromotedByUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bFolder\b","\bSpace\b","\bEntity\b","\bPromotedByUser\b"]
+            "Fields": ["\bID\b","\bSpaceID\b","\bEntityID\b","\bRecordID\b","\bBand\b","\bPromotedAt\b","\bPromotedByUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bFolder\b","\bArtifactVersionID\b","\bSpace\b","\bEntity\b","\bPromotedByUser\b","\bArtifactVersion\b"]
         },
         { 
-            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bKnowledge\b \bSources\b",
-            "Description": "",
-            "BaseView": "\bvwSpaceKnowledgeSources\b", 
-            "Fields": ["\bID\b","\bContentSourceID\b","\bSpaceTypeID\b","\bSpaceID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bContentSource\b","\bSpaceType\b","\bSpace\b"]
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bMember\b \bPins\b",
+            "Description": "\bSomething\b \ba\b \bmember\b \bkeeps\b \bat\b \bthe\b \btop\b \bof\b \ba\b \bspace\b (\bB22\b): \ba\b \brecord\b \bof\b \bthe\b \bspace\b (\ban\b \bitem\b, \ba\b \bnote\b, \ba\b \btask\b) \bor\b \bone\b \bof\b \bthe\b \bspace\b'\bs\b \bgrants\b (\ba\b \bview\b, \ba\b \bdashboard\b, \ba\b \bcomponent\b). \bThe\b \bmember\b'\bs\b \bown\b; \bHome\b \blists\b \bpins\b \bfrom\b \bthe\b \bspaces\b \bthey\b \bstill\b \breach\b.",
+            "BaseView": "\bvwSpaceMemberPins\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bUserID\b","\bKind\b","\bTargetEntityID\b","\bTargetRecordID\b","\bGrantID\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bUser\b","\bTargetEntity\b"]
         },
         { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bMembers\b",
@@ -50,22 +50,34 @@
             "Fields": ["\bID\b","\bSpaceID\b","\bUserID\b","\bSpaceRoleTypeID\b","\bBand\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSyncSource\b","\bPersonID\b","\bSpace\b","\bUser\b","\bSpaceRoleType\b","\bPerson\b"]
         },
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bNotes\b",
+            "Description": "\bA\b \blight\b \bnote\b \bin\b \ba\b \bspace\b (\bB21\b): \bthe\b \bspace\b'\bs\b \bown\b \brow\b \bon\b \ba\b \bband\b, \bnot\b \ba\b \blibrary\b \bitem\b, \bso\b \bthe\b \bmove\b-\band\b-\bpromote\b \brules\b \bdo\b \bnot\b \bapply\b \band\b \bit\b \bneeds\b \bno\b \bItemUse\b. \bPrivate\b \bnotes\b \bare\b \bthe\b \bauthor\b'\bs\b \balone\b.",
+            "BaseView": "\bvwSpaceNotes\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bTitle\b","\bBody\b","\bBand\b","\bVisibility\b","\bAuthorUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bAuthorUser\b"]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bRole\b \bTypes\b",
             "Description": "\bWhat\b \ba\b \bspace\b \bmember\b \bis\b \ballowed\b \bto\b \bdo\b. \bThe\b \bengine\b \breads\b \bLevel\b \band\b \bthe\b \bBIT\b \bflags\b. \bIt\b \bnever\b \bcompares\b \bCode\b \bor\b \bName\b.",
             "BaseView": "\bvwSpaceRoleTypes\b", 
             "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bLevel\b","\bMaxGrantableLevel\b","\bCanInvite\b","\bCanPromoteBand\b","\bCanSeeTeamBand\b","\bIsOwnerRole\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bCanContribute\b"]
         },
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bType\b \bStatus\b",
+            "Description": "\bA\b \bstatus\b \ba\b \bspace\b \btype\b \boffers\b \bits\b \bspaces\b: \bActive\b, \bPaused\b, \bClosed\b \band\b \bArchived\b \bship\b \bfor\b \bevery\b \btype\b; \ba\b \btype\b \bmay\b \badd\b \bits\b \bown\b. \bA\b \bspace\b \bis\b \bin\b \bexactly\b \bone\b \bof\b \bits\b \btype\b'\bs\b \bstatuses\b (\bSpace\b.\bStatusID\b) \band\b \bmay\b \bonly\b \bchoose\b \bamong\b \bthem\b. \bThe\b \battributes\b \bsay\b \bwhat\b \ba\b \bspace\b \bin\b \bthe\b \bstatus\b \ballows\b; \bthe\b \btype\b'\bs\b \bdriver\b \bmay\b \bstill\b \brefuse\b \ba\b \bchange\b.",
+            "BaseView": "\bvwSpaceTypeStatus\b", 
+            "Fields": ["\bID\b","\bSpaceTypeID\b","\bCode\b","\bName\b","\bSequence\b","\bIsDefault\b","\bReadOnly\b","\bVisible\b","\bAgentRetrieval\b","\bCanChangeAfter\b","\bNotifyMembersOnEnter\b","\bIsTerminal\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpaceType\b"]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",
             "Description": "\bKind\b \bof\b \bspace\b: \bvocabulary\b, \bwhich\b \bpanels\b \bare\b \bon\b, \bretention\b \band\b \bagent\b \bdefaults\b, \band\b \bhow\b \boutsiders\b \bjoin\b. \bBehavior\b \blives\b \bin\b \bthese\b \bcolumns\b, \bnot\b \bin\b \bcode\b \bbranched\b \bon\b \bthe\b \bname\b.",
             "BaseView": "\bvwSpaceTypes\b", 
-            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bVocabulary\b","\bDiscoverability\b","\bJoinMode\b","\bMessagingPanel\b","\bLibraryPanel\b","\bWorkPanel\b","\bGovernancePanel\b","\bDefaultRetention\b","\bDefaultAgentRetrieval\b","\bDefaultBand\b","\bInviteApproval\b","\bMemberCap\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bDefaultAllowParentAssignees\b","\bIconClass\b","\bColor\b","\bServerDriverClass\b","\bUIDriverClass\b","\bSpaceExtensionEntity\b","\bConfiguration\b","\bDefaultInheritsMembership\b","\bPostCloseAccess\b","\bPostCloseAccessDays\b"]
+            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bVocabulary\b","\bDiscoverability\b","\bJoinMode\b","\bMessagingPanel\b","\bLibraryPanel\b","\bWorkPanel\b","\bDefaultAgentRetrieval\b","\bDefaultBand\b","\bInviteApproval\b","\bMemberCap\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bDefaultAllowParentAssignees\b","\bIconClass\b","\bColor\b","\bServerDriverClass\b","\bUIDriverClass\b","\bSpaceExtensionEntity\b","\bConfiguration\b"]
         },
         { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
             "Description": "\bThe\b \bcontainer\b. \bPermission\b \bboundary\b \band\b \bagent\b \bretrieval\b \bboundary\b, \bas\b \ba\b \btree\b: \bone\b \broot\b \bper\b \brelationship\b, \bsub\b-\bspaces\b \bfor\b \bthe\b \bwork\b \binside\b \bit\b.",
             "BaseView": "\bvwSpaces\b", 
-            "Fields": ["\bID\b","\bSpaceTypeID\b","\bParentID\b","\bName\b","\bDescription\b","\bOwnerID\b","\bInheritsMembership\b","\bAgentRetrieval\b","\bStartedAt\b","\bClosedAt\b","\bRetention\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bAllowParentAssignees\b","\bPlannedCloseAt\b","\bIconClass\b","\bColor\b","\bBackgroundImageURL\b","\bConfiguration\b","\bAnchorEntityID\b","\bAnchorRecordID\b","\bPostCloseAccess\b","\bPostCloseAccessDays\b","\bSpaceType\b","\bParent\b","\bOwner\b","\bAnchorEntity\b"]
+            "Fields": ["\bID\b","\bSpaceTypeID\b","\bParentID\b","\bName\b","\bDescription\b","\bOwnerID\b","\bInheritsMembership\b","\bAgentRetrieval\b","\bStartedAt\b","\bClosedAt\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bAllowParentAssignees\b","\bPlannedCloseAt\b","\bIconClass\b","\bColor\b","\bBackgroundImageURL\b","\bConfiguration\b","\bStatusID\b","\bSpaceType\b","\bParent\b","\bOwner\b","\bStatus\b"]
         }
         ]
     }

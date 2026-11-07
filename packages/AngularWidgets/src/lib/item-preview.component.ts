@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { AvatarItem, FileKind, RecentUseModel, SpaceBand } from './types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -10,7 +11,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-item-preview',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabAvatarComponent, CollabBandChipComponent, CollabFileIconComponent, MJButtonDirective],
+  imports: [CollabAvatarComponent, CollabBandChipComponent, CollabFileIconComponent, MJButtonDirective, SharedGenericModule],
   template: `
     <aside class="drawer">
       <div class="row gap10 header-row">
@@ -19,7 +20,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <div class="fw7 fs14 ellipsis title">{{ Title }}</div>
           <div class="fs12 muted meta">{{ Meta }}</div>
         </div>
-        <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onClose()" ariaLabel="Close preview">
+        <button mjButton Variant="icon" class="icon-btn-ghost close-btn" (click)="onClose()" AriaLabel="Close preview">
           <i class="fa-solid fa-xmark muted"></i>
         </button>
       </div>
@@ -65,23 +66,24 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
         <div class="preview-actions">
           @if (CanShare) {
-            <button mjButton variant="primary" class="btn primary share-btn-full" (click)="onShare()">
+            <button type="button" mjButton Variant="primary" class="share-btn-full" (click)="onShare()">
               <i class="fa-solid fa-share-from-square" aria-hidden="true"></i>
               <span>{{ ShareButtonLabel || 'Share' }}</span>
             </button>
           }
           @if (FileId) {
             <button
+              type="button"
               mjButton
-              variant="secondary"
-              class="btn secondary open-file-btn"
+              Variant="secondary"
+              class="open-file-btn"
               [disabled]="IsOpeningFile"
               [attr.aria-busy]="IsOpeningFile"
               (click)="onOpenFile()"
               [title]="IsOpeningFile ? (OpeningLabel || 'Opening document…') : 'Open Document'"
             >
               @if (IsOpeningFile) {
-                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                <mj-loading Size="small" [ShowText]="false"></mj-loading>
                 <span>{{ OpeningLabel || 'Opening…' }}</span>
               } @else {
                 <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>

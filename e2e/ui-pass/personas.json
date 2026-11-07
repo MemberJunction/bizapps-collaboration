@@ -7,7 +7,7 @@
             "space": "Discovery",
             "spaceId": "C1000001-0000-4000-8000-000000000002",
             "expect": {
-                "closedBanner": false,
+                "readOnlyLock": false,
                 "composer": true,
                 "newConversationButton": true,
                 "settingsLink": false
@@ -19,7 +19,7 @@
             "space": "Discovery",
             "spaceId": "C1000001-0000-4000-8000-000000000002",
             "expect": {
-                "closedBanner": false,
+                "readOnlyLock": false,
                 "composer": true,
                 "newConversationButton": true,
                 "settingsLink": false
@@ -31,7 +31,7 @@
             "space": "Discovery",
             "spaceId": "C1000001-0000-4000-8000-000000000002",
             "expect": {
-                "closedBanner": false,
+                "readOnlyLock": false,
                 "composer": true,
                 "newConversationButton": true,
                 "settingsLink": false
@@ -43,7 +43,7 @@
             "space": "Discovery",
             "spaceId": "C1000001-0000-4000-8000-000000000002",
             "expect": {
-                "closedBanner": false,
+                "readOnlyLock": false,
                 "composer": true,
                 "newConversationButton": true,
                 "settingsLink": false
@@ -55,7 +55,7 @@
             "space": "Studio",
             "spaceId": "C1000001-0000-4000-8000-000000000010",
             "expect": {
-                "closedBanner": false,
+                "readOnlyLock": false,
                 "composer": true,
                 "newConversationButton": true,
                 "settingsLink": true
@@ -67,7 +67,7 @@
             "space": "Sealed child",
             "spaceId": "C1000001-0000-4000-8000-000000000015",
             "expect": {
-                "closedBanner": false,
+                "readOnlyLock": false,
                 "composer": true,
                 "newConversationButton": true,
                 "settingsLink": false
@@ -79,7 +79,7 @@
             "space": "Closed this month",
             "spaceId": "C1000001-0000-4000-8000-000000000007",
             "expect": {
-                "closedBanner": true,
+                "readOnlyLock": true,
                 "composer": false,
                 "newConversationButton": false,
                 "settingsLink": false

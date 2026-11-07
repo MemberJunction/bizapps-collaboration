@@ -205,15 +205,15 @@ v0.1 hasn't shipped to a host, so these change shape freely (D35). If it has shi
 
    /** An agent grant's settings (D31). Each can only narrow what the agent's own definition allows. */
    export interface AgentGrantSettings {
-       /** The skills this space's chats may use: none, or a subset of the agent's AcceptsSkills. Absent means the agent's own. */
+       /** The skills this space's chats may use: none, or skills the agent accepts. MJ's AcceptsSkills is All (any active skill), Limited (the agent's active AI Agent Skills rows) or None. Absent means the agent's own. */
        Skills?: 'None' | string[];
        /** Off, allowed or required; only where the agent sets SupportsPlanMode. */
        PlanMode?: 'Off' | 'Allowed' | 'Required';
        EffortLevel?: number;
        /** Whether the agent may write memory notes in this space. */
        MemoryWrites?: boolean;
-       /** Per-run limits, each at most the agent's own. The names follow MJ's agent columns. */
-       Limits?: Record<string, number>;
+       /** Per-run limits, each at most the agent's own, named as MJ's agent columns are. */
+       Limits?: Partial<Record<'MaxCostPerRun' | 'MaxTokensPerRun' | 'MaxIterationsPerRun' | 'MaxTimePerRun', number>>;
    }
 
    /** One entity a type's participants may read, by a path to an anchor role (D28). */
@@ -228,13 +228,13 @@ v0.1 hasn't shipped to a host, so these change shape freely (D35). If it has shi
 
 5. **The server classes,** in `CoreEntitiesServer`, each refusing through `ValidateAsync`:
    - **`SpaceAnchor`:** the space exists; the entity exists and the record's key parses for it; at most one primary per space; `SpaceTypeID` matches the space's type, and follows it when the type changes; writes need *Configure Spaces* or come from the type's driver through `EnsureSpaceForRecord` or `SyncSeats`.
-   - **`SpaceGrant`:** B15's validation: the target exists; each bound name is a real parameter or property of the target; each expression parses; the target is Canon-approved when the type seats participants (D34, and fail closed before A17); an agent's settings stay inside its definition. Writes need the settings authorizations (D23): *Configure Space Types* for app and type rows, *Configure Spaces* for a space's.
-   - **`SpaceNote`:** the author is the caller on create, and only the author edits a note; a caller who can't see Team can't write a Team note; a private note is its author's alone.
-   - **`SpaceMemberPin`:** the user is the caller; the caller can read the target.
+   - **`SpaceGrant`:** B15's validation: the target exists, and its entity is its kind's; each bound name is a real parameter or property of the target; each expression parses; the target is Canon-approved when the type seats participants (D34, and fail closed before A17), whether the grant is the app's, the type's or a space's; an agent's settings stay inside its definition. Until MJ#4789, [§ 4](#4-what-it-depends-on)'s four rules hold at every level: refused on save, and left out by the resolver and the turn when they read the grants, since a type can start seating participants after its grants were written. Writes need the settings authorizations (D23): *Configure Space Types* for app and type rows, *Configure Spaces* for a space's.
+   - **`SpaceNote`:** the author is the caller on create, and only the author edits a note; a caller who can't see Team can't write a Team note; a private note is its author's alone; a Team note doesn't move to Shared until Amith decides the plan's § 11 call 15.
+   - **`SpaceMemberPin`:** the user is the caller, and reaches the space; the target is in the space, and the caller can read it.
 6. **Reads:**
    - `SpaceAnchor`: the space's own filter (`fnCollaborationAccess`), so a participant sees the anchors of spaces they reach.
    - `SpaceNote`: the item filter's rule, by band, plus `Visibility = 'Private'` rows for their author only.
-   - `SpaceMemberPin`: the owner only.
+   - `SpaceMemberPin`: the owner only, in spaces they reach, since Home shows pins across the spaces a member is in (D32).
    - `SpaceGrant`: none for Space Participant. A participant's browser gets the space's configuration from the server, cut to what they may see ([§ 7](#7-stage-2-the-server)), so no grant row or bound value reaches it.
 7. **Tests:** unit tests for every rule above; server harness checks for each gate's refusing and accepting sides; `persona-check.sql` for the four new tables.
 
@@ -383,3 +383,10 @@ In `packages/ExampleSpaceTypes`, with its test-only migration:
 3. **`SpaceTypeID` on `SpaceAnchor`.** Denormalized, it lets the database enforce one primary anchor per type, entity and record; the server keeps it in step when a space's type changes. Or drop it and enforce the key in the server class only.
 4. **Field-level flags on other apps' entities.** The generator can't turn on another app's entity's field-level flag. Say who does, for the example and for a real deployment.
 5. **The approval status before A17.** Until MJ has it, a grant to a type that seats participants is refused (§ 4), which under the plan's D36 holds for all of PR #8. Confirm that's the rule, rather than a status of Collaboration's own.
+
+**Settled on 09-30,** in [PR 10's stage 1 design comment](https://github.com/MemberJunction/bizapps-collaboration/pull/10#issuecomment-5906462452) and [its review](https://github.com/MemberJunction/bizapps-collaboration/pull/10#issuecomment-5906758213):
+1. Dashboards with query parts, and components that run queries, go only to staff-only types until the viewers take a runner, which is a change to A15. Under D36 no dashboard is granted before A15 at all, so this starts with the follow-up.
+2. Skills stay in the grant's settings, with no table. MJ's `AcceptsSkills` is `All`, `Limited` or `None`, so a skill the agent accepts is any active skill for `All`, and one of the agent's active `MJ: AI Agent Skills` rows for `Limited`. The resolver drops a skill that's gone or that the agent doesn't accept, with a log.
+3. `SpaceTypeID` stays on `SpaceAnchor`, so the database enforces one primary anchor per type, entity and record. Without it, two `EnsureSpaceForRecord` calls could each find no primary anchor and both insert one.
+4. The data-reach generator writes an entity's field permissions into `metadata/`, and the app that owns the entity turns on its field-level security in its own metadata, as bizapps-common does for People (D46). The example's entities are Collaboration's own, so the example turns it on. For another app's entity, the generator says when the flag is off.
+5. Fail closed, with no approval status of Collaboration's own: [§ 4](#4-what-it-depends-on)'s four rules, for the app's, a type's and a space's grants.

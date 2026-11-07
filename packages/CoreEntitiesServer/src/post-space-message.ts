@@ -3,8 +3,9 @@ import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import type { SpaceAgentCandidateItem } from './space-agent-retrieval.js';
-import { resolveSpaceDriver } from './space-driver-call.js';
+import { refusalOf, resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
+import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const DETAILS = 'MJ: Conversation Details';
@@ -14,6 +15,7 @@ export interface PostSpaceMessageInput {
     spaceId: string;
     text: string;
     conversationId?: string;
+    parentDetailId?: string | null;
 }
 
 export type PostSpaceMessageResult =
@@ -46,21 +48,23 @@ export async function postSpaceMessage(
     const system = await requireSystemUser(probe);
     const view = RunView.FromMetadataProvider(provider);
 
-    const space = await view.RunView<{ ClosedAt: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
+    const space = await view.RunView<{ ClosedAt: string | null; StatusID: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
         EntityName: 'MJ_BizApps_Collaboration: Spaces',
         ExtraFilter: `ID = '${spaceId}'`,
-        Fields: ['ClosedAt', 'SpaceTypeID', 'Configuration'],
+        Fields: ['ClosedAt', 'StatusID', 'SpaceTypeID', 'Configuration'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
     if (!space.Success) return { ok: false, message: space.ErrorMessage || 'The space could not be read.' };
     const targetSpace = space.Results?.[0];
-    if (targetSpace?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
+    // A read-only status (Paused, Closed) takes no new message; the sentence names the status
+    const refusal = targetSpace ? spaceWriteRefusal(targetSpace) : null;
+    if (refusal?.readOnly) return { ok: false, message: spaceWriteRefusalMessage(refusal, 'message') };
 
     const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
     if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot post.' };
 
-    // A type whose driver is missing refuses (fail closed); message hooks wait for MJ to say who wrote a message
+    // A type whose driver is missing refuses (fail closed). Note: ValidateMessage and OnMessagePosted gate the server PostSpaceMessage path only; direct browser MJ: Conversation Details saves bypass them until A19 / D44.
     const driver = await resolveSpaceDriver(probe, provider, user, spaceId);
     if (!driver.ok) return { ok: false, message: driver.message };
 
@@ -72,10 +76,10 @@ export async function postSpaceMessage(
     if (!parsedTarget) {
         return { ok: false, message: 'The conversation ID is invalid.' };
     }
-    const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string }>({
+    const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string; OwnerUserID?: string | null }>({
         EntityName: 'MJ_BizApps_Collaboration: Space Chats',
         ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedTarget}' AND Status = 'Active'`,
-        Fields: ['ID', 'ConversationID', 'Kind'],
+        Fields: ['ID', 'ConversationID', 'Kind', 'OwnerUserID'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
@@ -87,7 +91,33 @@ export async function postSpaceMessage(
     if (foundChat.Kind === 'Private' && !reach.role.canSeeTeamBand) {
         return { ok: false, message: 'Caller cannot post in this internal conversation without Team visibility.' };
     }
+    if (foundChat.Kind === 'Assistant' && parseUuid(foundChat.OwnerUserID) !== callerId) {
+        return { ok: false, message: 'Caller cannot post in another member\'s assistant conversation.' };
+    }
     const conversationId = parsedTarget;
+    const parsedParentId = input.parentDetailId ? parseUuid(input.parentDetailId) : null;
+    if (input.parentDetailId && !parsedParentId) {
+        return { ok: false, message: 'The parent message ID is invalid.' };
+    }
+    if (parsedParentId) {
+        const parentCheck = await view.RunView<{ ID: string; ConversationID: string }>({
+            EntityName: DETAILS,
+            ExtraFilter: `ID = '${parsedParentId}' AND ConversationID = '${conversationId}'`,
+            Fields: ['ID', 'ConversationID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, system);
+        if (!parentCheck.Success || !parentCheck.Results?.[0]) {
+            return { ok: false, message: 'The parent message does not belong to this conversation.' };
+        }
+    }
+
+    const msgRefusal = refusalOf(await driver.call.driver.ValidateMessage({
+        ...driver.call.base,
+        chatId: foundChat.ID,
+        messageText: text,
+    }));
+    if (msgRefusal) return { ok: false, message: msgRefusal };
 
     const detail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     detail.NewRecord();
@@ -95,6 +125,9 @@ export async function postSpaceMessage(
     detail.UserID = callerId;
     detail.Role = 'User';
     detail.Message = text;
+    if (parsedParentId) {
+        detail.ParentID = parsedParentId;
+    }
     detail.Status = 'Complete';
     detail.HiddenToUser = false;
     detail.IsPinned = false;
@@ -104,6 +137,16 @@ export async function postSpaceMessage(
         const message = detail.LatestResult?.CompleteMessage || detail.LatestResult?.Message || 'The message was refused.';
         LogError(`Space message failed for space ${spaceId} and user ${callerId}: ${message}`);
         return { ok: false, message };
+    }
+    try {
+        await driver.call.driver.OnMessagePosted({
+            ...driver.call.base,
+            chatId: foundChat.ID,
+            messageId: detail.ID,
+            messageText: text,
+        });
+    } catch (hookErr) {
+        LogError(`postSpaceMessage: OnMessagePosted failed for space ${spaceId}: ${hookErr instanceof Error ? hookErr.message : String(hookErr)}`);
     }
     return { ok: true, detailId: detail.ID, conversationId };
 }

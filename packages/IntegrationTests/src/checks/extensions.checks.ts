@@ -4,24 +4,23 @@ import {
     BaseSpaceTypeServerDriver,
     createSpaceConversation,
     createSpaceTask,
+    postSpaceMessage,
     ServerDriverRegistry,
     type ChatChangeContext,
     type DriverValidationResult,
+    type MessageContext,
+    type MessageValidationContext,
     type TaskFiledContext,
 } from '@mj-biz-apps/collaboration-core-entities-server';
-import {
-    ExampleBoardServerDriver,
-    ExampleRoomServerDriver,
-    mjBizAppsCollabExamplesExampleBoardEntity,
-    mjBizAppsCollabExamplesExampleRoomEntity,
-} from '@mj-biz-apps/collaboration-example-space-types/server';
+import { ExampleBoardServerDriver } from '@mj-biz-apps/collaboration-example-space-types-server';
+import { mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
-import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY, TASK_ACTIVITY_ENTITY, TASK_ENTITY, TASK_LINK_ENTITY } from '../entity-names.js';
+import { CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY, TASK_ACTIVITY_ENTITY, TASK_ENTITY, TASK_LINK_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
 import { CHECK_SPACE_PREFIX } from '../world/ids.js';
 import { cleanupConversation, cleanupSpace, cleanupStep, deleteRowAndConfirm, deleteWhere, registerChecks } from './cleanup-helpers.js';
 
-/** The two test-only types (`metadata-tests/space-types`): each names the example package's driver of the same key. */
+/** A test-only type (`metadata-tests/space-types`): the example type names the example package's driver of the same key. */
 async function loadTypeByCode(ctx: IntegrationCheckContext, code: string): Promise<mjBizAppsCollaborationSpaceTypeEntity> {
     const rows = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, `Code = '${code}'`, ['ID']);
     Assert(rows.length === 1, `The ${code} test type is on this host (run "pnpm run mj:push:tests" once per database)`);
@@ -50,10 +49,6 @@ async function newSpace(ctx: IntegrationCheckContext, owner: Awaited<ReturnType<
     const leaf = await space.EnsureISAChild();
     if (leaf instanceof mjBizAppsCollabExamplesExampleBoardEntity) {
         leaf.TermName = '2026 to 2027';
-    } else if (leaf instanceof mjBizAppsCollabExamplesExampleRoomEntity) {
-        leaf.DealID = 'D-1';
-        leaf.AccountName = 'Acme';
-        leaf.DealStage = 'Prospecting';
     }
     return space;
 }
@@ -87,14 +82,24 @@ async function closeAndRemove(ctx: IntegrationCheckContext, spaceId: string): Pr
 }
 
 /** What the EX5 and EX6 driver was asked, so a check can see the hook ran. */
-const asked = { taskFiled: [] as string[], chatKinds: [] as string[] };
+const asked = { taskFiled: [] as string[], chatKinds: [] as string[], messagesPosted: [] as string[] };
 
-/** A test driver: it refuses a Topic conversation, and records the tasks filed in its spaces. */
+/** A test driver: it refuses a Topic conversation, refuses a message containing 'FORBIDDEN', and records the tasks and messages filed in its spaces. */
 @RegisterClass(BaseSpaceTypeServerDriver, 'ex5-spy')
 class Ex5SpyDriver extends BaseSpaceTypeServerDriver {
     public override ValidateChatChange(ctx: ChatChangeContext): DriverValidationResult {
         asked.chatKinds.push(ctx.chatKind);
         return ctx.chatKind === 'Topic' ? { ok: false, message: 'The EX5 driver does not take Topic conversations.' } : { ok: true };
+    }
+
+    public override ValidateMessage(ctx: MessageValidationContext): DriverValidationResult {
+        return ctx.messageText.includes('FORBIDDEN')
+            ? { ok: false, message: 'The EX5 driver refuses FORBIDDEN messages.' }
+            : { ok: true };
+    }
+
+    public override OnMessagePosted(ctx: MessageContext): void {
+        asked.messagesPosted.push(ctx.messageId);
     }
 
     public override OnTaskFiled(ctx: TaskFiledContext): void {
@@ -105,18 +110,17 @@ class Ex5SpyDriver extends BaseSpaceTypeServerDriver {
 /** Creates a marked test type (as Dev, who holds Configure Space Types) that names the given server driver. */
 async function newTestType(ctx: IntegrationCheckContext, label: string, driver: string): Promise<mjBizAppsCollaborationSpaceTypeEntity> {
     const dev = await GetPersonaUser(ctx, 'dev');
-    const source = await loadTypeByCode(ctx, 'example-room');
+    const source = await loadTypeByCode(ctx, 'example-board');
     const type = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>(SPACE_TYPE_ENTITY, dev);
     type.NewRecord();
     type.Code = `${label}-${Date.now()}`;
     type.Name = `${CHECK_SPACE_PREFIX}${label} type`;
-    type.Vocabulary = 'room';
+    type.Vocabulary = 'board';
     type.Discoverability = source.Discoverability;
     type.JoinMode = source.JoinMode;
     type.MessagingPanel = true;
     type.LibraryPanel = true;
     type.WorkPanel = true;
-    type.DefaultRetention = source.DefaultRetention;
     type.DefaultAgentRetrieval = source.DefaultAgentRetrieval;
     type.DefaultAllowParentAssignees = source.DefaultAllowParentAssignees;
     type.DefaultBand = source.DefaultBand;
@@ -145,14 +149,12 @@ async function cleanupTaskFiled(ctx: IntegrationCheckContext, taskId: string, it
 const checks: NamedCheck[] = [
     {
         Id: 'extensions.EX1',
-        Name: 'EX1 — the real driver registry resolves both example drivers from their type rows, and refuses a type naming a driver that is not registered',
+        Name: 'EX1 — the real driver registry resolves the example driver from its type row, and refuses a type naming a driver that is not registered',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const board = await loadTypeByCode(ctx, 'example-board');
-            const room = await loadTypeByCode(ctx, 'example-room');
             const registry = ServerDriverRegistry.Instance;
             Assert(registry.GetDriverForType(board) instanceof ExampleBoardServerDriver, 'example-board resolves to the board driver');
-            Assert(registry.GetDriverForType(room) instanceof ExampleRoomServerDriver, 'example-room resolves to the room driver');
 
             const unregistered = await loadTypeByCode(ctx, 'example-board');
             unregistered.ServerDriverClass = 'no-such-driver';
@@ -202,19 +204,22 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'extensions.EX3',
-        Name: 'EX3 — an example room refuses any sub-space',
+        Name: "EX3 — a sub-space of a type its parent's list leaves out is refused at creation, from the parent type's configuration",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
-            const room = await loadTypeByCode(ctx, 'example-room');
-            const parent = await newSpace(ctx, ada, { name: 'EX3-Room', typeId: room.ID });
-            Assert(await parent.Save(), `Ada creates an example room: ${parent.LatestResult?.CompleteMessage ?? ''}`);
+            const board = await loadTypeByCode(ctx, 'example-board');
+            const [workspace] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'workspace'", ['ID']);
+            Assert(!!workspace, 'The workspace type is on this host');
+            const parent = await newSpace(ctx, ada, { name: 'EX3-Board', typeId: board.ID });
+            Assert(await parent.Save(), `Ada creates an example board: ${parent.LatestResult?.CompleteMessage ?? ''}`);
             try {
                 await seatOwner(ctx, ada, parent.ID);
-                const child = await newSpace(ctx, ada, { name: 'EX3-Child', typeId: room.ID, parentId: parent.ID });
-                Assert(!(await child.Save()), 'A sub-space under a room must be refused');
+                // The board lists only boards (Children.AllowedTypeCodes), so a workspace under it is refused before any driver is asked
+                const child = await newSpace(ctx, ada, { name: 'EX3-Workspace', typeId: workspace.ID, parentId: parent.ID });
+                Assert(!(await child.Save()), 'A sub-space of a type the parent does not list must be refused');
                 const why = child.LatestResult?.CompleteMessage ?? '';
-                Assert(/cannot contain child spaces/.test(why), `The room's own message comes back: ${why}`);
+                Assert(/cannot sit under this kind of space \(allowed: example-board\)/.test(why), `The refusal names the parent's list: ${why}`);
             } finally {
                 await closeAndRemove(ctx, parent.ID);
             }
@@ -249,15 +254,37 @@ const checks: NamedCheck[] = [
             const space = await newSpace(ctx, ada, { name: 'EX5-Space', typeId: type.ID });
             Assert(await space.Save(), `Ada creates a space of the spy type: ${space.LatestResult?.CompleteMessage ?? ''}`);
             let conversationId: string | undefined;
+            const postedMessageIds: string[] = [];
             try {
                 await seatOwner(ctx, ada, space.ID);
                 asked.chatKinds.length = 0;
+                asked.messagesPosted.length = 0;
                 const topic = await createSpaceConversation(ctx.Provider, ada, { SpaceID: space.ID, Name: 'Topic talk', Kind: 'Topic' });
                 Assert(!topic.ok && /does not take Topic/.test(topic.message ?? ''), `The driver's refusal comes back: ${topic.message ?? ''}`);
                 const general = await createSpaceConversation(ctx.Provider, ada, { SpaceID: space.ID, Name: 'General talk', Kind: 'General' });
                 Assert(general.ok === true, `A General conversation the driver accepts is created: ${general.message ?? ''}`);
                 conversationId = general.conversationId;
                 Assert(asked.chatKinds.join(',') === 'Topic,General', `The driver was asked about each start, in order: ${asked.chatKinds.join(',')}`);
+
+                // Posting a message on the server PostSpaceMessage path asks ValidateMessage and notifies OnMessagePosted
+                const blockedMsg = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: space.ID,
+                    conversationId: conversationId!,
+                    text: 'This contains FORBIDDEN text.',
+                });
+                Assert(!blockedMsg.ok && /refuses FORBIDDEN/.test(blockedMsg.message), 'ValidateMessage refuses a FORBIDDEN message');
+                Assert(asked.messagesPosted.length === 0, 'OnMessagePosted does not run when ValidateMessage refuses');
+
+                const allowedMsg = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: space.ID,
+                    conversationId: conversationId!,
+                    text: 'Clean agenda update.',
+                });
+                Assert(allowedMsg.ok === true && Boolean(allowedMsg.detailId), 'An allowed message is posted');
+                if (allowedMsg.ok) {
+                    postedMessageIds.push(allowedMsg.detailId);
+                    Assert(asked.messagesPosted.length === 1 && asked.messagesPosted[0] === allowedMsg.detailId, 'OnMessagePosted receives the saved detail ID');
+                }
 
                 // The type now names a driver nobody registered: fail closed, for a new conversation too
                 const dev = await GetPersonaUser(ctx, 'dev');
@@ -278,6 +305,9 @@ const checks: NamedCheck[] = [
                     Assert(await restore.Save(), `Dev restores the driver: ${restore.LatestResult?.CompleteMessage ?? ''}`);
                     ServerDriverRegistry.Instance.ClearCache();
                 });
+                for (const detailId of postedMessageIds) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, detailId, 'an EX5 message detail');
+                }
                 if (conversationId) await cleanupConversationById(ctx, conversationId);
                 await cleanupSpace(ctx.Provider, ctx.User, space.ID);
                 await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_TYPE_ENTITY, type.ID, 'the EX5 test type');
@@ -381,7 +411,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'extensions.EX9',
-        Name: "EX9 — a type's Children.MaxOpen caps the open sub-spaces, and a reopen counts like a create",
+        Name: "EX9 — a type's Children.MaxOpen caps the open sub-spaces; a closed sub-space frees its place and, being in a terminal status, is not reopened",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
@@ -401,7 +431,7 @@ const checks: NamedCheck[] = [
                 Assert(!secondSaved, 'A second open sub-space must be refused (MaxOpen is 1)');
                 Assert(/most its type allows \(1\)/.test(second.LatestResult?.CompleteMessage ?? ''), `The refusal names the cap: ${second.LatestResult?.CompleteMessage ?? ''}`);
 
-                // Close the first, file a second in its place, then try to reopen the first: over the cap again
+                // Close the first (it moves to the board's Closed status, terminal), file a second in its place, then try to reopen the first
                 const closing = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
                 Assert(await closing.Load(first.ID), 'The first sub-space loads');
                 closing.ClosedAt = new Date(Date.now() - 60_000);
@@ -413,7 +443,8 @@ const checks: NamedCheck[] = [
                 const reopening = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
                 Assert(await reopening.Load(first.ID), 'The closed sub-space loads');
                 reopening.ClosedAt = null;
-                Assert(!(await reopening.Save()), 'Reopening it would take the board past MaxOpen, and must be refused');
+                Assert(!(await reopening.Save()), 'A Closed sub-space is in a terminal status: it moves forward only, never back to Active');
+                Assert(/can only move forward, not back to Active/.test(reopening.LatestResult?.CompleteMessage ?? ''), `The refusal names the rule: ${reopening.LatestResult?.CompleteMessage ?? ''}`);
             } finally {
                 for (const id of created) await closeAndRemove(ctx, id);
             }
@@ -455,7 +486,8 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
             const board = await loadTypeByCode(ctx, 'example-board');
-            const room = await loadTypeByCode(ctx, 'example-room');
+            const [workspace] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'workspace'", ['ID']);
+            Assert(!!workspace, 'The workspace type is on this host');
             const parent = await newSpace(ctx, ada, { name: 'EX11-Board', typeId: board.ID });
             const outsider = await newSpace(ctx, ada, { name: 'EX11-Outsider', typeId: board.ID });
             Assert(await parent.Save() && await outsider.Save(), 'Ada creates two example boards');
@@ -486,10 +518,10 @@ const checks: NamedCheck[] = [
                 filing.ParentID = parent.ID;
                 Assert(await filing.Save(), `A closed board may move under a full one: ${filing.LatestResult?.CompleteMessage ?? ''}`);
 
-                // The board lists only boards, so a sub-space cannot become a room
+                // The board lists only boards, so a sub-space cannot become a workspace
                 const retype = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
                 Assert(await retype.Load(held.ID), 'The open sub-space loads');
-                retype.SpaceTypeID = room.ID;
+                retype.SpaceTypeID = workspace.ID;
                 Assert(!(await retype.Save()), 'Retyping a sub-space to a type its parent does not list must be refused');
             } finally {
                 for (const id of created) await closeAndRemove(ctx, id);

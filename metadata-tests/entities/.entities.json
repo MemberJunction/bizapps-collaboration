@@ -1,0 +1,10 @@
+[
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Chapter Members"
+    },
+    "fields": {
+      "EnableFieldLevelSecurity": 1
+    }
+  }
+]

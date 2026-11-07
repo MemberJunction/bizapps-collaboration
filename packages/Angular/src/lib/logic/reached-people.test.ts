@@ -75,12 +75,15 @@ describe('who reaches a space', () => {
         assert.deepEqual(people.map((p) => p.row.UserID).sort(), ['ada', 'bea', 'casey', 'remy', 'sam']);
     });
 
-    it("stops at a closed parent whose post-close access has ended, and keeps one whose window is still open", () => {
+    it("stops at a parent whose status hides it, and keeps one whose status is read-only but visible", () => {
         const longAgo = '2020-01-01T00:00:00Z';
         const closed = (over: Partial<TreeSpace>): TreeSpace[] => spaces.map((s) => (s.ID === id(2) ? { ...s, ClosedAt: longAgo, ...over } : s));
-        assert.deepEqual(accessChain(id(11), closed({ PostCloseAccess: 'None' })).map((c) => c.name), ['Field notes']);
-        assert.deepEqual(accessChain(id(11), closed({ PostCloseAccess: 'ReadOnly', PostCloseAccessDays: 30 })).map((c) => c.name), ['Field notes']);
-        assert.deepEqual(accessChain(id(11), closed({ PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null })).map((c) => c.name), ['Field notes', 'Discovery', 'Northwind relationship']);
+        const archived = { ReadOnly: true, Visible: false, AgentRetrieval: false };
+        const closedStatus = { ReadOnly: true, Visible: true, AgentRetrieval: true };
+        assert.deepEqual(accessChain(id(11), closed({ Status: archived })).map((c) => c.name), ['Field notes']);
+        assert.deepEqual(accessChain(id(11), closed({ Status: closedStatus })).map((c) => c.name), ['Field notes', 'Discovery', 'Northwind relationship']);
+        // A type with no statuses yet: a closed space is read-only and visible, so its people still reach what lies below
+        assert.deepEqual(accessChain(id(11), closed({})).map((c) => c.name), ['Field notes', 'Discovery', 'Northwind relationship']);
     });
 });
 
@@ -98,22 +101,23 @@ describe("the section's list of who reaches a space, held against Core's", () =>
         ];
         const nodes: SpaceNode[] = tree.map((space) => ({
             id: space.ID, parentId: space.ParentID, inheritsMembership: space.InheritsMembership, ownerId: 'owner', agentRetrieval: 'Included',
-            closedAt: space.ClosedAt ?? null, postCloseAccess: space.PostCloseAccess ?? null, postCloseAccessDays: space.PostCloseAccessDays ?? null,
-            spaceTypePostCloseAccess: space.TypePostCloseAccess ?? null, spaceTypePostCloseAccessDays: space.TypePostCloseAccessDays ?? null,
+            closedAt: space.ClosedAt ?? null, status: space.Status ?? null,
         }));
         return { tree, nodes };
     }
     const rows = [seat(1, 'ada'), seat(2, 'bea'), seat(3, 'lee'), seat(1, 'bea')];
     const snapshots: MemberSnapshot[] = rows.map((row) => ({ spaceId: row.SpaceID, userId: row.UserID, status: 'Active', band: 'Team', role }));
 
+    const archived = { ReadOnly: true, Visible: false, AgentRetrieval: false };
+    const paused = { ReadOnly: true, Visible: true, AgentRetrieval: true };
+    const active = { ReadOnly: false, Visible: true, AgentRetrieval: true };
     for (const [label, closed] of [
         ['no space closed', {}],
-        ['a closed middle space with no post-close access', { ClosedAt: daysAgo(10), PostCloseAccess: 'None' as const }],
-        ['a closed middle space still inside its window', { ClosedAt: daysAgo(10), PostCloseAccess: 'ReadOnly' as const, PostCloseAccessDays: 30 }],
-        ['a closed middle space past its window', { ClosedAt: daysAgo(40), PostCloseAccess: 'ReadOnly' as const, PostCloseAccessDays: 30 }],
-        ['a closed middle space that leaves post-close access to a type that says ReadOnly', { ClosedAt: daysAgo(10), TypePostCloseAccess: 'ReadOnly' as const }],
-        ['a closed middle space that leaves it to a type whose window has run out', { ClosedAt: daysAgo(40), TypePostCloseAccess: 'ReadOnly' as const, TypePostCloseAccessDays: 30 }],
-        ['a closed middle space that leaves it to a type that says nothing', { ClosedAt: daysAgo(10) }],
+        ['an archived middle space (hidden)', { ClosedAt: daysAgo(10), Status: archived }],
+        ['a paused middle space (read-only, visible)', { Status: paused }],
+        ['a closed middle space (read-only, visible)', { ClosedAt: daysAgo(10), Status: paused }],
+        ['an active middle space with a status row', { Status: active }],
+        ['a closed middle space of a type with no statuses', { ClosedAt: daysAgo(10) }],
     ] as const) {
         it(`lists the same people under the same seats with ${label}`, () => {
             const { tree, nodes } = trees(closed);

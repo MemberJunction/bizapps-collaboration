@@ -445,5 +445,74 @@ describe('Audience-Bounded Retrieval & Verification Matrix (§ 10)', () => {
         });
         assert.deepEqual(scopeMatchingAnchor.allowedSpaceIds, ['space-isolated-only'], 'ExcludedFromParentScope with matching anchor must be included');
     });
+
+    it('enforces AgentRetrieval floor under Everything narrowing (ExcludedEntirely on ancestor/self and ExcludedFromParentScope on non-anchor)', () => {
+        const excludedParent: SpaceNode = {
+            id: 'space-excluded-parent',
+            parentId: null,
+            inheritsMembership: true,
+            ownerId: 'user-admin',
+            agentRetrieval: 'ExcludedEntirely',
+        };
+        const childOfExcludedParent: SpaceNode = {
+            id: 'space-child-of-excluded',
+            parentId: 'space-excluded-parent',
+            inheritsMembership: true,
+            ownerId: 'user-admin',
+            agentRetrieval: 'Included',
+        };
+        const siblingIsolated: SpaceNode = {
+            id: 'space-sibling-isolated',
+            parentId: 'space-board',
+            inheritsMembership: true,
+            ownerId: 'user-admin',
+            agentRetrieval: 'ExcludedFromParentScope',
+        };
+        const user: PrincipalReach = {
+            userId: 'user-a',
+            reachableSpaceIds: ['space-board', 'space-acme', 'space-excluded-parent', 'space-child-of-excluded', 'space-sibling-isolated'],
+            canSeeTeamSpaceIds: ['space-board', 'space-excluded-parent', 'space-child-of-excluded', 'space-sibling-isolated'],
+            isInternalOrg: true,
+        };
+
+        const scopeEverything = effectiveRetrievalScope({
+            audience: {
+                principals: ['user-a'],
+                mode: 'Private',
+                anchorSpaceId: 'space-child-of-excluded',
+                narrowing: 'Everything',
+            },
+            spaces: [boardSpace, acmeSpace, excludedParent, childOfExcludedParent, siblingIsolated],
+            principalReaches: [user],
+        });
+
+        assert.deepEqual(
+            [...scopeEverything.allowedSpaceIds].sort(),
+            ['space-acme', 'space-board'],
+            'Everything narrowing must still exclude child of ExcludedEntirely parent and non-anchor ExcludedFromParentScope space'
+        );
+        assert.equal(scopeEverything.spaceBands.get('space-board'), 'Team');
+        assert.equal(scopeEverything.spaceBands.get('space-acme'), 'Shared');
+    });
 });
 
+describe('closure and cycles in the retrieval scope (item 28)', () => {
+    const open: SpaceNode = { id: 'open', parentId: null, inheritsMembership: false, ownerId: 'u', agentRetrieval: 'Included' };
+    const closedNoStatuses: SpaceNode = { ...open, id: 'closed-plain', closedAt: '2026-01-01T00:00:00Z' };
+    const archived: SpaceNode = { ...open, id: 'archived', closedAt: '2026-01-01T00:00:00Z', status: { ReadOnly: true, Visible: true, AgentRetrieval: false } };
+    const reach: PrincipalReach = { userId: 'u', reachableSpaceIds: ['open', 'closed-plain', 'archived'], canSeeTeamSpaceIds: ['open', 'closed-plain', 'archived'], isInternalOrg: true };
+
+    it('leaves out a space whose status allows no agent retrieval, and keeps a closed space of a type with no statuses', () => {
+        const result = effectiveRetrievalScope({ audience: { principals: ['u'], mode: 'Private' }, spaces: [open, closedNoStatuses, archived], principalReaches: [reach] });
+        assert.deepEqual([...result.allowedSpaceIds].sort(), ['closed-plain', 'open']);
+    });
+
+    it('ends the walk to the root at a space it has seen, so a cycle in the parent links cannot hang it', () => {
+        const a: SpaceNode = { ...open, id: 'a', parentId: 'b' };
+        const b: SpaceNode = { ...open, id: 'b', parentId: 'a' };
+        const cyclic: PrincipalReach = { userId: 'u', reachableSpaceIds: ['a', 'b'], canSeeTeamSpaceIds: [], isInternalOrg: true };
+        const result = effectiveRetrievalScope({ audience: { principals: ['u'], mode: 'Private' }, spaces: [a, b], principalReaches: [cyclic] });
+        assert.deepEqual([...result.allowedSpaceIds].sort(), ['a', 'b']);
+        assert.equal(result.allowedBand, 'Shared');
+    });
+});

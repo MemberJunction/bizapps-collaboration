@@ -96,7 +96,7 @@
     "fields": {
       "Name": "Collaboration: Conversations In Reach",
       "Description": "Conversations bound to a space the caller reaches.",
-      "FilterText": "(ID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1))))"
+      "FilterText": "(ID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
     }
   },
   {
@@ -106,7 +106,7 @@
     "fields": {
       "Name": "Collaboration: Conversation Details In Reach",
       "Description": "Details whose conversation is a space conversation the caller reaches.",
-      "FilterText": "(ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1))))"
+      "FilterText": "(ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
     }
   },
   {
@@ -115,8 +115,8 @@
     },
     "fields": {
       "Name": "Collaboration: Space Chats In Reach",
-      "Description": "Space chats in a space the caller reaches, filtering Private by CanSeeTeam.",
-      "FilterText": "((Kind IN (N'General', N'Topic') AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR (Kind = N'Private' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1)))"
+      "Description": "Space chats in a space the caller reaches, filtering Private by CanSeeTeam and Assistant by OwnerUserID.",
+      "FilterText": "((Kind IN (N'General', N'Topic') AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR (Kind = N'Private' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1)) OR (Kind = N'Assistant' AND OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
     }
   },
   {
@@ -276,7 +276,7 @@
     "fields": {
       "Name": "Collaboration: Conversation Details Create In Reach",
       "Description": "Allows contributing participants to create user messages in space conversations.",
-      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND Role = N'User' AND ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE sc.Status = N'Active' AND a.CanContribute = 1 AND (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1))))"
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND Role = N'User' AND ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE sc.Status = N'Active' AND a.CanContribute = 1 AND (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
     }
   },
   {
@@ -326,7 +326,7 @@
     "fields": {
       "Name": "Collaboration: Agents In Reach",
       "Description": "Agents the caller may run in a space they reach: the shipped space agent, the app-wide and type rows, and the rows on a reached space or any ancestor of one. MemberJunction loads the agent as the caller before it judges a search scope.",
-      "FilterText": "(ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E' OR ID IN (SELECT sa.AgentID FROM [__mj_BizAppsCollaboration].[SpaceAgent] AS sa WHERE (sa.SpaceID IS NULL AND sa.SpaceTypeID IS NULL) OR sa.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationSpaceAndAncestors](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))) OR sa.SpaceTypeID IN (SELECT s.SpaceTypeID FROM [__mj_BizAppsCollaboration].[Space] AS s WHERE s.ID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))))"
+      "FilterText": "(ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E' OR ID IN (SELECT TRY_CAST(g.TargetRecordID AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceGrant] AS g WHERE g.Kind = N'Agent' AND ((g.SpaceID IS NULL AND g.SpaceTypeID IS NULL) OR g.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationSpaceAndAncestors](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))) OR g.SpaceTypeID IN (SELECT s.SpaceTypeID FROM [__mj_BizAppsCollaboration].[Space] AS s WHERE s.ID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))))"
     }
   },
   {
@@ -347,6 +347,212 @@
       "Name": "Collaboration: Scope Permissions For The Caller",
       "Description": "Search scope permission rows that name the caller or a role the caller holds. No other user's row.",
       "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR RoleID IN (SELECT ur.RoleID FROM [__mj].[UserRole] AS ur WHERE ur.UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "0D82D31C-FAEB-4E16-AAC0-9826A4012F3D"
+    },
+    "fields": {
+      "Name": "Collaboration: Visible Anchors",
+      "Description": "The anchors of spaces the caller reaches (stage 1, B14). Read only for a participant.",
+      "FilterText": "(SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3DB29677-9A4F-4B78-86E2-00B2513F8702"
+    },
+    "fields": {
+      "Name": "Collaboration: Visible Notes",
+      "Description": "A space's notes by band, as items are (Team for a seat that sees Team, Shared for any seat that reaches the space), plus the caller's own private notes (stage 1, B21, D33).",
+      "FilterText": "((Visibility = N'Space' AND (SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (Visibility = N'Private' AND AuthorUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9E22CDA4-B6B0-4194-846A-F3735F7B3E9E"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Notes",
+      "Description": "Only the author edits or deletes a note, and a note is created as its author (stage 1, item 146).",
+      "FilterText": "(AuthorUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C6E545E2-CF57-44DF-9D64-192DC679A630"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Pins",
+      "Description": "A member's own pins, in spaces they still reach, so Home lists pins only from spaces the member is in (stage 1, B22, D32, item 149).",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "AFA9CE9A-0473-4094-B22E-AF292A347F9B"
+    },
+    "fields": {
+      "Name": "Collaboration: Grants In Reach",
+      "Description": "For MJ's UI role, one reach for every level (stage 1, items 149 and 158): the app's grants; a type's grants where the caller reaches a space of that type; a space's grants where the caller reaches the space. Space Participant reads no grant at all.",
+      "FilterText": "((SpaceID IS NULL AND SpaceTypeID IS NULL) OR (SpaceID IS NULL AND SpaceTypeID IN (SELECT s.SpaceTypeID FROM [__mj_BizAppsCollaboration].[Space] AS s WHERE s.ID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D23DF8A4-A120-44B4-9102-39EA034C9BA0"
+    },
+    "fields": {
+      "Name": "Collaboration: Active Space Type Statuses",
+      "Description": "The statuses of active space types: what a participant needs to read a space's status and the moves its type allows (stage 1).",
+      "FilterText": "(SpaceTypeID IN (SELECT ID FROM [__mj_BizAppsCollaboration].[SpaceType] WHERE IsActive = 1))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "4A1F6C2D-8E3B-4D5A-9F7C-2B6E1D4A8C93"
+    },
+    "fields": {
+      "Name": "Collaboration: Notes The Caller May Change",
+      "Description": "The caller's own notes, and every note of a space where the caller's seat sees the Team band: the coarse gate for an update. The entity server keeps the fine rule: only the author edits, and a Team note moves to Shared only by the space's owner, a promoting seat or an administrator (the plan's call 15).",
+      "FilterText": "(AuthorUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "7F2E4D18-9A3B-4C5E-8D61-1A2B3C4D5E61"
+    },
+    "fields": {
+      "Name": "Collaboration: Entity Record Documents In Reach",
+      "Description": "Entity record documents whose origin record is a visible item, file, or task in a space the caller reaches.",
+      "FilterText": "((EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(REPLACE(RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(EntityID AS NVARCHAR(36)) + N'|' + REPLACE(RecordID, N'ID|', N'')) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + REPLACE(si.RecordID, N'ID|', N'') FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(REPLACE(RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8A3F5E29-0B4C-4D6F-9E72-2B3C4D5E6F72"
+    },
+    "fields": {
+      "Name": "Collaboration: Content Items In Reach",
+      "Description": "Content items whose own or root Entity Record Document documents a visible record in a space the caller reaches.",
+      "FilterText": "(EntityRecordDocumentID IN (SELECT erd.ID FROM [__mj].[EntityRecordDocument] AS erd WHERE (erd.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(REPLACE(erd.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(erd.EntityID AS NVARCHAR(36)) + N'|' + REPLACE(erd.RecordID, N'ID|', N'')) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + REPLACE(si.RecordID, N'ID|', N'') FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (erd.EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(REPLACE(erd.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR RootParentID IN (SELECT r.ID FROM [__mj].[ContentItem] AS r INNER JOIN [__mj].[EntityRecordDocument] AS erd ON erd.ID = r.EntityRecordDocumentID WHERE (erd.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(REPLACE(erd.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(erd.EntityID AS NVARCHAR(36)) + N'|' + REPLACE(erd.RecordID, N'ID|', N'')) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + REPLACE(si.RecordID, N'ID|', N'') FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (erd.EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(REPLACE(erd.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9B4A6F30-1C5D-4E7A-AF83-3C4D5E6F7A83"
+    },
+    "fields": {
+      "Name": "Collaboration: Content Item Chunks In Reach",
+      "Description": "Content item chunks whose owning content item is in a space the caller reaches.",
+      "FilterText": "(ContentItemID IN (SELECT ci.ID FROM [__mj].[vwContentItems] AS ci WHERE ci.EntityRecordDocumentID IN (SELECT erd.ID FROM [__mj].[EntityRecordDocument] AS erd WHERE (erd.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(REPLACE(erd.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(erd.EntityID AS NVARCHAR(36)) + N'|' + REPLACE(erd.RecordID, N'ID|', N'')) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + REPLACE(si.RecordID, N'ID|', N'') FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (erd.EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(REPLACE(erd.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR ci.RootParentID IN (SELECT r.ID FROM [__mj].[ContentItem] AS r INNER JOIN [__mj].[EntityRecordDocument] AS erd ON erd.ID = r.EntityRecordDocumentID WHERE (erd.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(REPLACE(erd.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(erd.EntityID AS NVARCHAR(36)) + N'|' + REPLACE(erd.RecordID, N'ID|', N'')) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + REPLACE(si.RecordID, N'ID|', N'') FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (erd.EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(REPLACE(erd.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "00946333-EA10-4A0E-83D5-86C8AA224AF4"
+    },
+    "fields": {
+      "Name": "Collaboration: Visible Pages",
+      "Description": "A space's pages by band, as notes and items are (Team for a seat that sees Team, Shared for any seat that reaches the space).",
+      "FilterText": "((SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR (Band = N'Shared' AND CAST(SpaceID AS NVARCHAR(450)) = '{{ScopeResourceID}}'))"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "658D79AC-98A5-429D-A5A0-9C1CC69D179C"
+    },
+    "fields": {
+      "Name": "Collaboration: Pages The Caller May Change",
+      "Description": "Pages of a space where the caller is the owner or reaches the space: the coarse gate for a create, update, or delete. SpacePageEntityServer enforces the fine rule via pageEditVerdict.",
+      "FilterText": "(SpaceID IN (SELECT ID FROM [__mj_BizAppsCollaboration].[Space] WHERE OwnerID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Collaboration: Files In Reach Or Outside Collaboration",
+      "Description": "UI role: every MJ: Files row a space does not hold, plus the space files the user reaches (Files In Reach). A file a space item points at, or a file a Collaboration content source keeps, is shown only in reach.",
+      "FilterText": "(((N'ID|' + CONVERT(nvarchar(36), ID)) IN (SELECT i.RecordID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS i WHERE i.EntityID = '29248F34-2837-EF11-86D4-6045BDEE16E6' AND ((i.Band = N'Shared' AND i.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR i.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1)))) OR (CONVERT(nvarchar(36), ID) NOT IN (SELECT SUBSTRING(i.RecordID, CASE WHEN i.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS i WHERE i.EntityID = '29248F34-2837-EF11-86D4-6045BDEE16E6' AND i.RecordID IS NOT NULL) AND ID NOT IN (SELECT ci.FileID FROM [__mj].[ContentItem] AS ci WHERE ci.FileID IS NOT NULL AND ci.ContentSourceID IN (SELECT cs.ID FROM [__mj].[ContentSource] AS cs INNER JOIN [__mj].[EntityDocument] AS ed ON ed.ID = cs.EntityDocumentID WHERE ed.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E'))))"
+    },
+    "primaryKey": {
+      "ID": "7F9B15C2-0405-4B42-9735-98AB9B8C0C7D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Collaboration: Content Items In Reach Or Outside Collaboration",
+      "Description": "UI role: every MJ: Content Items row outside Collaboration's content sources (sources whose Entity Document is on Space Items), plus the space documents the user reaches (Content Items In Reach).",
+      "FilterText": "((EntityRecordDocumentID IN (SELECT erd.ID FROM [__mj].[EntityRecordDocument] AS erd WHERE (erd.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(erd.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450)) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (erd.EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].fnCollaborationTasks(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR RootParentID IN (SELECT r.ID FROM [__mj].[ContentItem] AS r INNER JOIN [__mj].[EntityRecordDocument] AS erd ON erd.ID = r.EntityRecordDocumentID WHERE (erd.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(erd.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450)) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (erd.EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].fnCollaborationTasks(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ContentSourceID NOT IN (SELECT cs.ID FROM [__mj].[ContentSource] AS cs INNER JOIN [__mj].[EntityDocument] AS ed ON ed.ID = cs.EntityDocumentID WHERE ed.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E'))"
+    },
+    "primaryKey": {
+      "ID": "8CBE6668-C2EF-4CFE-8053-6DC99D5A0084"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Collaboration: Entity Record Documents In Reach Or Outside Collaboration",
+      "Description": "UI role: every MJ: Entity Record Documents row on a record no space holds, plus the rows the user reaches (Entity Record Documents In Reach). Rows on space items, on records filed in a space, and on tasks under a filed task are shown only in reach.",
+      "FilterText": "(((EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(SUBSTRING(RecordID, CASE WHEN RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(RecordID, CASE WHEN RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450)) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(SUBSTRING(RecordID, CASE WHEN RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].fnCollaborationTasks(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR (EntityID <> '41165FEC-A52B-469A-A880-3B108C39A65E' AND (CAST(EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(RecordID, CASE WHEN RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450)) NOT IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si) AND NOT (EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(SUBSTRING(RecordID, CASE WHEN RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT t.ID FROM [__mj_BizAppsTasks].[vwTasks] AS t WHERE COALESCE(t.RootParentID, t.ID) IN (SELECT TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466')))))"
+    },
+    "primaryKey": {
+      "ID": "1A7C751F-F984-4D3D-9414-4AC2ADBBFF92"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Collaboration: Content Item Chunks In Reach Or Outside Collaboration",
+      "Description": "UI role: every MJ: Content Item Chunks row of a document outside Collaboration's content sources, plus the chunks of space documents the user reaches (Content Item Chunks In Reach).",
+      "FilterText": "((ContentItemID IN (SELECT ci.ID FROM [__mj].[vwContentItems] AS ci WHERE ci.EntityRecordDocumentID IN (SELECT erd.ID FROM [__mj].[EntityRecordDocument] AS erd WHERE (erd.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(erd.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450)) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (erd.EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].fnCollaborationTasks(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR ci.RootParentID IN (SELECT r.ID FROM [__mj].[ContentItem] AS r INNER JOIN [__mj].[EntityRecordDocument] AS erd ON erd.ID = r.EntityRecordDocumentID WHERE (erd.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E' AND TRY_CAST(SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT si.ID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR ((CAST(erd.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450)) IN (SELECT CAST(si.EntityID AS NVARCHAR(36)) + N'|' + SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (si.Band = N'Shared' AND si.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (erd.EntityID = 'B348FFA2-B1A7-4AC2-B6FD-F4E0C0697466' AND TRY_CAST(SUBSTRING(erd.RecordID, CASE WHEN erd.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].fnCollaborationTasks(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))))) OR ContentItemID IN (SELECT ci.ID FROM [__mj].[ContentItem] AS ci WHERE ci.ContentSourceID NOT IN (SELECT cs.ID FROM [__mj].[ContentSource] AS cs INNER JOIN [__mj].[EntityDocument] AS ed ON ed.ID = cs.EntityDocumentID WHERE ed.EntityID = '41165FEC-A52B-469A-A880-3B108C39A65E')))"
+    },
+    "primaryKey": {
+      "ID": "A15F26E0-D096-436B-A4A4-694AE4EE3540"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Collaboration: Conversations In Reach Or Outside Collaboration",
+      "Description": "UI role: every MJ: Conversations row that is not a space chat, plus the space chats the user reaches (Conversations In Reach).",
+      "FilterText": "((ID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR ID NOT IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc WHERE sc.ConversationID IS NOT NULL))"
+    },
+    "primaryKey": {
+      "ID": "EEB9402C-BBEB-4DD8-BCD1-54EF9B43DD94"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Collaboration: Conversation Details In Reach Or Outside Collaboration",
+      "Description": "UI role: every MJ: Conversation Details row outside a space chat, plus the messages of space chats the user reaches (Conversation Details In Reach).",
+      "FilterText": "((ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR ConversationID NOT IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc WHERE sc.ConversationID IS NOT NULL))"
+    },
+    "primaryKey": {
+      "ID": "45BE6600-7F68-4E45-8C25-41BD49B2E0E1"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "09A26A42-C582-4DB4-9576-2C7780F29774"
+    },
+    "fields": {
+      "Name": "Collaboration: Conversation Branches In Reach",
+      "Description": "Forks whose conversation is a space conversation the caller reaches: the same reach as Conversation Details In Reach, so MJ's chat area can load a conversation's branches for a participant.",
+      "FilterText": "(ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].fnCollaborationAccess(TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9ABACC6B-8DF5-4574-B9BF-308106D868B2"
+    },
+    "fields": {
+      "Name": "Collaboration: Resource Type Catalog",
+      "Description": "The resource-type catalog: MJ's Explorer shell reads it at startup (it needs the Custom type's ID to open an app's landing page). It names types, not records. The filter is present so the participant is not exempt from row-level security, as All Application Roles is.",
+      "FilterText": "(1 = 1)"
     }
   }
 ]

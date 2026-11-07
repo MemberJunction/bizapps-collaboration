@@ -21,10 +21,10 @@ import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import '@mj-biz-apps/common-entities';
-import { mjBizAppsCommonPersonEntity } from '@mj-biz-apps/common-entities';
+import { IsPeopleEntity, mjBizAppsCommonPersonEntity, ResolvePersonIDForUser } from '@mj-biz-apps/common-entities';
 import { callerMayReceiveLink, handInviteToEngine, inviteEmail, linkHandoff, magicLinkBlocksAccount, membershipReaches, refuseInvite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
-import { loadWriteContext, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
+import { loadWriteContext, requireSystemUser, spaceTypeAudience } from '@mj-biz-apps/collaboration-core-entities-server';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
@@ -95,6 +95,10 @@ export async function mintSpaceLink(input: {
     }
     const granted = context.role;
     if (!granted) return { ok: false, message: 'Invite refused: that role is not on this host.' };
+    // The staff-only promise (item 157): a type that seats staff only issues no Space Participant link
+    if (spaceTypeAudience(context.typeId) === 'StaffOnly') {
+        return { ok: false, message: "Invite refused: this space's type seats staff only, so no Space Participant link is issued for it." };
+    }
     const system = await requireSystemUser(space);
     const found = await findUserId(input.provider, email, system);
     if (found.ok === false) return { ok: false, message: found.message };
@@ -402,21 +406,20 @@ async function deleteNewAccount(provider: IMetadataProvider, system: UserInfo, u
     if ((await account.Load(userId)) && !(await account.Delete())) LogError(`Could not delete the new account ${userId}.`);
 }
 
+/**
+ * Gives the account a Person when it has none. Writes both `People.LinkedUserID` (the active 1:1
+ * security-principal bridge restored in `bizapps-common#349`) and, when the account is not already
+ * linked to a record outside People, the user's own People link (`LinkedRecordType = 'Person'`,
+ * `LinkedEntityID` = People, `LinkedEntityRecordID` = the Person).
+ */
 async function ensurePerson(provider: IMetadataProvider, system: UserInfo, userId: string, email: string): Promise<void> {
-    if (!new Metadata().EntityByName(PEOPLE)) return;
-    const view = RunView.FromMetadataProvider(provider);
-    const existing = await view.RunView<{ ID: string }>({
-        EntityName: PEOPLE,
-        ExtraFilter: `LinkedUserID = '${userId}'`,
-        Fields: ['ID'],
-        MaxRows: 1,
-        ResultType: 'simple',
-    }, system);
-    if (!existing.Success) throw new Error(existing.ErrorMessage ?? 'The person record could not be read.');
-    if (existing.Results?.length) return;
+    const people = provider.EntityByName(PEOPLE);
+    if (!people) return;
     const account = await provider.GetEntityObject<MJUserEntity>(USERS, system);
-    const name = (await account.Load(userId)) ? account.Name : email;
-    const parts = (name || email).trim().split(/\s+/);
+    if (!(await account.Load(userId))) throw new Error('The account could not be read.');
+    if (await ResolvePersonIDForUser(account, provider, system)) return;
+    const linkedElsewhere = !!account.LinkedEntityID && !IsPeopleEntity(provider.EntityByID(account.LinkedEntityID));
+    const parts = (account.Name || email).trim().split(/\s+/);
     const person = await provider.GetEntityObject<mjBizAppsCommonPersonEntity>(PEOPLE, system);
     person.NewRecord();
     person.FirstName = parts[0] || 'Member';
@@ -424,6 +427,16 @@ async function ensurePerson(provider: IMetadataProvider, system: UserInfo, userI
     person.Email = email;
     person.LinkedUserID = userId;
     if (!(await person.Save())) throw new Error(person.LatestResult?.CompleteMessage ?? 'Person save failed.');
+    if (linkedElsewhere) return;
+    account.LinkedRecordType = 'Person';
+    account.LinkedEntityID = people.ID;
+    account.LinkedEntityRecordID = person.ID;
+    if (!(await account.Save())) {
+        const message = account.LatestResult?.CompleteMessage ?? 'The account could not be linked to its person record.';
+        if (!(await person.Delete())) LogError(`Could not delete the unlinked person record ${person.ID}.`);
+        throw new Error(message);
+    }
+    await refreshUsers(provider);
 }
 
 async function writeChildRows(provider: IMetadataProvider, system: UserInfo, inviteId: string): Promise<void> {

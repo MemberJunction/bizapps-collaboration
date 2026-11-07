@@ -230,7 +230,7 @@ export interface SubSpaceSummary {
           }
 
           <!-- Sub-spaces -->
-          @if (SubSpaces && SubSpaces.length > 0) {
+          @if ((SubSpaces && SubSpaces.length > 0) || CanAddSubSpace) {
             <div class="card sub-card">
               <div class="card-h">
                 <span class="h3">Inside {{ SpaceName }}</span>
@@ -238,6 +238,9 @@ export interface SubSpaceSummary {
                   <a class="link add-sub-link" [mjClickable]="'Add a sub-space'" (click)="onNewSubSpace($event)">+ Sub-space</a>
                 }
               </div>
+              @if (!SubSpaces || SubSpaces.length === 0) {
+                <div class="fs12 muted">No sub-spaces yet.</div>
+              }
               @for (sub of SubSpaces; track sub.id) {
                 <div class="sub-row" [mjClickable]="sub.name" (click)="onSubSpaceSelected(sub)">
                   <mjc-type-tile [IconClass]="sub.iconClass" [Color]="sub.color" Size="lg" />

@@ -1,5 +1,5 @@
 import { UUIDsEqual } from '@memberjunction/global';
-import { isPostCloseAccessPermitted } from '@mj-biz-apps/collaboration-core';
+import { spaceIsVisible, type SpaceStatusReach } from '@mj-biz-apps/collaboration-core';
 
 /** The fields of a space the walk up its tree reads. */
 export interface TreeSpace {
@@ -7,13 +7,10 @@ export interface TreeSpace {
     Name: string;
     ParentID: string | null;
     InheritsMembership: boolean;
-    /** A closed space lets its parent's people in only while its post-close access allows it. */
+    /** When the space entered a terminal status; a space of a type with no statuses reads as read-only but visible from it. */
     ClosedAt?: string | Date | null;
-    PostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
-    PostCloseAccessDays?: number | null;
-    /** What the space's type says, used when the space itself says nothing. */
-    TypePostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
-    TypePostCloseAccessDays?: number | null;
+    /** The space's effective status (stage 1), as the engine resolves it; a hidden one lets nobody in. */
+    Status?: SpaceStatusReach | null;
 }
 
 export interface ChainSpace {
@@ -23,8 +20,8 @@ export interface ChainSpace {
 
 /**
  * The spaces whose seats reach `spaceId`, nearest first: the space itself, then each parent while the child inherits
- * membership. A sealed space (one that doesn't inherit) stops the walk, and so does a closed parent whose post-close access has
- * ended (Core's `rosterBySeat` stops there too, and a test holds the two together). A parent the viewer can't read joins the chain
+ * membership. A sealed space (one that doesn't inherit) stops the walk, and so does a parent whose status hides it (Core's
+ * `rosterBySeat` stops there too, and a test holds the two together). A parent the viewer can't read joins the chain
  * unnamed and the walk ends there, since nothing is known of what lies above it. Its seats are readable only below an open
  * space that allows parent assignees, or when the viewer reaches the parent themselves: elsewhere they are missing from the list,
  * until the server reads the reaching seats.
@@ -43,11 +40,8 @@ export function accessChain(spaceId: string, spaces: readonly TreeSpace[]): Chai
             chain.push({ id: parentId, name: '' });
             break;
         }
-        // A closed parent whose post-close access has ended (or is None) no longer lets anyone in, and neither does what lies above it
-        if (parent.ClosedAt && !isPostCloseAccessPermitted({
-            closedAt: parent.ClosedAt, postCloseAccess: parent.PostCloseAccess, postCloseAccessDays: parent.PostCloseAccessDays,
-            spaceTypePostCloseAccess: parent.TypePostCloseAccess, spaceTypePostCloseAccessDays: parent.TypePostCloseAccessDays,
-        })) break;
+        // A parent whose status hides it no longer lets anyone in, and neither does what lies above it
+        if (!spaceIsVisible({ closedAt: parent.ClosedAt, status: parent.Status })) break;
         current = parent;
     }
     return chain;

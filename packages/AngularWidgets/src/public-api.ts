@@ -38,6 +38,9 @@ export { CollabSpaceTabsComponent } from './lib/space-tabs.component';
 export { CollabSpaceRailComponent } from './lib/space-rail.component';
 export { CollabFileIconComponent } from './lib/file-icon.component';
 export { CollabItemCardComponent } from './lib/item-card.component';
+export { CollabSpaceNotesComponent } from './lib/space-notes.component';
+export { CollabPinnedStripComponent } from './lib/pinned-strip.component';
+export { CollabSpaceDataComponent } from './lib/space-data.component';
 export { CollabItemRowComponent } from './lib/item-row.component';
 export { CollabAskBoxComponent } from './lib/ask-box.component';
 export { CollabNeedsYouCardComponent } from './lib/needs-you-card.component';
@@ -47,11 +50,26 @@ export { CollabSpaceOverviewComponent, RoomMiniMessage, SubSpaceSummary } from '
 export { CollabSpaceLibraryComponent, LibraryCollection, LibrarySmartView } from './lib/space-library.component';
 export { CollabShareCheckDialogComponent } from './lib/share-check-dialog.component';
 export { CollabUploadDialogComponent, CollabUploadSubmitPayload } from './lib/upload-dialog.component';
-export { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './lib/new-conversation-dialog.component';
+export {
+    CollabNewConversationDialogComponent,
+    NewConversationSubmitPayload,
+    type WorkstreamLinkTaskOption,
+    type WorkstreamLinkFileOption,
+    type WorkstreamActionLinkPayload,
+} from './lib/new-conversation-dialog.component';
 export { CollabNewSpaceDialogComponent, NewSpaceTypeOption, NewSpaceSubmitPayload } from './lib/new-space-dialog.component';
 export { CollabHomeListComponent, HomeListRow } from './lib/home-list.component';
 export { CollabSpaceWorkComponent } from './lib/space-work.component';
-export { CollabSpaceChatComponent } from './lib/space-chat.component';
+export {
+    CollabSpaceChatComponent,
+    CollabChatScopeBarComponent,
+    type SpaceChatCitationModel,
+    type WorkstreamLinkedItem,
+    type ChatThreadMessageLike,
+    type ChatRecordLink,
+    type ChatMessagePart,
+    type PendingAgentPromptState,
+} from './lib/space-chat.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';
 export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';

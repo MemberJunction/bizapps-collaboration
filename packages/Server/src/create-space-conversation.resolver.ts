@@ -49,13 +49,19 @@ export class CreateSpaceConversationResolver extends ResolverBase {
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) return { Success: false, ErrorMessage: 'Creating a conversation requires a signed-in person.' };
         try {
-            if (input.Kind !== undefined && input.Kind !== 'General' && input.Kind !== 'Topic' && input.Kind !== 'Private') {
-                return { Success: false, ErrorMessage: 'Invalid conversation kind. Only General, Topic, and Private (Internal Only) are permitted.' };
+            if (
+                input.Kind !== undefined &&
+                input.Kind !== 'General' &&
+                input.Kind !== 'Topic' &&
+                input.Kind !== 'Private' &&
+                input.Kind !== 'Assistant'
+            ) {
+                return { Success: false, ErrorMessage: 'Invalid conversation kind. Only General, Topic, Private (Internal Only), and Assistant (1-to-1) are permitted.' };
             }
             const result = await createSpaceConversation(provider, user, {
                 SpaceID: input.SpaceID,
                 Name: input.Name,
-                Kind: input.Kind as 'General' | 'Topic' | 'Private' | undefined,
+                Kind: input.Kind as 'General' | 'Topic' | 'Private' | 'Assistant' | undefined,
             });
             if (result.ok === false) {
                 return { Success: false, ErrorMessage: result.message };

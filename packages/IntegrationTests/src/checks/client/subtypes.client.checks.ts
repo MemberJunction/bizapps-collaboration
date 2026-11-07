@@ -1,7 +1,7 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 // The subtype's entity classes, and nothing else the package loads: the server's drivers would register server rules in this client process
-import { mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types/entities';
+import { mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
 
 void mjBizAppsCollabExamplesExampleBoardEntity;
 import { SPACE_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY } from '../../entity-names.js';
@@ -35,9 +35,10 @@ async function seatOther(ada: PersonaContext, spaceId: string, userId: string, r
 /** Closes a space as its owner (an open board is not deleted), then removes it and what hangs on it. */
 async function closeAndRemove(ctx: IntegrationCheckContext, ada: PersonaContext, spaceId: string): Promise<void> {
     const space = await ada.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada.User);
-    if (await space.Load(spaceId) && !space.ClosedAt) {
+    Assert(await space.Load(spaceId), `Ada loads the space to close it: ${space.LatestResult?.CompleteMessage ?? 'not found'}`);
+    if (!space.ClosedAt) {
         space.ClosedAt = new Date(Date.now() - 60_000);
-        await space.Save();
+        Assert(await space.Save(), `Ada closes the space before removing it: ${space.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
     await cleanupSpace(ctx.Provider, ctx.User, spaceId);
 }
@@ -129,6 +130,40 @@ const checks: NamedCheck[] = [
                 const allowed = await editAs(dev, 'By Dev');
                 Assert(allowed.saved, `Dev, an owner who holds Configure Spaces, saves: ${allowed.message}`);
                 Assert((await termNow()) === 'By Dev', 'and the row changed');
+            } finally {
+                await closeAndRemove(ctx, ada, id);
+            }
+        },
+    },
+    {
+        Id: 'subtypes.SC4',
+        Name: "SC4 — a client's save of only a board's own column reaches the type's driver with the old value and the new one: lowering an open board's quorum is refused, naming both, and raising it lands",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await getPersonaContext(ctx, 'ada');
+            const dev = await getPersonaContext(ctx, 'dev');
+            const client = new CollaborationClient((await getPersonaClientContext(ctx, 'ada')).GraphQLProvider);
+            const made = await client.CreateSpace({ TypeID: await boardTypeId(ctx), Name: `${CHECK_SPACE_PREFIX}SC4 board ${Date.now()}`, Details: { TermName: 'Original', QuorumPercentage: 60 } });
+            Assert(made.Success && !!made.SpaceID, `CreateSpace succeeds: ${made.ErrorMessage ?? ''}`);
+            const id = made.SpaceID as string;
+            try {
+                await seatOther(ada, id, dev.User.ID, "Code = 'owner'", ctx);
+                // Dev holds Configure Spaces and an owner seat, so only the driver's own rule decides
+                const setQuorum = async (quorum: number) => {
+                    const loaded = await dev.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev.User);
+                    Assert(await loaded.Load(id), 'Dev loads the board');
+                    const leaf = loaded.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity;
+                    leaf.QuorumPercentage = quorum;
+                    return { saved: await leaf.Save(), message: leaf.LatestResult?.CompleteMessage ?? '' };
+                };
+                const quorumNow = async () => (await FindRows<{ QuorumPercentage: number }>(ctx, BOARDS, `ID = '${id}'`, ['QuorumPercentage'], undefined, { BypassCache: true }))[0]?.QuorumPercentage;
+
+                const lowered = await setQuorum(50);
+                Assert(!lowered.saved && /60% to 50%/.test(lowered.message), `Lowering the quorum is refused by the driver, which names the old value and the new one: ${lowered.message}`);
+                Assert((await quorumNow()) === 60, 'The refused save changed nothing');
+                const raised = await setQuorum(75);
+                Assert(raised.saved, `Raising the quorum is allowed: ${raised.message}`);
+                Assert((await quorumNow()) === 75, 'and the row changed');
             } finally {
                 await closeAndRemove(ctx, ada, id);
             }

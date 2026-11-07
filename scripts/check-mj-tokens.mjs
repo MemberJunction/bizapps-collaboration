@@ -154,7 +154,7 @@ if (process.argv.includes('--self-test')) {
     selfTest();
     process.exit(0);
 }
-for (const root of ['packages/Angular/src', 'packages/AngularWidgets/src', 'packages/ExampleSpaceTypes/src']) walkHex(root);
+for (const root of ['packages/Angular/src', 'packages/AngularWidgets/src', 'packages/ExampleSpaceTypes/Angular/src']) walkHex(root);
 if (hexProblems.length) {
     for (const problem of hexProblems) console.error(`colour literal outside a var() fallback: ${problem}`);
     console.error(`${hexProblems.length} colour literal(s) found. Use a token, or mark the line "hex-ok" with a reason.`);

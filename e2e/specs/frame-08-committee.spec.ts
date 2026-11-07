@@ -111,4 +111,62 @@ test.describe('Frame 08 — Board & Committee Member Portal', () => {
         await expect(motionsTab).toBeVisible();
         await expect(motionsTab).toContainText('Motions & E-Ballots');
     });
+
+    test('renders Chat scope picker, opens New Conversation dialog, creates a 1-to-1 Assistant chat, and enables All My Spaces scope', async ({ page }) => {
+        await page.goto('/frame/08');
+        await ensureFontsLoaded(page);
+
+        // Open Chat tab
+        await page.locator('mjc-space-tabs .tab:has-text("Chat")').click();
+        const chatView = page.getByTestId('frame-08-chat-view');
+        await expect(chatView).toBeVisible();
+        await expect(page.getByTestId('active-chat-title')).toHaveText('Audit Committee General');
+
+        // Verify scope bar on General room conversation: This Space and Subtree visible, Everything hidden
+        const scopeBar = page.getByTestId('space-chat-scope-bar');
+        await expect(scopeBar).toBeVisible();
+        const thisSpacePill = page.getByTestId('scope-pill-this-space');
+        const subtreePill = page.getByTestId('scope-pill-subtree');
+        const everythingPill = page.getByTestId('scope-pill-everything');
+        await expect(thisSpacePill).toBeVisible();
+        await expect(subtreePill).toHaveAttribute('aria-pressed', 'true');
+        await expect(everythingPill).toHaveCount(0);
+
+        // Verify sources-in-scope chips bar renders candidate items in scope for the turn
+        const sourcesBar = page.getByTestId('sources-in-scope-bar');
+        await expect(sourcesBar).toBeVisible();
+        await expect(sourcesBar).toContainText('Sources in scope (2):');
+        const chips = page.getByTestId('source-in-scope-chip');
+        await expect(chips).toHaveCount(2);
+        await expect(chips.nth(0)).toContainText('FY2026 Audit Committee Pack.pdf');
+        await expect(chips.nth(1)).toContainText('Audit Charter Review Memo.docx');
+
+        // Narrow to This Space
+        await thisSpacePill.click();
+        await expect(thisSpacePill).toHaveAttribute('aria-pressed', 'true');
+        await expect(subtreePill).toHaveAttribute('aria-pressed', 'false');
+
+        // Open New Conversation dialog and select 1-to-1 Assistant
+        await page.getByTestId('btn-open-new-conversation').click();
+        const dialog = page.locator('mjc-new-conversation-dialog');
+        await expect(dialog.locator('.mj-dialog-container')).toBeVisible();
+        const assistantOption = dialog.getByTestId('kind-card-assistant');
+        await expect(assistantOption).toBeVisible();
+        await expect(assistantOption).toContainText('1-to-1 Assistant');
+        await assistantOption.click();
+
+        const nameInput = dialog.locator('#convo-name');
+        await nameInput.fill('audit-prep-assistant');
+        await dialog.locator('button:has-text("Create Conversation")').click();
+
+        // Dialog closes and active chat switches to the 1-to-1 Assistant conversation
+        await expect(dialog).toHaveCount(0);
+        await expect(page.getByTestId('active-chat-title')).toHaveText('audit-prep-assistant');
+        await expect(page.getByTestId('active-chat-subtitle')).toContainText('1-to-1 Assistant');
+
+        // All My Spaces scope pill is now available and selectable in the 1-to-1 Assistant chat
+        await expect(everythingPill).toBeVisible();
+        await everythingPill.click();
+        await expect(everythingPill).toHaveAttribute('aria-pressed', 'true');
+    });
 });

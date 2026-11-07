@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import { MJClickableDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { FormsModule } from '@angular/forms';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
@@ -7,7 +7,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-ask-box',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, MJClickableDirective],
+  imports: [FormsModule, MJButtonDirective, MJClickableDirective],
   template: `
     <div class="card ask">
       <div class="row gap10">
@@ -35,6 +35,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         />
         <button
           type="button"
+          mjButton
+          Variant="primary"
+          Size="sm"
           class="send"
           [disabled]="IsSubmitting || !Query.trim()"
           (click)="onSend()"
@@ -119,20 +122,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         }
       }
 
+      /* MJ's button draws the control; it sits inside the box's corner */
       .send {
         position: absolute;
         right: 6px;
         top: 6px;
-        width: 30px;
-        height: 30px;
-        border-radius: 8px;
-        background: var(--mj-brand-primary);
-        color: var(--mj-brand-on-primary);
-        display: grid;
-        place-items: center;
-        font-size: 12px;
-        border: 0;
-        cursor: pointer;
       }
     }
 

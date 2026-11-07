@@ -61,6 +61,25 @@ describe('making a new space', () => {
         assert.deepEqual(draft.MissingDetails(), []);
     });
 
+    it("leaves a form section of only the columns the driver hides out of the sections shown, keeps a required column whatever the driver says, and is unchanged when nothing is hidden", async () => {
+        const onForm = (Category: string) => ({ Category, GeneratedFormSection: 'Category', IncludeInGeneratedForm: true });
+        const fields = [
+            { ...field('TermName', { AllowsNull: false }), ...onForm('Board Details') },
+            { ...field('QuorumPercentage'), ...onForm('Board Details') },
+            { ...field('NextMeetingDate'), ...onForm('Next Meeting') },
+            { ...field('NextMeetingLocation'), ...onForm('Next Meeting') },
+            { ...field('Name'), GeneratedFormSection: 'Details', IncludeInGeneratedForm: true },
+        ] as unknown as FakeField[];
+        const { space } = fakeSpace({ child: { fields, values: {} } });
+        const draft = await NewSpaceDraft.Start(providerOf(space, seatStub()), USER, TYPE);
+        assert.deepEqual(draft.FormSectionsHiding(undefined), ['boardDetails', 'nextMeeting']);
+        assert.deepEqual(draft.FormSectionsHiding(['NextMeetingDate', 'nextmeetinglocation']), ['boardDetails']);
+        // TermName is required, so hiding it changes nothing
+        assert.deepEqual(draft.FormSectionsHiding(['TermName']), ['boardDetails', 'nextMeeting']);
+        // Hiding one column of Board Details leaves that section unshowable: the field list is drawn instead
+        assert.equal(draft.FormSectionsHiding(['QuorumPercentage']), null);
+    });
+
     it('collects what was typed into the subtype fields, and leaves out what has no value so the column default applies', async () => {
         const values: Record<string, unknown> = { TermName: '2026', Cadence: '', Quorum: 0 };
         const { space } = fakeSpace({ child: { fields: [field('ID', { IsPrimaryKey: true }), field('TermName', { AllowsNull: false }), field('Cadence'), field('Quorum'), field('Notes')], values } });

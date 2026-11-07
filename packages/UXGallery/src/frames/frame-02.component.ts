@@ -59,8 +59,8 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
                 [TotalPeople]="f.header.totalPeople"
                 [Summary]="f.header.audienceSummary"
               ></mjc-audience-pill>
-              <button mjButton variant="secondary" size="md"><i class="fa-solid fa-user-plus"></i>Invite</button>
-              <button mjButton variant="primary" size="md"><i class="fa-solid fa-plus"></i>New</button>
+              <button mjButton Variant="secondary" Size="md"><i class="fa-solid fa-user-plus"></i>Invite</button>
+              <button mjButton Variant="primary" Size="md"><i class="fa-solid fa-plus"></i>New</button>
             </div>
             <mjc-space-tabs
               [Tabs]="f.header.tabs"

@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { NeedsYouItemModel } from './types';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-needs-you-card',
   standalone: true,
+  imports: [MJButtonDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="attn-card">
@@ -22,7 +24,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <div class="fw6 fs13 ellipsis title">{{ Title }}</div>
         <div class="fs12 muted ellipsis sub">{{ Subtitle }}</div>
       </div>
-      <button type="button" class="btn sm" (click)="onAction()">{{ ActionLabel }}</button>
+      <button type="button" mjButton Variant="secondary" Size="sm" (click)="onAction()">{{ ActionLabel }}</button>
     </div>
   `,
   styles: [COLLAB_TOKENS_CSS, `
@@ -81,22 +83,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       color: var(--mj-text-muted);
     }
 
-    .btn.sm {
-      height: 30px;
-      padding: 0 12px;
-      border-radius: 8px;
-      border: 0;
-      background: var(--mj-bg-surface-active, #f1f5f9);
-      color: var(--mj-text-primary, #0f172a);
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      flex: none;
-
-      &:hover {
-        background: var(--mj-bg-surface-hover, #e2e8f0);
-      }
-    }
 
     .ellipsis {
       overflow: hidden;

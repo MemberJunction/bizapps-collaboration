@@ -5,7 +5,7 @@ import { runBeforeHookSafely } from './before-hook.ts';
 describe('running a Before hook', () => {
     it('answers true, and logs nothing, when the hook returns', () => {
         const logged: string[] = [];
-        assert.equal(runBeforeHookSafely('BeforeInvite', 'example-room', 'space-1', () => undefined, (m) => logged.push(m)), true);
+        assert.equal(runBeforeHookSafely('BeforeInvite', 'example-board', 'space-1', () => undefined, (m) => logged.push(m)), true);
         assert.deepEqual(logged, []);
     });
 

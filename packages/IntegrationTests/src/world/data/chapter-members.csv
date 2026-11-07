@@ -1,0 +1,6 @@
+Chapter,ID,FirstName,LastName,Email,JoinedAt,RenewalDate,DuesBalance,Status
+chapter-12,F2000001-0000-4000-8000-000000000001,Ivy,Twelve,ivy.twelve@collab-world.example,2021-01-10,2026-11-15,0,Active
+chapter-12,F2000001-0000-4000-8000-000000000002,Jun,Twelve,jun.twelve@collab-world.example,2022-05-02,2026-11-30,45.50,Active
+chapter-12,F2000001-0000-4000-8000-000000000003,Kai,Twelve,kai.twelve@collab-world.example,2019-08-20,2025-12-01,120,Lapsed
+chapter-40,F2000001-0000-4000-8000-000000000004,Lou,Forty,lou.forty@collab-world.example,2020-02-14,2026-12-05,0,Active
+chapter-40,F2000001-0000-4000-8000-000000000005,Mo,Forty,mo.forty@collab-world.example,2023-07-07,2027-01-20,0,Active

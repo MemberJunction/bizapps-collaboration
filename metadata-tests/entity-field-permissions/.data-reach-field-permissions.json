@@ -1,0 +1,110 @@
+[
+  {
+    "primaryKey": {
+      "ID": "FD49D288-1606-403E-85C6-15D1EFC7079D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Chapter&Entity=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DBFC508B-7A4C-422B-8552-87E359B2BFDE"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ChapterID&Entity=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "30613919-8EAA-487D-868E-98397F801E54"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DuesBalance&Entity=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "0EA5A0A1-B0DC-40E8-8F69-7FE4F89202EF"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Email&Entity=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "2D2C1013-786B-4039-866E-55DE81ABFF6C"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=FirstName&Entity=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "82BF8F78-0F02-4972-805A-B69074816F5D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=JoinedAt&Entity=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "1995B9C7-EBCB-4246-8E42-C35005D499C9"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=LastName&Entity=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C5662051-D0C9-4A03-8C28-434E98BF4B66"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=RenewalDate&Entity=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E2E008F8-EB38-4944-8DB7-0894478853C5"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Status&Entity=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  }
+]

@@ -12,7 +12,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "DefaultRetention": "Indefinite",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
       "DefaultBand": "Team",
@@ -38,11 +37,6 @@
             "work": "Work"
           }
         },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
-        },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
           "Chats.AgentReplyMode",
@@ -64,7 +58,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "DefaultRetention": "Indefinite",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
       "DefaultBand": "Team",
@@ -86,11 +79,6 @@
             "work": "Work"
           }
         },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
-        },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
           "Chats.AgentReplyMode"
@@ -111,7 +99,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "DefaultRetention": "Year",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
       "DefaultBand": "Team",
@@ -131,11 +118,6 @@
             "library": "Documents",
             "work": "Work"
           }
-        },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
         },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
@@ -157,7 +139,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "DefaultRetention": "Year",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
       "DefaultBand": "Shared",
@@ -174,11 +155,6 @@
             "library": "Documents",
             "work": "Work"
           }
-        },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
         },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
@@ -200,7 +176,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "DefaultRetention": "Year",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
       "DefaultBand": "Team",
@@ -219,11 +194,6 @@
             "library": "Documents",
             "work": "Work"
           }
-        },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
         },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
@@ -245,7 +215,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "DefaultRetention": "Indefinite",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
       "DefaultBand": "Shared",
@@ -265,11 +234,6 @@
             "library": "Documents",
             "work": "Work"
           }
-        },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
         },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
@@ -291,7 +255,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "DefaultRetention": "Year",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
       "DefaultBand": "Shared",
@@ -308,11 +271,6 @@
             "library": "Documents",
             "work": "Work"
           }
-        },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
         },
         "SpaceOverridable": [
           "Chats.WhoCanStart",

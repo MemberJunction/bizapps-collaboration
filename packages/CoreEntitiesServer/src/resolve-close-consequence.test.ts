@@ -40,13 +40,26 @@ function provider(options: { viewerCanRead: boolean }) {
     return { md, askedAs };
 }
 
+/** A type's statuses as the engine holds them: Active, Paused, Closed, Archived in the shipped shape. */
+const status = (id: string, code: string, name: string, sequence: number, over: Partial<Record<string, unknown>> = {}) => ({
+    ID: id, SpaceTypeID: TYPE, Code: code, Name: name, Sequence: sequence, IsDefault: code === 'active', ReadOnly: code !== 'active', Visible: code !== 'archived',
+    AgentRetrieval: code !== 'archived', CanChangeAfter: code !== 'archived', NotifyMembersOnEnter: code === 'paused' || code === 'closed', IsTerminal: code === 'closed' || code === 'archived', ...over,
+});
+const SHIPPED = [
+    status('E0000000-0000-4000-8000-000000000001', 'active', 'Active', 1),
+    status('E0000000-0000-4000-8000-000000000002', 'paused', 'Paused', 2),
+    status('E0000000-0000-4000-8000-000000000003', 'closed', 'Closed', 3),
+    status('E0000000-0000-4000-8000-000000000004', 'archived', 'Archived', 4),
+];
+
 describe('what closing a space would do, read on the server', () => {
     let systemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
-    let resolved: typeof CollaborationEngine.Instance.ResolvePostCloseAccessForSpace;
-    let reopen: typeof CollaborationEngine.Instance.UserCanReopenSpace;
-    let stamped = { access: 'None' as 'ReadOnly' | 'ReadOnlyWithAgent' | 'None', days: null as number | null };
+    let changeStatus: typeof CollaborationEngine.Instance.UserCanChangeSpaceStatus;
+    let statusesFor: typeof CollaborationEngine.Instance.StatusesForType;
+    let terminalFor: typeof CollaborationEngine.Instance.FirstTerminalStatusForType;
+    let ensureLoaded: typeof CollaborationEngine.Instance.EnsureLoaded;
+    let statuses: ReturnType<typeof status>[] = SHIPPED;
     let canReopen = true;
-    let resolveParams: Parameters<typeof CollaborationEngine.Instance.ResolvePostCloseAccessForSpace>[0] | null = null;
     let reopenFor: { id: string; roles: string[] } | null = null;
     let viewerCanClose = true;
     let reopenThrows = false;
@@ -56,54 +69,81 @@ describe('what closing a space would do, read on the server', () => {
         const engine = CollaborationEngine.Instance;
         systemUser = WellKnownUserSource.Instance.GetSystemUser.bind(WellKnownUserSource.Instance);
         WellKnownUserSource.Instance.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' } as UserInfo);
-        resolved = engine.ResolvePostCloseAccessForSpace.bind(engine);
-        engine.ResolvePostCloseAccessForSpace = async (params) => { resolveParams = params; return stamped; };
-        reopen = engine.UserCanReopenSpace.bind(engine);
+        ensureLoaded = engine.EnsureLoaded.bind(engine);
+        engine.EnsureLoaded = async () => undefined;
+        statusesFor = engine.StatusesForType.bind(engine);
+        engine.StatusesForType = () => [...statuses].sort((a, b) => a.Sequence - b.Sequence) as unknown as ReturnType<typeof statusesFor>;
+        terminalFor = engine.FirstTerminalStatusForType.bind(engine);
+        engine.FirstTerminalStatusForType = () => [...statuses].sort((a, b) => a.Sequence - b.Sequence).find((s) => s.IsTerminal) as unknown as ReturnType<typeof terminalFor>;
+        changeStatus = engine.UserCanChangeSpaceStatus.bind(engine);
         close = engine.UserCanCloseSpace.bind(engine);
         engine.UserCanCloseSpace = async () => viewerCanClose;
-        engine.UserCanReopenSpace = async (user) => { if (reopenThrows) throw new Error('the seat could not be read'); reopenFor = { id: user.ID, roles: (user.UserRoles ?? []).map((role) => role.Role ?? '') }; return canReopen; };
+        engine.UserCanChangeSpaceStatus = async (user) => { if (reopenThrows) throw new Error('the seat could not be read'); reopenFor = { id: user.ID, roles: (user.UserRoles ?? []).map((role) => role.Role ?? '') }; return canReopen; };
     });
     after(() => {
         WellKnownUserSource.Instance.GetSystemUser = systemUser;
-        CollaborationEngine.Instance.ResolvePostCloseAccessForSpace = resolved;
-        CollaborationEngine.Instance.UserCanReopenSpace = reopen;
+        CollaborationEngine.Instance.EnsureLoaded = ensureLoaded;
+        CollaborationEngine.Instance.StatusesForType = statusesFor;
+        CollaborationEngine.Instance.FirstTerminalStatusForType = terminalFor;
+        CollaborationEngine.Instance.UserCanChangeSpaceStatus = changeStatus;
         CollaborationEngine.Instance.UserCanCloseSpace = close;
     });
 
-    it("returns what the close would stamp (resolved as the close resolves it, from the parent and the space's own settings), the keeper's name, and whether they can reopen it", async () => {
-        stamped = { access: 'None', days: null };
+    it("returns the status the close moves the space to (the type's first terminal status) and what it allows, the keeper's name, and whether they can reopen it", async () => {
+        statuses = SHIPPED;
         canReopen = true;
         const { md } = provider({ viewerCanRead: true });
         const result = await resolveCloseConsequence(md, viewer, SPACE);
-        assert.deepEqual(result, { access: 'None', days: null, keeperUserId: KEEPER.toLowerCase(), keeperName: 'Ada Owner', keeperCanReopen: true });
-        assert.equal(resolveParams?.parentId, PARENT);
-        assert.equal(resolveParams?.spaceTypeId, TYPE);
-        assert.deepEqual(resolveParams?.currentConfig, { Chats: { WhoCanStart: 'Anyone' } });
+        assert.equal(result.status?.Code, 'closed');
+        assert.deepEqual([result.readOnly, result.visible, result.agentRetrieval], [true, true, true]);
+        assert.deepEqual({ keeperUserId: result.keeperUserId, keeperName: result.keeperName }, { keeperUserId: KEEPER.toLowerCase(), keeperName: 'Ada Owner' });
+        // Closed is terminal and the only status after it is Archived (read-only): nobody reopens it, whatever their right
+        assert.equal(result.keeperCanReopen, false);
     });
 
-    it('carries a window, and asks the keeper\'s right as the keeper, with their roles', async () => {
-        stamped = { access: 'ReadOnly', days: 30 };
+    it("asks the keeper's right as the keeper, with their roles, when a writable status follows the close", async () => {
+        // A type whose Closed is followed by a Reopened status that allows writes
+        statuses = [...SHIPPED.slice(0, 3), status('E0000000-0000-4000-8000-000000000005', 'reopened', 'Reopened', 5, { ReadOnly: false, IsTerminal: false })];
         const { md } = provider({ viewerCanRead: true });
         const result = await resolveCloseConsequence(md, viewer, SPACE);
-        assert.equal(result.access, 'ReadOnly');
-        assert.equal(result.days, 30);
+        assert.equal(result.keeperCanReopen, true);
         assert.deepEqual(reopenFor, { id: KEEPER.toLowerCase(), roles: ['UI', 'Space Participant'] });
     });
 
+    it('reads a type with no statuses yet as read-only and visible, with no status to name', async () => {
+        statuses = [];
+        try {
+            const { md } = provider({ viewerCanRead: true });
+            const result = await resolveCloseConsequence(md, viewer, SPACE);
+            assert.equal(result.status, null);
+            assert.deepEqual([result.readOnly, result.visible, result.agentRetrieval], [true, true, true]);
+            assert.equal(result.keeperCanReopen, false);
+        } finally {
+            statuses = SHIPPED;
+        }
+    });
+
     it('says the keeper cannot reopen it when the engine says so', async () => {
+        statuses = [...SHIPPED.slice(0, 3), status('E0000000-0000-4000-8000-000000000005', 'reopened', 'Reopened', 5, { ReadOnly: false, IsTerminal: false })];
         canReopen = false;
-        const { md } = provider({ viewerCanRead: true });
-        assert.equal((await resolveCloseConsequence(md, viewer, SPACE)).keeperCanReopen, false);
-        canReopen = true;
+        try {
+            const { md } = provider({ viewerCanRead: true });
+            assert.equal((await resolveCloseConsequence(md, viewer, SPACE)).keeperCanReopen, false);
+        } finally {
+            canReopen = true;
+            statuses = SHIPPED;
+        }
     });
 
     it('answers null, not false, when the check of the keeper\'s right fails: could not check is not cannot', async () => {
+        statuses = [...SHIPPED.slice(0, 3), status('E0000000-0000-4000-8000-000000000005', 'reopened', 'Reopened', 5, { ReadOnly: false, IsTerminal: false })];
         reopenThrows = true;
         try {
             const { md } = provider({ viewerCanRead: true });
             assert.equal((await resolveCloseConsequence(md, viewer, SPACE)).keeperCanReopen, null);
         } finally {
             reopenThrows = false;
+            statuses = SHIPPED;
         }
     });
 

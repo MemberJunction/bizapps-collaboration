@@ -24,7 +24,7 @@ import { CollabSpaceChatComponent } from './space-chat.component.ts';
 import { CollabSpacePeopleComponent } from './space-people.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './new-conversation-dialog.component.ts';
-import { SimpleChange } from '@angular/core';
+import { SimpleChange, ElementRef } from '@angular/core';
 import { filterLibraryRows } from './library-filter.ts';
 import { taskPriorityClass, taskPriorityLabel, taskStatusClass, taskStatusLabel } from './task-status.ts';
 import {
@@ -1191,16 +1191,18 @@ describe('Copy link says how it went', () => {
 
 /** The status-push subscription the space's chat starts; these tests don't look at it. */
 const streamingStub = { initialize: () => undefined } as unknown as ConversationStreamingService;
+/** The chat's own element, which only the lock's outside-click reads; these tests have no DOM. */
+const hostStub = { nativeElement: { contains: () => false } } as unknown as ElementRef<HTMLElement>;
 
 describe('CollabSpaceChatComponent', () => {
   it('initializes host inputs with proper defaults', () => {
-    const comp = new CollabSpaceChatComponent(streamingStub);
+    const comp = new CollabSpaceChatComponent(streamingStub, hostStub);
     expect(comp.AllowMentions).toBe(true);
     expect(comp.AllowAttachments).toBe(false);
   });
 
   it('emits the new-conversation request', () => {
-    const comp = new CollabSpaceChatComponent(streamingStub);
+    const comp = new CollabSpaceChatComponent(streamingStub, hostStub);
 
     let newConvoEmitted = false;
     comp.NewConversationRequested.subscribe(() => {
@@ -1235,11 +1237,27 @@ describe('CollabNewConversationDialogComponent', () => {
     expect(comp.name).toBe('');
     expect(comp.kind).toBe('General');
     expect(comp.IsSubmitting).toBe(false);
-    expect(comp.AllowedKinds).toEqual(['General', 'Topic']);
+    expect(comp.AllowedKinds).toEqual(['General', 'Topic', 'Assistant']);
     expect(comp.canShowPrivate).toBe(false);
+    expect(comp.canShowAssistant).toBe(true);
 
     comp.name = '   Weekly Sync   ';
     expect(comp.trimmedName).toBe('Weekly Sync');
+  });
+
+  it('emits SubmitRequested for 1-to-1 Assistant conversation kind', () => {
+    const comp = new CollabNewConversationDialogComponent();
+    comp.name = '  audit-prep-assistant  ';
+    comp.kind = 'Assistant';
+    let submitted: NewConversationSubmitPayload | null = null;
+    comp.SubmitRequested.subscribe(payload => {
+      submitted = payload;
+    });
+    comp.onSubmit();
+    expect(submitted).toEqual({
+      name: 'audit-prep-assistant',
+      kind: 'Assistant',
+    });
   });
 
   it('allows Private kind only when explicitly permitted in AllowedKinds', () => {
@@ -1495,7 +1513,6 @@ describe('CollabSpaceSettingsComponent', () => {
     backgroundImageUrl: 'https://example.com/banner.jpg',
     inheritsMembership: true,
     agentRetrieval: 'Included',
-    retention: 'Indefinite',
     status: 'Active',
   };
 
@@ -1565,5 +1582,277 @@ describe('CollabSpaceSettingsComponent', () => {
   it('edits and offers close and reopen by default', () => {
     const comp = new CollabSpaceSettingsComponent();
     expect([comp.CanEdit, comp.CanChangeLifecycle]).toEqual([true, true]);
+  });
+});
+
+describe('CollabSpaceNotesComponent (B21)', async () => {
+  const { CollabSpaceNotesComponent } = await import('./space-notes.component.ts');
+  const note = (over: Partial<import('./types.ts').NoteModel> = {}): import('./types.ts').NoteModel => ({
+    id: 'n1', title: 'Q3 plan', body: 'Call the lapsed members.', band: 'Team', visibility: 'Space', authorUserId: 'u1', authorName: 'Sam',
+    updatedLabel: 'today', isMine: true, canPromote: true, isPinned: false, ...over,
+  });
+  it('opens the composer on the default band for a seat that sees Team, and Shared for one that does not', () => {
+    const comp = new CollabSpaceNotesComponent();
+    comp.CanSeeTeam = true; comp.DefaultBand = 'Team';
+    comp.openComposer(null);
+    expect(comp.draft).toEqual({ id: null, title: '', body: '', band: 'Team', visibility: 'Space' });
+    const outside = new CollabSpaceNotesComponent();
+    outside.CanSeeTeam = false; outside.DefaultBand = 'Team';
+    outside.openComposer(null);
+    expect(outside.draft?.band).toBe('Shared');
+  });
+  it('a private note sits on Team; choosing Shared makes it a space note again', () => {
+    const comp = new CollabSpaceNotesComponent();
+    comp.CanSeeTeam = true;
+    comp.openComposer(null);
+    comp.setBand(comp.draft!, 'Team');
+    comp.togglePrivate(comp.draft!);
+    expect(comp.draft).toMatchObject({ band: 'Team', visibility: 'Private' });
+    comp.setBand(comp.draft!, 'Shared');
+    expect(comp.draft).toMatchObject({ band: 'Shared', visibility: 'Space' });
+  });
+  it('submits a trimmed draft and ignores an empty title', () => {
+    const comp = new CollabSpaceNotesComponent();
+    const saved: unknown[] = [];
+    comp.SaveRequested.subscribe((d) => saved.push(d));
+    comp.openComposer(null);
+    comp.submit();
+    expect(saved).toHaveLength(0);
+    comp.draft!.title = '  Agenda  ';
+    comp.submit();
+    expect(saved).toEqual([{ id: null, title: 'Agenda', body: '', band: 'Shared', visibility: 'Space' }]);
+  });
+  it('promotion asks first and emits only on confirmation', () => {
+    const comp = new CollabSpaceNotesComponent();
+    const promoted: string[] = [];
+    comp.PromoteRequested.subscribe((n) => promoted.push(n.id));
+    const n = note();
+    comp.askPromote(n);
+    expect(comp.promoting?.id).toBe('n1');
+    expect(promoted).toEqual([]);
+    comp.confirmPromote(n);
+    expect(comp.promoting).toBeNull();
+    expect(promoted).toEqual(['n1']);
+  });
+  it('editing fills the composer from the note', () => {
+    const comp = new CollabSpaceNotesComponent();
+    comp.openComposer(note({ band: 'Shared' }));
+    expect(comp.draft).toEqual({ id: 'n1', title: 'Q3 plan', body: 'Call the lapsed members.', band: 'Shared', visibility: 'Space' });
+  });
+});
+
+describe('CollabSpaceDataComponent (B19)', async () => {
+  const { CollabSpaceDataComponent } = await import('./space-data.component.ts');
+  it('names each kind and its icon', () => {
+    const comp = new CollabSpaceDataComponent();
+    expect(comp.kindLabel('Query')).toBe('Query');
+    expect(comp.iconFor('Dashboard')).toContain('chart');
+    expect(comp.iconFor('Component')).toContain('cubes');
+  });
+  it('renders cells readably', () => {
+    const comp = new CollabSpaceDataComponent();
+    expect(comp.cell(null)).toBe('');
+    expect(comp.cell(12)).toBe('12');
+    expect(comp.cell({ a: 1 })).toBe('{"a":1}');
+  });
+});
+
+describe('CollabPinnedStripComponent (B22)', async () => {
+  const { CollabPinnedStripComponent } = await import('./pinned-strip.component.ts');
+  it('emits open and unpin for the pin', () => {
+    const comp = new CollabPinnedStripComponent();
+    const opened: string[] = []; const unpinned: string[] = [];
+    comp.OpenRequested.subscribe((p) => opened.push(p.target));
+    comp.UnpinRequested.subscribe((p) => unpinned.push(p.id));
+    const pin = { id: 'p1', kind: 'Record' as const, title: 'Roadmap', subtitle: 'file', iconClass: 'fa-solid fa-file', target: 'item:i1', spaceId: 's', spaceName: 'Northwind' };
+    comp.OpenRequested.emit(pin); comp.UnpinRequested.emit(pin);
+    expect(opened).toEqual(['item:i1']);
+    expect(unpinned).toEqual(['p1']);
+  });
+});
+
+describe('CollabChatScopeBarComponent sources-in-scope chips', async () => {
+  const { CollabChatScopeBarComponent } = await import('./space-chat.component.ts');
+  it('emits CitationClicked when a source-in-scope chip is clicked', () => {
+    const bar = new CollabChatScopeBarComponent();
+    const clicked: string[] = [];
+    bar.CitationClicked.subscribe((c) => clicked.push(c.SpaceItemID));
+    bar.onCitationClick({
+      SpaceItemID: 'item-1',
+      SpaceID: 'space-1',
+      EntityID: 'entity-1',
+      RecordID: 'rec-1',
+      Name: 'FY2026 Audit Pack.pdf',
+      Band: 'Shared',
+    });
+    expect(clicked).toEqual(['item-1']);
+  });
+});
+
+describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI', async () => {
+  const { CollabNewConversationDialogComponent } = await import('./new-conversation-dialog.component.ts');
+  const { CollabSpaceChatComponent } = await import('./space-chat.component.ts');
+
+  it('links a Topic / Workstream conversation to an existing task, a new task, or a document in CollabNewConversationDialogComponent', () => {
+    const dialog = new CollabNewConversationDialogComponent();
+    dialog.Tasks = [
+      { id: 'task-1', name: 'Q3 Financial Audit Review', status: 'InProgress', priority: 'High' },
+      { id: 'task-2', name: 'Draft Board Resolution', status: 'Open', priority: 'Normal' },
+    ];
+    dialog.Files = [
+      { id: 'file-1', title: 'Audit Scope Charter.pdf', kind: 'pdf' },
+    ];
+    dialog.kind = 'Topic';
+
+    // Selecting 'task' mode auto-selects the first task and populates the conversation name when blank
+    dialog.setLinkMode('task');
+    expect(dialog.selectedTaskId).toBe('task-1');
+    expect(dialog.name).toBe('Q3 Financial Audit Review');
+
+    const submitted: unknown[] = [];
+    dialog.SubmitRequested.subscribe((p) => submitted.push(p));
+    dialog.onSubmit();
+    expect(submitted[0]).toEqual({
+      name: 'Q3 Financial Audit Review',
+      kind: 'Topic',
+      linkedAction: {
+        mode: 'task',
+        targetId: 'task-1',
+        targetTitle: 'Q3 Financial Audit Review',
+      },
+    });
+
+    // Creating a new linked task right from the workstream dialog
+    dialog.name = 'Tax Compliance Workstream';
+    dialog.setLinkMode('new-task');
+    dialog.newTaskTitle = 'Complete Q3 Tax Filing';
+    dialog.newTaskPriority = 'High';
+    dialog.onSubmit();
+    expect(submitted[1]).toEqual({
+      name: 'Tax Compliance Workstream',
+      kind: 'Topic',
+      linkedAction: {
+        mode: 'new-task',
+        newTaskTitle: 'Complete Q3 Tax Filing',
+        newTaskPriority: 'High',
+      },
+    });
+
+    // Linking to a document
+    dialog.setLinkMode('file');
+    dialog.onSubmit();
+    expect(submitted[2]).toEqual({
+      name: 'Tax Compliance Workstream',
+      kind: 'Topic',
+      linkedAction: {
+        mode: 'file',
+        targetId: 'file-1',
+        targetTitle: 'Audit Scope Charter.pdf',
+      },
+    });
+  });
+
+  it('handles PR #6176 thread replies, live agent progress bar, and "Ask if an agent should go" prompt in CollabSpaceChatComponent', async () => {
+    vi.useFakeTimers();
+    const chat = new CollabSpaceChatComponent();
+    chat.DefaultAgentName = 'Sage';
+    chat.DefaultAgentId = 'agent-sage';
+    chat.CurrentUser = { ID: 'user-colin', Name: 'Colin Brockman', Email: 'colin@example.com' } as never;
+    chat.LinkedWorkstreamItem = { kind: 'task', id: 'task-1', title: 'Q3 Financial Audit Review', status: 'InProgress' };
+    chat.ThreadMessages = [
+      { ID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Can someone check the variance table on page 4?' },
+      { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', UserID: '00000000-0000-0000-0000-000000000000', User: 'System', Message: 'I checked page 4 — variance is +4.2%.' },
+      { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'user-colin', User: 'Colin Brockman', Message: 'Thanks Ada, I will sign off on it.' },
+    ];
+
+    // 1. Linked workstream item opens when clicked
+    const openedItems: unknown[] = [];
+    chat.LinkedItemOpenRequested.subscribe((item) => openedItems.push(item));
+    chat.onOpenLinkedItem();
+    expect(openedItems).toEqual([{ kind: 'task', id: 'task-1', title: 'Q3 Financial Audit Review', status: 'InProgress' }]);
+
+    // 2. Thread parent & transitive Slack-thread replies resolution:
+    //    - Every reply (including msg-2, AI reply to top-level msg-1) resolves its parent via getParentMessage (R5-S2)
+    //    - msg-3 (person reply to msg-1), msg-5 (person reply to msg-3), and msg-6 (AI reply to msg-5) are in the thread
+    chat.ThreadMessages = [
+      ...chat.ThreadMessages,
+      { ID: 'msg-5', ParentID: 'msg-3', Role: 'User', User: 'Riku Sato', Message: 'Good catch @Sage — can you also check page 5?' },
+      { ID: 'msg-6', ParentID: 'msg-5', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', UserID: '00000000-0000-0000-0000-000000000000', User: 'System', Message: 'Page 5 is within tolerance.' },
+    ];
+    expect(chat.getParentMessage(chat.ThreadMessages[1])?.ID).toBe('msg-1');
+    expect(chat.getParentMessage(chat.ThreadMessages[2])?.ID).toBe('msg-1');
+    expect(chat.getRepliesFor('msg-1').map((m) => m.ID)).toEqual(['msg-3', 'msg-5', 'msg-6']);
+    expect(chat.getLastReplySpeaker('msg-1')).toBe('Sage');
+    expect(chat.getThreadParticipants('msg-1').map((p) => p.name)).toEqual(['Colin Brockman', 'Riku Sato', 'Sage']);
+    expect(chat.getNestedReplyTargetName(chat.ThreadMessages[3], 'msg-1')).toBe('Colin Brockman');
+    expect(chat.getThreadReplyTarget(chat.ThreadMessages[3], 'msg-1')?.ID).toBe('msg-3');
+    expect(chat.getThreadReplyTarget(chat.ThreadMessages[4], 'msg-1')?.ID).toBe('msg-5');
+    expect(chat.getThreadReplyTarget(chat.ThreadMessages[2], 'msg-1')).toBeNull();
+    expect(chat.getSpeakerName(chat.ThreadMessages[0])).toBe('Ada Lovelace');
+    expect(chat.getSpeakerName(chat.ThreadMessages[1])).toBe('Sage');
+    expect(chat.isAiMessage(chat.ThreadMessages[1])).toBe(true);
+    expect(chat.isAiMessage(chat.ThreadMessages[0])).toBe(false);
+
+    // 2b. Conversation participants @Mention helper
+    chat.mentionParticipant('Ada Lovelace');
+    expect(chat.ComposerDraft).toBe('@Ada Lovelace ');
+
+    // 3. Starting a reply to a human message sets replyToMessage, and sending without an agent turn triggers "Ask if an agent should go"
+    chat.startReplyTo(chat.ThreadMessages[0]);
+    expect(chat.replyToMessage?.ID).toBe('msg-1');
+
+    chat.onUserMessageSent({ ID: 'msg-4', ParentID: 'msg-1', Role: 'User', Message: 'Sounds good to me.' }, chat.ThreadMessages[0]);
+    expect(chat.replyToMessage).toBeNull();
+    vi.advanceTimersByTime(150);
+
+    expect(chat.pendingAgentPrompt).toEqual({
+      messageId: 'msg-4',
+      messageText: 'Sounds good to me.',
+      reasonLabel: 'You replied to Ada Lovelace.',
+      suggestedAgentName: 'Sage',
+      suggestedAgentId: 'agent-sage',
+    });
+
+    // 4. Confirming "Ask Sage to answer?" runs AgentTurnHandler with Route: 'Redirect' for that message and agent
+    const turnRequests: unknown[] = [];
+    chat.ConversationId = 'conv-1';
+    chat.AgentTurnHandler = async (req) => {
+      turnRequests.push(req);
+      return { Success: true, ReplyDetailIds: ['reply-99'] };
+    };
+    const askDone = chat.confirmAgentShouldGo();
+    expect(chat.pendingAgentPrompt).toBeNull();
+    expect(chat.isAgentWorking).toBe(true);
+    expect(chat.activeAgentName).toBe('Sage');
+    expect(chat.formatRouteBadge(chat.activeAgentRoute)).toBe('Handed to Sage');
+    await askDone;
+    expect(turnRequests).toEqual([
+      {
+        ConversationId: 'conv-1',
+        BranchID: null,
+        UserMessageId: 'msg-4',
+        MessageText: 'Sounds good to me.',
+        AgentId: 'agent-sage',
+        AgentName: 'Sage',
+        Route: 'Redirect',
+        ApplicationId: null,
+        AppContext: null,
+        AgentHistoryFrom: null,
+        ConfigurationPresetId: null,
+        RequestedSkillIDs: [],
+        PlanMode: false,
+        TargetArtifactVersionId: null,
+      },
+    ]);
+    expect(chat.isAgentWorking).toBe(false);
+    expect(chat.activeAgentRoute).toBeNull();
+
+    // 5. When no default agent is configured, the "Ask <Agent> to answer?" prompt does not appear
+    chat.DefaultAgentId = null;
+    chat.DefaultAgentName = '';
+    chat.onUserMessageSent({ ID: 'msg-7', ParentID: 'msg-1', Role: 'User', Message: 'No agent configured.' }, chat.ThreadMessages[0]);
+    vi.advanceTimersByTime(150);
+    expect(chat.pendingAgentPrompt).toBeNull();
+    vi.useRealTimers();
   });
 });

@@ -1,8 +1,9 @@
 import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
+import { ContentUploadIngestor } from '@memberjunction/content-pipeline';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { authorizeItemWrite, ResolveSpaceRules, type Band } from '@mj-biz-apps/collaboration-core';
+import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
 import { recordItemUse, recordShare } from './library-events.js';
 import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import {
@@ -11,13 +12,16 @@ import {
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
-import { refusalOf, resolveSpaceDriver, subtypeOf } from './space-driver-call.js';
+import { refusalOf, resolveSpaceDriver, driverBaseContext, subtypeOf } from './space-driver-call.js';
 import type { ItemChangeKind } from './base-space-type-server-driver.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Items';
+
+/** Shipped `MJ: Content Sources` ID for Collaboration's `"Space files"` (`Upload`) source. */
+export const SPACE_FILES_CONTENT_SOURCE_ID = 'CA69AB7B-248F-4543-86EE-5E0D00A41B35';
 
 /** The item object this upload created. Another request's item cannot match it. */
 const vouchedItems = new WeakSet<object>();
@@ -160,12 +164,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             const oldValues = reading.oldValues;
 
             const driverValidation = await spaceInfo.driver.ValidateItemChange({
-                actingUser: user,
-                provider: this.ProviderToUse,
-                space: spaceInfo.space,
-                spaceType: spaceInfo.spaceType,
-                effectiveRules: ResolveSpaceRules(null, null),
-                subtypeEntityName: subtypeOf(spaceInfo.spaceType),
+                ...(await driverBaseContext(this.ProviderToUse, user, spaceInfo.space, spaceInfo.spaceType, spaceInfo.configuration)),
                 item: this,
                 kind: itemKind,
                 oldValues,
@@ -185,6 +184,12 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const previousBand = this.Fields.find((field) => field.Name === 'Band')?.OldValue as Band | null | undefined;
         // One reading per save: taken here, handed to validation, used by the reaction. Dropped when the save is done.
         const own = this.readChange();
+        const provider = asMetadata(this.ProviderToUse);
+        const filesEntity = provider?.EntityByName('MJ: Files');
+        const oldEntityId = !wasNew ? String(own.oldValues.EntityID ?? this.EntityID ?? '') : '';
+        const wasFileItem = !wasNew && !!filesEntity && oldEntityId.toLowerCase() === filesEntity.ID.toLowerCase();
+        const oldRawRecId = wasFileItem ? String(own.oldValues.RecordID ?? this.RecordID ?? '') : '';
+        const oldFileId = oldRawRecId ? parseUuid(oldRawRecId.toLowerCase().startsWith('id|') ? oldRawRecId.slice(3) : oldRawRecId) : null;
         this.readingForSave = own;
         let ok = false;
         try {
@@ -195,6 +200,14 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const decided = own;
         const user = this.ContextCurrentUser;
         if (!ok || !user || !this.ID) return ok;
+        if (oldFileId && provider && filesEntity) {
+            const nowFileItem = !!this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
+            const nowRawRecId = nowFileItem && this.RecordID ? (this.RecordID.toLowerCase().startsWith('id|') ? this.RecordID.slice(3) : this.RecordID) : '';
+            const nowFileId = nowRawRecId ? parseUuid(nowRawRecId) : null;
+            if (!nowFileId || nowFileId.toLowerCase() !== oldFileId.toLowerCase()) {
+                await cleanupStoredFileIfUnreferenced(provider, this, oldFileId, filesEntity.ID, this.ID);
+            }
+        }
         const becameShared = this.Band === 'Shared' && (wasNew || previousBand !== 'Shared');
         try {
             if (!wasNew && becameShared) await recordItemUse(this, user, this.ID, this.SpaceID, 'promote');
@@ -204,18 +217,15 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         }
 
         // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
+        let spaceTypeCodeForSubscribers: string | null = null;
         if (decided.changed) {
             let typeCode: string | undefined;
             try {
                 const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
                 typeCode = spaceInfo.spaceType.Code;
+                spaceTypeCodeForSubscribers = typeCode ?? null;
                 await spaceInfo.driver.OnItemChanged({
-                    actingUser: user,
-                    provider: this.ProviderToUse,
-                    space: spaceInfo.space,
-                    spaceType: spaceInfo.spaceType,
-                    effectiveRules: ResolveSpaceRules(null, null),
-                    subtypeEntityName: subtypeOf(spaceInfo.spaceType),
+                    ...(await driverBaseContext(this.ProviderToUse, user, spaceInfo.space, spaceInfo.spaceType, spaceInfo.configuration)),
                     item: this,
                     kind: decided.kind,
                     oldValues: decided.oldValues,
@@ -228,6 +238,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (becameShared) {
             notifySpaceLifecycleSubscribers(this.ProviderToUse, {
                 spaceId: this.SpaceID,
+                spaceTypeCode: spaceTypeCodeForSubscribers,
                 actingUserId: user.ID,
                 event: 'AfterItemPromoted',
                 timestamp: new Date(),
@@ -448,6 +459,8 @@ async function cleanupStoredFileIfUnreferenced(
 }
 
 async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo, fileId: string): Promise<void> {
+    removeSpaceFileFromContentPipeline(provider, user, fileId);
+
     let storagePath: string | null = null;
     let accountId: string | null = null;
     let fileEntity: MJFileEntity | null = null;
@@ -478,16 +491,108 @@ async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo
         }
     }
 
+    // The Library's artifact over this file (stage 1): its versions name the file row, so they and their artifact go first
+    try {
+        const rv = RunView.FromMetadataProvider(provider);
+        const versions = await rv.RunView<{ ID: string; ArtifactID: string }>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `FileID = '${fileId}'`,
+            Fields: ['ID', 'ArtifactID'],
+            ResultType: 'simple',
+            MaxRows: 100,
+        }, user);
+        const artifactIds = new Set<string>();
+        for (const row of versions.Success ? versions.Results ?? [] : []) {
+            const version = await provider.GetEntityObject<BaseEntity>('MJ: Artifact Versions', user);
+            if (await version.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: row.ID }])) && (await version.Delete())) artifactIds.add(row.ArtifactID);
+        }
+        for (const artifactId of artifactIds) {
+            const left = await rv.RunView<{ ID: string }>({ EntityName: 'MJ: Artifact Versions', ExtraFilter: `ArtifactID = '${artifactId}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, user);
+            if (left.Success && (left.Results?.length ?? 0) === 0) {
+                const artifact = await provider.GetEntityObject<BaseEntity>('MJ: Artifacts', user);
+                if (await artifact.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: artifactId }]))) await artifact.Delete();
+            }
+        }
+    } catch (error) {
+        LogError(`Space item artifact cleanup: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    await detachContentItemsFromFile(provider, user, fileId);
+
     let rowGone = false;
     if (fileEntity && fileEntity.IsSaved) {
-        try {
-            rowGone = await fileEntity.Delete();
-        } catch (error) {
-            LogError(`Space item file row cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        rowGone = await deleteFileRow(fileEntity);
+        if (!rowGone) {
+            // The upload's ingest runs alongside this delete and can attach its Content Item after the detach above, which
+            // blocks the row (FK_ContentItem_File). Detach again and try once more.
+            await detachContentItemsFromFile(provider, user, fileId);
+            rowGone = await deleteFileRow(fileEntity);
         }
     }
     if ((storagePath && !objectGone) || !rowGone) {
         LogError(`Space item file cleanup incomplete for ${fileId}: object=${objectGone} row=${rowGone}.`);
+    }
+}
+
+/** Clears FileID on the Content Items that name this file, so the file row can be deleted; the items stay as tombstones. */
+async function detachContentItemsFromFile(provider: IMetadataProvider, user: UserInfo, fileId: string): Promise<void> {
+    if (typeof provider.EntityByName !== 'function' || !provider.EntityByName('MJ: Content Items')) {
+        return;
+    }
+    try {
+        const rv = RunView.FromMetadataProvider(provider);
+        const linked = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `FileID = '${fileId}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            user,
+        );
+        for (const row of linked.Success ? linked.Results ?? [] : []) {
+            const ci = await provider.GetEntityObject<BaseEntity & { FileID?: string | null }>('MJ: Content Items', user);
+            if (await ci.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: row.ID }]))) {
+                ci.FileID = null;
+                if (typeof ci.Set === 'function') {
+                    ci.Set('FileID', null);
+                }
+                await ci.Save();
+            }
+        }
+    } catch (error) {
+        LogError(`Space item content item file detachment: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+async function deleteFileRow(fileEntity: MJFileEntity): Promise<boolean> {
+    try {
+        return await fileEntity.Delete();
+    } catch (error) {
+        LogError(`Space item file row cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        return false;
+    }
+}
+
+// ponytail: if an ingest finishes after its item was deleted, the leftover Content Item's origin is gone,
+// so the read filters and VerifyOriginRecords already hide it. A later cleanup can sweep it.
+function removeSpaceFileFromContentPipeline(provider: IMetadataProvider, user: UserInfo, fileId: string): void {
+    if (typeof provider.EntityByName !== 'function' || !provider.EntityByName('MJ: Content Items')) {
+        return;
+    }
+    try {
+        void ContentUploadIngestor.Remove({
+            FileID: fileId,
+            ContentSourceID: SPACE_FILES_CONTENT_SOURCE_ID,
+            RunNow: true,
+            ContextUser: user,
+            Provider: provider,
+        }).catch((error: unknown) => {
+            LogError(`Space item content pipeline cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        });
+    } catch (error) {
+        LogError(`Space item content pipeline cleanup: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 

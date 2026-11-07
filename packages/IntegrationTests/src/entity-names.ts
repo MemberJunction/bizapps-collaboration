@@ -6,7 +6,11 @@ export const SPACE_ROLE_TYPE_ENTITY = 'MJ_BizApps_Collaboration: Space Role Type
 export const SHARE_NOTICE_ENTITY = 'MJ_BizApps_Collaboration: Share Notices';
 export const ITEM_USE_ENTITY = 'MJ_BizApps_Collaboration: Item Uses';
 export const SPACE_CHAT_ENTITY = 'MJ_BizApps_Collaboration: Space Chats';
-export const SPACE_AGENT_ENTITY = 'MJ_BizApps_Collaboration: Space Agents';
+export const SPACE_GRANT_ENTITY = 'MJ_BizApps_Collaboration: Space Grants';
+export const SPACE_ANCHOR_ENTITY = 'MJ_BizApps_Collaboration: Space Anchors';
+export const SPACE_NOTE_ENTITY = 'MJ_BizApps_Collaboration: Space Notes';
+export const SPACE_MEMBER_PIN_ENTITY = 'MJ_BizApps_Collaboration: Space Member Pins';
+export const SPACE_TYPE_STATUS_ENTITY = 'MJ_BizApps_Collaboration: Space Type Status';
 
 export const PERSON_ENTITY = 'MJ_BizApps_Common: People';
 

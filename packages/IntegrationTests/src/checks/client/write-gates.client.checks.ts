@@ -24,12 +24,11 @@ import {
 import { FindRows, getPersonaClientContext, getPersonaContext, SameID } from '../../wire.js';
 import { INVITEE_EMAIL_DOMAIN } from '../../world/ids.js';
 import { CHECK_SPACE_PREFIX } from '../../world/ids.js';
-import { cleanupConversation, cleanupStep, deleteInvitee, deleteRowAndConfirm, deleteWhere, registerChecks } from '../cleanup-helpers.js';
+import { cleanupConversation, cleanupSpace, cleanupStep, deleteInvitee, deleteRowAndConfirm, deleteWhere, registerChecks } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
-const CLOSED_RECENT_SPACE_ID = 'C1000001-0000-4000-8000-000000000007';
 
 /** Removes a task a check filed and everything hung on it, each read back. A failure is reported to the running check. */
 async function cleanupTaskAndItem(ctx: IntegrationCheckContext, taskId: string, itemId: string): Promise<void> {
@@ -540,30 +539,32 @@ const checks: NamedCheck[] = [
                 `Expected status permission refusal message for guest Dana over wire, got: ${danaReason}`,
             );
 
-            // 3b. Status change refused in a closed space (closed-recent) over the wire
+            // 3b. Status change refused in a closed space: a sub-space of Discovery (where Bea is seated) that Ada files a task in over the
+            // wire, then closes (a Closed space is in a terminal status and is not reopened, so the world's closed spaces are left as they are)
             const adaClientCtx = await getPersonaClientContext(ctx, 'ada');
             const adaClient = new CollaborationClient(adaClientCtx.GraphQLProvider);
             let closedTaskCreated: { taskId: string; itemId: string } | null = null;
-            const closedRecentSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
-            Assert(await closedRecentSpace.Load(CLOSED_RECENT_SPACE_ID), 'Load closed-recent space as Ada over wire');
-            const origClosedAt = closedRecentSpace.ClosedAt;
+            const closing = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            closing.NewRecord();
+            closing.Name = `${CHECK_SPACE_PREFIX}WG6-Closed-Wire-${Date.now()}`;
+            closing.SpaceTypeID = (await FindRows<{ SpaceTypeID: string }>(ctx, SPACE_ENTITY, `ID = '${DISCOVERY_SPACE_ID}'`, ['SpaceTypeID']))[0].SpaceTypeID;
+            closing.ParentID = DISCOVERY_SPACE_ID;
+            closing.InheritsMembership = true;
+            closing.OwnerID = adaCtx.User.ID;
+            Assert(await closing.Save() && !!closing.ID, `Ada creates a sub-space to close over wire: ${closing.LatestResult?.CompleteMessage ?? ''}`);
             try {
-                // Temporarily reopen closed-recent so Ada can file a root task
-                closedRecentSpace.ClosedAt = null;
-                Assert(await closedRecentSpace.Save(), 'Temporarily reopen closed-recent to file task over wire');
-
                 const closedTaskRes = await adaClient.CreateSpaceTask({
-                    SpaceID: CLOSED_RECENT_SPACE_ID,
+                    SpaceID: closing.ID,
                     Name: `WG6 Closed Task Client ${Date.now()}`,
                     Band: 'Shared',
                 });
-                Assert(closedTaskRes.Success && !!closedTaskRes.TaskID && !!closedTaskRes.ItemID, `Creating root task in closed space via client CreateSpaceTask must succeed: ${closedTaskRes.ErrorMessage ?? ''}`);
-                if (!closedTaskRes.Success || !closedTaskRes.TaskID || !closedTaskRes.ItemID) throw new Error(`Creating root task in closed space failed: ${closedTaskRes.ErrorMessage ?? ''}`);
+                Assert(closedTaskRes.Success && !!closedTaskRes.TaskID && !!closedTaskRes.ItemID, `Creating a root task in the sub-space via client CreateSpaceTask must succeed: ${closedTaskRes.ErrorMessage ?? ''}`);
+                if (!closedTaskRes.Success || !closedTaskRes.TaskID || !closedTaskRes.ItemID) throw new Error(`Creating a root task failed: ${closedTaskRes.ErrorMessage ?? ''}`);
                 closedTaskCreated = { taskId: closedTaskRes.TaskID, itemId: closedTaskRes.ItemID };
 
-                // Re-close the space
-                closedRecentSpace.ClosedAt = origClosedAt ?? new Date();
-                Assert(await closedRecentSpace.Save(), 'Re-close closed-recent space over wire');
+                // Close the sub-space: it moves to the type's Closed status
+                closing.ClosedAt = new Date(Date.now() - 60_000);
+                Assert(await closing.Save(), `Ada closes the sub-space over wire: ${closing.LatestResult?.CompleteMessage ?? ''}`);
 
                 const closedTask = await beaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, beaCtx.User);
                 Assert(await closedTask.Load(closedTaskRes.TaskID), 'Loading task in closed space over wire must succeed');
@@ -579,20 +580,7 @@ const checks: NamedCheck[] = [
                 if (closedTaskCreated) {
                     await cleanupTaskAndItem(ctx, closedTaskCreated.taskId, closedTaskCreated.itemId);
                 }
-                await cleanupStep(async () => {
-                    const restoreSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
-                    Assert(await restoreSpace.Load(CLOSED_RECENT_SPACE_ID), 'Loading closed-recent space over wire to restore ClosedAt must succeed');
-                    const currentTime = restoreSpace.ClosedAt instanceof Date
-                        ? restoreSpace.ClosedAt.getTime()
-                        : (restoreSpace.ClosedAt ? new Date(restoreSpace.ClosedAt).getTime() : null);
-                    const origTime = origClosedAt instanceof Date
-                        ? origClosedAt.getTime()
-                        : (origClosedAt ? new Date(origClosedAt).getTime() : null);
-                    if (currentTime !== origTime) {
-                        restoreSpace.ClosedAt = origClosedAt;
-                        Assert(await restoreSpace.Save(), 'Restoring closed-recent ClosedAt over wire must succeed');
-                    }
-                });
+                await cleanupSpace(ctx.Provider, ctx.User, closing.ID);
             }
 
             // 3c. Authorized status change: contributing member Bea updating a task status is accepted over wire

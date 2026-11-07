@@ -2,15 +2,17 @@
  * CollaborationEngineBase — browser-safe metadata engine for BizApps Collaboration
  * (modeled on AIEngineBase and AccountingEngineBase, punch list 2 item 54).
  *
- * Caches all Collaboration metadata with CacheLocal: true:
+ * Caches, with CacheLocal: true, the Collaboration metadata every seated person can read:
  * - Space Types
+ * - Space Type Statuses (stage 1: the statuses each type declares; a participant reads the active types' rows)
  * - Space Role Types
- * - Task Types
  * - Application Settings
- * - Authorizations & Authorization Roles
- * - App- and type-level Space Agents, Skills, and Knowledge Sources
  *
- * Provides typed getters and O(1) lookups by ID and code, reset on reload.
+ * MemberJunction's BaseEngine loads an engine's entities all or nothing, so what a Space Participant has no read on (the
+ * authorization catalog, the app- and type-level grants) lives in CollaborationAdminEngineBase:
+ * a guest's workspace must not fail because an engine also wanted a staff-only row.
+ *
+ * Provides typed getters and O(1) lookups by ID and code, reset on reload. The rights checks read MemberJunction's metadata.
  */
 
 import {
@@ -31,27 +33,22 @@ import { UUIDsEqual } from '@memberjunction/global';
 import {
     type AgentRetrieval,
     type CollaborationSettings,
+    defaultStatus,
     type MemberSnapshot,
     membershipReaches,
     MissingAppSettingsError,
     type ResolvedCollaborationSettings,
-    ResolveCollaborationSettings,
     type SpaceNode,
+    type SpaceStatusReach,
     ValidateCollaborationSettings,
 } from '@mj-biz-apps/collaboration-core';
 import type {
-    mjBizAppsCollaborationSpaceAgentEntity,
-    mjBizAppsCollaborationSpaceAgentSkillEntity,
-    mjBizAppsCollaborationSpaceKnowledgeSourceEntity,
     mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
+    mjBizAppsCollaborationSpaceTypeStatusEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { SpaceSubtypeDirectory } from '@mj-biz-apps/collaboration-entities';
-import type {
-    MJApplicationSettingEntity,
-    MJAuthorizationEntity,
-    MJAuthorizationRoleEntity,
-} from '@memberjunction/core-entities';
+import type { MJApplicationSettingEntity } from '@memberjunction/core-entities';
 
 const normalizeKey = (key: string | null | undefined): string => (key ?? '').trim().toLowerCase();
 
@@ -80,20 +77,17 @@ export interface RoleTypeFlags {
 @RegisterForStartup()
 export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase> {
     private _spaceTypes: mjBizAppsCollaborationSpaceTypeEntity[] = [];
+    private _spaceTypeStatuses: mjBizAppsCollaborationSpaceTypeStatusEntity[] = [];
     private _spaceRoleTypes: mjBizAppsCollaborationSpaceRoleTypeEntity[] = [];
     private _applicationSettings: MJApplicationSettingEntity[] = [];
-    private _authorizations: MJAuthorizationEntity[] = [];
-    private _authorizationRoles: MJAuthorizationRoleEntity[] = [];
-    private _appAndTypeSpaceAgents: mjBizAppsCollaborationSpaceAgentEntity[] = [];
-    private _appAndTypeSpaceAgentSkills: mjBizAppsCollaborationSpaceAgentSkillEntity[] = [];
-    private _appAndTypeSpaceKnowledgeSources: mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] = [];
 
     // O(1) memoized lookup indexes, reset on reload in AdditionalLoading()
     private _spaceTypesById: Map<string, mjBizAppsCollaborationSpaceTypeEntity> | null = null;
     private _spaceTypesByCode: Map<string, mjBizAppsCollaborationSpaceTypeEntity> | null = null;
     private _spaceRoleTypesById: Map<string, mjBizAppsCollaborationSpaceRoleTypeEntity> | null = null;
     private _spaceRoleTypesByCode: Map<string, mjBizAppsCollaborationSpaceRoleTypeEntity> | null = null;
-    private _authorizationsByName: Map<string, MJAuthorizationEntity> | null = null;
+    private _statusesById: Map<string, mjBizAppsCollaborationSpaceTypeStatusEntity> | null = null;
+    private _statusesByType: Map<string, mjBizAppsCollaborationSpaceTypeStatusEntity[]> | null = null;
     private _cachedParsedSettings: CollaborationSettings | null | undefined = undefined;
 
     public static get Instance(): CollaborationEngineBase {
@@ -113,6 +107,12 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 CacheLocal: true,
             },
             {
+                PropertyName: '_spaceTypeStatuses',
+                EntityName: 'MJ_BizApps_Collaboration: Space Type Status',
+                CacheLocal: true,
+                OrderBy: 'Sequence',
+            },
+            {
                 PropertyName: '_spaceRoleTypes',
                 EntityName: 'MJ_BizApps_Collaboration: Space Role Types',
                 CacheLocal: true,
@@ -122,34 +122,6 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 PropertyName: '_applicationSettings',
                 EntityName: 'MJ: Application Settings',
                 CacheLocal: true,
-            },
-            {
-                PropertyName: '_authorizations',
-                EntityName: 'MJ: Authorizations',
-                CacheLocal: true,
-            },
-            {
-                PropertyName: '_authorizationRoles',
-                EntityName: 'MJ: Authorization Roles',
-                CacheLocal: true,
-            },
-            {
-                PropertyName: '_appAndTypeSpaceAgents',
-                EntityName: 'MJ_BizApps_Collaboration: Space Agents',
-                CacheLocal: true,
-                Filter: 'SpaceID IS NULL',
-            },
-            {
-                PropertyName: '_appAndTypeSpaceAgentSkills',
-                EntityName: 'MJ_BizApps_Collaboration: Space Agent Skills',
-                CacheLocal: true,
-                Filter: 'SpaceID IS NULL',
-            },
-            {
-                PropertyName: '_appAndTypeSpaceKnowledgeSources',
-                EntityName: 'MJ_BizApps_Collaboration: Space Knowledge Sources',
-                CacheLocal: true,
-                Filter: 'SpaceID IS NULL',
             },
         ];
 
@@ -162,7 +134,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         this._spaceTypesByCode = null;
         this._spaceRoleTypesById = null;
         this._spaceRoleTypesByCode = null;
-        this._authorizationsByName = null;
+        this._statusesById = null;
+        this._statusesByType = null;
         this._cachedParsedSettings = undefined;
         this._settingsError = null;
         // The subtype each space type names, for the Spaces subtype resolver: it answers a load's hint from memory, never by a read
@@ -175,32 +148,16 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return this.GetConfigData<mjBizAppsCollaborationSpaceTypeEntity>('_spaceTypes');
     }
 
+    public get SpaceTypeStatuses(): mjBizAppsCollaborationSpaceTypeStatusEntity[] {
+        return this.GetConfigData<mjBizAppsCollaborationSpaceTypeStatusEntity>('_spaceTypeStatuses');
+    }
+
     public get SpaceRoleTypes(): mjBizAppsCollaborationSpaceRoleTypeEntity[] {
         return this.GetConfigData<mjBizAppsCollaborationSpaceRoleTypeEntity>('_spaceRoleTypes');
     }
 
     public get ApplicationSettings(): MJApplicationSettingEntity[] {
         return this.GetConfigData<MJApplicationSettingEntity>('_applicationSettings');
-    }
-
-    public get Authorizations(): MJAuthorizationEntity[] {
-        return this.GetConfigData<MJAuthorizationEntity>('_authorizations');
-    }
-
-    public get AuthorizationRoles(): MJAuthorizationRoleEntity[] {
-        return this.GetConfigData<MJAuthorizationRoleEntity>('_authorizationRoles');
-    }
-
-    public get AppAndTypeSpaceAgents(): mjBizAppsCollaborationSpaceAgentEntity[] {
-        return this.GetConfigData<mjBizAppsCollaborationSpaceAgentEntity>('_appAndTypeSpaceAgents');
-    }
-
-    public get AppAndTypeSpaceAgentSkills(): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        return this.GetConfigData<mjBizAppsCollaborationSpaceAgentSkillEntity>('_appAndTypeSpaceAgentSkills');
-    }
-
-    public get AppAndTypeSpaceKnowledgeSources(): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        return this.GetConfigData<mjBizAppsCollaborationSpaceKnowledgeSourceEntity>('_appAndTypeSpaceKnowledgeSources');
     }
 
     // ─── Lookups by ID and Code ────────────────────────────────────────────────
@@ -253,6 +210,72 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         if (!code) return undefined;
         this.ensureSpaceRoleTypeMaps();
         return this._spaceRoleTypesByCode?.get(normalizeKey(code));
+    }
+
+    // ─── Statuses ──────────────────────────────────────────────────────────────
+
+    private ensureStatusMaps(): void {
+        if (!this._statusesById || !this._statusesByType) {
+            const byId = new Map<string, mjBizAppsCollaborationSpaceTypeStatusEntity>();
+            const byType = new Map<string, mjBizAppsCollaborationSpaceTypeStatusEntity[]>();
+            for (const status of this.SpaceTypeStatuses) {
+                if (status.ID) byId.set(normalizeKey(status.ID), status);
+                const typeKey = normalizeKey(status.SpaceTypeID);
+                const list = byType.get(typeKey) ?? [];
+                list.push(status);
+                byType.set(typeKey, list);
+            }
+            for (const list of byType.values()) list.sort((a, b) => a.Sequence - b.Sequence);
+            this._statusesById = byId;
+            this._statusesByType = byType;
+        }
+    }
+
+    public StatusById(id: string | null | undefined): mjBizAppsCollaborationSpaceTypeStatusEntity | undefined {
+        if (!id) return undefined;
+        this.ensureStatusMaps();
+        return this._statusesById?.get(normalizeKey(id));
+    }
+
+    /** One type's statuses, in sequence order. Empty for a type that declares none yet. */
+    public StatusesForType(typeId: string | null | undefined): mjBizAppsCollaborationSpaceTypeStatusEntity[] {
+        if (!typeId) return [];
+        this.ensureStatusMaps();
+        return this._statusesByType?.get(normalizeKey(typeId)) ?? [];
+    }
+
+    /** One type's status by code, as the shipped metadata names them ('active', 'paused', 'closed', 'archived'). */
+    public StatusByCode(typeId: string | null | undefined, code: string | null | undefined): mjBizAppsCollaborationSpaceTypeStatusEntity | undefined {
+        if (!code) return undefined;
+        const key = normalizeKey(code);
+        return this.StatusesForType(typeId).find((status) => normalizeKey(status.Code) === key);
+    }
+
+    /** Where a new space of the type starts: the status marked default, else the lowest in sequence; undefined for a type with none. */
+    public DefaultStatusForType(typeId: string | null | undefined): mjBizAppsCollaborationSpaceTypeStatusEntity | undefined {
+        return defaultStatus(this.StatusesForType(typeId)) ?? undefined;
+    }
+
+    /** The type's first terminal status in sequence order: what a close moves a space to. */
+    public FirstTerminalStatusForType(typeId: string | null | undefined): mjBizAppsCollaborationSpaceTypeStatusEntity | undefined {
+        return this.StatusesForType(typeId).find((status) => status.IsTerminal);
+    }
+
+    /**
+     * The status a space is effectively in, as `fnCollaborationSpaceStatuses` works it out: the one it names, else (while it is
+     * unstamped) its type's default when open and its type's first terminal status when ClosedAt is set. Undefined for a space
+     * whose type declares no statuses, which the rules then read from ClosedAt alone.
+     */
+    public EffectiveStatusForSpace(space: { StatusID?: string | null; SpaceTypeID?: string | null; ClosedAt?: string | Date | null }): mjBizAppsCollaborationSpaceTypeStatusEntity | undefined {
+        const named = this.StatusById(space.StatusID);
+        if (named) return named;
+        return space.ClosedAt ? this.FirstTerminalStatusForType(space.SpaceTypeID) : this.DefaultStatusForType(space.SpaceTypeID);
+    }
+
+    /** The reach of a space's effective status, for a `SpaceNode`; null when its type has no statuses yet. */
+    public StatusReachForSpace(space: { StatusID?: string | null; SpaceTypeID?: string | null; ClosedAt?: string | Date | null }): SpaceStatusReach | null {
+        const status = this.EffectiveStatusForSpace(space);
+        return status ? { ReadOnly: !!status.ReadOnly, Visible: !!status.Visible, AgentRetrieval: !!status.AgentRetrieval } : null;
     }
 
     // ─── Settings ──────────────────────────────────────────────────────────────
@@ -313,89 +336,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         throw error;
     }
 
-    public ResolveSettingsForSpace(
-        spaceConfigs: Array<CollaborationSettings | null | undefined>,
-        spaceTypeId?: string | null
-    ): ResolvedCollaborationSettings {
-        const typeEntity = spaceTypeId ? this.SpaceTypeById(spaceTypeId) : undefined;
-        let typeConfig: CollaborationSettings | undefined;
-        if (typeEntity?.Configuration) {
-            try {
-                typeConfig =
-                    typeof typeEntity.Configuration === 'string'
-                        ? (JSON.parse(typeEntity.Configuration) as CollaborationSettings)
-                        : (typeEntity.Configuration as CollaborationSettings);
-            } catch (err) {
-                const detail = err instanceof Error ? err.message : String(err);
-                LogError(`ResolveSettingsForSpace: Failed to parse type configuration for space type ${spaceTypeId}: ${detail}`);
-                // Fails closed: resolving without the type's narrowing would loosen what it restricts
-                throw new Error(`Space settings refused: the space type ${spaceTypeId} has a configuration that does not parse: ${detail}`);
-            }
-        }
-
-        // A missing app settings row throws MissingAppSettingsError: the app's defaults are not a silent stand-in for it
-        const appConfig: CollaborationSettings = this.CollaborationSettings;
-
-        return ResolveCollaborationSettings({
-            spaces: spaceConfigs,
-            type: typeConfig,
-            app: appConfig,
-        });
-    }
-
-    // ─── Agents, Skills, Knowledge ─────────────────────────────────────────────
-
-    public get AppSpaceAgents(): mjBizAppsCollaborationSpaceAgentEntity[] {
-        return this.AppAndTypeSpaceAgents.filter(
-            a => !a.SpaceTypeID && !a.SpaceID
-        );
-    }
-
-    public SpaceAgentsForType(typeId: string): mjBizAppsCollaborationSpaceAgentEntity[] {
-        const key = normalizeKey(typeId);
-        return this.AppAndTypeSpaceAgents.filter(
-            a => a.SpaceTypeID && normalizeKey(a.SpaceTypeID) === key && !a.SpaceID
-        );
-    }
-
-    public get AppSpaceAgentSkills(): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        return this.AppAndTypeSpaceAgentSkills.filter(
-            s => !s.SpaceTypeID && !s.SpaceID
-        );
-    }
-
-    public SpaceAgentSkillsForType(typeId: string): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        const key = normalizeKey(typeId);
-        return this.AppAndTypeSpaceAgentSkills.filter(
-            s => s.SpaceTypeID && normalizeKey(s.SpaceTypeID) === key && !s.SpaceID
-        );
-    }
-
-    public get AppSpaceKnowledgeSources(): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        return this.AppAndTypeSpaceKnowledgeSources.filter(
-            k => !k.SpaceTypeID && !k.SpaceID
-        );
-    }
-
-    public SpaceKnowledgeSourcesForType(typeId: string): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        const key = normalizeKey(typeId);
-        return this.AppAndTypeSpaceKnowledgeSources.filter(
-            k => k.SpaceTypeID && normalizeKey(k.SpaceTypeID) === key && !k.SpaceID
-        );
-    }
-
     // ─── Authorizations ────────────────────────────────────────────────────────
-
-    public AuthorizationByName(name: string): MJAuthorizationEntity | undefined {
-        if (!this._authorizationsByName) {
-            const map = new Map<string, MJAuthorizationEntity>();
-            for (const a of this.Authorizations) {
-                if (a.Name) map.set(normalizeKey(a.Name), a);
-            }
-            this._authorizationsByName = map;
-        }
-        return this._authorizationsByName.get(normalizeKey(name));
-    }
 
     /**
      * Resolves a child authorization under the "Collaboration" root authorization strictly.
@@ -455,7 +396,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             return true;
         }
 
-        // The post-close filter applies: on a space closed with its access ended, the server refuses every change but a reopen
+        // The status filter applies: on a hidden space the server refuses every change but a status change
         const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf);
         return !!reached?.role.isOwnerRole;
     }
@@ -488,8 +429,25 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
     }
 
     /**
+     * Whether a user may change a space's status (stage 1): the 'Close and Reopen Spaces' authorization AND an owner seat on the
+     * space or on an ancestor it inherits from, found with the status filter off, so the owner of a hidden or read-only space is
+     * still its owner. Which statuses the space may move to is the type's statuses' business (`statusChangeRefusal`).
+     */
+    public async UserCanChangeSpaceStatus(
+        user: UserInfo,
+        spaceId: string,
+        provider?: IMetadataProvider,
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
+    ): Promise<boolean> {
+        const md = provider ?? Metadata.Provider;
+        if (!this.UserHoldsLifecycleAuthorization(user, md)) return false;
+        const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf, true);
+        return !!reached?.role.isOwnerRole;
+    }
+
+    /**
      * Whether a user may close an open space: the 'Close and Reopen Spaces' authorization AND an owner seat on the space (or on
-     * an ancestor it inherits from), with the post-close filter applied.
+     * an ancestor it inherits from), with the status filter applied.
      */
     public async UserCanCloseSpace(
         user: UserInfo,
@@ -504,13 +462,13 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
     }
 
     /**
-     * Whether a user may reopen a closed space: the 'Close and Reopen Spaces' authorization AND an owner seat on the space or on an
-     * ancestor it inherits from, reached even when the space's post-close access has ended. `UserCanConfigureSpaces` keeps the
-     * post-close filter, so on such a space an owner may reopen but not configure.
+     * Whether a user may reopen a space (move it from a read-only status back to a writable one): the same right as any status
+     * change, found with the status filter off. `UserCanConfigureSpaces` keeps the filter, so on a hidden space an owner may change
+     * its status but not configure it.
      *
-     * The row filter decides who can read the space once its access has ended: only its `OwnerID`. So in practice this answers true,
-     * for the person who asks, only for the `OwnerID` (an owner by seat who isn't it reads no row, and their seat read finds nothing).
-     * `OwnerID` gives no write right by itself: it must still hold an owner seat and the authorization.
+     * The row filter decides who can read a hidden space: only its `OwnerID`. So in practice this answers true, for the person who
+     * asks, only for the `OwnerID` (an owner by seat who isn't it reads no row, and their seat read finds nothing). `OwnerID` gives
+     * no write right by itself: it must still hold an owner seat and the authorization.
      */
     public async UserCanReopenSpace(
         user: UserInfo,
@@ -533,7 +491,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         spaceId: string,
         provider?: IMetadataProvider,
         roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id),
-        ignorePostCloseFilter: boolean = false
+        ignoreStatusFilter: boolean = false
     ): Promise<ReturnType<typeof membershipReaches>> {
         const md = provider ?? Metadata.Provider;
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -555,7 +513,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                     break;
                 }
                 seen.add(currentSpaceId.toLowerCase());
-                const spaceRes: RunViewResult<{
+                interface SpaceReachRow {
                     ID: string;
                     ParentID: string | null;
                     SpaceTypeID: string | null;
@@ -564,23 +522,12 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                     AgentRetrieval?: AgentRetrieval;
                     AllowParentAssignees?: boolean;
                     ClosedAt: string | null;
-                    PostCloseAccess: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
-                    PostCloseAccessDays: number | null;
-                }> = await rv.RunView<{
-                    ID: string;
-                    ParentID: string | null;
-                    SpaceTypeID: string | null;
-                    InheritsMembership: boolean;
-                    OwnerID: string;
-                    AgentRetrieval?: AgentRetrieval;
-                    AllowParentAssignees?: boolean;
-                    ClosedAt: string | null;
-                    PostCloseAccess: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
-                    PostCloseAccessDays: number | null;
-                }>({
+                    StatusID: string | null;
+                }
+                const spaceRes: RunViewResult<SpaceReachRow> = await rv.RunView<SpaceReachRow>({
                     EntityName: 'MJ_BizApps_Collaboration: Spaces',
                     ExtraFilter: `ID = '${currentSpaceId}'`,
-                    Fields: ['ID', 'ParentID', 'SpaceTypeID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'PostCloseAccess', 'PostCloseAccessDays'],
+                    Fields: ['ID', 'ParentID', 'SpaceTypeID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID'],
                     ResultType: 'simple',
                     MaxRows: 1,
                 }, user);
@@ -601,10 +548,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                     agentRetrieval: s.AgentRetrieval ?? 'Included',
                     allowParentAssignees: s.AllowParentAssignees !== undefined ? !!s.AllowParentAssignees : true,
                     closedAt: s.ClosedAt,
-                    postCloseAccess: s.PostCloseAccess,
-                    postCloseAccessDays: s.PostCloseAccessDays,
-                    spaceTypePostCloseAccess: this.SpaceTypeById(s.SpaceTypeID)?.PostCloseAccess ?? null,
-                    spaceTypePostCloseAccessDays: this.SpaceTypeById(s.SpaceTypeID)?.PostCloseAccessDays ?? null,
+                    status: this.StatusReachForSpace(s),
                 });
                 if (!s.InheritsMembership || !s.ParentID) {
                     break;
@@ -655,7 +599,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 };
             });
 
-            return membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), ignorePostCloseFilter);
+            return membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), ignoreStatusFilter);
         } catch (e) {
             LogError(`Error resolving the seat of user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
             return null;

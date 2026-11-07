@@ -1,0 +1,561 @@
+// Takes PR 10's screenshots in Explorer with Playwright, as the people the plan names, in light and dark, and asserts what each
+// screen must show before it saves the shot. See README.md for the setup.
+//
+//   node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs [--who guest|leader|staff|all] [--theme light|dark|both] [--only <name>[,<name>…]]
+//   node docs/screenshots/pr10/take-screenshots.mjs --save-staff-session     (opens a browser: sign in once as staff)
+//
+// The guest is a seated outside member who signs in by magic link; the script mints the session itself. Staff sign in with the
+// host's provider, so their session is saved once by hand (--save-staff-session) and reused; the file stays out of git.
+// Stage 2's screens (20 to 33) add the leader: a chapter leader from the sample world, who also signs in by magic link.
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
+import { mintGuestSession } from '../../../packages/IntegrationTests/dist/screenshots/magic-link-session.js';
+import { latestAuditLogId } from '../../../packages/IntegrationTests/dist/screenshots/latest-audit-log.js';
+import { attachStubAgent, detachStubAgent } from '../../../packages/IntegrationTests/dist/screenshots/stub-agent-attachment.js';
+import { askAs, removeConversation } from '../../../packages/IntegrationTests/dist/screenshots/turn-as.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const EXPLORER = (process.env.EXPLORER_URL ?? 'http://localhost:4217').replace(/\/$/, '');
+const MJAPI = (process.env.MJAPI_URL ?? 'http://localhost:4117').replace(/\/$/, '');
+const GUEST_EMAIL = process.env.SCREENSHOT_GUEST_EMAIL ?? '';
+/** The chapter leader of the sample world's chapter 12 (a Space Participant with no host account): `personas.csv`'s lena. */
+const LEADER_EMAIL = process.env.SCREENSHOT_LEADER_EMAIL ?? 'lena.leader@collab-world.example';
+/** The staff account whose session `staff-session.json` holds; stage 3's staff turn is made as this person. */
+const STAFF_EMAIL = process.env.SCREENSHOT_STAFF_EMAIL ?? '';
+/** The harness's stub agent, by the name a message mentions it with (`packages/IntegrationTests/src/agents/test-agent.ts`). */
+const STUB_AGENT = 'Space Chat Test Stub';
+const STAFF_SESSION = join(here, 'staff-session.json');
+const NORTHWIND = 'C1000001-0000-4000-8000-000000000001';
+const CLOSED_THIS_MONTH = 'C1000001-0000-4000-8000-000000000007';
+const DISCOVERY = 'C1000001-0000-4000-8000-000000000002';
+// Stage 2's chapter world (spaces.csv): two chapters of the example-chapter type, a same-type sub-space and a staff-only sub-space
+const CHAPTER_12 = 'C1000001-0000-4000-8000-000000000016';
+const CHAPTER_40 = 'C1000001-0000-4000-8000-000000000017';
+const CHAPTER_12_OUTREACH = 'C1000001-0000-4000-8000-000000000018';
+const CHAPTER_12_STAFF = 'C1000001-0000-4000-8000-000000000019';
+const EXAMPLE_CHAPTER_TYPE = 'C716F54B-23F7-4C6D-AD12-F7C95D33F0D0';
+const GRANT_RUN_LOG_TYPE = '67486965-904D-4C18-8F20-5EDA97BFD2B4';
+const SPACE_TYPES = 'MJ_BizApps_Collaboration: Space Types';
+const AUDIT_LOGS = 'MJ: Audit Logs';
+const CHAPTER_MEMBERS = 'MJ_BizApps_Collaboration_Examples: Example Chapter Members';
+const recordUrl = (entity, id) => `${EXPLORER}/resource/record/${encodeURIComponent(entity)}/${id}`;
+const listUrl = (entity) => `${EXPLORER}/resource/view/dynamic/${encodeURIComponent(entity)}`;
+
+const args = process.argv.slice(2);
+const option = (name, fallback) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : fallback; };
+const who = option('--who', 'all');
+const themes = { light: ['light'], dark: ['dark'], both: ['light', 'dark'] }[option('--theme', 'both')];
+const only = option('--only', null);
+
+const spaceUrl = (spaceId, tab) => `${EXPLORER}/app/collaboration/Spaces?view=space&tab=${tab}&space=${spaceId}`;
+
+/** Fails the run when `page` doesn't show every text in `present`, or shows any in `absent`. */
+async function assertScreen(page, name, { present = [], absent = [] }) {
+    for (const text of present) {
+        await page.getByText(text, { exact: false }).first().waitFor({ state: 'visible', timeout: 20000 }).catch(() => {
+            throw new Error(`${name}: "${text}" is not on the screen`);
+        });
+    }
+    const body = await page.locator('body').innerText();
+    for (const text of absent) if (body.includes(text)) throw new Error(`${name}: "${text}" must not be on the screen`);
+}
+
+const SAMPLE_PDF = join(here, 'sample.pdf');
+const SAMPLE_NAME = 'sample.pdf';
+
+/** Puts `sample.pdf` in Northwind's Shared band once, as the guest, so the viewer has a real page to paint. The world's own PDFs are stubs. */
+async function ensureSamplePdf(page) {
+    await page.goto(spaceUrl(NORTHWIND, 'library'));
+    await page.getByText('executive-roadmap.pdf').first().waitFor({ state: 'visible', timeout: 20000 });
+    if ((await page.locator('body').innerText()).includes(SAMPLE_NAME)) return;
+    await page.getByRole('button', { name: /Upload/ }).first().click();
+    await page.getByText('Add document to Northwind relationship').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('input[type="file"]').first().setInputFiles(SAMPLE_PDF);
+    await page.getByRole('button', { name: /Upload file/ }).click();
+    await page.getByText(SAMPLE_NAME).first().waitFor({ state: 'visible', timeout: 30000 });
+}
+
+/**
+ * A step that must clean up after itself (a pin, a note, a star it made) captures its screen here, before the cleanup; the
+ * runner then leaves that capture alone instead of taking its own at the end of the step.
+ */
+async function captureNow(page, name) {
+    await page.waitForTimeout(400);
+    const theme = await page.evaluate(() => localStorage.getItem('mj-theme'));
+    await page.screenshot({ path: join(here, `${name}-${theme}.png`) });
+    page.__captured = true;
+}
+
+/** The screens, in the plan's order (pr10-plan § 4's table). Each step drives the page and says what the shot must show. */
+const SHOTS = [
+    {
+        name: '01-client-overview', who: 'guest', item: '25, D42',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'overview'));
+            await assertScreen(page, '01', { present: ['Shared with everyone in this space', 'executive-roadmap.pdf'], absent: ['Team only', 'northwind-internal'] });
+        },
+    },
+    {
+        name: '02-client-library', who: 'guest', item: '25',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'library'));
+            await assertScreen(page, '02', { present: ['executive-roadmap.pdf', 'Shared'], absent: ['master-services-agreement.pdf', 'northwind-account-plan.txt'] });
+        },
+    },
+    {
+        name: '03-client-file-viewer', who: 'guest', item: '29',
+        run: async (page) => {
+            await ensureSamplePdf(page);
+            // The name also sits in hidden copies (the upload toast, a collapsed panel): click the visible row
+            await page.getByText(SAMPLE_NAME, { exact: true }).filter({ visible: true }).first().click();
+            await page.getByRole('button', { name: /Open Document/i }).click();
+            // MJ's record tab: the file's name in the tab strip, and the way back to the space above the viewer
+            await page.locator('.mj-file-viewer-stage, iframe').first().waitFor({ state: 'attached', timeout: 20000 });
+            const text = await page.locator('body').innerText();
+            for (const needle of [SAMPLE_NAME, 'Collaboration', 'Spaces']) if (!text.includes(needle)) throw new Error(`03: "${needle}" is not on the screen`);
+            await page.waitForTimeout(4000); // the PDF frame paints after the record loads
+        },
+    },
+    {
+        name: '04-client-people', who: 'guest', item: '25',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'people'));
+            // The guest's own row reads Outside member or Outside admin, by the seat they were given
+            await page.getByText(/Outside (member|admin)/).first().waitFor({ state: 'visible', timeout: 20000 }).catch(() => { throw new Error('04: no outside seat is listed'); });
+            await assertScreen(page, '04', { present: ['Active', 'Owner'] });
+        },
+    },
+    {
+        name: '05-client-chat-open', who: 'guest', item: '25, 23',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'chat'));
+            await page.getByText('northwind-general').first().click();
+            await assertScreen(page, '05', { present: ['northwind-general'], absent: ['northwind-internal', 'Consulting Team'] });
+            await page.waitForTimeout(1500);
+        },
+    },
+    {
+        name: '06-client-closed-chat', who: 'guest', item: '25, MJ#4838',
+        run: async (page) => {
+            await page.goto(spaceUrl(CLOSED_THIS_MONTH, 'chat'));
+            await assertScreen(page, '06', { present: ['Closed this month'] });
+            await page.locator('.read-only-lock').first().waitFor({ state: 'visible', timeout: 20000 });
+        },
+    },
+    {
+        name: '07-client-lock-reason', who: 'guest', item: '121, 125',
+        run: async (page) => {
+            await page.goto(spaceUrl(CLOSED_THIS_MONTH, 'chat'));
+            const lock = page.locator('.read-only-lock').first();
+            await lock.waitFor({ state: 'visible', timeout: 20000 });
+            await lock.focus(); // focus shows the reason (item 125); Enter would toggle it closed again
+            await page.locator('.read-only-reason').first().waitFor({ state: 'visible', timeout: 5000 });
+        },
+    },
+    {
+        name: '08-client-upload-dialog', who: 'guest', item: '38',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'library'));
+            await page.getByRole('button', { name: /Upload/ }).first().click();
+            await assertScreen(page, '08', { present: ['Add document to Northwind relationship', 'Who can see this?'] });
+            // An outside member's band choice: Shared only; the Team option is for seats that see the Team band
+            const dialog = await page.locator('body').innerText();
+            if (dialog.includes('Only the team can see it')) throw new Error('08: the Team band is offered to an outside member');
+        },
+    },
+    // Staff screens run once staff-session.json exists (see --save-staff-session). The items they cover: 23's five with the real
+    // agent answering, 38 (Discovery's default band is Team and Sam's Shared choice is refused), 70's row (a type with the library
+    // off), D42's three board forms, 121 (switching spaces on Chat with no note) and MJ#4884/4885 (a turn's live status).
+    {
+        name: '10-staff-overview', who: 'staff', item: '25',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'overview'));
+            await assertScreen(page, '10', { present: ['Team only', 'Shared with everyone in this space'] });
+        },
+    },
+    {
+        name: '11-staff-discovery-upload-default-team', who: 'staff', item: '38',
+        run: async (page) => {
+            await page.goto(spaceUrl(DISCOVERY, 'library'));
+            await page.getByRole('button', { name: /Upload/ }).first().click();
+            await assertScreen(page, '11', { present: ['Add document to Discovery', 'Only the team can see it'] });
+        },
+    },
+    {
+        name: '12-staff-chat-switch-no-note', who: 'staff', item: '121',
+        run: async (page) => {
+            // Staff's chat page lists sections and conversations, not child spaces, so the switch is a navigation.
+            await page.goto(spaceUrl(NORTHWIND, 'chat'));
+            await page.getByText('New Conversation').first().waitFor();
+            await page.goto(spaceUrl(DISCOVERY, 'chat'));
+            await page.getByText('New Conversation').first().waitFor();
+            await page.waitForTimeout(800);
+            await assertScreen(page, '12', { present: ['Discovery'], absent: ["can't post", 'not on the roster'] });
+        },
+    },
+    // Stage 2, the server: what it changed on screen. The leader is seated on chapter 12 (Shared band) and nowhere else; the
+    // staff-only sub-space (D34, 157) and the other chapter stay out of her list, the same-type sub-space (D30, row 18) is in it,
+    // and the People tab reads with the type's label (53, 101). The data reach itself (B18) has no screen until B19 in stage 4:
+    // it is checked over the wire (SC1) and in the persona check. Band names from the type (Labels.Bands) reach the dialogs in
+    // stage 4 too; today the upload dialog keeps its default words.
+    {
+        name: '20-leader-chapter-overview', who: 'leader', item: 'B24, 157, 18',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12, 'overview'));
+            await assertScreen(page, '20', { present: ['Chapter 12', 'Chapter 12 outreach'], absent: ['Chapter 12 staff', 'Chapter 40'] });
+        },
+    },
+    {
+        name: '21-leader-chapter-members-tab', who: 'leader', item: '53, 101',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12, 'people'));
+            // The type's Labels.Tabs renames People to Members for every chapter; the label lands when the server's document does
+            await page.getByRole('tab', { name: /Members/ }).waitFor({ state: 'visible', timeout: 20000 }).catch(() => { throw new Error('21: the People tab does not read "Members"'); });
+            await assertScreen(page, '21', { present: ['Lena'], absent: ['Chapter 12 staff'] });
+        },
+    },
+    {
+        name: '22-leader-same-type-subspace', who: 'leader', item: '18, D30',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_OUTREACH, 'overview'));
+            await assertScreen(page, '22', { present: ['Chapter 12 outreach'], absent: ['Chapter 12 staff'] });
+        },
+    },
+    {
+        name: '23-leader-other-chapter-not-in-list', who: 'leader', item: '14, 17',
+        run: async (page) => {
+            // A link to a space she does not reach opens her own list instead: nothing of chapter 40 is shown
+            await page.goto(spaceUrl(CHAPTER_40, 'overview'));
+            await assertScreen(page, '23', { present: ['Chapter 12'], absent: ['Chapter 40'] });
+        },
+    },
+    {
+        name: '24-leader-upload-dialog', who: 'leader', item: '6, 38',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12, 'library'));
+            await page.getByRole('button', { name: /Upload/ }).first().click();
+            await assertScreen(page, '24', { present: ['Add document to Chapter 12', 'Who can see this?'], absent: ['Only the team can see it'] });
+        },
+    },
+    // Staff, seated on the staff-only sub-space as its owner and holding Developer: the sub-space itself, the type's record with
+    // its grants, a grant run's log row, and the chapter members as a Developer reads them (unfiltered: the reach is the
+    // participant role's).
+    {
+        name: '30-staff-staff-only-subspace', who: 'staff', item: '157, D34',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_STAFF, 'overview'));
+            await assertScreen(page, '30', { present: ['Chapter 12 staff'] });
+        },
+    },
+    {
+        name: '31-staff-chapter-type-record', who: 'staff', item: 'B24, 13',
+        run: async (page) => {
+            await page.goto(recordUrl(SPACE_TYPES, EXAMPLE_CHAPTER_TYPE));
+            await assertScreen(page, '31', { present: ['example-chapter'] });
+            // The grants hang off the type as a related list; open it when the form offers it
+            await page.getByText(/Space Grants/).first().click({ timeout: 5000 }).catch(() => undefined);
+            await page.waitForTimeout(1500);
+        },
+    },
+    {
+        name: '32-staff-grant-run-log', who: 'staff', item: 'A2 stand-in, 16',
+        run: async (page) => {
+            const id = await latestAuditLogId(GRANT_RUN_LOG_TYPE);
+            if (!id) throw new Error('32: no grant run is logged yet; run the stage2 harness bundle first');
+            await page.goto(recordUrl(AUDIT_LOGS, id));
+            await assertScreen(page, '32', { present: ['Collaboration: Grant Run'] });
+        },
+    },
+    {
+        name: '33-staff-chapter-members-entity', who: 'staff', item: 'B18, 14',
+        run: async (page) => {
+            await page.goto(listUrl(CHAPTER_MEMBERS));
+            // MJ Explorer: a dynamic entity list opened by URL while the workspace restores a record tab (31's) shows "0 records"
+            // and makes no read for the entity; a reload reads it. Seen 2026-10-14 in the whole set, never when 33 runs alone.
+            const grid = page.getByText('Ivy').first();
+            const shown = await grid.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+            if (!shown) { await page.reload(); }
+            await assertScreen(page, '33', { present: ['Ivy', 'Lou'] });
+        },
+    },
+    // Stage 3, agents (B20): what a turn gives the agent, read off the harness's stub agent's reply, since it says what it was given.
+    // The stub is seated as the space's agent for the shot and removed after it. The turn is made the way the server makes one, as
+    // the person named, and the browser shows the reply. Both screens are staff's: MJ's chat area shows a magic-link participant
+    // no messages at all (its mention autocomplete fails without read on MJ: AI Agents and the area stops there), which stage 0's
+    // screen 05 already shows and the stage 3 note reports. The two conversations differ in kind: General seats everyone, so the
+    // Team-band query grant is not in force; Internal Only seats Team, so it is, and Run space data runs it.
+    {
+        name: '40-staff-general-chat-no-tools', who: 'staff', item: 'B20, § 8.1',
+        run: async (page) => {
+            const grantId = await attachStubAgent(CHAPTER_12_STAFF);
+            let made = null;
+            try {
+                made = await askAs(STAFF_EMAIL, CHAPTER_12_STAFF, 'General', `@${STUB_AGENT} What can you run here?`);
+                await page.goto(`${spaceUrl(CHAPTER_12_STAFF, 'chat')}&conv=${made.conversationId}`);
+                // General: everyone who reaches the space, so the staff type's Team-band query is not in force and nothing is given
+                await assertScreen(page, '40', { present: ['Tools: none', 'Data: none'] });
+                await page.waitForTimeout(800);
+            } finally {
+                if (made) await removeConversation(made.conversationId);
+                await detachStubAgent(grantId);
+            }
+        },
+    },
+    {
+        name: '41-staff-internal-chat-run-space-data', who: 'staff', item: 'B20, 17, 24',
+        run: async (page) => {
+            const grantId = await attachStubAgent(CHAPTER_12_STAFF);
+            let made = null;
+            try {
+                // Internal Only: the staff type's query grant sits on the Team band, so only a Team audience has it in force
+                made = await askAs(STAFF_EMAIL, CHAPTER_12_STAFF, 'Private', `@${STUB_AGENT} run "Renewals by month"`);
+                await page.goto(`${spaceUrl(CHAPTER_12_STAFF, 'chat')}&conv=${made.conversationId}`);
+                await assertScreen(page, '41', { present: ['Run space data: ok', '2 rows'] });
+                await page.waitForTimeout(800);
+            } finally {
+                if (made) await removeConversation(made.conversationId);
+                await detachStubAgent(grantId);
+            }
+        },
+    },
+    // The leader's own chat, once MJ#5243 is in the MJ the host runs (the plan's A12.17): a magic-link participant sees the
+    // conversation's messages and the composer. Before it, the chat area stopped on its mention engine and showed "No messages yet".
+    {
+        name: '42-leader-chat-messages-and-composer', who: 'leader', item: 'A12.17, MJ#5243',
+        run: async (page) => {
+            const grantId = await attachStubAgent(CHAPTER_12);
+            let made = null;
+            try {
+                made = await askAs(LEADER_EMAIL, CHAPTER_12, 'General', `@${STUB_AGENT} What can you run here?`);
+                await page.goto(`${spaceUrl(CHAPTER_12, 'chat')}&conv=${made.conversationId}`);
+                await assertScreen(page, '42', { present: ['Tools: none'], absent: ['No messages yet'] });
+                // MJ's composer carries its placeholder on the element itself or as data-placeholder, depending on the build
+                await page.locator('[placeholder*="Type a message"], [data-placeholder*="Type a message"]').first().waitFor({ state: 'attached', timeout: 20000 }).catch(() => { throw new Error('42: the leader has no composer'); });
+                await page.waitForTimeout(800);
+            } finally {
+                if (made) await removeConversation(made.conversationId);
+                await detachStubAgent(grantId);
+            }
+        },
+    },
+
+    // Stage 4 (B19, B21, B22): notes with call 15's promotion, pins and the star, the data surface, and Settings' configuration.
+    // Each shot that writes (a pin, a note, a star) removes what it wrote, so the dark pass sees the same world.
+    {
+        name: '50-staff-notes-tab', who: 'staff', item: 'B21',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            await assertScreen(page, '50', { present: ['Kickoff recap', 'Pricing thoughts (internal)', 'Share with'], absent: ['My follow-ups'] });
+        },
+    },
+    {
+        name: '51-staff-note-promote-confirm', who: 'staff', item: 'B21, call 15',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            await page.getByText('Pricing thoughts (internal)').first().waitFor({ state: 'visible', timeout: 20000 });
+            const note = page.locator('article.note', { hasText: 'Pricing thoughts (internal)' }).first();
+            await note.locator('button', { hasText: /Share with/ }).click();
+            await assertScreen(page, '51', { present: ['Share this note with', 'will be visible to', 'not undone', 'Keep it with the team'] });
+        },
+    },
+    {
+        name: '52-guest-notes-shared-only', who: 'guest', item: 'B21',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            await assertScreen(page, '52', { present: ['Kickoff recap'], absent: ['Pricing thoughts', 'My follow-ups', 'Share with'] });
+        },
+    },
+    {
+        name: '53-staff-pinned-strip', who: 'staff', item: 'B22',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            const note = page.locator('article.note', { hasText: 'Kickoff recap' }).first();
+            await note.waitFor({ state: 'visible', timeout: 20000 });
+            await note.locator('button', { hasText: /^\s*Pin\s*$/ }).click();
+            await note.locator('button', { hasText: /^\s*Unpin\s*$/ }).waitFor({ state: 'visible', timeout: 20000 });
+            await page.goto(spaceUrl(NORTHWIND, 'overview'));
+            await assertScreen(page, '53', { present: ['Pinned', 'Kickoff recap'] });
+        },
+    },
+    {
+        name: '54-staff-home-my-pins', who: 'staff', item: 'B22',
+        run: async (page) => {
+            await page.goto(`${EXPLORER}/app/collaboration/Spaces?view=home`);
+            await page.getByText('My Pins').first().waitFor({ state: 'visible', timeout: 30000 });
+            await page.getByText('My Pins').first().click();
+            // The row itself, inside the list: the last space's view stays in the page and carries the note's title too
+            await page.locator('.home-list-wrap .hl-row', { hasText: 'Kickoff recap' }).first().waitFor({ state: 'visible', timeout: 20000 });
+            await assertScreen(page, '54', { present: ['Your pins, across your spaces', 'Kickoff recap', 'Northwind relationship'] });
+            await page.waitForTimeout(400);
+            await captureNow(page, '54-staff-home-my-pins');
+            // The pin 53 made is removed here, so the next pass starts from the world as loaded
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            const note = page.locator('article.note', { hasText: 'Kickoff recap' }).first();
+            await note.waitFor({ state: 'visible', timeout: 20000 });
+            await note.locator('button', { hasText: /^\s*Unpin\s*$/ }).click();
+            await note.locator('button', { hasText: /^\s*Pin\s*$/ }).waitFor({ state: 'visible', timeout: 20000 });
+            await page.goto(`${EXPLORER}/app/collaboration/Spaces?view=home`);
+            await page.getByText('My Pins').first().waitFor({ state: 'visible', timeout: 30000 });
+            await page.getByText('My Pins').first().click();
+            await page.getByText('Your pins, across your spaces').first().waitFor({ state: 'visible', timeout: 20000 });
+            await page.locator('.home-list-wrap .hl-row', { hasText: 'Kickoff recap' }).waitFor({ state: 'hidden', timeout: 20000 });
+        },
+    },
+    {
+        name: '55-staff-data-tab-query', who: 'staff', item: 'B19',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_STAFF, 'data'));
+            await page.getByText('Renewals by month').first().waitFor({ state: 'visible', timeout: 30000 });
+            await page.getByText('Renewals by month').first().click();
+            await assertScreen(page, '55', { present: ['Renewals by month', 'Chapter banner', 'Run again', 'rows'] });
+            await page.locator('table.grid').first().waitFor({ state: 'visible', timeout: 20000 });
+        },
+    },
+    {
+        name: '56-staff-data-component', who: 'staff', item: 'B19',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_STAFF, 'data'));
+            await page.getByText('Chapter banner').first().waitFor({ state: 'visible', timeout: 30000 });
+            await page.getByText('Chapter banner').first().click();
+            // The React host renders the component with the props the server bound from the space's anchor
+            await page.locator('.example-chapter-banner').first().waitFor({ state: 'visible', timeout: 60000 });
+            await assertScreen(page, '56', { present: ['Chapter 12', 'West'] });
+        },
+    },
+    {
+        name: '57-staff-settings-configuration', who: 'staff', item: 'D23',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_STAFF, 'settings'));
+            await assertScreen(page, '57', { present: ['What this space is given', 'Grants', 'Anchors', 'Data reach', 'Renewals by month', 'Chapter banner'] });
+        },
+    },
+    {
+        name: '58-leader-note-quick-add', who: 'leader', item: 'B21',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12, 'overview'));
+            const noteButton = page.locator('button', { hasText: /^\s*Note\s*$/ }).first();
+            await noteButton.waitFor({ state: 'visible', timeout: 30000 });
+            await noteButton.click();
+            await page.getByPlaceholder('Title').waitFor({ state: 'visible', timeout: 20000 });
+            await page.getByPlaceholder('Title').fill('Leader quick note');
+            await page.locator('textarea.body-input').fill('Written from the Overview with the Note button.');
+            await page.locator('button', { hasText: /^\s*Add note\s*$/ }).click();
+            const note = page.locator('article.note', { hasText: 'Leader quick note' }).first();
+            await note.waitFor({ state: 'visible', timeout: 20000 });
+            await assertScreen(page, '58', { present: ['Leader quick note', 'Welcome chapter leaders'], absent: ['Share with'] });
+            await page.waitForTimeout(400);
+            await captureNow(page, '58-leader-note-quick-add');
+            // Every note of that title goes (a run that failed earlier may have left one), so the next pass starts clean
+            for (let left = await page.locator('article.note', { hasText: 'Leader quick note' }).count(); left > 0; left--) {
+                const target = page.locator('article.note', { hasText: 'Leader quick note' }).first();
+                await target.locator('button', { hasText: /^\s*Delete\s*$/ }).click();
+                await page.locator('article.note', { hasText: 'Leader quick note' }).nth(left - 1).waitFor({ state: 'detached', timeout: 20000 });
+            }
+        },
+    },
+    {
+        name: '59-guest-space-star', who: 'guest', item: 'B22',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'overview'));
+            const star = page.locator('button[aria-label="Star this space"]').first();
+            await star.waitFor({ state: 'visible', timeout: 30000 });
+            await star.click();
+            await page.locator('button[aria-label="Unstar this space"]').first().waitFor({ state: 'visible', timeout: 20000 });
+            await assertScreen(page, '59', { present: ['Northwind relationship'] });
+            await page.waitForTimeout(400);
+            await captureNow(page, '59-guest-space-star');
+            await page.locator('button[aria-label="Unstar this space"]').first().click();
+            await page.locator('button[aria-label="Star this space"]').first().waitFor({ state: 'visible', timeout: 20000 });
+        },
+    },
+];
+
+async function saveStaffSession() {
+    const browser = await chromium.launch({ headless: false });
+    const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+    const page = await context.newPage();
+    await page.goto(`${EXPLORER}/`);
+    console.log('Sign in as staff in the browser window. The session is saved when the Spaces page is shown.');
+    await page.waitForURL(/\/app\//, { timeout: Number(process.env.STAFF_SIGNIN_MINUTES || 10) * 60 * 1000 });
+    await page.waitForTimeout(3000);
+    await context.storageState({ path: STAFF_SESSION });
+    console.log(`Saved ${STAFF_SESSION}. Keep it out of git.`);
+    await browser.close();
+}
+
+async function main() {
+    if (args.includes('--save-staff-session')) return saveStaffSession();
+    mkdirSync(here, { recursive: true });
+    const onlyNames = only ? only.split(',').map((n) => n.trim()).filter(Boolean) : [];
+    const wanted = SHOTS.filter((s) => (who === 'all' || s.who === who) && (!onlyNames.length || onlyNames.includes(s.name)));
+    const needsGuest = wanted.some((s) => s.who === 'guest');
+    const needsLeader = wanted.some((s) => s.who === 'leader');
+    const needsStaff = wanted.some((s) => s.who === 'staff');
+    if (needsGuest && !GUEST_EMAIL) throw new Error('Set SCREENSHOT_GUEST_EMAIL to a seated outside member (an invite from an owner seats them).');
+    if (wanted.some((s) => s.name.startsWith('40-') || s.name.startsWith('41-')) && !STAFF_EMAIL) throw new Error('Set SCREENSHOT_STAFF_EMAIL to the staff account whose session is saved (screens 40 and 41 make a turn as them).');
+    if (needsStaff && !existsSync(STAFF_SESSION)) {
+        console.log(`No ${STAFF_SESSION}: the staff screens are skipped. Run --save-staff-session first.`);
+    }
+    const sessions = {
+        guest: needsGuest ? await mintGuestSession(GUEST_EMAIL, MJAPI) : null,
+        leader: needsLeader ? await mintGuestSession(LEADER_EMAIL, MJAPI) : null,
+    };
+
+    // The full Chromium build, not the headless shell: only it paints a PDF in the viewer's frame
+    const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chromium' });
+    const failures = [];
+    try {
+        for (const theme of themes) {
+            for (const shot of wanted) {
+                if (shot.who === 'staff' && !existsSync(STAFF_SESSION)) continue;
+                const context = await browser.newContext({
+                    viewport: { width: 1600, height: 1000 },
+                    colorScheme: theme,
+                    ...(shot.who === 'staff' ? { storageState: STAFF_SESSION } : {}),
+                });
+                await context.addInitScript((t) => { try { localStorage.setItem('mj-theme', t); } catch { /* theme falls back */ } }, theme);
+                const page = await context.newPage();
+                const errors = [];
+                page.on('pageerror', (e) => errors.push(String(e)));
+                // SHOT_DEBUG=1 prints the GraphQL calls a shot makes, for a step that does nothing visible
+                if (process.env.SHOT_DEBUG) page.on('request', (request) => { const body = request.postData() ?? ''; if (/graphql|4119/.test(request.url()) && body) console.log(`     gql ${body.replace(/\s+/g, ' ').slice(0, 400)}`); });
+                // A failed shot prints what the page logged as errors, so the cause is in the run's output and not only in the picture
+                page.on('console', (message) => { if (message.type() === 'error') errors.push(`console: ${message.text()}`); });
+                try {
+                    if (shot.who === 'guest' || shot.who === 'leader') {
+                        // The session token rides in the fragment, as the redeem's redirect sends it; Explorer reads it on load
+                        const session = sessions[shot.who];
+                        await page.goto(`${EXPLORER}/app/${session.applicationPath}#token=${encodeURIComponent(session.token)}`, { waitUntil: 'load' });
+                        await page.getByText('All Spaces').first().waitFor({ state: 'visible', timeout: 60000 });
+                    }
+                    await shot.run(page);
+                    if (!page.__captured) {
+                        await page.waitForTimeout(400);
+                        await page.screenshot({ path: join(here, `${shot.name}-${theme}.png`) });
+                    }
+                    console.log(`ok   ${shot.name}-${theme}.png (item ${shot.item})${errors.length ? `  page errors: ${errors.length}` : ''}`);
+                    if (process.env.SHOT_DEBUG && errors.length) console.log(`     page errors (${errors.length}):\n       ${[...new Set(errors.map((e) => e.split('\n')[0].slice(0, 200)))].slice(0, 40).join('\n       ')}`);
+                } catch (error) {
+                    // The failed screen is kept beside the others, so the assertion can be read against what was shown
+                    await page.screenshot({ path: join(here, `${shot.name}-${theme}-FAILED.png`) }).catch(() => undefined);
+                    failures.push(`${shot.name}-${theme}: ${error instanceof Error ? error.message : String(error)}`);
+                    if (errors.length) console.log(`     page errors (${errors.length}):\n       ${errors.slice(0, 8).map((e) => e.split('\n')[0].slice(0, 300)).join('\n       ')}`);
+                    console.log(`     at ${page.url()}`);
+                    console.log(`FAIL ${shot.name}-${theme}: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+                } finally {
+                    await context.close();
+                }
+            }
+        }
+    } finally {
+        await browser.close();
+    }
+    if (failures.length) {
+        console.error(`${failures.length} screenshot(s) failed their assertions:\n${failures.join('\n')}`);
+        process.exit(1);
+    }
+}
+
+await main();

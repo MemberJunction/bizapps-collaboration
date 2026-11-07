@@ -1,4 +1,5 @@
 import { describe, it, beforeEach, expect } from 'vitest';
+import { ResolveSpaceConfiguration, type CollaborationSettings } from '@mj-biz-apps/collaboration-core';
 import { CollaborationEngineBase, COLLABORATION_APP_ID, MissingAppSettingsError } from '../CollaborationEngineBase.js';
 import type {
     mjBizAppsCollaborationSpaceTypeEntity,
@@ -27,8 +28,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
                 Code: 'project',
                 Name: 'Project',
                 Configuration: JSON.stringify({
-                    PostCloseAccess: 'None',
-                    PostCloseAccessDays: 30,
+                    Chats: { WhoCanStart: 'Owners' },
                 }),
             },
         ];
@@ -56,8 +56,6 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
                 ApplicationID: COLLABORATION_APP_ID,
                 Name: 'CollaborationSettings',
                 Value: JSON.stringify({
-                    PostCloseAccess: 'ReadOnly',
-                    PostCloseAccessDays: null,
                     StorageAccountID: 'DEFAULT-APP-STORAGE',
                     Chats: {
                         WhoCanStart: 'Anyone',
@@ -75,11 +73,6 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
         (engine as unknown as { _spaceTypes: unknown[] })._spaceTypes = mockTypes;
         (engine as unknown as { _spaceRoleTypes: unknown[] })._spaceRoleTypes = mockRoleTypes;
         (engine as unknown as { _applicationSettings: unknown[] })._applicationSettings = mockAppSettings;
-        (engine as unknown as { _authorizations: unknown[] })._authorizations = [];
-        (engine as unknown as { _authorizationRoles: unknown[] })._authorizationRoles = [];
-        (engine as unknown as { _appAndTypeSpaceAgents: unknown[] })._appAndTypeSpaceAgents = [];
-        (engine as unknown as { _appAndTypeSpaceAgentSkills: unknown[] })._appAndTypeSpaceAgentSkills = [];
-        (engine as unknown as { _appAndTypeSpaceKnowledgeSources: unknown[] })._appAndTypeSpaceKnowledgeSources = [];
 
         // Reset indexes
         void (engine as unknown as { AdditionalLoading: () => Promise<void> }).AdditionalLoading();
@@ -137,25 +130,21 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
     it('reads parsed CollaborationSettings and resolves settings for a space', () => {
         const settings = engine.CollaborationSettings;
         expect(settings.StorageAccountID).toBe('DEFAULT-APP-STORAGE');
-        expect(settings.PostCloseAccess).toBe('ReadOnly');
+        expect(settings.Chats?.WhoCanStart).toBe('Anyone');
 
-        // Space override with type config
-        const resolved = engine.ResolveSettingsForSpace(
-            [{ StorageAccountID: 'SPACE-OVERRIDE-STORAGE' }],
-            'TYPE-111' // type has SpaceOverridable: ['StorageAccountID']
-        );
-        expect(resolved.StorageAccountID).toBe('SPACE-OVERRIDE-STORAGE');
-        expect(resolved.PostCloseAccess).toBe('ReadOnly'); // from app default
+        // The engine's row is the app level of the one resolver (B16); the type has SpaceOverridable: ['StorageAccountID']
+        const type = engine.SpaceTypeById('TYPE-111');
+        const resolved = ResolveSpaceConfiguration({
+            App: { Settings: settings, Grants: [] },
+            Type: { ID: 'TYPE-111', Settings: type?.Configuration ? (JSON.parse(type.Configuration) as CollaborationSettings) : null, Grants: [] },
+            Spaces: [{ ID: 'SPACE-1', TypeID: 'TYPE-111', Settings: { StorageAccountID: 'SPACE-OVERRIDE-STORAGE' }, Grants: [] }],
+        });
+        expect(resolved.Settings.StorageAccountID).toBe('SPACE-OVERRIDE-STORAGE');
+        expect(resolved.Settings.Chats.WhoCanStart).toBe('Anyone'); // from app default
     });
 
     describe('settings fail closed', () => {
         type Internals = { _spaceTypes: Array<Partial<mjBizAppsCollaborationSpaceTypeEntity>>; _applicationSettings: unknown[] };
-
-        it('refuses to resolve when a space type configuration does not parse', () => {
-            const internals = engine as unknown as Internals;
-            internals._spaceTypes.push({ ID: 'TYPE-BAD', Code: 'bad', Name: 'Bad', Configuration: '{ not json' });
-            expect(() => engine.ResolveSettingsForSpace([], 'TYPE-BAD')).toThrow(/has a configuration that does not parse/);
-        });
 
         it('refuses to resolve when the app settings row does not validate, instead of using it anyway', () => {
             const internals = engine as unknown as Internals;
@@ -166,7 +155,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             }];
             (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
             try {
-                expect(() => engine.ResolveSettingsForSpace([], 'TYPE-111')).toThrow(/CollaborationSettings are invalid/);
+                expect(() => engine.CollaborationSettings).toThrow(/CollaborationSettings are invalid/);
             } finally {
                 internals._applicationSettings = held;
                 (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
@@ -179,7 +168,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             internals._applicationSettings = [];
             (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
             try {
-                expect(() => engine.ResolveSettingsForSpace([], 'TYPE-111')).toThrow();
+                expect(() => engine.CollaborationSettings).toThrow();
             } finally {
                 internals._applicationSettings = held;
                 (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
@@ -215,7 +204,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
                 // A reload that finds a good row reads it
                 internals._applicationSettings = held;
                 await reload();
-                expect(engine.CollaborationSettings.PostCloseAccess).toBe('ReadOnly');
+                expect(engine.CollaborationSettings.Chats?.WhoCanStart).toBe('Anyone');
             } finally {
                 internals._applicationSettings = held;
                 await reload();

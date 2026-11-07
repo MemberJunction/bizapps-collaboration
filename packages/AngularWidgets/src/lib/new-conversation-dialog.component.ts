@@ -5,6 +5,7 @@ import {
   EventEmitter,
   Input,
   OnChanges,
+  OnDestroy,
   Output,
   SimpleChanges,
   ViewChild,
@@ -13,12 +14,33 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CollabDialogBase } from './dialog-base';
 import { COLLAB_TOKENS_CSS } from './tokens';
+
+export interface WorkstreamLinkTaskOption {
+  id: string;
+  name: string;
+  status?: string;
+  priority?: string;
+}
+
+export interface WorkstreamLinkFileOption {
+  id: string;
+  title: string;
+  kind?: string;
+}
+
+export interface WorkstreamActionLinkPayload {
+  mode: 'task' | 'new-task' | 'file';
+  targetId?: string;
+  targetTitle?: string;
+  newTaskTitle?: string;
+  newTaskPriority?: 'Low' | 'Normal' | 'High';
+}
 
 export interface NewConversationSubmitPayload {
   name: string;
-  kind: 'General' | 'Topic' | 'Private';
+  kind: 'General' | 'Topic' | 'Private' | 'Assistant';
+  linkedAction?: WorkstreamActionLinkPayload;
 }
 
 @Component({
@@ -27,7 +49,7 @@ export interface NewConversationSubmitPayload {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, SharedGenericModule],
   template: `
-    <mj-dialog [Visible]="true" Title="New Conversation" [Width]="520" [Closeable]="!IsSubmitting" (Close)="onCancel()">
+    <mj-dialog [Visible]="true" Title="New Conversation" [Width]="540" [Closeable]="!IsSubmitting" (Close)="onCancel()">
     <div class="conversation-modal">
       <p class="d-sub">Start a new conversation in {{ SpaceName || 'this space' }}.</p>
 
@@ -43,7 +65,7 @@ export interface NewConversationSubmitPayload {
               class="f-input"
               [(ngModel)]="name"
               [disabled]="IsSubmitting"
-              placeholder="e.g. project-updates, weekly-sync"
+              placeholder="e.g. project-updates, q3-audit-review"
               (keydown.enter)="onSubmit()"
               autofocus
             />
@@ -58,7 +80,7 @@ export interface NewConversationSubmitPayload {
               <div class="kind-card-icon general"><i class="fa-solid fa-comments" aria-hidden="true"></i></div>
               <div class="kind-card-text">
                 <div class="kind-title">General Discussion</div>
-                <div class="kind-desc">Open conversation for all space participants and team members.</div>
+                <div class="kind-desc">Open channel for ongoing questions, updates, and broad discussion.</div>
               </div>
             </label>
 
@@ -67,7 +89,7 @@ export interface NewConversationSubmitPayload {
               <div class="kind-card-icon topic"><i class="fa-solid fa-bullseye" aria-hidden="true"></i></div>
               <div class="kind-card-text">
                 <div class="kind-title">Topic / Workstream</div>
-                <div class="kind-desc">Focused on a specific deliverable, review, or initiative.</div>
+                <div class="kind-desc">Focused working thread tied to a specific task, deliverable, or initiative.</div>
               </div>
             </label>
 
@@ -81,8 +103,129 @@ export interface NewConversationSubmitPayload {
                 </div>
               </label>
             }
+
+            @if (canShowAssistant) {
+              <label class="kind-card" [class.selected]="kind === 'Assistant'" data-testid="kind-card-assistant">
+                <input type="radio" name="convoKind" value="Assistant" [(ngModel)]="kind" [disabled]="IsSubmitting" class="sr-only" />
+                <div class="kind-card-icon assistant"><i class="fa-solid fa-robot" aria-hidden="true"></i></div>
+                <div class="kind-card-text">
+                  <div class="kind-title">1-to-1 Assistant</div>
+                  <div class="kind-desc">Private conversation between just you and the space assistant.</div>
+                </div>
+              </label>
+            }
           </div>
         </div>
+
+        @if (kind === 'Topic') {
+          <div class="workstream-link-box" data-testid="workstream-link-box">
+            <div class="workstream-link-header">
+              <div class="workstream-link-title">
+                <i class="fa-solid fa-link" aria-hidden="true"></i>
+                <span>Link Workstream to Actionable Item</span>
+              </div>
+              <span class="workstream-link-sub">Connect this workstream to a trackable task or document in this space.</span>
+            </div>
+
+            <div class="link-mode-pills" role="group" aria-label="Actionable item link type">
+              <button
+                type="button"
+                class="link-mode-pill"
+                [class.active]="linkMode === 'task'"
+                (click)="setLinkMode('task')">
+                <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                <span>Existing Task ({{ Tasks.length }})</span>
+              </button>
+              <button
+                type="button"
+                class="link-mode-pill"
+                [class.active]="linkMode === 'new-task'"
+                (click)="setLinkMode('new-task')">
+                <i class="fa-solid fa-plus-circle" aria-hidden="true"></i>
+                <span>Create New Task</span>
+              </button>
+              <button
+                type="button"
+                class="link-mode-pill"
+                [class.active]="linkMode === 'file'"
+                (click)="setLinkMode('file')">
+                <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+                <span>Document ({{ Files.length }})</span>
+              </button>
+              <button
+                type="button"
+                class="link-mode-pill"
+                [class.active]="linkMode === 'none'"
+                (click)="setLinkMode('none')">
+                <span>No Link</span>
+              </button>
+            </div>
+
+            @if (linkMode === 'task') {
+              <div class="link-picker-body">
+                @if (Tasks.length > 0) {
+                  <label class="f-sublabel" for="workstream-task-select">Select Task from Work Board</label>
+                  <select
+                    id="workstream-task-select"
+                    class="f-select"
+                    [(ngModel)]="selectedTaskId"
+                    (ngModelChange)="onTaskSelectionChange($event)">
+                    @for (t of Tasks; track t.id) {
+                      <option [value]="t.id">{{ t.name }} {{ t.status ? '(' + t.status + ')' : '' }}</option>
+                    }
+                  </select>
+                } @else {
+                  <div class="link-empty-note">
+                    No tasks exist in this space yet. Choose <strong>Create New Task</strong> to create and link one automatically.
+                  </div>
+                }
+              </div>
+            }
+
+            @if (linkMode === 'new-task') {
+              <div class="link-picker-body new-task-row">
+                <div class="new-task-field">
+                  <label class="f-sublabel" for="workstream-new-task-title">New Task Title</label>
+                  <input
+                    id="workstream-new-task-title"
+                    type="text"
+                    class="f-select"
+                    [(ngModel)]="newTaskTitle"
+                    [placeholder]="trimmedName ? 'Task: ' + trimmedName : 'e.g. Complete Q3 financial review'" />
+                </div>
+                <div class="new-task-priority">
+                  <label class="f-sublabel" for="workstream-new-task-priority">Priority</label>
+                  <select id="workstream-new-task-priority" class="f-select" [(ngModel)]="newTaskPriority">
+                    <option value="High">High</option>
+                    <option value="Normal">Normal</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+              </div>
+            }
+
+            @if (linkMode === 'file') {
+              <div class="link-picker-body">
+                @if (Files.length > 0) {
+                  <label class="f-sublabel" for="workstream-file-select">Select Document / Deliverable</label>
+                  <select
+                    id="workstream-file-select"
+                    class="f-select"
+                    [(ngModel)]="selectedFileId"
+                    (ngModelChange)="onFileSelectionChange($event)">
+                    @for (f of Files; track f.id) {
+                      <option [value]="f.id">{{ f.title }}</option>
+                    }
+                  </select>
+                } @else {
+                  <div class="link-empty-note">
+                    No documents in this space yet.
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
       </div>
 
 
@@ -91,13 +234,13 @@ export interface NewConversationSubmitPayload {
         <button
           type="button"
           mjButton
-          variant="primary"
-          size="md"
+          Variant="primary"
+          Size="md"
           [disabled]="!trimmedName || IsSubmitting"
           (click)="onSubmit()"
         >
           @if (IsSubmitting) {
-            <mj-loading Size="small" [showText]="false"></mj-loading> Creating...
+            <mj-loading Size="small" [ShowText]="false"></mj-loading> Creating...
           } @else {
             <i class="fa-solid fa-plus" aria-hidden="true"></i> Create Conversation
           }
@@ -105,8 +248,8 @@ export interface NewConversationSubmitPayload {
         <button
           type="button"
           mjButton
-          variant="secondary"
-          size="md"
+          Variant="secondary"
+          Size="md"
           [disabled]="IsSubmitting"
           (click)="onCancel()"
         >
@@ -138,7 +281,7 @@ export interface NewConversationSubmitPayload {
       .d-body {
         display: flex;
         flex-direction: column;
-        gap: 18px;
+        gap: 16px;
       }
 
       .form-group {
@@ -151,6 +294,12 @@ export interface NewConversationSubmitPayload {
         font-size: 13px;
         font-weight: 600;
         color: var(--mj-text-primary, #0f172a);
+      }
+
+      .f-sublabel {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--mj-text-secondary, #475569);
       }
 
       .input-with-prefix {
@@ -248,6 +397,10 @@ export interface NewConversationSubmitPayload {
         background: color-mix(in srgb, var(--mjc-team, #7c3aed) 12%, transparent);
         color: var(--mjc-team, #7c3aed);
       }
+      .kind-card-icon.assistant {
+        background: color-mix(in srgb, var(--mj-brand-accent, #0284c7) 12%, transparent);
+        color: var(--mj-brand-accent, #0284c7);
+      }
 
       .kind-card-text {
         display: flex;
@@ -267,39 +420,199 @@ export interface NewConversationSubmitPayload {
         color: var(--mj-text-secondary, #64748b);
       }
 
+      .workstream-link-box {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid color-mix(in srgb, var(--mj-brand-tertiary, #059669) 30%, var(--mj-border-default, #e2e8f0));
+        background: color-mix(in srgb, var(--mj-brand-tertiary, #059669) 4%, var(--mj-bg-surface, #ffffff));
+      }
+
+      .workstream-link-header {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .workstream-link-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--mj-text-primary, #0f172a);
+      }
+      .workstream-link-title i {
+        color: var(--mj-brand-tertiary, #059669);
+        font-size: 12px;
+      }
+
+      .workstream-link-sub {
+        font-size: 11.5px;
+        color: var(--mj-text-secondary, #64748b);
+      }
+
+      .link-mode-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .link-mode-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--mj-border-default, #cbd5e1);
+        background: var(--mj-bg-surface, #ffffff);
+        color: var(--mj-text-secondary, #475569);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.12s ease;
+      }
+      .link-mode-pill:hover {
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-text-primary, #0f172a);
+      }
+      .link-mode-pill.active {
+        background: var(--mj-brand-primary, #0076b6);
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-text-inverse, #ffffff);
+      }
+
+      .link-picker-body {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding-top: 2px;
+      }
+
+      .new-task-row {
+        flex-direction: row;
+        gap: 10px;
+      }
+      .new-task-field {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .new-task-priority {
+        width: 120px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .f-select {
+        width: 100%;
+        padding: 7px 10px;
+        border-radius: 7px;
+        border: 1px solid var(--mj-border-default, #cbd5e1);
+        background: var(--mj-bg-surface, #ffffff);
+        color: var(--mj-text-primary, #0f172a);
+        font-size: 13px;
+        outline: none;
+        box-sizing: border-box;
+      }
+      .f-select:focus {
+        border-color: var(--mj-brand-primary, #0076b6);
+      }
+
+      .link-empty-note {
+        font-size: 12px;
+        color: var(--mj-text-secondary, #64748b);
+        padding: 4px 0;
+      }
+
     `,
   ],
 })
-export class CollabNewConversationDialogComponent extends CollabDialogBase implements OnChanges {
+export class CollabNewConversationDialogComponent implements OnChanges, OnDestroy {
   @Input() public SpaceName = '';
-  @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private')[] = ['General', 'Topic'];
+  @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private' | 'Assistant')[] = ['General', 'Topic', 'Assistant'];
   @Input() public IsSubmitting = false;
+  @Input() public Tasks: readonly WorkstreamLinkTaskOption[] = [];
+  @Input() public Files: readonly WorkstreamLinkFileOption[] = [];
 
   @Output() public CancelRequested = new EventEmitter<void>();
   @Output() public SubmitRequested = new EventEmitter<NewConversationSubmitPayload>();
 
   @ViewChild('nameInput') private nameInputElement?: ElementRef<HTMLInputElement>;
-  @ViewChild(MJDialogComponent, { read: ElementRef }) private dialogHost?: ElementRef<HTMLElement>;
+  private refocusTimer: ReturnType<typeof setTimeout> | undefined;
 
   public name = '';
-  public kind: 'General' | 'Topic' | 'Private' = 'General';
+  public kind: 'General' | 'Topic' | 'Private' | 'Assistant' = 'General';
+  public linkMode: 'none' | 'task' | 'new-task' | 'file' = 'none';
+  public selectedTaskId = '';
+  public selectedFileId = '';
+  public newTaskTitle = '';
+  public newTaskPriority: 'Low' | 'Normal' | 'High' = 'Normal';
 
-  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogHost; }
-  /** The name field, so a dialog that opens (or finishes a submit) is ready to type in. */
-  protected override FirstFocus(): HTMLElement | null { return this.nameInputElement?.nativeElement ?? null; }
+  public setLinkMode(mode: 'none' | 'task' | 'new-task' | 'file'): void {
+    this.linkMode = mode;
+    if (mode === 'task' && !this.selectedTaskId && this.Tasks.length > 0) {
+      this.selectedTaskId = this.Tasks[0].id;
+      this.onTaskSelectionChange(this.selectedTaskId);
+    } else if (mode === 'file' && !this.selectedFileId && this.Files.length > 0) {
+      this.selectedFileId = this.Files[0].id;
+      this.onFileSelectionChange(this.selectedFileId);
+    }
+  }
 
-  public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['IsSubmitting']) {
-      const prev = changes['IsSubmitting'].previousValue;
-      const curr = changes['IsSubmitting'].currentValue;
-      if (prev === true && curr === false) {
-        this.ScheduleFirstFocus();
+  public onTaskSelectionChange(taskId: string): void {
+    this.selectedTaskId = taskId;
+    if (!this.trimmedName) {
+      const match = this.Tasks.find((t) => t.id === taskId);
+      if (match) {
+        this.name = match.name;
       }
     }
   }
 
+  public onFileSelectionChange(fileId: string): void {
+    this.selectedFileId = fileId;
+    if (!this.trimmedName) {
+      const match = this.Files.find((f) => f.id === fileId);
+      if (match) {
+        this.name = match.title;
+      }
+    }
+  }
+
+  /**
+   * `mj-dialog` focuses the name field when the dialog opens, keeps Tab inside and gives focus back on close. What it can't know is
+   * that a submit ended: the controls come back on, and the name field takes the focus again on the next turn, so a refusal is ready to fix.
+   */
+  public ngOnChanges(changes: SimpleChanges): void {
+    const submitting = changes['IsSubmitting'];
+    if (submitting && submitting.previousValue === true && submitting.currentValue === false) {
+      this.scheduleRefocus();
+    }
+  }
+
+  public ngOnDestroy(): void {
+    if (this.refocusTimer !== undefined) clearTimeout(this.refocusTimer);
+  }
+
+  private scheduleRefocus(): void {
+    if (this.refocusTimer !== undefined) clearTimeout(this.refocusTimer);
+    this.refocusTimer = setTimeout(() => {
+      this.refocusTimer = undefined;
+      this.nameInputElement?.nativeElement.focus();
+    }, 0);
+  }
+
   public get canShowPrivate(): boolean {
     return this.AllowedKinds.includes('Private');
+  }
+
+  public get canShowAssistant(): boolean {
+    return this.AllowedKinds.includes('Assistant');
   }
 
   public get trimmedName(): string {
@@ -315,9 +628,36 @@ export class CollabNewConversationDialogComponent extends CollabDialogBase imple
   public onSubmit(): void {
     const clean = this.trimmedName;
     if (!clean || this.IsSubmitting) return;
-    this.SubmitRequested.emit({
+
+    const payload: NewConversationSubmitPayload = {
       name: clean,
       kind: this.kind,
-    });
+    };
+
+    if (this.kind === 'Topic' && this.linkMode !== 'none') {
+      if (this.linkMode === 'task' && this.selectedTaskId) {
+        const task = this.Tasks.find((t) => t.id === this.selectedTaskId);
+        payload.linkedAction = {
+          mode: 'task',
+          targetId: this.selectedTaskId,
+          targetTitle: task?.name ?? clean,
+        };
+      } else if (this.linkMode === 'file' && this.selectedFileId) {
+        const file = this.Files.find((f) => f.id === this.selectedFileId);
+        payload.linkedAction = {
+          mode: 'file',
+          targetId: this.selectedFileId,
+          targetTitle: file?.title ?? clean,
+        };
+      } else if (this.linkMode === 'new-task') {
+        payload.linkedAction = {
+          mode: 'new-task',
+          newTaskTitle: this.newTaskTitle.trim() || clean,
+          newTaskPriority: this.newTaskPriority,
+        };
+      }
+    }
+
+    this.SubmitRequested.emit(payload);
   }
 }

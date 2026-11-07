@@ -6,19 +6,19 @@ import {
 } from '@memberjunction/core';
 import type { MJConversationEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
 import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
-import { membershipReaches } from '@mj-biz-apps/collaboration-core';
+import { spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
 import { refusalOf, resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
+import { COLLABORATION_APP_ID } from '@mj-biz-apps/collaboration-engine-base';
 
-const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
 export interface CreateSpaceConversationInput {
     SpaceID: string;
     Name: string;
-    Kind?: 'General' | 'Topic' | 'Private';
+    Kind?: 'General' | 'Topic' | 'Private' | 'Assistant';
 }
 
 export interface CreateSpaceConversationResult {
@@ -34,14 +34,14 @@ export function evaluateCanStartSpaceConversation(
     isSpaceClosed: boolean,
     whoCanStart: string,
     reachRole: { isOwnerRole?: boolean; canContribute?: boolean; canSeeTeamBand?: boolean } | null | undefined
-): { canStartConversation: boolean; allowedConversationKinds: ('General' | 'Topic' | 'Private')[] } {
+): { canStartConversation: boolean; allowedConversationKinds: ('General' | 'Topic' | 'Private' | 'Assistant')[] } {
     if (isSpaceClosed || !reachRole || !reachRole.canContribute) {
         return { canStartConversation: false, allowedConversationKinds: [] };
     }
     if (whoCanStart === 'Owners' && !reachRole.isOwnerRole) {
         return { canStartConversation: false, allowedConversationKinds: [] };
     }
-    const kinds: ('General' | 'Topic' | 'Private')[] = ['General', 'Topic'];
+    const kinds: ('General' | 'Topic' | 'Private' | 'Assistant')[] = ['General', 'Topic', 'Assistant'];
     if (reachRole.canSeeTeamBand) {
         kinds.push('Private');
     }
@@ -87,8 +87,8 @@ export async function createSpaceConversation(
     if (!targetSpace) {
         return { ok: false, message: 'Space not found or caller cannot access this space.' };
     }
-    if (targetSpace.closedAt) {
-        return { ok: false, message: 'Cannot create conversation in a closed space.' };
+    if (spaceIsReadOnly(targetSpace)) {
+        return { ok: false, message: targetSpace.closedAt ? 'Cannot create conversation in a closed space.' : 'Cannot create conversation in a read-only space.' };
     }
 
     const reach = membershipReaches(context.spaces, context.memberships, user.ID, spaceId);
@@ -116,13 +116,23 @@ export async function createSpaceConversation(
         return { ok: false, message: 'Caller is not permitted to start a conversation in this space.' };
     }
 
-    if (input.Kind !== undefined && input.Kind !== 'General' && input.Kind !== 'Topic' && input.Kind !== 'Private') {
-        return { ok: false, message: 'Invalid conversation kind. Only General, Topic, and Private (Internal Only) are permitted.' };
+    if (
+        input.Kind !== undefined &&
+        input.Kind !== 'General' &&
+        input.Kind !== 'Topic' &&
+        input.Kind !== 'Private' &&
+        input.Kind !== 'Assistant'
+    ) {
+        return { ok: false, message: 'Invalid conversation kind. Only General, Topic, Private (Internal Only), and Assistant (1-to-1) are permitted.' };
     }
 
     const targetKind = input.Kind ?? 'General';
     if (!startPerms.allowedConversationKinds.includes(targetKind)) {
         return { ok: false, message: `Caller cannot start a ${targetKind} conversation.` };
+    }
+    const callerId = parseUuid(user.ID);
+    if (!callerId) {
+        return { ok: false, message: 'Caller user ID is invalid.' };
     }
 
     // The space type's driver has the last word, and a type whose driver is missing refuses (fail closed)
@@ -151,6 +161,7 @@ export async function createSpaceConversation(
     spaceChat.ConversationID = conversation.ID;
     spaceChat.Name = cleanName;
     spaceChat.Kind = targetKind;
+    spaceChat.OwnerUserID = targetKind === 'Assistant' ? callerId : null;
     spaceChat.Status = 'Active';
 
     if (typeof provider.CreateTransactionGroup === 'function') {
