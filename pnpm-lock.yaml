@@ -268,10 +268,10 @@ importers:
   packages/CoreEntitiesServer:
     dependencies:
       '@memberjunction/actions':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/actions-base':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@mj-biz-apps/collaboration-core':
         specifier: 0.1.0
@@ -285,13 +285,13 @@ importers:
     devDependencies:
       '@memberjunction/ai-agents':
         specifier: 6.2.0-edge.7
-        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/content-pipeline':
         specifier: 6.2.0-edge.7
-        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/conversations-runtime':
         specifier: 6.2.0-edge.7
         version: 6.2.0-edge.7(ws@8.22.1)
@@ -309,7 +309,7 @@ importers:
         version: 6.2.0-edge.7
       '@memberjunction/notifications':
         specifier: 6.2.0-edge.7
-        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/storage':
         specifier: 6.2.0-edge.7
         version: 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
@@ -360,7 +360,7 @@ importers:
         specifier: 0.1.0
         version: link:../Core
       zod:
-        specifier: 3.25.76
+        specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
       '@memberjunction/core':
@@ -437,7 +437,7 @@ importers:
   packages/ExampleSpaceTypes/Entities:
     dependencies:
       zod:
-        specifier: 3.25.76
+        specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
       '@memberjunction/core':
@@ -453,10 +453,10 @@ importers:
   packages/ExampleSpaceTypes/Server:
     dependencies:
       '@memberjunction/actions':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/actions-base':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@mj-biz-apps/collaboration-example-space-types-entities':
         specifier: 0.1.0
@@ -496,50 +496,50 @@ importers:
   packages/IntegrationTests:
     dependencies:
       '@memberjunction/actions':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/actions-base':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/ai-agents':
-        specifier: 6.2.0-edge.7
-        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+        specifier: ^6.2.0-edge.7
+        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/ai-core-plus':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/ai-engine-base':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/api-keys':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7(typescript@5.9.3)
       '@memberjunction/core':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/core-entities':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/generic-database-provider':
-        specifier: 6.2.0-edge.7
-        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+        specifier: ^6.2.0-edge.7
+        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/global':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7
       '@memberjunction/graphql-dataprovider':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7(ws@8.22.1)
       '@memberjunction/search-engine':
-        specifier: 6.2.0-edge.7
-        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+        specifier: ^6.2.0-edge.7
+        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/sqlserver-dataprovider':
-        specifier: 6.2.0-edge.7
-        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+        specifier: ^6.2.0-edge.7
+        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/storage':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/testing-integration':
-        specifier: 6.2.0-edge.7
-        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(vitest@4.1.11(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))(ws@8.22.1)(zod@4.6.7)
+        specifier: ^6.2.0-edge.7
+        version: 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(vitest@4.1.11(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))(ws@8.22.1)(zod@3.25.76)
       '@mj-biz-apps/collaboration-core':
         specifier: workspace:*
         version: link:../Core
@@ -556,13 +556,13 @@ importers:
         specifier: workspace:*
         version: link:../ExampleSpaceTypes/Server
       '@mj-biz-apps/common-entities':
-        specifier: 5.59.0
+        specifier: ^5.59.0
         version: 5.59.0(@memberjunction/core@6.2.0-edge.7)(@memberjunction/global@6.2.0-edge.7)
       '@mj-biz-apps/tasks-entities':
-        specifier: 1.5.0
+        specifier: ^1.5.0
         version: 1.5.0(@memberjunction/core@6.2.0-edge.7)(@memberjunction/global@6.2.0-edge.7)
       mssql:
-        specifier: 12.7.0
+        specifier: ^12.7.0
         version: 12.7.0
     devDependencies:
       '@types/mssql':
@@ -645,10 +645,10 @@ importers:
         specifier: 21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@memberjunction/ng-shared-generic':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@memberjunction/ng-ui-components':
-        specifier: 6.2.0-edge.7
+        specifier: ^6.2.0-edge.7
         version: 6.2.0-edge.7(f5517fe63f1c615d5901e88463cf954b)
       '@mj-biz-apps/collaboration-core':
         specifier: 0.1.0
@@ -9186,12 +9186,12 @@ snapshots:
   '@aws-crypto/sha256-js@5.2.0':
     dependencies:
       '@aws-crypto/util': 5.2.0
-      '@aws-sdk/types': 3.974.6
+      '@aws-sdk/types': 3.975.0
       tslib: 2.8.1
 
   '@aws-crypto/util@5.2.0':
     dependencies:
-      '@aws-sdk/types': 3.974.6
+      '@aws-sdk/types': 3.975.0
       '@smithy/util-utf8': 2.3.0
       tslib: 2.8.1
 
@@ -9205,16 +9205,16 @@ snapshots:
 
   '@aws-sdk/client-bedrock-runtime@3.1138.0':
     dependencies:
-      '@aws-sdk/core': 3.978.1
-      '@aws-sdk/credential-provider-node': 3.972.84
+      '@aws-sdk/core': 3.979.1
+      '@aws-sdk/credential-provider-node': 3.972.92
       '@aws-sdk/eventstream-handler-node': 3.972.35
       '@aws-sdk/middleware-eventstream': 3.972.30
       '@aws-sdk/middleware-websocket': 3.972.54
       '@aws-sdk/token-providers': 3.1138.0
-      '@aws-sdk/types': 3.974.6
-      '@smithy/core': 3.35.0
+      '@aws-sdk/types': 3.975.0
+      '@smithy/core': 3.38.1
       '@smithy/fetch-http-handler': 5.8.0
-      '@smithy/node-http-handler': 4.12.1
+      '@smithy/node-http-handler': 4.14.1
       '@smithy/types': 4.19.0
       tslib: 2.8.1
 
@@ -9246,12 +9246,12 @@ snapshots:
 
   '@aws-sdk/client-sagemaker@3.1138.0':
     dependencies:
-      '@aws-sdk/core': 3.978.1
-      '@aws-sdk/credential-provider-node': 3.972.84
-      '@aws-sdk/types': 3.974.6
-      '@smithy/core': 3.35.0
+      '@aws-sdk/core': 3.979.1
+      '@aws-sdk/credential-provider-node': 3.972.92
+      '@aws-sdk/types': 3.975.0
+      '@smithy/core': 3.38.1
       '@smithy/fetch-http-handler': 5.8.0
-      '@smithy/node-http-handler': 4.12.1
+      '@smithy/node-http-handler': 4.14.1
       '@smithy/types': 4.19.0
       tslib: 2.8.1
 
@@ -9497,15 +9497,15 @@ snapshots:
 
   '@aws-sdk/eventstream-handler-node@3.972.35':
     dependencies:
-      '@aws-sdk/types': 3.974.6
-      '@smithy/core': 3.35.0
+      '@aws-sdk/types': 3.975.0
+      '@smithy/core': 3.38.1
       '@smithy/types': 4.19.0
       tslib: 2.8.1
 
   '@aws-sdk/middleware-eventstream@3.972.30':
     dependencies:
-      '@aws-sdk/types': 3.974.6
-      '@smithy/core': 3.35.0
+      '@aws-sdk/types': 3.975.0
+      '@smithy/core': 3.38.1
       '@smithy/types': 4.19.0
       tslib: 2.8.1
 
@@ -9527,11 +9527,11 @@ snapshots:
 
   '@aws-sdk/middleware-websocket@3.972.54':
     dependencies:
-      '@aws-sdk/core': 3.978.1
-      '@aws-sdk/types': 3.974.6
-      '@smithy/core': 3.35.0
+      '@aws-sdk/core': 3.979.1
+      '@aws-sdk/types': 3.975.0
+      '@smithy/core': 3.38.1
       '@smithy/fetch-http-handler': 5.8.0
-      '@smithy/signature-v4': 5.7.3
+      '@smithy/signature-v4': 5.7.5
       '@smithy/types': 4.19.0
       tslib: 2.8.1
 
@@ -10322,7 +10322,7 @@ snapshots:
     dependencies:
       command-exists: 1.2.9
       node-fetch: 2.7.0(encoding@0.1.13)
-      ws: 8.21.3
+      ws: 8.22.1
     transitivePeerDependencies:
       - bufferutil
       - encoding
@@ -10674,7 +10674,7 @@ snapshots:
       - canvas
     optional: true
 
-  '@hyperframes/engine@0.8.134(@types/node@24.10.11)':
+  '@hyperframes/engine@0.8.134':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.8)
       '@hyperframes/core': 0.8.134(@types/node@24.10.11)
@@ -10684,7 +10684,6 @@ snapshots:
       puppeteer: 25.16.0
       puppeteer-core: 25.16.0
     transitivePeerDependencies:
-      - '@types/node'
       - bufferutil
       - canvas
       - proxy-agent
@@ -10721,7 +10720,7 @@ snapshots:
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.8)
       '@hyperframes/core': 0.8.134(@types/node@24.10.11)
-      '@hyperframes/engine': 0.8.134(@types/node@24.10.11)
+      '@hyperframes/engine': 0.8.134
       '@hyperframes/lint': 0.8.134
       '@hyperframes/parsers': 0.8.134
       '@hyperframes/studio-server': 0.8.134(@types/node@24.10.11)
@@ -11194,7 +11193,7 @@ snapshots:
 
   '@lmstudio/lms-isomorphic@0.4.6':
     dependencies:
-      ws: 8.21.3
+      ws: 8.22.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -11503,36 +11502,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/ai-agent-harness@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/ai-agent-manager-actions@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/actions': 6.2.0-edge.7
@@ -11750,37 +11719,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/ai-agent-manager@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/ai-agents@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)':
     dependencies:
       '@evan/opus': 1.0.3
@@ -11934,57 +11872,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/ai-agents@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@evan/opus': 1.0.3
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-reranker': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-dupe': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-sync': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/context-crush': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/generic-database-provider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/rubrics': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/search-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      dotenv: 17.4.2
-      exceljs: 4.4.0
-      lodash: 4.18.1
-      mammoth: 1.12.3
-      pdfjs-dist: 4.10.38
-      rxjs: 7.8.2
-      safe-regex: 2.1.1
-      sql-formatter: 15.8.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/ai-agents@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@evan/opus': 1.0.3
@@ -12058,57 +11945,6 @@ snapshots:
       '@memberjunction/search-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      dotenv: 17.4.2
-      exceljs: 4.4.0
-      lodash: 4.18.1
-      mammoth: 1.12.3
-      pdfjs-dist: 4.10.38
-      rxjs: 7.8.2
-      safe-regex: 2.1.1
-      sql-formatter: 15.8.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/ai-agents@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@evan/opus': 1.0.3
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-reranker': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-dupe': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-sync': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/context-crush': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/generic-database-provider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/rubrics': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/search-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       dotenv: 17.4.2
       exceljs: 4.4.0
       lodash: 4.18.1
@@ -12657,39 +12493,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/ai-form-builder@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/interactive-component-types': 6.2.0-edge.7
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/ai-gemini@6.2.0-edge.7(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))':
     dependencies:
       '@google/genai': 2.24.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
@@ -12996,44 +12799,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/ai-prompts@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/credentials': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/templates-base-types': 6.2.0-edge.7
-      cosmiconfig: 9.0.0(typescript@5.9.3)
-      date-fns: 2.30.0
-      date-fns-tz: 2.0.1(date-fns@2.30.0)
-      dotenv: 17.4.2
-      json5: 2.2.3
-      rxjs: 7.8.2
-      uuid: 13.0.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/ai-prompts@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai': 6.2.0-edge.7
@@ -13083,44 +12848,6 @@ snapshots:
       '@memberjunction/credentials': 6.2.0-edge.7
       '@memberjunction/global': 6.2.0-edge.7
       '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/templates-base-types': 6.2.0-edge.7
-      cosmiconfig: 9.0.0(typescript@5.9.3)
-      date-fns: 2.30.0
-      date-fns-tz: 2.0.1(date-fns@2.30.0)
-      dotenv: 17.4.2
-      json5: 2.2.3
-      rxjs: 7.8.2
-      uuid: 13.0.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/ai-prompts@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/credentials': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/templates-base-types': 6.2.0-edge.7
       cosmiconfig: 9.0.0(typescript@5.9.3)
       date-fns: 2.30.0
@@ -13234,58 +12961,6 @@ snapshots:
       '@memberjunction/ai-vertex': 6.2.0-edge.7(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
       '@memberjunction/ai-xai': 6.2.0-edge.7(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/ai-zhipu': 6.2.0-edge.7(ws@8.22.1)(zod@3.25.76)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/ai-provider-bundle@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai-anthropic': 6.2.0-edge.7(zod@4.6.7)
-      '@memberjunction/ai-assemblyai': 6.2.0-edge.7
-      '@memberjunction/ai-azure': 6.2.0-edge.7
-      '@memberjunction/ai-bedrock': 6.2.0-edge.7
-      '@memberjunction/ai-betty-bot': 6.2.0-edge.7(axios@1.20.0)
-      '@memberjunction/ai-blackforestlabs': 6.2.0-edge.7
-      '@memberjunction/ai-cerebras': 6.2.0-edge.7(encoding@0.1.13)
-      '@memberjunction/ai-cloudflare': 6.2.0-edge.7
-      '@memberjunction/ai-cohere': 6.2.0-edge.7
-      '@memberjunction/ai-deepinfra': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-elevenlabs': 6.2.0-edge.7(encoding@0.1.13)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-fireworks': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-gemini': 6.2.0-edge.7(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
-      '@memberjunction/ai-groq': 6.2.0-edge.7(encoding@0.1.13)
-      '@memberjunction/ai-heygen': 6.2.0-edge.7(encoding@0.1.13)
-      '@memberjunction/ai-inception': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-inworld': 6.2.0-edge.7
-      '@memberjunction/ai-llamacpp': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-lmstudio': 6.2.0-edge.7
-      '@memberjunction/ai-local-embeddings': 6.2.0-edge.7(@types/node@24.10.11)
-      '@memberjunction/ai-minimax': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-mistral': 6.2.0-edge.7(axios@1.20.0)
-      '@memberjunction/ai-ollama': 6.2.0-edge.7
-      '@memberjunction/ai-openai': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-openrouter': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-recommendations-rex': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-siliconflow': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-systemone': 6.2.0-edge.7
-      '@memberjunction/ai-vectors-pinecone': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vertex': 6.2.0-edge.7(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
-      '@memberjunction/ai-xai': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-zhipu': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
       - '@azure/msal-browser'
@@ -13622,34 +13297,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/ai-reranker@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/ai-reranker@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai': 6.2.0-edge.7
@@ -13683,34 +13330,6 @@ snapshots:
       '@memberjunction/ai': 6.2.0-edge.7
       '@memberjunction/ai-core-plus': 6.2.0-edge.7
       '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/ai-reranker@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/core': 6.2.0-edge.7
       '@memberjunction/core-entities': 6.2.0-edge.7
@@ -13821,35 +13440,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/ai-segmentation@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      cheerio: 1.2.0
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/ai-segmentation@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai-core-plus': 6.2.0-edge.7
@@ -13884,35 +13474,6 @@ snapshots:
       '@memberjunction/ai-core-plus': 6.2.0-edge.7
       '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      cheerio: 1.2.0
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/ai-segmentation@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/core': 6.2.0-edge.7
       '@memberjunction/core-entities': 6.2.0-edge.7
@@ -14074,41 +13635,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/ai-vector-dupe@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-sync': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/entity-documents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/record-comparison': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      dotenv: 17.4.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/ai-vector-dupe@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai': 6.2.0-edge.7
@@ -14159,41 +13685,6 @@ snapshots:
       '@memberjunction/global': 6.2.0-edge.7
       '@memberjunction/record-comparison': 6.2.0-edge.7
       '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      dotenv: 17.4.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/ai-vector-dupe@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-sync': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/entity-documents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/record-comparison': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       dotenv: 17.4.2
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
@@ -14325,43 +13816,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/ai-vector-sync@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectors-pinecone': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/credentials': 6.2.0-edge.7
-      '@memberjunction/entity-documents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/templates-base-types': 6.2.0-edge.7
-      dotenv: 17.4.2
-      mssql: 12.7.0
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/ai-vector-sync@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai': 6.2.0-edge.7
@@ -14414,43 +13868,6 @@ snapshots:
       '@memberjunction/entity-documents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/global': 6.2.0-edge.7
       '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/templates-base-types': 6.2.0-edge.7
-      dotenv: 17.4.2
-      mssql: 12.7.0
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/ai-vector-sync@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectors-pinecone': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/credentials': 6.2.0-edge.7
-      '@memberjunction/entity-documents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/templates-base-types': 6.2.0-edge.7
       dotenv: 17.4.2
       mssql: 12.7.0
@@ -15012,35 +14429,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/clustering-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectors-memory': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      umap-js: 1.4.0
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/clustering-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai-core-plus': 6.2.0-edge.7
@@ -15075,35 +14463,6 @@ snapshots:
       '@memberjunction/ai-core-plus': 6.2.0-edge.7
       '@memberjunction/ai-engine-base': 6.2.0-edge.7
       '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/ai-vectors-memory': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      umap-js: 1.4.0
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/clustering-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/ai-vectors-memory': 6.2.0-edge.7
       '@memberjunction/core': 6.2.0-edge.7
       '@memberjunction/core-entities': 6.2.0-edge.7
@@ -15436,36 +14795,6 @@ snapshots:
       '@memberjunction/lists': 6.2.0-edge.7
       '@memberjunction/lists-base': 6.2.0-edge.7
       '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
-      rxjs: 7.8.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/communication-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/communication-types': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/credentials': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/lists': 6.2.0-edge.7
-      '@memberjunction/lists-base': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
@@ -15948,60 +15277,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/content-autotagging@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@azure/storage-blob': 12.33.0
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-provider-bundle': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-segmentation': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-sync': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/content-pipeline-base': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/credentials': 6.2.0-edge.7
-      '@memberjunction/entity-documents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/network-utils': 6.2.0-edge.7
-      '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/tag-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/tag-engine-base': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      cheerio: 1.2.0
-      date-fns: 3.6.0
-      date-fns-tz: 3.2.0(date-fns@3.6.0)
-      domhandler: 5.0.3
-      dotenv: 17.4.2
-      officeparser: 6.1.1(encoding@0.1.13)
-      openai: 6.49.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(ws@8.22.1)(zod@4.6.7)
-      pdf-parse: 1.1.4
-      rss-parser: 3.13.0
-      rxjs: 7.8.2
-      tslib: 2.8.1
-      xml2js: 0.6.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/content-autotagging@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@azure/storage-blob': 12.33.0
@@ -16110,60 +15385,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/content-autotagging@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@azure/storage-blob': 12.33.0
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-provider-bundle': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-segmentation': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-sync': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/content-pipeline-base': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/credentials': 6.2.0-edge.7
-      '@memberjunction/entity-documents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/network-utils': 6.2.0-edge.7
-      '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/tag-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/tag-engine-base': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      cheerio: 1.2.0
-      date-fns: 3.6.0
-      date-fns-tz: 3.2.0(date-fns@3.6.0)
-      domhandler: 5.0.3
-      dotenv: 17.4.2
-      officeparser: 6.1.1(encoding@0.1.13)
-      openai: 6.49.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(ws@8.22.1)(zod@4.6.7)
-      pdf-parse: 1.1.4
-      rss-parser: 3.13.0
-      rxjs: 7.8.2
-      tslib: 2.8.1
-      xml2js: 0.6.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/content-pipeline-base@6.2.0-edge.7':
     dependencies:
       '@memberjunction/core': 6.2.0-edge.7
@@ -16171,15 +15392,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@memberjunction/content-pipeline@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
+  '@memberjunction/content-pipeline@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-segmentation': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
+      '@memberjunction/ai-segmentation': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+      '@memberjunction/ai-vectors': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/content-autotagging': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+      '@memberjunction/content-autotagging': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/content-pipeline-base': 6.2.0-edge.7
       '@memberjunction/core': 6.2.0-edge.7
       '@memberjunction/core-entities': 6.2.0-edge.7
@@ -16187,10 +15408,10 @@ snapshots:
       '@memberjunction/document-parsing': 6.2.0-edge.7
       '@memberjunction/global': 6.2.0-edge.7
       '@memberjunction/network-utils': 6.2.0-edge.7
-      '@memberjunction/record-set-processor': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+      '@memberjunction/record-set-processor': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/record-set-processor-base': 6.2.0-edge.7
       '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/tag-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
+      '@memberjunction/tag-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       jszip: 3.10.2
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
@@ -17194,31 +16415,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/entity-documents@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/entity-documents@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/core': 6.2.0-edge.7
@@ -17250,31 +16446,6 @@ snapshots:
       '@memberjunction/core-entities': 6.2.0-edge.7
       '@memberjunction/global': 6.2.0-edge.7
       '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/entity-documents@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
       - '@azure/msal-browser'
@@ -17713,45 +16884,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/feature-pipelines-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/entity-documents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/feature-pipelines': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/record-set-processor': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/record-set-processor-base': 6.2.0-edge.7
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/testing-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)
-      '@memberjunction/testing-engine-base': 6.2.0-edge.7
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/feature-pipelines@6.2.0-edge.7':
     dependencies:
       '@memberjunction/core': 6.2.0-edge.7
@@ -17819,44 +16951,6 @@ snapshots:
       '@memberjunction/global': 6.2.0-edge.7
       '@memberjunction/query-processor': 6.2.0-edge.7(chokidar@5.0.0)
       '@memberjunction/queue': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
-      '@memberjunction/sql-dialect': 6.2.0-edge.7
-      '@memberjunction/sql-parser': 6.2.0-edge.7
-      sql-formatter: 15.8.2
-      uuid: 13.0.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/generic-database-provider@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai-vectors-memory': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/encryption': 6.2.0-edge.7(typescript@5.9.3)
-      '@memberjunction/geo-core': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/query-processor': 6.2.0-edge.7(chokidar@5.0.0)
-      '@memberjunction/queue': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/sql-dialect': 6.2.0-edge.7
       '@memberjunction/sql-parser': 6.2.0-edge.7
       sql-formatter: 15.8.2
@@ -19946,37 +19040,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/notifications@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/communication-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/communication-types': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/generic-database-provider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/sqlserver-dataprovider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/notifications@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/communication-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
@@ -20018,37 +19081,6 @@ snapshots:
       '@memberjunction/global': 6.2.0-edge.7
       '@memberjunction/sqlserver-dataprovider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/notifications@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/communication-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/communication-types': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/generic-database-provider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/sqlserver-dataprovider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
       - '@azure/msal-browser'
@@ -20215,38 +19247,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/postgresql-dataprovider@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/generic-database-provider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/query-processor': 6.2.0-edge.7(chokidar@5.0.0)
-      '@memberjunction/sql-dialect': 6.2.0-edge.7
-      pg: 8.23.0
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - pg-native
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-    optional: true
-
   '@memberjunction/predictive-studio-core@6.2.0-edge.7':
     dependencies:
       zod: 3.25.76
@@ -20399,42 +19399,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/predictive-studio@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/predictive-studio-core': 6.2.0-edge.7
-      '@memberjunction/predictive-studio-sidecar': 6.2.0-edge.7
-      '@memberjunction/record-set-processor': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/record-set-processor-base': 6.2.0-edge.7
-      rxjs: 7.8.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/query-gen@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai': 6.2.0-edge.7
@@ -20514,34 +19478,6 @@ snapshots:
     dependencies:
       '@memberjunction/ai': 6.2.0-edge.7
       '@memberjunction/ai-provider-bundle': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@types/uuid': 11.0.0
-      uuid: 13.0.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/queue@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-provider-bundle': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/core': 6.2.0-edge.7
       '@memberjunction/core-entities': 6.2.0-edge.7
@@ -20914,43 +19850,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/record-set-processor@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/field-rules-transforms': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/record-set-processor-base': 6.2.0-edge.7
-      '@memberjunction/tag-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/record-set-processor@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/actions': 6.2.0-edge.7
@@ -21004,43 +19903,6 @@ snapshots:
       '@memberjunction/record-set-processor-base': 6.2.0-edge.7
       '@memberjunction/tag-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
       '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/record-set-processor@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/field-rules-transforms': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/record-set-processor-base': 6.2.0-edge.7
-      '@memberjunction/tag-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
       - '@azure/msal-browser'
@@ -21216,38 +20078,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/rubrics@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/rubrics-base': 6.2.0-edge.7(typescript@5.9.3)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/rubrics@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/actions': 6.2.0-edge.7
@@ -21287,38 +20117,6 @@ snapshots:
       '@memberjunction/ai': 6.2.0-edge.7
       '@memberjunction/ai-core-plus': 6.2.0-edge.7
       '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/rubrics-base': 6.2.0-edge.7(typescript@5.9.3)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/rubrics@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/core': 6.2.0-edge.7
       '@memberjunction/core-entities': 6.2.0-edge.7
       '@memberjunction/global': 6.2.0-edge.7
@@ -21449,38 +20247,6 @@ snapshots:
       '@memberjunction/global': 6.2.0-edge.7
       '@memberjunction/scheduling-base-types': 6.2.0-edge.7
       '@memberjunction/scheduling-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
-      cron-parser: 4.9.0
-      luxon: 3.7.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/scheduling-actions@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/scheduling-base-types': 6.2.0-edge.7
-      '@memberjunction/scheduling-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       cron-parser: 4.9.0
       luxon: 3.7.2
     transitivePeerDependencies:
@@ -21743,51 +20509,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/scheduling-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/integration-engine': 6.2.0-edge.7
-      '@memberjunction/materialization': 6.2.0-edge.7
-      '@memberjunction/notifications': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/record-set-processor': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/record-set-processor-base': 6.2.0-edge.7
-      '@memberjunction/rubrics': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/scheduling-base-types': 6.2.0-edge.7
-      '@memberjunction/scheduling-engine-base': 6.2.0-edge.7
-      '@memberjunction/sqlserver-dataprovider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/task-graph': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      cron-parser: 4.9.0
-      rxjs: 7.8.2
-      uuid: 13.0.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/schema-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/core': 6.2.0-edge.7
@@ -21939,39 +20660,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/search-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/tag-engine-base': 6.2.0-edge.7
-      nunjucks: 3.2.4(chokidar@5.0.0)
-    optionalDependencies:
-      '@huggingface/transformers': 4.3.2(@types/node@24.10.11)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/search-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai': 6.2.0-edge.7
@@ -22009,39 +20697,6 @@ snapshots:
     dependencies:
       '@memberjunction/ai': 6.2.0-edge.7
       '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/tag-engine-base': 6.2.0-edge.7
-      nunjucks: 3.2.4(chokidar@5.0.0)
-    optionalDependencies:
-      '@huggingface/transformers': 4.3.2(@types/node@24.10.11)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/search-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/ai-vectordb': 6.2.0-edge.7
       '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/core': 6.2.0-edge.7
@@ -22686,129 +21341,6 @@ snapshots:
       - yauzl
       - zod
 
-  '@memberjunction/server-bootstrap-lite@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(vitest@4.1.11(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-apollo': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/actions-bizapps-accounting': 6.2.0-edge.7
-      '@memberjunction/actions-bizapps-crm': 6.2.0-edge.7
-      '@memberjunction/actions-bizapps-formbuilders': 6.2.0-edge.7
-      '@memberjunction/actions-bizapps-lms': 6.2.0-edge.7
-      '@memberjunction/actions-bizapps-social': 6.2.0-edge.7(debug@4.4.3)
-      '@memberjunction/actions-peopledatalabs': 6.2.0-edge.7
-      '@memberjunction/ai-agent-harness': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-agent-manager': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-anthropic': 6.2.0-edge.7(zod@4.6.7)
-      '@memberjunction/ai-assemblyai': 6.2.0-edge.7
-      '@memberjunction/ai-azure': 6.2.0-edge.7
-      '@memberjunction/ai-bedrock': 6.2.0-edge.7
-      '@memberjunction/ai-betty': 6.2.0-edge.7
-      '@memberjunction/ai-betty-bot': 6.2.0-edge.7(axios@1.20.0)
-      '@memberjunction/ai-blackforestlabs': 6.2.0-edge.7
-      '@memberjunction/ai-cerebras': 6.2.0-edge.7(encoding@0.1.13)
-      '@memberjunction/ai-cloudflare': 6.2.0-edge.7
-      '@memberjunction/ai-cohere': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-deepinfra': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-elevenlabs': 6.2.0-edge.7(encoding@0.1.13)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-fireworks': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-form-builder': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-gemini': 6.2.0-edge.7(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))
-      '@memberjunction/ai-groq': 6.2.0-edge.7(encoding@0.1.13)
-      '@memberjunction/ai-heygen': 6.2.0-edge.7(encoding@0.1.13)
-      '@memberjunction/ai-inception': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-inworld': 6.2.0-edge.7
-      '@memberjunction/ai-llamacpp': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-lmstudio': 6.2.0-edge.7
-      '@memberjunction/ai-local-embeddings': 6.2.0-edge.7(@types/node@24.10.11)
-      '@memberjunction/ai-minimax': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-mistral': 6.2.0-edge.7(axios@1.20.0)
-      '@memberjunction/ai-ollama': 6.2.0-edge.7
-      '@memberjunction/ai-openai': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-openrouter': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-provider-bundle': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-recommendations-rex': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-reranker': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-siliconflow': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-systemone': 6.2.0-edge.7
-      '@memberjunction/ai-vector-dupe': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectors-memory': 6.2.0-edge.7
-      '@memberjunction/ai-vectors-pgvector': 6.2.0-edge.7
-      '@memberjunction/ai-vectors-pinecone': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectors-qdrant': 6.2.0-edge.7(typescript@5.9.3)
-      '@memberjunction/ai-vectors-sqlserver': 6.2.0-edge.7
-      '@memberjunction/ai-vertex': 6.2.0-edge.7(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))
-      '@memberjunction/ai-xai': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-zhipu': 6.2.0-edge.7(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/communication-types': 6.2.0-edge.7
-      '@memberjunction/content-autotagging': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-actions': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/core-entities-server': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)
-      '@memberjunction/data-context-server': 6.2.0-edge.7
-      '@memberjunction/doc-utils': 6.2.0-edge.7
-      '@memberjunction/encryption': 6.2.0-edge.7(typescript@5.9.3)
-      '@memberjunction/feature-pipelines': 6.2.0-edge.7
-      '@memberjunction/feature-pipelines-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/generic-database-provider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/geo-core': 6.2.0-edge.7
-      '@memberjunction/predictive-studio': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/queue': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/react-linter': 6.2.0-edge.7(ws@8.22.1)
-      '@memberjunction/record-cloning': 6.2.0-edge.7
-      '@memberjunction/record-comparison': 6.2.0-edge.7
-      '@memberjunction/record-set-processor': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/rubrics': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/rubrics-base': 6.2.0-edge.7(typescript@5.9.3)
-      '@memberjunction/scheduling-actions': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/scheduling-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/scheduling-engine-base': 6.2.0-edge.7
-      '@memberjunction/search-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/tag-engine-base': 6.2.0-edge.7
-      '@memberjunction/task-graph': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/templates': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/testing-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)
-      '@memberjunction/video-studio': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/work-queue-engine': 6.2.0-edge.7(vitest@4.1.11(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))
-      '@memberjunction/work-queue-samples': 6.2.0-edge.7(vitest@4.1.11(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@cfworker/json-schema'
-      - '@fastify/websocket'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - bare-abort-controller
-      - bare-buffer
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - crossws
-      - debug
-      - encoding
-      - pg-native
-      - proxy-agent
-      - react-native-b4a
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - vitest
-      - ws
-      - yauzl
-      - zod
-
   '@memberjunction/server-extensions-core@6.2.0-edge.7':
     dependencies:
       '@memberjunction/core': 6.2.0-edge.7
@@ -23330,46 +21862,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/sqlserver-dataprovider@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-provider-bundle': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-dupe': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/encryption': 6.2.0-edge.7(typescript@5.9.3)
-      '@memberjunction/generic-database-provider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/query-processor': 6.2.0-edge.7(chokidar@5.0.0)
-      '@memberjunction/queue': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/sql-dialect': 6.2.0-edge.7
-      mssql: 12.7.0
-      rxjs: 7.8.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/sqlserver-dataprovider@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/actions': 6.2.0-edge.7
@@ -23426,46 +21918,6 @@ snapshots:
       '@memberjunction/global': 6.2.0-edge.7
       '@memberjunction/query-processor': 6.2.0-edge.7(chokidar@5.0.0)
       '@memberjunction/queue': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/sql-dialect': 6.2.0-edge.7
-      mssql: 12.7.0
-      rxjs: 7.8.2
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/sqlserver-dataprovider@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-provider-bundle': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vector-dupe': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectordb': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/encryption': 6.2.0-edge.7(typescript@5.9.3)
-      '@memberjunction/generic-database-provider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/query-processor': 6.2.0-edge.7(chokidar@5.0.0)
-      '@memberjunction/queue': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/sql-dialect': 6.2.0-edge.7
       mssql: 12.7.0
       rxjs: 7.8.2
@@ -23630,38 +22082,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/tag-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectors-memory': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/clustering-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/tag-engine-base': 6.2.0-edge.7
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/tag-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@memberjunction/ai': 6.2.0-edge.7
@@ -23703,38 +22123,6 @@ snapshots:
       '@memberjunction/ai-vectors-memory': 6.2.0-edge.7
       '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/clustering-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/tag-engine-base': 6.2.0-edge.7
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/tag-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-vectors-memory': 6.2.0-edge.7
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/clustering-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/core': 6.2.0-edge.7
       '@memberjunction/core-entities': 6.2.0-edge.7
       '@memberjunction/global': 6.2.0-edge.7
@@ -23928,40 +22316,6 @@ snapshots:
       - ws
       - zod
 
-  '@memberjunction/task-graph@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/notifications': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/sql-dialect': 6.2.0-edge.7
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
   '@memberjunction/templates-base-types@6.1.3':
     dependencies:
       '@memberjunction/core': 6.1.3
@@ -24013,36 +22367,6 @@ snapshots:
       '@memberjunction/ai': 6.2.0-edge.7
       '@memberjunction/ai-core-plus': 6.2.0-edge.7
       '@memberjunction/ai-provider-bundle': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/templates-base-types': 6.2.0-edge.7
-      nunjucks: 3.2.4(chokidar@5.0.0)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@memberjunction/templates@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-provider-bundle': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/core': 6.2.0-edge.7
       '@memberjunction/core-entities': 6.2.0-edge.7
@@ -24379,45 +22703,6 @@ snapshots:
       - utf-8-validate
       - ws
 
-  '@memberjunction/testing-engine@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)':
-    dependencies:
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/component-registry-client-sdk': 6.2.0-edge.7
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/credentials': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/interactive-component-types': 6.2.0-edge.7
-      '@memberjunction/rubrics': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
-      '@memberjunction/rubrics-base': 6.2.0-edge.7(typescript@5.9.3)
-      '@memberjunction/testing-engine-base': 6.2.0-edge.7
-      debug: 4.4.3(supports-color@8.1.1)
-      rxjs: 7.8.2
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-
   '@memberjunction/testing-integration@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(debug@4.4.3)(encoding@0.1.13)(typescript@5.9.3)(vitest@4.1.11(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))(ws@8.22.1)(zod@3.25.76)':
     dependencies:
       '@memberjunction/core': 6.2.0-edge.7
@@ -24516,55 +22801,6 @@ snapshots:
       - yauzl
       - zod
 
-  '@memberjunction/testing-integration@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(vitest@4.1.11(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/dynamic-packages': 6.2.0-edge.7(typescript@5.9.3)
-      '@memberjunction/generic-database-provider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/graphql-dataprovider': 6.2.0-edge.7(ws@8.22.1)
-      '@memberjunction/server-bootstrap-lite': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(vitest@4.1.11(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/sqlserver-dataprovider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/testing-engine': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)
-      '@memberjunction/testing-engine-base': 6.2.0-edge.7
-      cosmiconfig: 9.0.0(typescript@5.9.3)
-      dotenv: 17.2.4
-      mssql: 12.7.0
-    optionalDependencies:
-      '@memberjunction/postgresql-dataprovider': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@cfworker/json-schema'
-      - '@fastify/websocket'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - bare-abort-controller
-      - bare-buffer
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - crossws
-      - debug
-      - encoding
-      - pg-native
-      - proxy-agent
-      - react-native-b4a
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - vitest
-      - ws
-      - yauzl
-      - zod
-
   '@memberjunction/theme-engine@6.1.3': {}
 
   '@memberjunction/theme-engine@6.2.0-edge.7': {}
@@ -24583,7 +22819,7 @@ snapshots:
   '@memberjunction/video-studio-render-worker@6.2.0-edge.7(@types/node@24.10.11)':
     dependencies:
       '@hyperframes/core': 0.8.134(@types/node@24.10.11)
-      '@hyperframes/engine': 0.8.134(@types/node@24.10.11)
+      '@hyperframes/engine': 0.8.134
       '@hyperframes/lint': 0.8.134
       '@hyperframes/parsers': 0.8.134
       '@hyperframes/producer': 0.8.134(@types/node@24.10.11)
@@ -24772,49 +23008,6 @@ snapshots:
       - yauzl
       - zod
 
-  '@memberjunction/video-studio@6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)':
-    dependencies:
-      '@memberjunction/actions': 6.2.0-edge.7
-      '@memberjunction/actions-base': 6.2.0-edge.7
-      '@memberjunction/ai': 6.2.0-edge.7
-      '@memberjunction/ai-agent-harness': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-agents': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/ai-core-plus': 6.2.0-edge.7
-      '@memberjunction/ai-engine-base': 6.2.0-edge.7
-      '@memberjunction/ai-prompts': 6.2.0-edge.7(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
-      '@memberjunction/aiengine': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/core': 6.2.0-edge.7
-      '@memberjunction/core-entities': 6.2.0-edge.7
-      '@memberjunction/global': 6.2.0-edge.7
-      '@memberjunction/rubrics-base': 6.2.0-edge.7(typescript@5.9.3)
-      '@memberjunction/storage': 6.2.0-edge.7(encoding@0.1.13)(typescript@5.9.3)
-      '@memberjunction/video-studio-core': 6.2.0-edge.7
-      cosmiconfig: 9.0.0(typescript@5.9.3)
-    optionalDependencies:
-      '@memberjunction/video-studio-render-worker': 6.2.0-edge.7(@types/node@24.10.11)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@azure/msal-browser'
-      - '@modelcontextprotocol/sdk'
-      - '@noble/hashes'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - '@types/node'
-      - axios
-      - buffer
-      - bufferutil
-      - canvas
-      - chokidar
-      - encoding
-      - proxy-agent
-      - stream-browserify
-      - supports-color
-      - typescript
-      - utf-8-validate
-      - ws
-      - yauzl
-      - zod
-
   '@memberjunction/web-search-engine@6.2.0-edge.7':
     dependencies:
       '@memberjunction/core': 6.2.0-edge.7
@@ -24925,7 +23118,7 @@ snapshots:
 
   '@mistralai/mistralai@1.15.1':
     dependencies:
-      ws: 8.21.3
+      ws: 8.22.1
       zod: 3.25.76
       zod-to-json-schema: 3.25.2(zod@3.25.76)
     transitivePeerDependencies:
@@ -25517,7 +23710,7 @@ snapshots:
 
   '@smithy/protocol-http@5.6.2':
     dependencies:
-      '@smithy/core': 3.35.0
+      '@smithy/core': 3.38.1
       tslib: 2.8.1
 
   '@smithy/signature-v4@5.7.3':
@@ -26631,7 +24824,7 @@ snapshots:
       '@aws-sdk/client-sagemaker': 3.1138.0
       '@aws-sdk/credential-providers': 3.1138.0
       '@smithy/protocol-http': 5.6.2
-      '@smithy/signature-v4': 5.7.3
+      '@smithy/signature-v4': 5.7.5
       convict: 6.2.5
       form-data: 4.0.6
       form-data-encoder: 4.1.0

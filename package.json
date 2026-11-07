@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "BizApps Collaboration — shared spaces for collaborative team and outside work.",
   "license": "UNLICENSED",
+  "packageManager": "pnpm@10.33.0",
   "devDependencies": {
     "@memberjunction/cli": "6.2.0-edge.7",
     "@memberjunction/core": "6.2.0-edge.7",
