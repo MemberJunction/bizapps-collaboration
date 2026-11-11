@@ -186,7 +186,7 @@
     "fields": {
       "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PhotoURL&Entity=MJ_BizApps_Common: People",
       "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
-      "ReadAccess": "Deny",
+      "ReadAccess": "Allow",
       "UpdateAccess": "Deny",
       "CreateAccess": "Deny"
     }

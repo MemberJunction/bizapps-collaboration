@@ -21,6 +21,19 @@ describe('the Discussion card lines', () => {
         assert.equal(lines[1].isAssistant, true);
     });
 
+    it("draws a sender's photo when they have one, and never gives the assistant one", () => {
+        const photos = (id: string) => (id === 'u-bea' ? 'https://example.test/bea.jpg' : undefined);
+        const lines = toOverviewMessages(rows, plain, () => false, (iso) => iso, photos);
+        assert.equal(lines[0].senderAvatarUrl, 'https://example.test/bea.jpg');
+        assert.equal(lines[1].senderAvatarUrl, undefined);
+    });
+
+    it('leaves every sender on initials when no photos are given', () => {
+        const lines = toOverviewMessages(rows, plain, () => false, (iso) => iso);
+        assert.deepEqual(lines.map((l) => l.senderAvatarUrl), [undefined, undefined]);
+        assert.equal(lines[0].senderInitials, 'BC');
+    });
+
     it('keeps the last five', () => {
         const many: OverviewMessageRow[] = Array.from({ length: 8 }, (_, i) => ({ ID: String(i), Role: 'User', Message: `m${i}`, __mj_CreatedAt: 'x' }));
         assert.equal(toOverviewMessages(many, plain, () => false, (i) => i).length, 5);

@@ -140,7 +140,7 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 
 | | Feature |
 |---|---|
-| ✅ | **Row-level security on every read** an outside participant can make, one filter per entity, and field rules on people, so outsiders see only a person's name and email once BizApps Common turns on field-level security for People. |
+| ✅ | **Row-level security on every read** an outside participant can make, one filter per entity, and field rules on people, so outsiders see only a person's name, email and photo once BizApps Common turns on field-level security for People. |
 | ✅ | **Every write checked on the server,** in the entity classes, so the API, MCP and the screens obey the same rules. |
 | ✅ | **One settings model,** from the app's defaults down through the type, parent spaces and the space. |
 | ✅ | **Rights through MemberJunction's Authorizations:** changing a space type needs *Configure Space Types*; changing a space's settings needs *Configure Spaces* and an owner seat; closing or reopening needs *Close and Reopen Spaces* and an owner seat. |
