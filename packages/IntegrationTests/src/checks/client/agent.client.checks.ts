@@ -1,6 +1,16 @@
 import { CompositeKey } from '@memberjunction/core';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { CollaborationClient, type mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import {
+    CollaborationClient,
+    type mjBizAppsCollaborationSpaceItemEntity,
+    type mjBizAppsCollaborationSpaceMemberEntity,
+} from '@mj-biz-apps/collaboration-entities';
+import type {
+    mjBizAppsTasksTaskActivityEntity,
+    mjBizAppsTasksTaskAssignmentEntity,
+    mjBizAppsTasksTaskEntity,
+    mjBizAppsTasksTaskLinkEntity,
+} from '@mj-biz-apps/tasks-entities';
 import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../../agents/test-agent.js';
 import {
     AI_AGENT_ENTITY,
@@ -11,11 +21,19 @@ import {
     AI_SKILL_ENTITY,
     CONVERSATION_DETAIL_ENTITY,
     FILE_ENTITY,
+    PERSON_ENTITY,
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
     SPACE_ITEM_ENTITY,
+    SPACE_MEMBER_ENTITY,
+    SPACE_ROLE_TYPE_ENTITY,
+    TASK_ACTIVITY_ENTITY,
+    TASK_ASSIGNMENT_ENTITY,
+    TASK_ENTITY,
+    TASK_LINK_ENTITY,
+    USER_ENTITY,
 } from '../../entity-names.js';
-import { FindRows, getPersonaClientContext, getPersonaContext } from '../../wire.js';
+import { FindRows, SameID, getPersonaClientContext, getPersonaContext } from '../../wire.js';
 import { cleanupConversation, deleteRowAndConfirm, registerChecks, runAllSteps } from '../cleanup-helpers.js';
 import {
     makeDocx,
@@ -155,15 +173,31 @@ const checks: NamedCheck[] = [
                 Assert(perm.CanView === true, 'Permission CanView is true');
             }
 
-            // 7. Verify Search Scope link
-            const agentScopes = await FindRows<{ ID: string; SearchScopeID: string; Phase: string }>(
+            // 7. Verify Search Scope link and Ask template grounding
+            const agentScopes = await FindRows<{ ID: string; SearchScopeID: string; Phase: string; IsDefault: boolean }>(
                 ctx,
                 AI_AGENT_SEARCH_SCOPE_ENTITY,
                 `AgentID = '${AGENT_ID}'`,
-                ['ID', 'SearchScopeID', 'Phase'],
+                ['ID', 'SearchScopeID', 'Phase', 'IsDefault'],
             );
             Assert(agentScopes.length === 1, 'Agent is linked to 1 Search Scope');
             Assert(agentScopes[0].SearchScopeID.toLowerCase() === SEARCH_SCOPE_ID.toLowerCase(), 'Linked to Collaboration Space Scope');
+            Assert(agentScopes[0].Phase === 'AgentInvoked', `Collaboration Space Scope Phase is AgentInvoked (saw ${agentScopes[0].Phase})`);
+            Assert(agentScopes[0].IsDefault === true, `Collaboration Space Scope IsDefault is true (saw ${agentScopes[0].IsDefault})`);
+
+            const askTemplateContents = await FindRows<{ ID: string; TemplateText: string }>(
+                ctx,
+                'MJ: Template Contents',
+                `TemplateID = 'A61788A9-9524-4BE7-B5F5-3FB8DEAA7081' AND IsActive = 1`,
+                ['ID', 'TemplateText'],
+            );
+            Assert(askTemplateContents.length >= 1, 'Collaboration Space Agent - Ask template has active content');
+            Assert(
+                askTemplateContents[0].TemplateText.includes('item.Status') &&
+                    askTemplateContents[0].TemplateText.includes('item.Assignees') &&
+                    askTemplateContents[0].TemplateText.includes('item.DueAt'),
+                'Collaboration Space Agent - Ask template renders task Status, Assignees, and DueAt',
+            );
 
             // Note: ExplainScope has no GraphQL endpoint on MJ next; the server harness covers it.
         },
@@ -1036,6 +1070,261 @@ const checks: NamedCheck[] = [
                         .reverse()
                         .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG9 wire uploaded space item')),
                     () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, trackedItemIds),
+                ]);
+            }
+        },
+    },
+    {
+        Id: 'agent.AG10',
+        Name: 'AG10 — ExecuteSpaceChatTurn over the wire grounds Space Tasks with status, priority, due date, and resolved owners across Shared and Team audiences',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const devCtx = await getPersonaClientContext(ctx, 'dev');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
+
+            const ownerRoleId = (await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']))[0]?.ID;
+            Assert(!!ownerRoleId, 'Owner space role type found');
+            if (!ownerRoleId) return;
+
+            const personEntity = ctx.Provider.EntityByName(PERSON_ENTITY);
+            const userEntity = ctx.Provider.EntityByName(USER_ENTITY);
+            Assert(!!personEntity && !!userEntity, 'People and Users entities exist');
+            if (!personEntity || !userEntity) return;
+
+            const personRows = await FindRows<{ ID: string; LinkedUserID: string }>(
+                ctx,
+                PERSON_ENTITY,
+                `LinkedUserID IN ('${adaCtx.User.ID}', '${beaCtx.User.ID}')`,
+                ['ID', 'LinkedUserID'],
+            );
+            const adaPersonId = personRows.find((r) => SameID(r.LinkedUserID, adaCtx.User.ID))?.ID;
+            const beaPersonId = personRows.find((r) => SameID(r.LinkedUserID, beaCtx.User.ID))?.ID;
+            Assert(!!adaPersonId && !!beaPersonId, 'Ada and Bea Person rows resolved');
+            if (!adaPersonId || !beaPersonId) return;
+
+            const stamp = Date.now();
+            const sharedDue = new Date(stamp + 30 * 86_400_000);
+            const teamDue = new Date(stamp + 45 * 86_400_000);
+            const sharedDueIso = sharedDue.toISOString().slice(0, 10);
+            const teamDueIso = teamDue.toISOString().slice(0, 10);
+
+            const sharedOpenTitle = `AG10 wire shared open action item ${stamp}`;
+            const sharedClosedTitle = `AG10 wire shared completed action item ${stamp}`;
+            const teamInProgressTitle = `AG10 wire team internal action item ${stamp}`;
+
+            const createdTaskIds: string[] = [];
+            const createdItemIds: string[] = [];
+            const createdAssignmentIds: string[] = [];
+            let devSeatId: string | null = null;
+            let genConvId: string | null = null;
+            let genChatId: string | null = null;
+            let privConvId: string | null = null;
+            let privChatId: string | null = null;
+
+            type PersonaWireCtx = Awaited<ReturnType<typeof getPersonaClientContext>>;
+
+            const fileWireTask = async (
+                name: string,
+                band: 'Shared' | 'Team',
+                editorCtx: PersonaWireCtx,
+                updates: {
+                    status?: mjBizAppsTasksTaskEntity['Status'];
+                    priority?: mjBizAppsTasksTaskEntity['Priority'];
+                    dueAt?: Date;
+                },
+            ): Promise<string> => {
+                const created = await adaClient.CreateSpaceTask({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: name,
+                    Band: band,
+                });
+                Assert(
+                    created.Success === true && !!created.TaskID && !!created.ItemID,
+                    `Created ${band} task "${name}" over wire: ${created.ErrorMessage ?? ''}`,
+                );
+                const taskId = created.TaskID!;
+                createdTaskIds.push(taskId);
+                createdItemIds.push(created.ItemID!);
+
+                const task = await editorCtx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, editorCtx.User);
+                Assert(await task.Load(taskId), `Loaded task ${taskId} over wire as ${editorCtx.User.Name}`);
+                if (updates.status) task.Status = updates.status;
+                if (updates.priority) task.Priority = updates.priority;
+                if (updates.dueAt) task.DueAt = updates.dueAt;
+                Assert(await task.Save(), `Saved task updates for "${name}" over wire: ${task.LatestResult?.CompleteMessage ?? ''}`);
+                return taskId;
+            };
+
+            const assignWireTask = async (
+                taskId: string,
+                editorCtx: PersonaWireCtx,
+                assigneeEntityId: string,
+                assigneeRecordId: string,
+                status: mjBizAppsTasksTaskAssignmentEntity['Status'],
+            ): Promise<void> => {
+                const assignment = await editorCtx.Provider.GetEntityObject<mjBizAppsTasksTaskAssignmentEntity>(
+                    TASK_ASSIGNMENT_ENTITY,
+                    editorCtx.User,
+                );
+                assignment.NewRecord();
+                assignment.TaskID = taskId;
+                assignment.AssigneeEntityID = assigneeEntityId;
+                assignment.AssigneeRecordID = assigneeRecordId;
+                assignment.Status = status;
+                Assert(await assignment.Save(), `Saved assignment on ${taskId} over wire: ${assignment.LatestResult?.CompleteMessage ?? ''}`);
+                createdAssignmentIds.push(assignment.ID);
+            };
+
+            try {
+                const seat = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
+                seat.NewRecord();
+                seat.SpaceID = DISCOVERY_SPACE_ID;
+                seat.UserID = devCtx.User.ID;
+                seat.SpaceRoleTypeID = ownerRoleId;
+                seat.Band = 'Team';
+                seat.Status = 'Active';
+                Assert(await seat.Save(), `Ada seats Dev as a temporary Team owner on Discovery over wire: ${seat.LatestResult?.CompleteMessage ?? ''}`);
+                devSeatId = seat.ID;
+
+                const sharedOpenId = await fileWireTask(sharedOpenTitle, 'Shared', beaCtx, {
+                    priority: 'High',
+                    dueAt: sharedDue,
+                });
+                await assignWireTask(sharedOpenId, beaCtx, personEntity.ID, beaPersonId, 'InProgress');
+                await assignWireTask(sharedOpenId, beaCtx, userEntity.ID, adaCtx.User.ID, 'Pending');
+
+                await fileWireTask(sharedClosedTitle, 'Shared', beaCtx, {
+                    status: 'Completed',
+                    priority: 'Low',
+                });
+
+                const teamInProgressId = await fileWireTask(teamInProgressTitle, 'Team', devCtx, {
+                    status: 'InProgress',
+                    priority: 'Critical',
+                    dueAt: teamDue,
+                });
+                await assignWireTask(teamInProgressId, devCtx, personEntity.ID, adaPersonId, 'InProgress');
+
+                const genStart = await adaClient.CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-client-ag10-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(genStart.Success === true && !!genStart.ConversationID && !!genStart.SpaceChatID, `Ada created General conversation over wire: ${genStart.ErrorMessage ?? ''}`);
+                genConvId = genStart.ConversationID!;
+                genChatId = genStart.SpaceChatID!;
+
+                const privStart = await adaClient.CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-client-ag10-priv-${stamp}`,
+                    Kind: 'Private',
+                });
+                Assert(privStart.Success === true && !!privStart.ConversationID && !!privStart.SpaceChatID, `Ada created Private conversation over wire: ${privStart.ErrorMessage ?? ''}`);
+                privConvId = privStart.ConversationID!;
+                privChatId = privStart.SpaceChatID!;
+
+                const beaMsg = await beaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} What open action items does Discovery have, and who owns them?`,
+                });
+                Assert(beaMsg.Success === true && !!beaMsg.DetailID, `Bea posted question in General over wire: ${beaMsg.ErrorMessage ?? ''}`);
+                if (beaMsg.DetailID) createdDetailIds.push(beaMsg.DetailID);
+
+                const genTurn = await beaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: beaMsg.DetailID!,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(genTurn.Success === true, `General wire turn succeeded: ${genTurn.ErrorMessage ?? ''}`);
+                if (genTurn.ReplyDetailIDs) createdDetailIds.push(...genTurn.ReplyDetailIDs);
+
+                const genReplies = await FindRows<{ Message: string }>(
+                    beaCtx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${genTurn.ReplyDetailIDs?.[0]}'`,
+                    ['Message'],
+                    beaCtx.User,
+                    { BypassCache: true },
+                );
+                const genReplyText = genReplies[0]?.Message ?? '';
+                Assert(
+                    genReplyText.includes(`- ${sharedOpenTitle} [Status: Open | Priority: High | Owner: Bea Member, Ada Owner | Due: ${sharedDueIso}]`),
+                    `General wire reply grounds Shared open task with status, priority, owners, and due date: ${genReplyText}`,
+                );
+                Assert(
+                    genReplyText.includes(`- ${sharedClosedTitle} [Status: Completed | Priority: Low | Owner: Unassigned]`),
+                    `General wire reply grounds Shared completed unassigned task: ${genReplyText}`,
+                );
+                Assert(!genReplyText.includes(teamInProgressTitle), 'General wire reply omits Team task');
+
+                const adaMsg = await adaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: privConvId,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} What open action items does Discovery have, and who owns them?`,
+                });
+                Assert(adaMsg.Success === true && !!adaMsg.DetailID, `Ada posted question in Private over wire: ${adaMsg.ErrorMessage ?? ''}`);
+                if (adaMsg.DetailID) createdDetailIds.push(adaMsg.DetailID);
+
+                const privTurn = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: privConvId,
+                    UserMessageID: adaMsg.DetailID!,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(privTurn.Success === true, `Private wire turn succeeded: ${privTurn.ErrorMessage ?? ''}`);
+                if (privTurn.ReplyDetailIDs) createdDetailIds.push(...privTurn.ReplyDetailIDs);
+
+                const privReplies = await FindRows<{ Message: string }>(
+                    adaCtx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${privTurn.ReplyDetailIDs?.[0]}'`,
+                    ['Message'],
+                    adaCtx.User,
+                    { BypassCache: true },
+                );
+                const privReplyText = privReplies[0]?.Message ?? '';
+                Assert(
+                    privReplyText.includes(`- ${sharedOpenTitle} [Status: Open | Priority: High | Owner: Bea Member, Ada Owner | Due: ${sharedDueIso}]`),
+                    `Private wire reply grounds Shared open task: ${privReplyText}`,
+                );
+                Assert(
+                    privReplyText.includes(`- ${teamInProgressTitle} [Status: InProgress | Priority: Critical | Owner: Ada Owner | Due: ${teamDueIso}]`),
+                    `Private wire reply grounds Team in-progress task with owner and due date: ${privReplyText}`,
+                );
+            } finally {
+                if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
+                if (privConvId && privChatId) await cleanupConversation(ctx.Provider, ctx.User, privConvId, privChatId);
+                const taskInClause = createdTaskIds.map((id) => `'${id}'`).join(',');
+                const linkRows = taskInClause
+                    ? await FindRows<{ ID: string }>(ctx, TASK_LINK_ENTITY, `TaskID IN (${taskInClause})`, ['ID'], ctx.User, { BypassCache: true })
+                    : [];
+                const activityRows = taskInClause
+                    ? await FindRows<{ ID: string }>(ctx, TASK_ACTIVITY_ENTITY, `TaskID IN (${taskInClause})`, ['ID'], ctx.User, { BypassCache: true })
+                    : [];
+                await runAllSteps([
+                    ...createdAssignmentIds
+                        .slice()
+                        .reverse()
+                        .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, TASK_ASSIGNMENT_ENTITY, id, 'an AG10 wire task assignment')),
+                    ...createdItemIds
+                        .slice()
+                        .reverse()
+                        .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG10 wire space item')),
+                    () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, createdItemIds),
+                    ...linkRows.map((r) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, TASK_LINK_ENTITY, r.ID, 'an AG10 wire task link')),
+                    ...activityRows.map((r) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, TASK_ACTIVITY_ENTITY, r.ID, 'an AG10 wire task activity')),
+                    ...createdTaskIds
+                        .slice()
+                        .reverse()
+                        .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, TASK_ENTITY, id, 'an AG10 wire task')),
+                    ...(devSeatId
+                        ? [() => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, devSeatId!, "AG10 wire Dev's temporary seat on Discovery")]
+                        : []),
                 ]);
             }
         },
