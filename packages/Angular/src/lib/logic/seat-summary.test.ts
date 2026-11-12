@@ -31,6 +31,16 @@ describe('the header seat summary', () => {
         assert.equal(summarizeSeats(seats).audienceBand, 'Shared');
     });
 
+    it("carries a person's photo to their avatar, and leaves a person without one on initials", () => {
+        const summary = summarizeSeats([
+            { ...seat('Ada', 'Team', 'Active'), avatarUrl: 'https://example.test/ada.jpg' },
+            seat('Sam', 'Team', 'Active'),
+            { ...seat('Bea', 'Shared', 'Active'), avatarUrl: 'https://example.test/bea.jpg' },
+        ]);
+        assert.deepEqual(summary.staffAvatars.map((a) => a.avatarUrl), ['https://example.test/ada.jpg', undefined]);
+        assert.deepEqual(summary.outsideAvatars.map((a) => a.avatarUrl), ['https://example.test/bea.jpg']);
+    });
+
     it('summarizes a space with no seats', () => {
         const summary = summarizeSeats([]);
         assert.equal(summary.totalPeople, 0);

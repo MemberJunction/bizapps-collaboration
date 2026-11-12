@@ -14,12 +14,12 @@
     "zod": "3.25.76"
   },
   "peerDependencies": {
-    "@memberjunction/core": "6.2.0-edge.7",
-    "@memberjunction/global": "6.2.0-edge.7"
+    "@memberjunction/core": "6.2.1",
+    "@memberjunction/global": "6.2.1"
   },
   "devDependencies": {
-    "@memberjunction/core": "6.2.0-edge.7",
-    "@memberjunction/global": "6.2.0-edge.7",
+    "@memberjunction/core": "6.2.1",
+    "@memberjunction/global": "6.2.1",
     "typescript": "5.9.3"
   }
 }

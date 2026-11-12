@@ -41,7 +41,8 @@ function idList(rows: Array<Record<string, string>>, label: string): string {
  * provider itself, and a `File` row that still points at it blocks that delete (finding 16 of the browser pass: three
  * uploads into a space that was not the world's stopped the purge, and the loader then ran over a half-purged
  * database). Anything on this provider is test data on a test host, so it goes: the space items that show it in any
- * space, with their uses and share notices, its record links, then the row. Runs inside the purge's transaction, after
+ * space, with their uses and share notices, its record links, the Content Items the pipeline ingested it into, then the
+ * row. Runs inside the purge's transaction, after
  * the world's own items are gone and before the provider is deleted.
  */
 export function providerFilesPurgeSql(core: string, providerId: string): string {
@@ -57,6 +58,24 @@ export function providerFilesPurgeSql(core: string, providerId: string): string 
             DELETE FROM [${core}].ArtifactVersion WHERE ID IN (SELECT VersionID FROM #fileversions);
             DELETE FROM [${core}].Artifact WHERE ID IN (SELECT ArtifactID FROM #fileversions) AND NOT EXISTS (SELECT 1 FROM [${core}].ArtifactVersion AS left_ WHERE left_.ArtifactID = Artifact.ID);
             DELETE FROM [${core}].FileEntityRecordLink WHERE FileID IN (SELECT FileID FROM #providerfiles);
+            -- The content pipeline ingests a file into a Content Item that points back at its file row (MJ 6.2), with chunks,
+            -- tags, attributes, duplicate pairs and any items derived from it underneath: they go before the file, or the file's
+            -- delete is refused and the provider's after it. One dynamic batch behind a check for the column, so the purge
+            -- still compiles on a core schema from before the pipeline kept the file on the item.
+            IF COL_LENGTH('[${core}].[ContentItem]', 'FileID') IS NOT NULL
+                EXEC(N'
+                    WITH ingested AS (
+                        SELECT ID FROM [${core}].ContentItem WHERE FileID IN (SELECT FileID FROM #providerfiles)
+                        UNION ALL
+                        SELECT derived.ID FROM [${core}].ContentItem AS derived INNER JOIN ingested ON derived.ParentID = ingested.ID
+                    )
+                    SELECT ID INTO #fileitems FROM ingested;
+                    IF OBJECT_ID(''[${core}].ContentItemChunk'') IS NOT NULL DELETE FROM [${core}].ContentItemChunk WHERE ContentItemID IN (SELECT ID FROM #fileitems);
+                    IF OBJECT_ID(''[${core}].ContentItemAttribute'') IS NOT NULL DELETE FROM [${core}].ContentItemAttribute WHERE ContentItemID IN (SELECT ID FROM #fileitems);
+                    IF OBJECT_ID(''[${core}].ContentItemTag'') IS NOT NULL DELETE FROM [${core}].ContentItemTag WHERE ItemID IN (SELECT ID FROM #fileitems);
+                    IF OBJECT_ID(''[${core}].ContentItemDuplicate'') IS NOT NULL DELETE FROM [${core}].ContentItemDuplicate WHERE ContentItemAID IN (SELECT ID FROM #fileitems) OR ContentItemBID IN (SELECT ID FROM #fileitems);
+                    IF OBJECT_ID(''[${core}].TagSuggestion'') IS NOT NULL DELETE FROM [${core}].TagSuggestion WHERE SourceContentItemID IN (SELECT ID FROM #fileitems);
+                    DELETE FROM [${core}].ContentItem WHERE ID IN (SELECT ID FROM #fileitems);');
             DELETE FROM [${core}].[File] WHERE ID IN (SELECT FileID FROM #providerfiles);`;
 }
 

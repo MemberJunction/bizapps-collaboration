@@ -7,6 +7,8 @@ const ALLOWED_PEOPLE_FIELDS = new Set([
     'id', 'firstname', 'lastname', 'middlename', 'prefix', 'suffix',
     'preferredname', 'displayname', 'email', 'primaryemail',
     'linkeduserid', 'linkeduser',
+    // the photo: a participant sees who they share a space with
+    'photourl',
 ]);
 
 const checks: NamedCheck[] = [
@@ -67,7 +69,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'people-fls.FLS3',
-        Name: 'FLS3 — exact column audit: Space Participant readable People fields are strictly ID, name, email, and link fields',
+        Name: 'FLS3 — exact column audit: Space Participant readable People fields are strictly ID, name, email, photo, and link fields',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const peopleEntityInfo = ctx.Provider.EntityByName(PERSON_ENTITY);
