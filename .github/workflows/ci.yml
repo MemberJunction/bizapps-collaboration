@@ -9,7 +9,9 @@ on:
 jobs:
   build:
     name: Build, test, standards & visual e2e
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: it moved to 26.04, which the e2e suite's Playwright (1.58.1) can not install a browser on.
+    # Move back when Playwright is bumped to a release that supports it.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
