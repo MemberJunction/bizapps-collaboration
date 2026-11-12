@@ -52,9 +52,9 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-    # The same procedure as docs/building-the-database.md, against a throwaway SQL Server: MemberJunction core at the commit
-    # the pinned 6.2.0-edge.7 packages were published from, bizapps-common and bizapps-tasks at the commits the workspace
-    # builds against, then this app's baseline, metadata, test metadata and world. The client harness needs an MJAPI with
+    # The same procedure as docs/building-the-database.md, against a throwaway SQL Server: MemberJunction core at the
+    # v6.2.1 tag, bizapps-common at v5.65.0 and bizapps-tasks at v1.12.0 (the releases the package pins name, each checked
+    # out by its tag's commit), then this app's baseline, metadata, test metadata and world. The client harness needs an MJAPI with
     # this app's packages loaded and is not run here.
     env:
       DB_HOST: localhost
@@ -81,7 +81,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MemberJunction/MJ
-          ref: 59a9cc463aad11b82dcfe2f2d33c07ff77ac62a5
+          ref: 310a9c49bd832eaa22172f5061c0146806e8e861
           path: .ci/MJ
           # MJ's prompt templates @include files under these generated-for-prompt folders, so the push needs them too.
           sparse-checkout: |
@@ -92,7 +92,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MemberJunction/bizapps-common
-          ref: 1bde3444b0060ba8eeeb6ee3680862ed4ae60d36
+          ref: 5f1d764a153a17cb8f9bf48fed45cce06da39157
           path: .ci/bizapps-common
           sparse-checkout: |
             migrations
@@ -100,7 +100,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MemberJunction/bizapps-tasks
-          ref: add3fdb244a981b54d63f9bd725d09c911cff14e
+          ref: c3475cb5c99451141d479a95b1ccd134abfddcbe
           path: .ci/bizapps-tasks
           sparse-checkout: |
             migrations
