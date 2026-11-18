@@ -371,7 +371,7 @@ END
 CLOSE filters;
 DEALLOCATE filters;
 
--- Field-level security check: Space Participant must read only ID, name, email, and link fields on People.
+-- Field-level security check: Space Participant must read only ID, name, email, photo, and link fields on People.
 -- Any new column added to People without an explicit Deny for Space Participant will fail this check.
 IF OBJECT_ID('__mj.EntityFieldPermission', 'U') IS NOT NULL
 BEGIN
@@ -390,7 +390,7 @@ BEGIN
           AND ef.Name NOT IN (
               N'ID', N'FirstName', N'LastName', N'MiddleName', N'Prefix', N'Suffix',
               N'PreferredName', N'DisplayName', N'Email', N'PrimaryEmail',
-              N'LinkedUserID', N'LinkedUser'
+              N'LinkedUserID', N'LinkedUser', N'PhotoURL'
           )
           AND (
               efp.ReadAccess = N'Allow' OR ISNULL(efp.ReadAccess, N'') <> N'Deny'
@@ -404,7 +404,7 @@ BEGIN
         FROM (VALUES
             (N'FirstName'), (N'LastName'), (N'MiddleName'), (N'Prefix'), (N'Suffix'),
             (N'PreferredName'), (N'DisplayName'), (N'Email'), (N'PrimaryEmail'),
-            (N'LinkedUserID'), (N'LinkedUser')
+            (N'LinkedUserID'), (N'LinkedUser'), (N'PhotoURL')
         ) AS a(Name)
         LEFT JOIN (
             SELECT ef.Name, efp.ReadAccess

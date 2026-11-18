@@ -8,4 +8,4 @@
 "@mj-biz-apps/collaboration-server": patch
 ---
 
-Dependency and peer ranges are caret floors at the version they pinned before (`^6.2.0-edge.7` for MemberJunction, `^3.25.76` for zod), so a host on a later release in the same major satisfies them instead of installing a second copy. The workspace still resolves the same versions: the `@memberjunction/*` override in `pnpm-workspace.yaml` holds MJ at 6.2.0-edge.7.
+Dependency and peer ranges are caret floors at the version they pinned before (`^6.2.1` for MemberJunction, `^3.25.76` for zod), so a host on a later release in the same major satisfies them instead of installing a second copy. The workspace still resolves the same versions: the `@memberjunction/*` override in `pnpm-workspace.yaml` holds MJ at 6.2.1.

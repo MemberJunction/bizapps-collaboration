@@ -13,6 +13,8 @@ export interface OverviewMessage {
     id: string;
     senderName: string;
     senderInitials: string;
+    /** The sender's photo, when they have one. The assistant has none. */
+    senderAvatarUrl?: string;
     senderColorClass: string;
     isOutside: boolean;
     isAssistant: boolean;
@@ -26,13 +28,15 @@ function initialsOf(name: string): string {
 
 /**
  * Turns a conversation's newest rows into the card's lines, oldest first, the last five. `toPlainText` turns the stored mention form
- * (`@{"type":"agent",…} question`) into the words a person typed; `isOutsideUser` says whether a sender holds an outside seat.
+ * (`@{"type":"agent",…} question`) into the words a person typed; `isOutsideUser` says whether a sender holds an outside seat;
+ * `photoOfUser` gives a sender's photo, and a sender without one is drawn as initials.
  */
 export function toOverviewMessages(
     rows: readonly OverviewMessageRow[],
     toPlainText: (message: string) => string,
     isOutsideUser: (userId: string) => boolean,
     formatTime: (iso: string) => string,
+    photoOfUser: (userId: string) => string | undefined = () => undefined,
 ): OverviewMessage[] {
     return [...rows].reverse().map((row) => {
         const isAssistant = row.Role === 'AI';
@@ -41,6 +45,7 @@ export function toOverviewMessages(
             id: row.ID,
             senderName: name,
             senderInitials: isAssistant ? 'AI' : (row.User ? initialsOf(row.User) : 'TM'),
+            senderAvatarUrl: !isAssistant && row.UserID ? photoOfUser(row.UserID) : undefined,
             senderColorClass: isAssistant ? 'c1' : 'c2',
             isOutside: !isAssistant && !!row.UserID && isOutsideUser(row.UserID),
             isAssistant,

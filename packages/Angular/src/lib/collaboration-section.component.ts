@@ -18,6 +18,7 @@ import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
 import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, GrantsForViewer, noteDocument, notePromotionVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
+import { photosByUser, type PersonPhotoRow, type UserPhotoRow } from './logic/member-photos.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
 import { taskAssigneeLabels, type AssigneeKind, type TaskAssignmentRow } from './logic/task-assignee.js';
@@ -3677,6 +3678,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         (message) => parser.ToPlainText(message),
                         (userId) => this.isOutsideUser(userId),
                         (iso) => formatDateTime(iso),
+                        (userId) => this.photoOfUser(userId),
                     );
                 },
             );
@@ -3873,24 +3875,33 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 const reached = nearestSeats(membersRes.Results, chain);
                 const userIds = [...new Set(reached.map(r => r.row.UserID).filter(Boolean))];
                 const userEmailMap = new Map<string, string>();
+                const userRows: Array<UserPhotoRow & { Email: string }> = [];
+                let personRows: PersonPhotoRow[] = [];
                 if (userIds.length > 0) {
-                    try {
-                        const userFilter = userIds.map(id => `'${id}'`).join(',');
-                        const userRes = await rv.RunView<{ ID: string; Email: string }>({
+                    const userFilter = userIds.map(id => `'${id}'`).join(',');
+                    // Two reads, not one batch: an outside participant reads only their own user, and a host that has not
+                    // opened the People photo to them refuses the second read, which must not take the emails with it
+                    const [users, people] = await Promise.all([
+                        rv.RunView<UserPhotoRow & { Email: string }>({
                             EntityName: 'MJ: Users',
                             ExtraFilter: `ID IN (${userFilter})`,
+                            Fields: ['ID', 'Email', 'UserImageURL'],
                             ResultType: 'simple',
                             MaxRows: userIds.length,
-                        });
-                        if (userRes?.Success && userRes.Results) {
-                            for (const u of userRes.Results) {
-                                userEmailMap.set(u.ID, u.Email || '');
-                            }
-                        }
-                    } catch (userErr) {
-                        LogError('Error loading user emails for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
+                        }).catch((userErr: unknown) => {
+                            LogError('Error loading user emails and photos for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
+                            return null;
+                        }),
+                        this.loadPeoplePhotos(rv, userFilter),
+                    ]);
+                    if (users?.Success && users.Results) {
+                        userRows.push(...users.Results);
+                        for (const u of users.Results) userEmailMap.set(u.ID, u.Email || '');
                     }
+                    personRows = people;
                 }
+                // A user's own photo is the one MJ's chat draws, so it comes first; the People record's fills in
+                const photos = photosByUser(userRows, personRows);
 
                 if (!isCurrent()) return;
                 this.spaceMembers = reached.map(({ row: m, from, inherited, ownSeat }, _i, all) => {
@@ -3907,6 +3918,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         name,
                         email: userEmailMap.get(m.UserID) || '',
                         initials,
+                        avatarUrl: m.UserID ? photos.get(m.UserID.toLowerCase()) : undefined,
                         roleName: roleType?.Name || m.SpaceRoleType || 'Member',
                         roleCode,
                         roleId: m.SpaceRoleTypeID || undefined,
@@ -3927,7 +3939,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.headerOutsideAvatars = seats.outsideAvatars;
                 this.headerAudienceSummary = seats.audienceSummary;
                 this.spaceAudienceBand = seats.audienceBand;
-                // The Discussion card's outside ring needs the seats: map its messages again now that they are here
+                // The Discussion card's outside ring and photos need the seats: map its messages again now that they are here
                 if (this.activeConversationId) void this.loadOverviewMessages(this.activeConversationId, isCurrent);
             }
         } catch (err) {
@@ -4022,6 +4034,35 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** Whether the user holds an Active outside (Shared band) seat on the space shown. */
     private isOutsideUser(userId: string): boolean {
         return this.spaceMembers.some((m) => m.status === 'Active' && m.band === 'Shared' && UUIDsEqual(m.userId, userId));
+    }
+
+    /**
+     * The photos on the People records linked to these users, for whoever may read them. An outside participant reads the
+     * People records of everyone they share a space with, which is how they see a photo of someone whose user they can not
+     * read. A refused or failed read leaves those members on initials; it never fails the People tab.
+     */
+    private async loadPeoplePhotos(rv: RunView, userFilter: string): Promise<PersonPhotoRow[]> {
+        try {
+            const res = await rv.RunView<PersonPhotoRow>({
+                EntityName: PEOPLE_ENTITY,
+                ExtraFilter: `LinkedUserID IN (${userFilter})`,
+                Fields: ['ID', 'LinkedUserID', 'PhotoURL'],
+                ResultType: 'simple',
+            });
+            if (!res?.Success) {
+                LogError(`Member photos from People could not be read: ${res?.ErrorMessage ?? 'unknown error'}`);
+                return [];
+            }
+            return res.Results ?? [];
+        } catch (err) {
+            LogError('Error loading member photos from People: ' + (err instanceof Error ? err.message : String(err)));
+            return [];
+        }
+    }
+
+    /** The photo of a person who holds a seat on the space shown, whatever the seat's status. */
+    private photoOfUser(userId: string): string | undefined {
+        return this.spaceMembers.find((m) => !!m.avatarUrl && UUIDsEqual(m.userId, userId))?.avatarUrl;
     }
 
     public onInviteClicked(): void {

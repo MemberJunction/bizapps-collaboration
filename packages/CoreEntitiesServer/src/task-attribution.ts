@@ -1,7 +1,11 @@
 import { BaseEntity, BaseEntityEvent, BaseEntityResult, LogError, LogStatus, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { MJEventType, MJGlobal, RegisterClass, type MJEvent } from '@memberjunction/global';
 import { ResolvePersonIDForUser } from '@mj-biz-apps/common-entities';
-import { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskCommentEntity, mjBizAppsTasksTaskDecisionEntity } from '@mj-biz-apps/tasks-entities';
+import { mjBizAppsTasksTaskCommentEntity } from '@mj-biz-apps/tasks-entities';
+import {
+    TaskAssignmentEntityServer as TasksTaskAssignmentEntityServer,
+    TaskDecisionEntityServer as TasksTaskDecisionEntityServer,
+} from '@mj-biz-apps/tasks-entities-server';
 import { requireSystemUser } from './load-graph.js';
 import { assigneeSeatMessage, filedTask } from './task-space.js';
 import { asMetadata } from './uuid.js';
@@ -9,11 +13,16 @@ import { asMetadata } from './uuid.js';
 const PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
 
 /**
- * These gates run for every save of the entity, at priority 2, so they sit
- * above bizapps-tasks' generated classes. A later subclass registered with no
- * priority gets the highest existing priority plus one, so it would win.
- * The checks apply only when the caller
- * holds Space Participant, matched by role id. Everyone else keeps
+ * These gates run for every save of the entity. One class wins per entity, and a class registered with no priority
+ * takes the highest existing priority plus one, so whichever of two unrelated classes loads last would win and the
+ * other's rules would never run.
+ *
+ * bizapps-tasks has its own server classes for assignments and decisions (since 1.11: who an approval task may be
+ * reassigned to, and who may decide one). The gates here extend those classes, the way the task class does. Extending
+ * one imports it, so it always registers first, and 100 stays above it; and its rules run through super, so neither
+ * app drops the other's. Comments have no bizapps-tasks server class; that gate sits at 2, above the generated class.
+ *
+ * The checks apply only when the caller holds Space Participant, matched by role id. Everyone else keeps
  * bizapps-tasks' own rules. Stamping happens on create only.
  */
 export function isSpaceParticipant(user: UserInfo): boolean {
@@ -41,21 +50,26 @@ export class TaskCommentEntityServer extends mjBizAppsTasksTaskCommentEntity {
     }
 }
 
-@RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Decisions', 2)
-export class TaskDecisionEntityServer extends mjBizAppsTasksTaskDecisionEntity {
+@RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Decisions', 100)
+export class TaskDecisionEntityServer extends TasksTaskDecisionEntityServer {
     public override async ValidateAsync(): Promise<ValidationResult> {
-        const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
-        if (!user || !isSpaceParticipant(user) || this.IsSaved) return result;
-        const personId = await callerPersonId(this, user);
-        if (!personId) return refuse(result, 'Decision refused: the signer has no person record.');
-        this.DecidedByPersonID = personId;
+        // A participant's new decision is stamped with their own person first: bizapps-tasks' rule on who may decide an
+        // approval reads the decider from the record, and must read the signer, not what the caller sent
+        let signerHasNoPerson = false;
+        if (user && isSpaceParticipant(user) && !this.IsSaved) {
+            const personId = await callerPersonId(this, user);
+            if (personId) this.DecidedByPersonID = personId;
+            else signerHasNoPerson = true;
+        }
+        const result = await super.ValidateAsync();
+        if (signerHasNoPerson) return refuse(result, 'Decision refused: the signer has no person record.');
         return result;
     }
 }
 
-@RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Assignments', 2)
-export class TaskAssignmentEntityServer extends mjBizAppsTasksTaskAssignmentEntity {
+@RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Assignments', 100)
+export class TaskAssignmentEntityServer extends TasksTaskAssignmentEntityServer {
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;

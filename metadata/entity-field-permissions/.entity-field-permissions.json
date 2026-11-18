@@ -186,7 +186,7 @@
     "fields": {
       "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PhotoURL&Entity=MJ_BizApps_Common: People",
       "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
-      "ReadAccess": "Deny",
+      "ReadAccess": "Allow",
       "UpdateAccess": "Deny",
       "CreateAccess": "Deny"
     }
@@ -413,6 +413,18 @@
     },
     "fields": {
       "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryJobFunction&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "F657D035-D622-4DE2-A764-19E0AFB47D2D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=EmailDomain&Entity=MJ_BizApps_Common: People",
       "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
       "ReadAccess": "Deny",
       "UpdateAccess": "No Access",

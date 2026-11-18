@@ -4,10 +4,17 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import type { ActionParam } from '@memberjunction/actions-base';
 import { COLLABORATION_TEST_AGENT_DRIVER_CLASS } from './test-agent.js';
 import type { ActionChange, ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import type { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 
 /** The items the space chat turn hands an agent: what its audience may quote. */
 interface AllowedItem {
     readonly Name: string;
+    readonly EntityName?: string | null;
+    readonly Status?: mjBizAppsTasksTaskEntity['Status'] | null;
+    readonly Priority?: mjBizAppsTasksTaskEntity['Priority'] | null;
+    readonly DueAt?: string | null;
+    readonly PercentComplete?: number | null;
+    readonly Assignees?: readonly string[];
     readonly ChunkTexts?: readonly string[];
 }
 
@@ -49,7 +56,16 @@ export class CollaborationTestSpaceAgentDriver extends BaseAgent {
             const list = allowedItems
                 .map((item) => {
                     const chunks = (item.ChunkTexts ?? []).map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean);
-                    return chunks.length > 0 ? `- ${item.Name}: ${chunks.join(' | ')}` : `- ${item.Name}`;
+                    const chunkSuffix = chunks.length > 0 ? `: ${chunks.join(' | ')}` : '';
+                    if (item.EntityName === 'MJ_BizApps_Tasks: Tasks') {
+                        const owners = item.Assignees && item.Assignees.length > 0 ? item.Assignees.join(', ') : 'Unassigned';
+                        const parts = [`Status: ${item.Status ?? 'Open'}`];
+                        if (item.Priority) parts.push(`Priority: ${item.Priority}`);
+                        parts.push(`Owner: ${owners}`);
+                        if (item.DueAt) parts.push(`Due: ${item.DueAt}`);
+                        return `- ${item.Name} [${parts.join(' | ')}]${chunkSuffix}`;
+                    }
+                    return `- ${item.Name}${chunkSuffix}`;
                 })
                 .join('\n');
             replyText = `Here are the available materials in this space:\n${list}`;

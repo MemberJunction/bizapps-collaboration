@@ -6,6 +6,7 @@ import { audienceOfConversationKind, noteDocument } from '@mj-biz-apps/collabora
 import {
     collaborationFileStore,
     createSpaceConversation,
+    createSpaceTask,
     decideUploadBand,
     EXPLICIT_ASK_MARKER,
     executeSpaceChatTurn,
@@ -18,7 +19,17 @@ import {
     SCOPED_SEARCH_ACTION_ID,
     uploadSpaceFile,
 } from '@mj-biz-apps/collaboration-core-entities-server';
-import type { mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
+import type {
+    mjBizAppsCollaborationSpaceItemEntity,
+    mjBizAppsCollaborationSpaceMemberEntity,
+    mjBizAppsCollaborationSpaceNoteEntity,
+} from '@mj-biz-apps/collaboration-entities';
+import type {
+    mjBizAppsTasksTaskActivityEntity,
+    mjBizAppsTasksTaskAssignmentEntity,
+    mjBizAppsTasksTaskEntity,
+    mjBizAppsTasksTaskLinkEntity,
+} from '@mj-biz-apps/tasks-entities';
 import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
 import {
     AI_AGENT_ENTITY,
@@ -27,6 +38,7 @@ import {
     AI_AGENT_SEARCH_SCOPE_ENTITY,
     AI_AGENT_SKILL_ENTITY,
     ENTITY_PERMISSION_ENTITY,
+    PERSON_ENTITY,
     ROW_LEVEL_SECURITY_FILTER_ENTITY,
     SEARCH_SCOPE_PERMISSION_ENTITY,
     AI_SKILL_ENTITY,
@@ -35,7 +47,13 @@ import {
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
     SPACE_ITEM_ENTITY,
+    SPACE_MEMBER_ENTITY,
+    SPACE_ROLE_TYPE_ENTITY,
+    TASK_ACTIVITY_ENTITY,
+    TASK_ASSIGNMENT_ENTITY,
     TASK_ENTITY,
+    TASK_LINK_ENTITY,
+    USER_ENTITY,
 } from '../entity-names.js';
 import { FindRows, GetPersonaUser, SameID, View, isClientTransport } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
@@ -188,15 +206,31 @@ const checks: NamedCheck[] = [
                 Assert(perm.CanView === true, 'Permission CanView is true');
             }
 
-            // 7. Verify Search Scope link
-            const agentScopes = await FindRows<{ ID: string; SearchScopeID: string; Phase: string }>(
+            // 7. Verify Search Scope link and Ask template grounding
+            const agentScopes = await FindRows<{ ID: string; SearchScopeID: string; Phase: string; IsDefault: boolean }>(
                 ctx,
                 AI_AGENT_SEARCH_SCOPE_ENTITY,
                 `AgentID = '${AGENT_ID}'`,
-                ['ID', 'SearchScopeID', 'Phase'],
+                ['ID', 'SearchScopeID', 'Phase', 'IsDefault'],
             );
             Assert(agentScopes.length === 1, 'Agent is linked to 1 Search Scope');
             Assert(agentScopes[0].SearchScopeID.toLowerCase() === SEARCH_SCOPE_ID.toLowerCase(), 'Linked to Collaboration Space Scope');
+            Assert(agentScopes[0].Phase === 'AgentInvoked', `Collaboration Space Scope Phase is AgentInvoked (saw ${agentScopes[0].Phase})`);
+            Assert(agentScopes[0].IsDefault === true, `Collaboration Space Scope IsDefault is true (saw ${agentScopes[0].IsDefault})`);
+
+            const askTemplateContents = await FindRows<{ ID: string; TemplateText: string }>(
+                ctx,
+                'MJ: Template Contents',
+                `TemplateID = 'A61788A9-9524-4BE7-B5F5-3FB8DEAA7081' AND IsActive = 1`,
+                ['ID', 'TemplateText'],
+            );
+            Assert(askTemplateContents.length >= 1, 'Collaboration Space Agent - Ask template has active content');
+            Assert(
+                askTemplateContents[0].TemplateText.includes('item.Status') &&
+                    askTemplateContents[0].TemplateText.includes('item.Assignees') &&
+                    askTemplateContents[0].TemplateText.includes('item.DueAt'),
+                'Collaboration Space Agent - Ask template renders task Status, Assignees, and DueAt',
+            );
 
             // 8. Verify SearchEngine.ExplainScope
             if (isClientTransport(ctx)) {
@@ -2159,6 +2193,297 @@ const checks: NamedCheck[] = [
                 Assert(taggedTurn.ok && (await marker(taggedTurn.replyDetailIds?.[0])) === null, "The tagged turn's reply carries no ask marker");
             } finally {
                 await cleanupConversation(ctx.Provider, ctx.User, start.conversationId!, start.spaceChatId!);
+            }
+        },
+    },
+    {
+        Id: 'agent.AG15',
+        Name: 'AG15 — Space Tasks ground agent turns with status, priority, due date, and resolved People/User assignees across Shared and Team audiences',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const dev = await GetPersonaUser(ctx, 'dev');
+            const ownerRoleId = (await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']))[0]?.ID;
+            Assert(!!ownerRoleId, 'Owner space role type found');
+            if (!ownerRoleId) return;
+            const personEntity = ctx.Provider.EntityByName(PERSON_ENTITY);
+            const userEntity = ctx.Provider.EntityByName(USER_ENTITY);
+            Assert(!!personEntity && !!userEntity, 'People and Users entities exist');
+            if (!personEntity || !userEntity) return;
+
+            const personRows = await FindRows<{ ID: string; LinkedUserID: string }>(
+                ctx,
+                PERSON_ENTITY,
+                `LinkedUserID IN ('${ada.ID}', '${bea.ID}')`,
+                ['ID', 'LinkedUserID'],
+            );
+            const adaPersonId = personRows.find((r) => SameID(r.LinkedUserID, ada.ID))?.ID;
+            const beaPersonId = personRows.find((r) => SameID(r.LinkedUserID, bea.ID))?.ID;
+            Assert(!!adaPersonId && !!beaPersonId, 'Ada and Bea Person rows resolved');
+            if (!adaPersonId || !beaPersonId) return;
+
+            const stamp = Date.now();
+            const sharedDue = new Date(stamp + 30 * 86_400_000);
+            const teamDue = new Date(stamp + 45 * 86_400_000);
+            const sharedDueIso = sharedDue.toISOString().slice(0, 10);
+            const teamDueIso = teamDue.toISOString().slice(0, 10);
+
+            const sharedOpenTitle = `AG15 shared open action item ${stamp}`;
+            const sharedClosedTitle = `AG15 shared completed action item ${stamp}`;
+            const teamInProgressTitle = `AG15 team internal action item ${stamp}`;
+
+            const createdTaskIds: string[] = [];
+            const createdItemIds: string[] = [];
+            const createdAssignmentIds: string[] = [];
+            let devSeatId: string | null = null;
+            let genConvId: string | null = null;
+            let genChatId: string | null = null;
+            let privConvId: string | null = null;
+            let privChatId: string | null = null;
+
+            const fileTask = async (
+                name: string,
+                band: 'Shared' | 'Team',
+                editor: UserInfo,
+                updates: {
+                    status?: mjBizAppsTasksTaskEntity['Status'];
+                    priority?: mjBizAppsTasksTaskEntity['Priority'];
+                    dueAt?: Date;
+                },
+            ): Promise<string> => {
+                const filed = await createSpaceTask(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    name,
+                    band,
+                });
+                Assert(filed.ok === true, `Filed ${band} task "${name}": ${filed.ok ? '' : filed.message}`);
+                if (!filed.ok) throw new Error(filed.message);
+                createdTaskIds.push(filed.taskId);
+                createdItemIds.push(filed.itemId);
+
+                const task = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, editor);
+                Assert(await task.Load(filed.taskId), `Loaded task ${filed.taskId} as ${editor.Name}`);
+                if (updates.status) task.Status = updates.status;
+                if (updates.priority) task.Priority = updates.priority;
+                if (updates.dueAt) task.DueAt = updates.dueAt;
+                Assert(await task.Save(), `Updated task "${name}": ${task.LatestResult?.CompleteMessage ?? ''}`);
+                return filed.taskId;
+            };
+
+            const assignTask = async (
+                taskId: string,
+                editor: UserInfo,
+                assigneeEntityId: string,
+                assigneeRecordId: string,
+                status: mjBizAppsTasksTaskAssignmentEntity['Status'],
+            ): Promise<void> => {
+                const assignment = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskAssignmentEntity>(TASK_ASSIGNMENT_ENTITY, editor);
+                assignment.NewRecord();
+                assignment.TaskID = taskId;
+                assignment.AssigneeEntityID = assigneeEntityId;
+                assignment.AssigneeRecordID = assigneeRecordId;
+                assignment.Status = status;
+                Assert(await assignment.Save(), `Saved assignment on ${taskId}: ${assignment.LatestResult?.CompleteMessage ?? ''}`);
+                createdAssignmentIds.push(assignment.ID);
+            };
+
+            try {
+                const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+                seat.NewRecord();
+                seat.SpaceID = DISCOVERY_SPACE_ID;
+                seat.UserID = dev.ID;
+                seat.SpaceRoleTypeID = ownerRoleId;
+                seat.Band = 'Team';
+                seat.Status = 'Active';
+                Assert(await seat.Save(), `Ada seats Dev as a temporary Team owner on Discovery: ${seat.LatestResult?.CompleteMessage ?? ''}`);
+                devSeatId = seat.ID;
+
+                const sharedOpenId = await fileTask(sharedOpenTitle, 'Shared', bea, {
+                    priority: 'High',
+                    dueAt: sharedDue,
+                });
+                await assignTask(sharedOpenId, bea, personEntity.ID, beaPersonId, 'InProgress');
+                await assignTask(sharedOpenId, bea, userEntity.ID, ada.ID, 'Pending');
+
+                await fileTask(sharedClosedTitle, 'Shared', bea, {
+                    status: 'Completed',
+                    priority: 'Low',
+                });
+
+                const teamInProgressId = await fileTask(teamInProgressTitle, 'Team', dev, {
+                    status: 'InProgress',
+                    priority: 'Critical',
+                    dueAt: teamDue,
+                });
+                await assignTask(teamInProgressId, dev, personEntity.ID, adaPersonId, 'InProgress');
+
+                // 1. Direct retrieval as Space Participant Bea in General (Shared audience)
+                const beaShared = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID, {
+                    conversationKind: 'General',
+                });
+                const beaOpen = beaShared.quotedItems.find((i) => i.Name === sharedOpenTitle);
+                Assert(!!beaOpen, 'Bea receives Shared open task in General retrieval');
+                Assert(beaOpen?.EntityName === TASK_ENTITY, `Shared open task sets EntityName=${TASK_ENTITY}`);
+                Assert(beaOpen?.Status === 'Open', `Shared open task Status=Open (got ${beaOpen?.Status})`);
+                Assert(beaOpen?.Priority === 'High', `Shared open task Priority=High (got ${beaOpen?.Priority})`);
+                Assert(beaOpen?.DueAt === sharedDueIso, `Shared open task DueAt=${sharedDueIso} (got ${beaOpen?.DueAt})`);
+                Assert(
+                    JSON.stringify(beaOpen?.Assignees) === JSON.stringify(['Bea Member', 'Ada Owner']),
+                    `Bea resolves both People and co-member User assignees in active-first order: ${JSON.stringify(beaOpen?.Assignees)}`,
+                );
+
+                const beaClosed = beaShared.quotedItems.find((i) => i.Name === sharedClosedTitle);
+                Assert(!!beaClosed, 'Bea receives Shared completed task in General retrieval');
+                Assert(beaClosed?.Status === 'Completed', `Shared completed task Status=Completed (got ${beaClosed?.Status})`);
+                Assert(beaClosed?.Priority === 'Low', `Shared completed task Priority=Low (got ${beaClosed?.Priority})`);
+                Assert(beaClosed?.PercentComplete === 100, `Shared completed task PercentComplete=100 (got ${beaClosed?.PercentComplete})`);
+                Assert(Array.isArray(beaClosed?.Assignees) && beaClosed.Assignees.length === 0, 'Unassigned task has empty Assignees array');
+                Assert(!beaShared.quotedItems.some((i) => i.Name === teamInProgressTitle), 'Bea never receives Team task in General retrieval');
+
+                // 2. Staff Ada in General sees Team task decision allowed=false with all task metadata withheld and no query side-channel
+                const adaSharedFiltered = await resolveSpaceAgentRetrieval(ctx.Provider, ada, DISCOVERY_SPACE_ID, {
+                    conversationKind: 'General',
+                    query: 'Critical',
+                });
+                Assert(
+                    !adaSharedFiltered.quotedItems.some((i) => i.Name === teamInProgressTitle),
+                    'Querying Team-only Priority in General does not leak disallowed Team task',
+                );
+                const adaSharedAll = await resolveSpaceAgentRetrieval(ctx.Provider, ada, DISCOVERY_SPACE_ID, {
+                    conversationKind: 'General',
+                });
+                const withheldTeamDecision = adaSharedAll.decisions.find((d) => d.item.Name === teamInProgressTitle);
+                Assert(!!withheldTeamDecision && withheldTeamDecision.allowed === false, 'Ada sees Team task as allowed=false in General decisions');
+                Assert(
+                    withheldTeamDecision?.item.Status === undefined &&
+                        withheldTeamDecision?.item.Priority === undefined &&
+                        withheldTeamDecision?.item.DueAt === undefined &&
+                        withheldTeamDecision?.item.Assignees === undefined,
+                    'Disallowed Team candidate withholds Status, Priority, DueAt, and Assignees',
+                );
+
+                // 3. End-to-end executeSpaceChatTurn in General (Bea) vs Private (Ada)
+                const genStart = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-ag15-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(genStart.ok === true && !!genStart.conversationId && !!genStart.spaceChatId, `Started General conversation: ${genStart.message ?? ''}`);
+                genConvId = genStart.conversationId!;
+                genChatId = genStart.spaceChatId!;
+
+                const privStart = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-ag15-priv-${stamp}`,
+                    Kind: 'Private',
+                });
+                Assert(privStart.ok === true && !!privStart.conversationId && !!privStart.spaceChatId, `Started Private conversation: ${privStart.message ?? ''}`);
+                privConvId = privStart.conversationId!;
+                privChatId = privStart.spaceChatId!;
+
+                const beaPost = await postSpaceMessage(ctx.Provider, bea, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} What open action items does Discovery have, and who owns them?`,
+                });
+                Assert(beaPost.ok === true, `Bea posted question in General: ${beaPost.ok ? '' : beaPost.message}`);
+                if (!beaPost.ok) return;
+                createdDetailIds.push(beaPost.detailId);
+
+                const genTurn = await executeSpaceChatTurn(ctx.Provider, bea, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    userMessageId: beaPost.detailId,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(genTurn.ok === true, `General turn succeeded: ${genTurn.ok ? '' : genTurn.message}`);
+                if (genTurn.ok) {
+                    createdDetailIds.push(...genTurn.replyDetailIds);
+                    const genReplies = await FindRows<{ Message: string }>(
+                        ctx,
+                        CONVERSATION_DETAIL_ENTITY,
+                        `ID = '${genTurn.replyDetailIds[0]}'`,
+                        ['Message'],
+                        bea,
+                    );
+                    const genReplyText = genReplies[0]?.Message ?? '';
+                    Assert(
+                        genReplyText.includes(`- ${sharedOpenTitle} [Status: Open | Priority: High | Owner: Bea Member, Ada Owner | Due: ${sharedDueIso}]`),
+                        `General reply grounds Shared open task with status, priority, owners, and due date: ${genReplyText}`,
+                    );
+                    Assert(
+                        genReplyText.includes(`- ${sharedClosedTitle} [Status: Completed | Priority: Low | Owner: Unassigned]`),
+                        `General reply grounds Shared completed unassigned task: ${genReplyText}`,
+                    );
+                    Assert(!genReplyText.includes(teamInProgressTitle), 'General reply omits Team task');
+                }
+
+                const adaPost = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: privConvId,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} What open action items does Discovery have, and who owns them?`,
+                });
+                Assert(adaPost.ok === true, `Ada posted question in Private: ${adaPost.ok ? '' : adaPost.message}`);
+                if (!adaPost.ok) return;
+                createdDetailIds.push(adaPost.detailId);
+
+                const privTurn = await executeSpaceChatTurn(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: privConvId,
+                    userMessageId: adaPost.detailId,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(privTurn.ok === true, `Private turn succeeded: ${privTurn.ok ? '' : privTurn.message}`);
+                if (privTurn.ok) {
+                    createdDetailIds.push(...privTurn.replyDetailIds);
+                    const privReplies = await FindRows<{ Message: string }>(
+                        ctx,
+                        CONVERSATION_DETAIL_ENTITY,
+                        `ID = '${privTurn.replyDetailIds[0]}'`,
+                        ['Message'],
+                        ada,
+                    );
+                    const privReplyText = privReplies[0]?.Message ?? '';
+                    Assert(
+                        privReplyText.includes(`- ${sharedOpenTitle} [Status: Open | Priority: High | Owner: Bea Member, Ada Owner | Due: ${sharedDueIso}]`),
+                        `Private reply grounds Shared open task: ${privReplyText}`,
+                    );
+                    Assert(
+                        privReplyText.includes(`- ${teamInProgressTitle} [Status: InProgress | Priority: Critical | Owner: Ada Owner | Due: ${teamDueIso}]`),
+                        `Private reply grounds Team in-progress task with owner and due date: ${privReplyText}`,
+                    );
+                }
+            } finally {
+                if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
+                if (privConvId && privChatId) await cleanupConversation(ctx.Provider, ctx.User, privConvId, privChatId);
+                const taskInClause = createdTaskIds.map((id) => `'${id}'`).join(',');
+                const linkRows = taskInClause
+                    ? await FindRows<{ ID: string }>(ctx, TASK_LINK_ENTITY, `TaskID IN (${taskInClause})`, ['ID'])
+                    : [];
+                const activityRows = taskInClause
+                    ? await FindRows<{ ID: string }>(ctx, TASK_ACTIVITY_ENTITY, `TaskID IN (${taskInClause})`, ['ID'])
+                    : [];
+                await runAllSteps([
+                    ...createdAssignmentIds
+                        .slice()
+                        .reverse()
+                        .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, TASK_ASSIGNMENT_ENTITY, id, 'an AG15 task assignment')),
+                    ...createdItemIds
+                        .slice()
+                        .reverse()
+                        .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG15 space item')),
+                    () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, createdItemIds),
+                    ...linkRows.map((r) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, TASK_LINK_ENTITY, r.ID, 'an AG15 task link')),
+                    ...activityRows.map((r) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, TASK_ACTIVITY_ENTITY, r.ID, 'an AG15 task activity')),
+                    ...createdTaskIds
+                        .slice()
+                        .reverse()
+                        .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, TASK_ENTITY, id, 'an AG15 task')),
+                    ...(devSeatId
+                        ? [() => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, devSeatId!, "AG15 Dev's temporary seat on Discovery")]
+                        : []),
+                ]);
             }
         },
     },

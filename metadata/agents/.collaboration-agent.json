@@ -78,7 +78,8 @@
           "fields": {
             "AgentID": "@parent:ID",
             "SearchScopeID": "6E5187CF-7E5B-447F-893D-D291994083C0",
-            "Phase": "PreExecution",
+            "Phase": "AgentInvoked",
+            "IsDefault": true,
             "Status": "Active"
           }
         }

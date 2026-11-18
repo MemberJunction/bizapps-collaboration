@@ -6,12 +6,12 @@
   "license": "UNLICENSED",
   "packageManager": "pnpm@10.33.0",
   "devDependencies": {
-    "@memberjunction/cli": "6.2.0-edge.7",
-    "@memberjunction/core": "6.2.0-edge.7",
-    "@memberjunction/generic-database-provider": "6.2.0-edge.7",
-    "@memberjunction/ng-shared-generic": "6.2.0-edge.7",
-    "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.7",
-    "@memberjunction/testing-integration": "6.2.0-edge.7",
+    "@memberjunction/cli": "6.2.1",
+    "@memberjunction/core": "6.2.1",
+    "@memberjunction/generic-database-provider": "6.2.1",
+    "@memberjunction/ng-shared-generic": "6.2.1",
+    "@memberjunction/sqlserver-dataprovider": "6.2.1",
+    "@memberjunction/testing-integration": "6.2.1",
     "dotenv": "^16.4.7",
     "mssql": "12.7.0"
   },
