@@ -11,6 +11,8 @@ const FINANCE_AGENT_ID = '4f8822aa-bb11-4cc2-9dd3-112233445566';
 const ADA_ID = 'aaaa0001-0000-4000-8000-000000000001';
 const BEA_ID = 'bbbb0002-0000-4000-8000-000000000002';
 
+const IDENTITY_CALIBRATION = { A: 1, B: 0 } as const;
+
 const systemUser = { ID: '00000000-0000-0000-0000-000000000001', Name: 'System' } as unknown as UserInfo;
 
 function createMockView(historyRows: Array<Record<string, unknown>>): RunView {
@@ -145,6 +147,7 @@ describe('resolveTurnAgentViaDecision (multi-party / multi-agent routing)', () =
             userMessageId: USER_MSG_ID,
             messageText: 'Which of those shared files was uploaded most recently?',
             allowedAgentIds: [SPACE_AGENT_ID, FINANCE_AGENT_ID],
+            decisionCalibration: IDENTITY_CALIBRATION,
             decisionRunner: async ({ state }) => {
                 capturedState = state;
                 return {
@@ -215,6 +218,7 @@ describe('resolveTurnAgentViaDecision (multi-party / multi-agent routing)', () =
             userMessageId: USER_MSG_ID,
             messageText: 'Can you break that $42k/month burn rate down by vendor category?',
             allowedAgentIds: [SPACE_AGENT_ID, FINANCE_AGENT_ID],
+            decisionCalibration: IDENTITY_CALIBRATION,
             decisionRunner: async () => ({
                 Success: true,
                 ModelName: 'Jev',
@@ -263,6 +267,7 @@ describe('resolveTurnAgentViaDecision (multi-party / multi-agent routing)', () =
             userMessageId: USER_MSG_ID,
             messageText: 'Hey Ada, I am grabbing coffee before our 2pm call — want an iced latte?',
             allowedAgentIds: [SPACE_AGENT_ID],
+            decisionCalibration: IDENTITY_CALIBRATION,
             decisionRunner: async () => ({
                 Success: true,
                 ModelName: 'Jev',

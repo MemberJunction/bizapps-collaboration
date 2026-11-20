@@ -5,6 +5,15 @@ import { WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberju
 import type { ValidationErrorInfo } from '@memberjunction/global';
 import type { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
 import { CollaborationTaskEntityServer } from '../dist/task-entity-server.js';
+import { TaskAssignmentEntityServer, TaskCommentEntityServer, TaskDecisionEntityServer } from '../dist/task-attribution.js';
+import { BaseEntity } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
+import {
+    LoadBizAppsTasksEntitiesServer,
+    TaskAssignmentEntityServer as TasksTaskAssignmentEntityServer,
+    TaskDecisionEntityServer as TasksTaskDecisionEntityServer,
+    TaskEntityServer as TasksTaskEntityServer,
+} from '@mj-biz-apps/tasks-entities-server';
 import { assigneeSeatMessage, relevantFieldsChanged } from '../dist/task-space.js';
 
 // Staff stand-ins: the engine answers 'Administer Spaces' the way the shipped grants do, by the roles a test user carries
@@ -527,3 +536,23 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
     });
 });
 
+describe("the gates on bizapps-tasks' entities", () => {
+    const winner = (key: string): unknown => MJGlobal.Instance.ClassFactory.GetRegistration(BaseEntity, key)?.SubClass;
+
+    it("are the classes the registry resolves, with bizapps-tasks' own server classes loaded too", () => {
+        LoadBizAppsTasksEntitiesServer();
+        assert.equal(winner('MJ_BizApps_Tasks: Tasks'), CollaborationTaskEntityServer);
+        assert.equal(winner('MJ_BizApps_Tasks: Task Assignments'), TaskAssignmentEntityServer);
+        assert.equal(winner('MJ_BizApps_Tasks: Task Decisions'), TaskDecisionEntityServer);
+        assert.equal(winner('MJ_BizApps_Tasks: Task Comments'), TaskCommentEntityServer);
+    });
+
+    // One class wins per entity, and a class registered with no priority outranks every earlier one. Two unrelated classes
+    // would leave the winner to load order and drop the loser's rules. A gate that extends bizapps-tasks' class makes that
+    // class load, and so register, first, and runs its rules through super.
+    it("extend bizapps-tasks' server classes, so its rules run beside Collaboration's and load order can not drop either", () => {
+        assert.ok(CollaborationTaskEntityServer.prototype instanceof TasksTaskEntityServer);
+        assert.ok(TaskAssignmentEntityServer.prototype instanceof TasksTaskAssignmentEntityServer);
+        assert.ok(TaskDecisionEntityServer.prototype instanceof TasksTaskDecisionEntityServer);
+    });
+});

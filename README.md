@@ -140,7 +140,7 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 
 | | Feature |
 |---|---|
-| ✅ | **Row-level security on every read** an outside participant can make, one filter per entity, and field rules on people, so outsiders see only a person's name and email once BizApps Common turns on field-level security for People. |
+| ✅ | **Row-level security on every read** an outside participant can make, one filter per entity, and field rules on people, so outsiders see only a person's name, email and photo once BizApps Common turns on field-level security for People. |
 | ✅ | **Every write checked on the server,** in the entity classes, so the API, MCP and the screens obey the same rules. |
 | ✅ | **One settings model,** from the app's defaults down through the type, parent spaces and the space. |
 | ✅ | **Rights through MemberJunction's Authorizations:** changing a space type needs *Configure Space Types*; changing a space's settings needs *Configure Spaces* and an owner seat; closing or reopening needs *Close and Reopen Spaces* and an owner seat. |
@@ -175,7 +175,7 @@ The full set of rules, each marked built or planned, is in [How Collaboration wo
 ### Install it on a MemberJunction host
 
 **Requirements** (from [`mj-app.json`](mj-app.json)):
-- MemberJunction `>=6.2.0-edge.7 <7.0.0`, on SQL Server. PostgreSQL is on the roadmap.
+- MemberJunction `>=6.2.1 <7.0.0`, on SQL Server. PostgreSQL is on the roadmap.
 - [BizApps Common](https://github.com/MemberJunction/bizapps-common) and [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks), which the installer brings in.
 
 ```bash
@@ -194,7 +194,7 @@ Never give an outside participant MemberJunction's `UI` role: one unfiltered gra
 
 ### Develop it
 
-This is a pnpm workspace; CI uses Node 22 and installs the pinned MemberJunction `>=6.2.0-edge.7 <7.0.0` packages. You can also develop against MemberJunction's `next` in a workspace made by `mj dev workspace` beside MemberJunction, BizApps Common and BizApps Tasks ([PR 10's plan § 2.1](plans/pr10-plan.md#21-work-on-mj-next)).
+This is a pnpm workspace; CI uses Node 22 and installs the pinned MemberJunction `>=6.2.1 <7.0.0` packages. You can also develop against MemberJunction's `next` in a workspace made by `mj dev workspace` beside MemberJunction, BizApps Common and BizApps Tasks ([PR 10's plan § 2.1](plans/pr10-plan.md#21-work-on-mj-next)).
 
 ```bash
 pnpm run build             # every package
