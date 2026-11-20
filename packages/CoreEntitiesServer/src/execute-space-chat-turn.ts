@@ -22,7 +22,7 @@ import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
-import { resolveTurnAgentViaDecision, type SpaceChatDecisionRunner } from './space-chat-decision-routing.js';
+import { resolveTurnAgentViaDecision, type ResolveTurnAgentViaDecisionParams, type SpaceChatDecisionRunner } from './space-chat-decision-routing.js';
 import { parseUuid } from './uuid.js';
 import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 
@@ -69,6 +69,8 @@ export interface ExecuteSpaceChatTurnInput {
     observer?: TurnObserver;
     /** Optional unit-test seam for server-side decision routing; production uses AgentDecisionService (Default Decision). */
     decisionRunner?: SpaceChatDecisionRunner;
+    /** Optional Platt calibration override for unit tests using `decisionRunner` without a loaded `AIEngineBase` cache. */
+    decisionCalibration?: ResolveTurnAgentViaDecisionParams['decisionCalibration'];
 }
 
 /** Candidate item in retrieval scope for the turn (sources-in-scope chip). */
@@ -402,6 +404,7 @@ async function runClaimedTurn(
             allowedAgentIds: allowed.allowedAgentIds,
             conversationHistoryFrom,
             decisionRunner: input.decisionRunner,
+            decisionCalibration: input.decisionCalibration,
         });
         if (!decisionResolved.ok) {
             return { ok: false, message: decisionResolved.message };
