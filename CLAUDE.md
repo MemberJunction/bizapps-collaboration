@@ -11,3 +11,7 @@ Every metadata record has a `primaryKey`, nested `relatedEntities` children incl
 ## MemberJunction version
 
 Work runs on MemberJunction's `next`, in a workspace made by `mj dev workspace` beside MemberJunction, BizApps Common and BizApps Tasks ([PR 10's plan § 2.1](plans/pr10-plan.md#21-work-on-mj-next)). Install and build from that parent folder, never in this repo. CI installs published packages, so it fails on the `next`-only types until a release is pinned. Judge a change by the workspace build, `pnpm test` and both integration harnesses.
+
+## Release lines
+
+`next` is built on MJ Edge and never publishes. Production releases come from release lines (`lts/<MJ major.minor>`), listed in `release-lines.json`. Land every change on `next` first, then add a `backport lts/X.Y` label; a PR that adds a migration needs a label for every open line, or its files listed as edge-only in `release-lines.json`. Never open a PR straight into a line or into `main`. Full rules, publishing and the line cut: [guides/RELEASE_LINES.md](guides/RELEASE_LINES.md).

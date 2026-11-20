@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.2/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [
+    [
+      "@mj-biz-apps/*"
+    ]
+  ],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "next",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@mj-biz-apps/collaboration-integration-tests",
+    "@mj-biz-apps/collaboration-ux-gallery",
+    "@mj-biz-apps/collaboration-example-space-types-entities",
+    "@mj-biz-apps/collaboration-example-space-types-server",
+    "@mj-biz-apps/collaboration-example-space-types-ng",
+    "@mj-biz-apps/collaboration-e2e"
+  ]
+}
