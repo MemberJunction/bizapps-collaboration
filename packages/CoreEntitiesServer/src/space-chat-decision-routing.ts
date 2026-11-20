@@ -9,12 +9,15 @@ import {
     CanAskRoutingDecision,
     CollectRoutingParticipants,
     InterpretRoutingAnswers,
+    ROUTING_CONTINUES_CALIBRATION_KEY,
+    RoutingAnsweredBy,
     type RoutingCatalogAgent,
     type RoutingDecisionAnswers,
     type RoutingDecisionInput,
     type RoutingDecisionOutcome,
     type RoutingHistoryRow,
 } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { parseUuid } from './uuid.js';
 
 const DETAILS_ENTITY = 'MJ: Conversation Details';
@@ -113,6 +116,12 @@ export interface ResolveTurnAgentViaDecisionParams {
     conversationHistoryFrom?: Date;
     timeoutMs?: number;
     decisionRunner?: SpaceChatDecisionRunner;
+    /**
+     * Optional Platt calibration override for unit tests injecting `decisionRunner` without a loaded
+     * `AIEngineBase` metadata cache. Production callers omit this so calibration is looked up via
+     * `AIEngineBase.Instance.FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION_KEY, RoutingAnsweredBy(decisionAnswers))`.
+     */
+    decisionCalibration?: Parameters<typeof InterpretRoutingAnswers>[2];
 }
 
 export type ResolveTurnAgentViaDecisionResult =
@@ -293,7 +302,14 @@ export async function resolveTurnAgentViaDecision(
         }
     }
 
-    const outcome = InterpretRoutingAnswers(routingInput, decisionAnswers);
+    const calibration =
+        params.decisionCalibration !== undefined
+            ? params.decisionCalibration
+            : AIEngineBase.Instance.FindDecisionCalibration(
+                  ROUTING_CONTINUES_CALIBRATION_KEY,
+                  RoutingAnsweredBy(decisionAnswers),
+              );
+    const outcome = InterpretRoutingAnswers(routingInput, decisionAnswers, calibration);
     if (outcome.Verdict === 'Routed' && outcome.RoutedAgentId) {
         const routedId = parseUuid(outcome.RoutedAgentId) ?? outcome.RoutedAgentId;
         return { ok: true, agentId: routedId, outcome };
