@@ -24,6 +24,12 @@ import { CollabSpaceChatComponent } from './space-chat.component.ts';
 import { CollabSpacePeopleComponent } from './space-people.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './new-conversation-dialog.component.ts';
+import {
+  SpaceMeetingsTabComponent,
+  meetingVisibilityToSpaceBand,
+  validateNewSpaceMeetingDraft,
+  type NewSpaceMeetingDraft,
+} from './space-meetings-tab.component.ts';
 import { SimpleChange, ElementRef } from '@angular/core';
 import { filterLibraryRows } from './library-filter.ts';
 import { taskPriorityClass, taskPriorityLabel, taskStatusClass, taskStatusLabel } from './task-status.ts';
@@ -1854,5 +1860,79 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     vi.advanceTimersByTime(150);
     expect(chat.pendingAgentPrompt).toBeNull();
     vi.useRealTimers();
+  });
+});
+
+describe('SpaceMeetingsTabComponent & draft helpers', () => {
+  const validDraft: NewSpaceMeetingDraft = {
+    Name: 'Q4 Controls Review',
+    Description: 'Review evidence',
+    StartsAt: '2026-12-10T10:00',
+    EndsAt: '2026-12-10T11:00',
+    TimeZone: 'America/Chicago',
+    LocationType: 'Virtual',
+    Location: '',
+    VideoJoinURL: 'https://zoom.us/j/123',
+    Visibility: 'Standard',
+  };
+
+  it('validates new space meeting drafts and maps visibility to space bands', () => {
+    expect(validateNewSpaceMeetingDraft(validDraft)).toEqual({ valid: true });
+    expect(validateNewSpaceMeetingDraft({ ...validDraft, Name: '   ' })).toEqual({
+      valid: false,
+      error: 'Meeting title is required.',
+    });
+    expect(validateNewSpaceMeetingDraft({ ...validDraft, TimeZone: '' })).toEqual({
+      valid: false,
+      error: 'Time zone is required.',
+    });
+    expect(
+      validateNewSpaceMeetingDraft({
+        ...validDraft,
+        StartsAt: '2026-12-10T11:00',
+        EndsAt: '2026-12-10T10:00',
+      }),
+    ).toEqual({
+      valid: false,
+      error: 'End time must be after start time.',
+    });
+
+    expect(meetingVisibilityToSpaceBand('Standard')).toBe('Shared');
+    expect(meetingVisibilityToSpaceBand('Private')).toBe('Team');
+  });
+
+  it('opens the inline schedule dialog only when a host observes CreateMeetingRequested', () => {
+    const comp = new SpaceMeetingsTabComponent();
+    comp.SpaceId = 'space-1';
+    comp.CanSchedule = true;
+
+    const scheduled: string[] = [];
+    comp.ScheduleMeetingRequested.subscribe((id) => scheduled.push(id));
+
+    // Without a CreateMeetingRequested subscriber, clicking Schedule meeting emits ScheduleMeetingRequested but does not open the inline dialog
+    comp.onScheduleClick();
+    expect(scheduled).toEqual(['space-1']);
+    expect(comp.IsScheduleDialogOpen).toBe(false);
+
+    // Once a host subscribes to CreateMeetingRequested, clicking opens the dialog and submitting emits a normalized draft
+    const created: NewSpaceMeetingDraft[] = [];
+    comp.CreateMeetingRequested.subscribe((d) => created.push(d));
+    comp.onScheduleClick();
+    expect(comp.IsScheduleDialogOpen).toBe(true);
+
+    comp.Draft = { ...validDraft, Name: '  Q4 Controls Review  ' };
+    comp.submitScheduleDialog();
+    expect(comp.IsSubmitting).toBe(true);
+    expect(created).toHaveLength(1);
+    expect(created[0].Name).toBe('Q4 Controls Review');
+
+    comp.failSchedule('Server refused.');
+    expect(comp.IsSubmitting).toBe(false);
+    expect(comp.ScheduleError).toBe('Server refused.');
+    expect(comp.IsScheduleDialogOpen).toBe(true);
+
+    comp.completeSchedule();
+    expect(comp.IsScheduleDialogOpen).toBe(false);
+    expect(comp.ScheduleError).toBe('');
   });
 });
