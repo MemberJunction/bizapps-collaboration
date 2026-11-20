@@ -40,6 +40,7 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
           [ActiveSpaceId]="'discovery'"
           [InboxCount]="f.rail.inboxCount"
           [TaskCount]="f.rail.taskCount"
+          [MyTaskCount]="f.rail.taskCount"
         ></mjc-space-rail>
 
         <main class="main">

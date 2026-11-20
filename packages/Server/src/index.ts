@@ -15,6 +15,7 @@ import {
     LoadSpaceNoteEntityServer,
     LoadCollaborationTaskEntityServer,
     LoadTaskAttributionEntityServer,
+    LoadSpaceMeetingsAgendaProvider,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import './generated/generated.js';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +40,8 @@ export const RESOLVER_PATHS = [
     resolve(here, 'get-space-configuration.resolver.{js,ts}'),
     resolve(here, 'ensure-space-for-record.resolver.{js,ts}'),
     resolve(here, 'grant-operations.resolver.{js,ts}'),
+    resolve(here, 'create-space-meeting.resolver.{js,ts}'),
+    resolve(here, 'ensure-meeting-space-chat.resolver.{js,ts}'),
 ];
 
 export { mintSpaceLink } from './mint-space-link.js';
@@ -53,4 +56,5 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceNoteEntityServer();
     LoadTaskAttributionEntityServer();
     LoadCollaborationTaskEntityServer();
+    LoadSpaceMeetingsAgendaProvider();
 }

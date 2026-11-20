@@ -229,8 +229,8 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
           (click)="selectNav('tasks')">
           <i class="fa-solid fa-list-check"></i>
           <span>My tasks</span>
-          @if (TaskCount > 0) {
-            <span class="count">{{ TaskCount }}</span>
+          @if (MyTaskCount > 0) {
+            <span class="count">{{ MyTaskCount }}</span>
           }
         </button>
 
@@ -804,7 +804,10 @@ export class CollabSpaceRailComponent implements OnInit {
     return !!this.ActiveConversationId && UUIDsEqual(this.ActiveConversationId, conversationId);
   }
   @Input() LibraryCount = 0;
+  /** The tasks of the space shown: the Work tab's badge. */
   @Input() TaskCount = 0;
+  /** The viewer's own open tasks across their spaces: the My tasks link's badge, which must not borrow the space's count. */
+  @Input() MyTaskCount = 0;
   @Input() MemberCount = 0;
   @Input() InboxCount = 0;
   @Input() Spaces: RailSpaceNode[] = [];
