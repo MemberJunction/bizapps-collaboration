@@ -12,25 +12,25 @@
     "test": "tsc -p tsconfig.test.json && vitest run"
   },
   "dependencies": {
-    "@memberjunction/actions": "6.2.0-edge.7",
-    "@memberjunction/actions-base": "6.2.0-edge.7",
+    "@memberjunction/actions": "6.2.1",
+    "@memberjunction/actions-base": "6.2.1",
     "@mj-biz-apps/collaboration-example-space-types-entities": "0.1.0",
     "class-validator": "^0.14.3"
   },
   "peerDependencies": {
-    "@memberjunction/actions": "6.2.0-edge.7",
-    "@memberjunction/actions-base": "6.2.0-edge.7",
-    "@memberjunction/core": "6.2.0-edge.7",
-    "@memberjunction/global": "6.2.0-edge.7",
-    "@memberjunction/server": "6.2.0-edge.7",
+    "@memberjunction/actions": "6.2.1",
+    "@memberjunction/actions-base": "6.2.1",
+    "@memberjunction/core": "6.2.1",
+    "@memberjunction/global": "6.2.1",
+    "@memberjunction/server": "6.2.1",
     "@mj-biz-apps/collaboration-core": "^0.1.0",
     "@mj-biz-apps/collaboration-core-entities-server": "^0.1.0",
     "@mj-biz-apps/collaboration-entities": "^0.1.0"
   },
   "devDependencies": {
-    "@memberjunction/core": "6.2.0-edge.7",
-    "@memberjunction/global": "6.2.0-edge.7",
-    "@memberjunction/server": "6.2.0-edge.7",
+    "@memberjunction/core": "6.2.1",
+    "@memberjunction/global": "6.2.1",
+    "@memberjunction/server": "6.2.1",
     "@mj-biz-apps/collaboration-core": "0.1.0",
     "@mj-biz-apps/collaboration-core-entities-server": "0.1.0",
     "@mj-biz-apps/collaboration-entities": "0.1.0",

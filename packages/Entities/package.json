@@ -17,16 +17,16 @@
   },
   "license": "UNLICENSED",
   "peerDependencies": {
-    "@memberjunction/core": "6.2.0-edge.7",
-    "@memberjunction/global": "6.2.0-edge.7"
+    "@memberjunction/core": "6.2.1",
+    "@memberjunction/global": "6.2.1"
   },
   "dependencies": {
     "@mj-biz-apps/collaboration-core": "0.1.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@memberjunction/core": "6.2.0-edge.7",
-    "@memberjunction/global": "6.2.0-edge.7",
+    "@memberjunction/core": "6.2.1",
+    "@memberjunction/global": "6.2.1",
     "typescript": "5.9.3"
   },
   "repository": {

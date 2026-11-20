@@ -1,4 +1,5 @@
 import { BaseEntity, LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
+import { UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     agentMayQuote,
     agentMayQuoteCandidate,
@@ -13,6 +14,8 @@ import {
     type ScopeNarrowing,
     type SpaceNode,
 } from '@mj-biz-apps/collaboration-core';
+import { IsPeopleEntity } from '@mj-biz-apps/common-entities';
+import type { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import { requireSystemUser, toNode, type SpaceRow } from './load-graph.js';
 import { parseUuid } from './uuid.js';
 
@@ -20,16 +23,27 @@ const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS_ENTITY = 'MJ_BizApps_Collaboration: Space Members';
 const ROLES_ENTITY = 'MJ_BizApps_Collaboration: Space Role Types';
 const ITEMS_ENTITY = 'MJ_BizApps_Collaboration: Space Items';
+const FILES_ENTITY = 'MJ: Files';
+const USERS_ENTITY = 'MJ: Users';
+const PEOPLE_ENTITY = 'MJ_BizApps_Common: People';
+const TASKS_ENTITY = 'MJ_BizApps_Tasks: Tasks';
+const TASK_ASSIGNMENTS_ENTITY = 'MJ_BizApps_Tasks: Task Assignments';
 
 export interface SpaceAgentCandidateItem {
     ID: string;
     SpaceID: string;
     EntityID: string;
     RecordID: string;
+    EntityName?: string | null;
     Name: string;
     Description: string | null;
     Band: Band;
     StoredContentType: string | null;
+    Status?: mjBizAppsTasksTaskEntity['Status'] | null;
+    Priority?: mjBizAppsTasksTaskEntity['Priority'] | null;
+    DueAt?: string | null;
+    PercentComplete?: number | null;
+    Assignees?: string[];
     ChunkTexts?: string[];
 }
 
@@ -97,10 +111,45 @@ interface SpaceItemRow {
     Band: Band;
 }
 
+interface TargetMetadata {
+    name: string;
+    description: string | null;
+    contentType: string | null;
+    status: mjBizAppsTasksTaskEntity['Status'] | null;
+    priority: mjBizAppsTasksTaskEntity['Priority'] | null;
+    dueAt: string | null;
+    percentComplete: number | null;
+}
+
+interface TargetLookupRow {
+    ID: string;
+    Name?: string | null;
+    Description?: string | null;
+    ContentType?: string | null;
+    Status?: mjBizAppsTasksTaskEntity['Status'] | null;
+    Priority?: mjBizAppsTasksTaskEntity['Priority'] | null;
+    DueAt?: Date | string | null;
+    PercentComplete?: number | null;
+}
+
 function cleanRecordId(raw: string): string {
     const s = String(raw).trim();
-    if (s.toLowerCase().startsWith('id|')) return s.slice(3);
+    if (s.toLowerCase().startsWith('id|')) return s.slice(3).trim();
     return s;
+}
+
+function formatIsoDate(raw: Date | string | null | undefined): string | null {
+    if (raw == null) return null;
+    if (raw instanceof Date) {
+        return Number.isNaN(raw.getTime()) ? null : raw.toISOString().slice(0, 10);
+    }
+    const trimmed = String(raw).trim();
+    if (!trimmed) return null;
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+        return trimmed.slice(0, 10);
+    }
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 }
 
 function isAncestorOrSelf(index: Map<string, SpaceNode>, ancestorId: string, nodeId: string): boolean {
@@ -467,7 +516,8 @@ export async function resolveSpaceAgentRetrieval(
         }
     }
 
-    const targetNames = new Map<string, { name: string; description: string | null; contentType: string | null }>();
+    const targetNames = new Map<string, TargetMetadata>();
+    const entityNameByEntityId = new UUIDMap<string>();
     const entityEntries = Array.from(recordIdsByEntity.entries());
     const viewParams: RunViewParams[] = [];
     const validEntityIds: string[] = [];
@@ -475,11 +525,14 @@ export async function resolveSpaceAgentRetrieval(
     for (const [entityId, recIds] of entityEntries) {
         const entityInfo = provider.EntityByID(entityId);
         if (!entityInfo) continue;
+        entityNameByEntityId.Set(entityId, entityInfo.Name);
         const targetInClause = recIds.map((id) => `'${id}'`).join(',');
         const fields =
-            entityInfo.Name === 'MJ: Files'
+            entityInfo.Name === FILES_ENTITY
                 ? ['ID', 'Name', 'Description', 'ContentType']
-                : ['ID', 'Name', 'Description'];
+                : entityInfo.Name === TASKS_ENTITY
+                    ? ['ID', 'Name', 'Description', 'Status', 'Priority', 'DueAt', 'PercentComplete']
+                    : ['ID', 'Name', 'Description'];
         viewParams.push({
             EntityName: entityInfo.Name,
             ExtraFilter: `ID IN (${targetInClause})`,
@@ -497,24 +550,27 @@ export async function resolveSpaceAgentRetrieval(
                 const res = batchResults[i];
                 const entityId = validEntityIds[i];
                 if (res.Success && res.Results) {
-                    for (const t of res.Results as Array<{
-                        ID: string;
-                        Name?: string;
-                        Description?: string;
-                        ContentType?: string;
-                    }>) {
+                    for (const t of res.Results as TargetLookupRow[]) {
                         const id = (parseUuid(t.ID) ?? t.ID).toLowerCase();
+                        const rawName = t.Name ?? 'Unnamed item';
+                        const cleanName = typeof rawName === 'string' ? rawName.replace(/\s+/g, ' ').trim() || 'Unnamed item' : 'Unnamed item';
+                        const rawDesc = t.Description ?? null;
+                        const cleanDesc = typeof rawDesc === 'string' ? rawDesc.replace(/\s+/g, ' ').trim() || null : null;
                         targetNames.set(`${entityId}:${id}`, {
-                            name: t.Name ?? 'Unnamed item',
-                            description: t.Description ?? null,
+                            name: cleanName,
+                            description: cleanDesc,
                             contentType: t.ContentType ?? null,
+                            status: t.Status ?? null,
+                            priority: t.Priority ?? null,
+                            dueAt: formatIsoDate(t.DueAt),
+                            percentComplete: typeof t.PercentComplete === 'number' ? t.PercentComplete : null,
                         });
                     }
                 } else if (!res.Success) {
                     LogError(`Failed to lookup target names for entity ${viewParams[i].EntityName}: ${res.ErrorMessage}`);
                 }
             }
-        } catch (err) {
+        } catch (err: unknown) {
             LogError(`resolveSpaceAgentRetrieval batch target lookup failed: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
@@ -523,6 +579,9 @@ export async function resolveSpaceAgentRetrieval(
         item: SpaceAgentCandidateItem;
         allowed: boolean;
         reason: string;
+        entityName: string | undefined;
+        cleanTargetRecordId: string | null;
+        target: TargetMetadata | undefined;
     }> = [];
     const spaceIndex = new Map<string, SpaceNode>();
     for (const s of spaceNodes) {
@@ -531,7 +590,10 @@ export async function resolveSpaceAgentRetrieval(
 
     for (const raw of rawItems) {
         const entityId = (parseUuid(raw.EntityID) ?? raw.EntityID).toLowerCase();
-        const recId = cleanRecordId(raw.RecordID).toLowerCase();
+        const cleanedRec = cleanRecordId(raw.RecordID);
+        const recId = cleanedRec.toLowerCase();
+        const cleanTargetRecordId = parseUuid(cleanedRec);
+        const entityName = entityNameByEntityId.Get(entityId);
         const target = targetNames.get(`${entityId}:${recId}`);
         const name = target?.name ?? `Item ${raw.ID}`;
         const description = target?.description ?? null;
@@ -540,6 +602,7 @@ export async function resolveSpaceAgentRetrieval(
             SpaceID: raw.SpaceID,
             EntityID: raw.EntityID,
             RecordID: raw.RecordID,
+            ...(entityName ? { EntityName: entityName } : {}),
             Name: name,
             Description: description,
             Band: raw.Band,
@@ -582,11 +645,17 @@ export async function resolveSpaceAgentRetrieval(
         const reason = allowed
             ? 'Allowed: item is within effective retrieval scope and readable by caller.'
             : audienceDecision.reason ?? 'Refused: agentMayQuote excluded item based on space subtree, team band, or retrieval policy.';
-        preliminaryCandidates.push({ item, allowed, reason });
+        preliminaryCandidates.push({ item, allowed, reason, entityName, cleanTargetRecordId, target });
     }
 
     const allowedItemIds = preliminaryCandidates.filter((c) => c.allowed).map((c) => c.item.ID);
-    const chunksBySpaceItemId = await loadChunksBySpaceItemId(provider, rvUser, user, allowedItemIds);
+    const allowedTaskIds = preliminaryCandidates
+        .filter((c) => c.allowed && c.entityName === TASKS_ENTITY && c.cleanTargetRecordId != null)
+        .map((c) => c.cleanTargetRecordId!);
+    const [chunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
+        loadChunksBySpaceItemId(provider, rvUser, user, allowedItemIds),
+        loadTaskAssigneesByTaskId(provider, rvUser, user, allowedTaskIds),
+    ]);
 
     const candidateItems: SpaceAgentCandidateItem[] = [];
     const quotedItems: SpaceAgentCandidateItem[] = [];
@@ -594,14 +663,29 @@ export async function resolveSpaceAgentRetrieval(
 
     for (const entry of preliminaryCandidates) {
         const chunkTexts = entry.allowed ? chunksBySpaceItemId.get((parseUuid(entry.item.ID) ?? entry.item.ID).toLowerCase()) : undefined;
-        const item: SpaceAgentCandidateItem = chunkTexts && chunkTexts.length > 0 ? { ...entry.item, ChunkTexts: chunkTexts } : entry.item;
+        let item: SpaceAgentCandidateItem = entry.item;
+        if (entry.allowed && entry.entityName === TASKS_ENTITY) {
+            item = {
+                ...item,
+                Status: entry.target?.status ?? null,
+                Priority: entry.target?.priority ?? null,
+                DueAt: entry.target?.dueAt ?? null,
+                PercentComplete: entry.target?.percentComplete ?? null,
+                Assignees: (entry.cleanTargetRecordId ? assigneesByTaskId.Get(entry.cleanTargetRecordId) : undefined) ?? [],
+            };
+        }
+        if (chunkTexts && chunkTexts.length > 0) {
+            item = { ...item, ChunkTexts: chunkTexts };
+        }
 
         if (options?.query) {
             const q = options.query.toLowerCase();
             const matchesName = item.Name.toLowerCase().includes(q);
             const matchesDescription = !!(item.Description && item.Description.toLowerCase().includes(q));
             const matchesChunks = !!(chunkTexts && chunkTexts.some((t) => t.toLowerCase().includes(q)));
-            if (!matchesName && !matchesDescription && !matchesChunks) {
+            const matchesStatus = !!(item.Status && item.Status.toLowerCase().includes(q));
+            const matchesAssignees = !!(item.Assignees && item.Assignees.some((a) => a.toLowerCase().includes(q)));
+            if (!matchesName && !matchesDescription && !matchesChunks && !matchesStatus && !matchesAssignees) {
                 continue;
             }
         }
@@ -623,6 +707,234 @@ export async function resolveSpaceAgentRetrieval(
         quotedItems,
         decisions,
     };
+}
+
+interface TaskAssignmentRow {
+    TaskID: string;
+    AssigneeEntityID: string;
+    AssigneeRecordID: string;
+    Status?: mjBizAppsTasksTaskAssignmentEntity['Status'] | null;
+    AssignedAt?: Date | string | null;
+}
+
+interface PersonLookupRow {
+    ID: string;
+    LinkedUserID?: string | null;
+    DisplayName?: string | null;
+    FirstName?: string | null;
+    LastName?: string | null;
+    PreferredName?: string | null;
+}
+
+interface UserLookupRow {
+    ID: string;
+    FirstLast?: string | null;
+    Name?: string | null;
+}
+
+interface MemberUserLookupRow {
+    UserID: string;
+    User?: string | null;
+}
+
+function formatPersonName(row: PersonLookupRow): string | null {
+    const display = (row.DisplayName ?? '').replace(/\s+/g, ' ').trim();
+    if (display) return display;
+    const given = ((row.PreferredName ?? '').trim() || (row.FirstName ?? '').trim()).replace(/\s+/g, ' ').trim();
+    const family = (row.LastName ?? '').replace(/\s+/g, ' ').trim();
+    const full = [given, family].filter(Boolean).join(' ').trim();
+    return full || null;
+}
+
+function classifyAssigneeKind(provider: IMetadataProvider, assigneeEntityId: string): 'person' | 'user' | null {
+    const usersEntity = provider.EntityByName(USERS_ENTITY);
+    if (usersEntity && UUIDsEqual(assigneeEntityId, usersEntity.ID)) return 'user';
+    const entityInfo = provider.EntityByID(assigneeEntityId);
+    if (entityInfo?.Name === USERS_ENTITY) return 'user';
+    if (IsPeopleEntity(entityInfo)) return 'person';
+    return null;
+}
+
+async function resolveAssigneeNames(
+    provider: IMetadataProvider,
+    rvUser: RunView,
+    user: UserInfo,
+    personIds: readonly string[],
+    userIds: readonly string[],
+): Promise<{ personNames: UUIDMap<string>; userNames: UUIDMap<string> }> {
+    const personNames = new UUIDMap<string>();
+    const userNames = new UUIDMap<string>();
+    const views: RunViewParams[] = [];
+    const tags: Array<'person' | 'user' | 'personByUser' | 'memberByUser'> = [];
+    const hasEntity = (name: string): boolean => !!provider.EntityByName(name);
+
+    if (personIds.length > 0 && hasEntity(PEOPLE_ENTITY)) {
+        views.push({
+            EntityName: PEOPLE_ENTITY,
+            ExtraFilter: `ID IN (${personIds.map((id) => `'${id}'`).join(', ')})`,
+            Fields: ['ID', 'DisplayName', 'FirstName', 'LastName', 'PreferredName'],
+            MaxRows: 2000,
+            ResultType: 'simple',
+        });
+        tags.push('person');
+    }
+    if (userIds.length > 0) {
+        const userIn = userIds.map((id) => `'${id}'`).join(', ');
+        if (hasEntity(USERS_ENTITY)) {
+            views.push({
+                EntityName: USERS_ENTITY,
+                ExtraFilter: `ID IN (${userIn})`,
+                Fields: ['ID', 'FirstLast', 'Name'],
+                MaxRows: 2000,
+                ResultType: 'simple',
+            });
+            tags.push('user');
+        }
+        if (hasEntity(PEOPLE_ENTITY)) {
+            views.push({
+                EntityName: PEOPLE_ENTITY,
+                ExtraFilter: `LinkedUserID IN (${userIn})`,
+                Fields: ['ID', 'LinkedUserID', 'DisplayName', 'FirstName', 'LastName', 'PreferredName'],
+                MaxRows: 2000,
+                ResultType: 'simple',
+            });
+            tags.push('personByUser');
+        }
+        if (hasEntity(MEMBERS_ENTITY)) {
+            views.push({
+                EntityName: MEMBERS_ENTITY,
+                ExtraFilter: `UserID IN (${userIn}) AND Status = 'Active'`,
+                Fields: ['UserID', 'User'],
+                MaxRows: 2000,
+                ResultType: 'simple',
+            });
+            tags.push('memberByUser');
+        }
+    }
+    if (views.length === 0) return { personNames, userNames };
+
+    const results = await rvUser.RunViews(views, user);
+    const userFirstLast = new UUIDMap<string>();
+    const userRawName = new UUIDMap<string>();
+    const personByUser = new UUIDMap<string>();
+    const memberByUser = new UUIDMap<string>();
+
+    for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        const tag = tags[i];
+        if (!res?.Success) {
+            LogError(`resolveSpaceAgentRetrieval assignee lookup (${tag}) failed: ${res?.ErrorMessage ?? 'unknown error'}`);
+            continue;
+        }
+        if (tag === 'person') {
+            for (const row of (res.Results as PersonLookupRow[]) ?? []) {
+                const label = formatPersonName(row);
+                if (label) personNames.Set(row.ID, label);
+            }
+        } else if (tag === 'user') {
+            for (const row of (res.Results as UserLookupRow[]) ?? []) {
+                const fl = (row.FirstLast ?? '').replace(/\s+/g, ' ').trim();
+                const raw = (row.Name ?? '').replace(/\s+/g, ' ').trim();
+                if (fl) userFirstLast.Set(row.ID, fl);
+                if (raw) userRawName.Set(row.ID, raw);
+            }
+        } else if (tag === 'personByUser') {
+            for (const row of (res.Results as PersonLookupRow[]) ?? []) {
+                const linkedId = parseUuid(row.LinkedUserID ?? undefined);
+                const label = formatPersonName(row);
+                if (linkedId && label) personByUser.Set(linkedId, label);
+            }
+        } else if (tag === 'memberByUser') {
+            for (const row of (res.Results as MemberUserLookupRow[]) ?? []) {
+                const label = (row.User ?? '').replace(/\s+/g, ' ').trim();
+                if (label && !memberByUser.Has(row.UserID)) memberByUser.Set(row.UserID, label);
+            }
+        }
+    }
+
+    for (const uid of userIds) {
+        const chosen = userFirstLast.Get(uid) ?? personByUser.Get(uid) ?? userRawName.Get(uid) ?? memberByUser.Get(uid);
+        if (chosen) userNames.Set(uid, chosen);
+    }
+    return { personNames, userNames };
+}
+
+async function loadTaskAssigneesByTaskId(
+    provider: IMetadataProvider,
+    rvUser: RunView,
+    user: UserInfo,
+    allowedTaskIds: readonly string[],
+): Promise<UUIDMap<string[]>> {
+    const result = new UUIDMap<string[]>();
+    if (allowedTaskIds.length === 0 || !provider.EntityByName(TASK_ASSIGNMENTS_ENTITY)) {
+        return result;
+    }
+
+    const uniqueTaskIds = Array.from(new UUIDSet(allowedTaskIds.map((id) => parseUuid(id)).filter((id): id is string => !!id)));
+    if (uniqueTaskIds.length === 0) return result;
+
+    try {
+        const assignRes = await rvUser.RunView<TaskAssignmentRow>(
+            {
+                EntityName: TASK_ASSIGNMENTS_ENTITY,
+                ExtraFilter: `TaskID IN (${uniqueTaskIds.map((id) => `'${id}'`).join(', ')})`,
+                Fields: ['TaskID', 'AssigneeEntityID', 'AssigneeRecordID', 'Status', 'AssignedAt'],
+                MaxRows: 2000,
+                ResultType: 'simple',
+            },
+            user,
+        );
+        if (!assignRes.Success) {
+            LogError(`resolveSpaceAgentRetrieval task assignments lookup failed: ${assignRes.ErrorMessage}`);
+            return result;
+        }
+        const rows = assignRes.Results ?? [];
+        if (rows.length === 0) return result;
+
+        const parsed: Array<{ taskId: string; kind: 'person' | 'user'; recordId: string; completed: boolean; assignedAtMs: number }> = [];
+        const personIdSet = new UUIDSet();
+        const userIdSet = new UUIDSet();
+
+        for (const row of rows) {
+            const taskId = parseUuid(row.TaskID);
+            const recordId = parseUuid(cleanRecordId(row.AssigneeRecordID));
+            const kind = row.AssigneeEntityID ? classifyAssigneeKind(provider, row.AssigneeEntityID) : null;
+            if (!taskId || !recordId || !kind) continue;
+            if (kind === 'person') personIdSet.Add(recordId);
+            else userIdSet.Add(recordId);
+            const ts = row.AssignedAt ? new Date(row.AssignedAt).getTime() : 0;
+            parsed.push({
+                taskId,
+                kind,
+                recordId,
+                completed: row.Status === 'Completed',
+                assignedAtMs: Number.isNaN(ts) ? 0 : ts,
+            });
+        }
+        if (parsed.length === 0) return result;
+
+        const { personNames, userNames } = await resolveAssigneeNames(
+            provider,
+            rvUser,
+            user,
+            Array.from(personIdSet),
+            Array.from(userIdSet),
+        );
+
+        parsed.sort((a, b) => (a.completed === b.completed ? a.assignedAtMs - b.assignedAtMs : a.completed ? 1 : -1));
+        for (const entry of parsed) {
+            const name = entry.kind === 'person' ? personNames.Get(entry.recordId) : userNames.Get(entry.recordId);
+            if (!name) continue;
+            const list = result.Get(entry.taskId) ?? [];
+            if (!list.includes(name)) {
+                list.push(name);
+                result.Set(entry.taskId, list);
+            }
+        }
+    } catch (error: unknown) {
+        LogError(`resolveSpaceAgentRetrieval task assignee lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return result;
 }
 
 async function loadChunksBySpaceItemId(

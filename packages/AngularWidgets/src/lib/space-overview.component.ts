@@ -17,6 +17,7 @@ export interface RoomMiniMessage {
   id?: string;
   senderName: string;
   senderInitials?: string;
+  senderAvatarUrl?: string;
   senderColorClass?: string;
   isOutside?: boolean;
   isAssistant?: boolean;
@@ -188,7 +189,7 @@ export interface SubSpaceSummary {
                     </span>
                   } @else {
                     <mjc-avatar
-                      [Avatar]="{ initials: msg.senderInitials || '', colorClass: msg.senderColorClass || 'c1', isOutside: msg.isOutside }"
+                      [Avatar]="{ initials: msg.senderInitials || '', avatarUrl: msg.senderAvatarUrl, colorClass: msg.senderColorClass || 'c1', isOutside: msg.isOutside }"
                       Size="sm"
                     />
                   }

@@ -33,6 +33,7 @@ import { CollabHomeListComponent, type HomeListRow } from './home-list.component
 import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
+import { CollabSpacePeopleComponent } from './space-people.component.ts';
 import { CollabSpaceRailComponent } from './space-rail.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabUploadDialogComponent } from './upload-dialog.component.ts';
@@ -828,6 +829,41 @@ describe("The Overview's contributed cards, rendered", () => {
   it('draws the Shared card and no Team card for a viewer who cannot see the Team band, and every card for one who can', async () => {
     expect(await render(false)).toEqual(['shared']);
     expect(await render(true)).toEqual(['shared', 'team', 'none']);
+  });
+});
+
+describe("a person's photo, rendered", () => {
+  const photo = 'https://example.test/ada.jpg';
+
+  it('draws the photo on the People list for a member who has one, and initials for one who has not', async () => {
+    const fixture = TestBed.createComponent(CollabSpacePeopleComponent);
+    fixture.componentRef.setInput('Members', [
+      { id: 'm1', userId: 'u1', name: 'Ada Lovelace', email: 'ada@example.test', initials: 'AL', avatarUrl: photo, roleName: 'Owner', roleCode: 'owner', band: 'Team', status: 'Active' },
+      { id: 'm2', userId: 'u2', name: 'Sam Reed', email: 'sam@example.test', initials: 'SR', roleName: 'Member', roleCode: 'member', band: 'Team', status: 'Active' },
+    ]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const avatars = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.member-row .td-person mjc-avatar .av'));
+    expect(avatars.length).toBe(2);
+    expect(avatars[0].querySelector<HTMLImageElement>('img.av-img')?.getAttribute('src')).toBe(photo);
+    expect(avatars[1].querySelector('img')).toBeNull();
+    expect(avatars[1].textContent?.trim()).toBe('SR');
+  });
+
+  it("draws the photo on the Overview's Discussion card for a sender who has one, and initials for one who has not", async () => {
+    const fixture = TestBed.createComponent(CollabSpaceOverviewComponent);
+    fixture.componentRef.setInput('ShowChatLink', true);
+    fixture.componentRef.setInput('RoomMessages', [
+      { id: '1', senderName: 'Ada Lovelace', senderInitials: 'AL', senderAvatarUrl: photo, timestamp: 'now', text: 'First' },
+      { id: '2', senderName: 'Sam Reed', senderInitials: 'SR', timestamp: 'now', text: 'Second' },
+    ]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const avatars = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.room-card .mm mjc-avatar .av'));
+    expect(avatars.length).toBe(2);
+    expect(avatars[0].querySelector<HTMLImageElement>('img.av-img')?.getAttribute('src')).toBe(photo);
+    expect(avatars[1].querySelector('img')).toBeNull();
+    expect(avatars[1].textContent?.trim()).toBe('SR');
   });
 });
 
