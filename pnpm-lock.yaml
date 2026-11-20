@@ -508,49 +508,49 @@ importers:
   packages/IntegrationTests:
     dependencies:
       '@memberjunction/actions':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1
       '@memberjunction/actions-base':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1
       '@memberjunction/ai-agents':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/ai-core-plus':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1
       '@memberjunction/ai-engine-base':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1
       '@memberjunction/api-keys':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(typescript@5.9.3)
       '@memberjunction/core':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1
       '@memberjunction/core-entities':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1
       '@memberjunction/generic-database-provider':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/global':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1
       '@memberjunction/graphql-dataprovider':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(ws@8.22.1)
       '@memberjunction/search-engine':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/sqlserver-dataprovider':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@4.6.7)
       '@memberjunction/storage':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/testing-integration':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(vitest@4.1.11(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))(ws@8.22.1)(zod@4.6.7)
       '@mj-biz-apps/collaboration-core':
         specifier: workspace:*
@@ -657,10 +657,10 @@ importers:
         specifier: 21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@memberjunction/ng-shared-generic':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@memberjunction/ng-ui-components':
-        specifier: ^6.2.1
+        specifier: '>=6.2.1 <6.3.0'
         version: 6.2.1(f5517fe63f1c615d5901e88463cf954b)
       '@mj-biz-apps/collaboration-core':
         specifier: 0.1.0
@@ -10582,7 +10582,7 @@ snapshots:
       - canvas
     optional: true
 
-  '@hyperframes/engine@0.8.134(@types/node@24.10.11)':
+  '@hyperframes/engine@0.8.134':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.8)
       '@hyperframes/core': 0.8.134(@types/node@24.10.11)
@@ -10592,7 +10592,6 @@ snapshots:
       puppeteer: 25.16.0
       puppeteer-core: 25.16.0
     transitivePeerDependencies:
-      - '@types/node'
       - bufferutil
       - canvas
       - proxy-agent
@@ -10629,7 +10628,7 @@ snapshots:
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.8)
       '@hyperframes/core': 0.8.134(@types/node@24.10.11)
-      '@hyperframes/engine': 0.8.134(@types/node@24.10.11)
+      '@hyperframes/engine': 0.8.134
       '@hyperframes/lint': 0.8.134
       '@hyperframes/parsers': 0.8.134
       '@hyperframes/studio-server': 0.8.134(@types/node@24.10.11)
@@ -20620,7 +20619,7 @@ snapshots:
   '@memberjunction/video-studio-render-worker@6.2.1(@types/node@24.10.11)':
     dependencies:
       '@hyperframes/core': 0.8.134(@types/node@24.10.11)
-      '@hyperframes/engine': 0.8.134(@types/node@24.10.11)
+      '@hyperframes/engine': 0.8.134
       '@hyperframes/lint': 0.8.134
       '@hyperframes/parsers': 0.8.134
       '@hyperframes/producer': 0.8.134(@types/node@24.10.11)
