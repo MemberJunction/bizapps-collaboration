@@ -174,11 +174,11 @@ importers:
         specifier: 5.65.0
         version: 5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
       '@mj-biz-apps/tasks-entities':
-        specifier: 1.12.0
-        version: 1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+        specifier: 1.14.0
+        version: 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
       '@mj-biz-apps/tasks-ng':
-        specifier: 1.12.0
-        version: 1.12.0(73e2a53156f07e09aa6e2c19590efd63)
+        specifier: 1.14.0
+        version: 1.14.0(27277c9b13cdfb14aefeb88d8ea6f554)
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -332,11 +332,11 @@ importers:
         specifier: 5.65.0
         version: 5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
       '@mj-biz-apps/tasks-entities':
-        specifier: 1.12.0
-        version: 1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+        specifier: 1.14.0
+        version: 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
       '@mj-biz-apps/tasks-entities-server':
-        specifier: 1.12.0
-        version: 1.12.0(@memberjunction/actions@6.3.0-edge.1)(@memberjunction/core-entities@6.3.0-edge.1)(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+        specifier: 1.14.0
+        version: 1.14.0(3eebc48d368c64e0a68a4805e7268986)
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -574,8 +574,8 @@ importers:
         specifier: ^5.65.0
         version: 5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
       '@mj-biz-apps/tasks-entities':
-        specifier: ^1.12.0
-        version: 1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+        specifier: ^1.14.0
+        version: 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
       mssql:
         specifier: ^12.7.0
         version: 12.7.0
@@ -3548,46 +3548,67 @@ packages:
       '@memberjunction/core': ^6.2.1
       '@memberjunction/global': ^6.2.1
 
-  '@mj-biz-apps/tasks-core@1.12.0':
-    resolution: {integrity: sha512-FBxt3t1+pcvUt+V7kBAfrsG/w3d4K8ttUQB7GnwvSBDXHB0tYvXDpdlhD4Hyzq4recBNxWbQMzGTdYRLVWK5lw==}
+  '@mj-biz-apps/tasks-core@1.14.0':
+    resolution: {integrity: sha512-iiogPOWpajCD8qAk46Odew70IIAATu6NmGTU1kwcE+XyxUfrXULmdSuqOupsI1GV/20UF3+my2VptvWP/9KNVg==}
     peerDependencies:
-      '@memberjunction/core': ^6.2.1
-      '@memberjunction/global': ^6.2.1
+      '@memberjunction/core': '>=6.2.1 <6.3.0'
+      '@memberjunction/global': '>=6.2.1 <6.3.0'
+      '@mj-biz-apps/common-entities': ^5.55.0
 
-  '@mj-biz-apps/tasks-entities-server@1.12.0':
-    resolution: {integrity: sha512-MwmmMkMS14lZC35PEDjOcl3fJuk3wcaibjQWu8G0mrtxakCmg8Rr51meJJhKB2k7t9WyixkXe8NCj1tKroyhOw==}
+  '@mj-biz-apps/tasks-entities-server@1.14.0':
+    resolution: {integrity: sha512-rooiwBUWLRt7WyurKesj2Ol6Xuw7272KDMxnaLACeEKuzimbYrXgZWbeFaBfZF37UphpvI/0WxdoaiV7pkZytg==}
     peerDependencies:
-      '@memberjunction/actions': ^6.2.1
-      '@memberjunction/core': ^6.2.1
-      '@memberjunction/core-entities': ^6.2.1
-      '@memberjunction/global': ^6.2.1
+      '@memberjunction/actions': '>=6.2.1 <6.3.0'
+      '@memberjunction/ai-core-plus': '>=6.2.1 <6.3.0'
+      '@memberjunction/ai-prompts': '>=6.2.1 <6.3.0'
+      '@memberjunction/aiengine': '>=6.2.1 <6.3.0'
+      '@memberjunction/communication-engine': '>=6.2.1 <6.3.0'
+      '@memberjunction/communication-types': '>=6.2.1 <6.3.0'
+      '@memberjunction/core': '>=6.2.1 <6.3.0'
+      '@memberjunction/core-entities': '>=6.2.1 <6.3.0'
+      '@memberjunction/credentials': '>=6.2.1 <6.3.0'
+      '@memberjunction/global': '>=6.2.1 <6.3.0'
+      '@memberjunction/storage': '>=6.2.1 <6.3.0'
+      '@mj-biz-apps/common-entities': ^5.55.0
 
-  '@mj-biz-apps/tasks-entities@1.12.0':
-    resolution: {integrity: sha512-H8DmP30n6XfdjPhFQQIdaFmPq9wbfZW/SIWaH5SjL1p8v7G7BE3XbucqzgaSe2wc5jCcRjBUKbvgMDbtmrZy0A==}
+  '@mj-biz-apps/tasks-entities@1.14.0':
+    resolution: {integrity: sha512-c6ViMh6uPRJcy3G+PZZ+c7bXI+7/udQTUZZUZGS7lGnENXjM5AjS2+5g4GqVbbZvUlIrP6m5TQuSBxhx+TyFDg==}
     peerDependencies:
-      '@memberjunction/core': ^6.2.1
-      '@memberjunction/global': ^6.2.1
+      '@memberjunction/core': '>=6.2.1 <6.3.0'
+      '@memberjunction/global': '>=6.2.1 <6.3.0'
 
-  '@mj-biz-apps/tasks-ng@1.12.0':
-    resolution: {integrity: sha512-dxha3m2cJvkQkgBfeSiG4tXzvXdcXfG+fcGU/VLZsj9ivcGV7ceMmUhFSBPJihDS1Vz2t2dtz8Z6eJvMGYkH4w==}
+  '@mj-biz-apps/tasks-ng-widgets@1.14.0':
+    resolution: {integrity: sha512-gM/SoC69dPU9QQt7u3luRy41XtKwMwbzZw73h3ALPq0eew0wkLxRgtKu+09rHh7IZlDhMUaR1QBVnY7kMmQ3gw==}
+    peerDependencies:
+      '@angular/common': 21.2.22
+      '@angular/core': 21.2.22
+      '@angular/forms': 21.2.22
+      '@memberjunction/core': '>=6.2.1 <6.3.0'
+      '@memberjunction/global': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-base-types': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-ui-components': '>=6.2.1 <6.3.0'
+
+  '@mj-biz-apps/tasks-ng@1.14.0':
+    resolution: {integrity: sha512-Fx08YPG203tqd5/trg2G3pWkY1AIDBAH9bmAhTaYlGyvd9Vq/M+T8Eb/n0Yy/vEVCqR+aiNU7oLxmMDpLNPtPA==}
     peerDependencies:
       '@angular/animations': 21.2.22
       '@angular/common': 21.2.22
       '@angular/core': 21.2.22
       '@angular/forms': 21.2.22
-      '@memberjunction/core': ^6.2.1
-      '@memberjunction/core-entities': ^6.2.1
-      '@memberjunction/global': ^6.2.1
-      '@memberjunction/graphql-dataprovider': ^6.2.1
-      '@memberjunction/ng-base-forms': ^6.2.1
-      '@memberjunction/ng-entity-viewer': ^6.2.1
-      '@memberjunction/ng-gantt': ^6.2.1
-      '@memberjunction/ng-hierarchy-tree': ^6.2.1
-      '@memberjunction/ng-kanban': ^6.2.1
-      '@memberjunction/ng-link-directives': ^6.2.1
-      '@memberjunction/ng-shared': ^6.2.1
-      '@memberjunction/ng-shared-generic': ^6.2.1
-      '@memberjunction/ng-ui-components': ^6.2.1
+      '@memberjunction/core': '>=6.2.1 <6.3.0'
+      '@memberjunction/core-entities': '>=6.2.1 <6.3.0'
+      '@memberjunction/global': '>=6.2.1 <6.3.0'
+      '@memberjunction/graphql-dataprovider': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-base-forms': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-entity-viewer': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-gantt': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-hierarchy-tree': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-kanban': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-link-directives': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-shared': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-shared-generic': '>=6.2.1 <6.3.0'
+      '@memberjunction/ng-ui-components': '>=6.2.1 <6.3.0'
+      '@mj-biz-apps/common-entities': ^5.55.0
 
   '@modelcontextprotocol/sdk@1.30.0':
     resolution: {integrity: sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==}
@@ -7993,6 +8014,9 @@ packages:
   router@2.2.0:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
     engines: {node: '>= 18'}
+
+  rrule@2.8.1:
+    resolution: {integrity: sha512-hM3dHSBMeaJ0Ktp7W38BJZ7O1zOgaFEsn41PDk+yHoEtfLV+PoJt9E9xAlZiWgf/iqEqionN0ebHFZIDAp+iGw==}
 
   rrweb-cssom@0.8.0:
     resolution: {integrity: sha512-guoltQEx+9aMf2gDZ0s62EcV8lsXR+0w8915TC3ITdn2YueuNjdAYh/levpU9nFaoChh9RUS5ZdQMrKfVEN9tw==}
@@ -21447,28 +21471,53 @@ snapshots:
       '@memberjunction/global': 6.3.0-edge.1
       zod: 3.25.76
 
-  '@mj-biz-apps/tasks-core@1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)':
+  '@mj-biz-apps/tasks-core@1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)(@mj-biz-apps/common-entities@5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1))':
     dependencies:
       '@memberjunction/core': 6.3.0-edge.1
       '@memberjunction/global': 6.3.0-edge.1
-      '@mj-biz-apps/tasks-entities': 1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+      '@mj-biz-apps/common-entities': 5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+      '@mj-biz-apps/tasks-entities': 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+      luxon: 3.7.2
+      rrule: 2.8.1
 
-  '@mj-biz-apps/tasks-entities-server@1.12.0(@memberjunction/actions@6.3.0-edge.1)(@memberjunction/core-entities@6.3.0-edge.1)(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)':
+  '@mj-biz-apps/tasks-entities-server@1.14.0(3eebc48d368c64e0a68a4805e7268986)':
     dependencies:
       '@memberjunction/actions': 6.3.0-edge.1
+      '@memberjunction/ai-core-plus': 6.3.0-edge.1
+      '@memberjunction/ai-prompts': 6.3.0-edge.1(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
+      '@memberjunction/aiengine': 6.3.0-edge.1(encoding@0.1.13)(typescript@5.9.3)
+      '@memberjunction/communication-engine': 6.3.0-edge.1(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.22.1)(zod@3.25.76)
+      '@memberjunction/communication-types': 6.3.0-edge.1
       '@memberjunction/core': 6.3.0-edge.1
       '@memberjunction/core-entities': 6.3.0-edge.1
+      '@memberjunction/credentials': 6.3.0-edge.1
       '@memberjunction/global': 6.3.0-edge.1
-      '@mj-biz-apps/tasks-core': 1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
-      '@mj-biz-apps/tasks-entities': 1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+      '@memberjunction/storage': 6.3.0-edge.1(encoding@0.1.13)(typescript@5.9.3)
+      '@mj-biz-apps/common-entities': 5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+      '@mj-biz-apps/tasks-core': 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)(@mj-biz-apps/common-entities@5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1))
+      '@mj-biz-apps/tasks-entities': 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
 
-  '@mj-biz-apps/tasks-entities@1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)':
+  '@mj-biz-apps/tasks-entities@1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)':
     dependencies:
       '@memberjunction/core': 6.3.0-edge.1
       '@memberjunction/global': 6.3.0-edge.1
       zod: 3.25.76
 
-  '@mj-biz-apps/tasks-ng@1.12.0(73e2a53156f07e09aa6e2c19590efd63)':
+  '@mj-biz-apps/tasks-ng-widgets@1.14.0(e258952b8f10c79c627ad3bbb88ced2f)':
+    dependencies:
+      '@angular/common': 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@angular/core': 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)
+      '@angular/forms': 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@memberjunction/core': 6.3.0-edge.1
+      '@memberjunction/global': 6.3.0-edge.1
+      '@memberjunction/ng-base-types': 6.3.0-edge.1(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))
+      '@memberjunction/ng-ui-components': 6.3.0-edge.1(f5517fe63f1c615d5901e88463cf954b)
+      '@mj-biz-apps/tasks-core': 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)(@mj-biz-apps/common-entities@5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1))
+      '@mj-biz-apps/tasks-entities': 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+    transitivePeerDependencies:
+      - '@mj-biz-apps/common-entities'
+
+  '@mj-biz-apps/tasks-ng@1.14.0(27277c9b13cdfb14aefeb88d8ea6f554)':
     dependencies:
       '@angular/animations': 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))
       '@angular/common': 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2)
@@ -21487,10 +21536,14 @@ snapshots:
       '@memberjunction/ng-shared': 6.3.0-edge.1(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/router@21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2))(rxjs@7.8.2)(ws@8.22.1)
       '@memberjunction/ng-shared-generic': 6.3.0-edge.1(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)(ws@8.22.1)
       '@memberjunction/ng-ui-components': 6.3.0-edge.1(f5517fe63f1c615d5901e88463cf954b)
-      '@mj-biz-apps/tasks-core': 1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
-      '@mj-biz-apps/tasks-entities': 1.12.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+      '@mj-biz-apps/common-entities': 5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+      '@mj-biz-apps/tasks-core': 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)(@mj-biz-apps/common-entities@5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1))
+      '@mj-biz-apps/tasks-entities': 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+      '@mj-biz-apps/tasks-ng-widgets': 1.14.0(e258952b8f10c79c627ad3bbb88ced2f)
       dhtmlx-gantt: 9.1.4
       rxjs: 7.8.2
+    transitivePeerDependencies:
+      - '@memberjunction/ng-base-types'
 
   '@modelcontextprotocol/sdk@1.30.0(zod@3.25.76)':
     dependencies:
@@ -26393,6 +26446,10 @@ snapshots:
       path-to-regexp: 8.4.2
     transitivePeerDependencies:
       - supports-color
+
+  rrule@2.8.1:
+    dependencies:
+      tslib: 2.8.1
 
   rrweb-cssom@0.8.0: {}
 

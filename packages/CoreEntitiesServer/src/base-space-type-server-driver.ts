@@ -3,16 +3,21 @@
  * Extensibility plan § 5.
  */
 
-import { type IEntityDataProvider, type IMetadataProvider, LogError, type UserInfo } from '@memberjunction/core';
+import { type BaseEntity, type IEntityDataProvider, type IMetadataProvider, LogError, RunView, type UserInfo } from '@memberjunction/core';
+import type { MJUserEntity } from '@memberjunction/core-entities';
+import { ResolvePersonIDForUser, ResolveUserIDForPerson } from '@mj-biz-apps/common-entities';
 import { type EffectiveSpaceConfiguration, type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import {
     type mjBizAppsCollaborationSpaceEntity,
     type mjBizAppsCollaborationSpaceItemEntity,
     type mjBizAppsCollaborationSpaceMemberEntity,
+    type mjBizAppsCollaborationSpaceRoleTypeEntity,
     type mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationEngine } from './CollaborationEngine.js';
 import { requireSystemUser } from './load-graph.js';
-import { asMetadata } from './uuid.js';
+import { mintSpaceLink, resolveMagicLinkHost, type MagicLinkHost } from './mint-space-link.js';
+import { parseUuid } from './uuid.js';
 
 export interface DriverValidationResult {
     ok: boolean;
@@ -149,6 +154,7 @@ export interface SyncSeatsResult {
     removed: number;
     invited: number;
     errors: string[];
+    redemptionUrls?: Record<string, string>;
 }
 
 export class BaseSpaceTypeServerDriver {
@@ -255,22 +261,394 @@ export class BaseSpaceTypeServerDriver {
     }
 
     /**
-     * Helper to sync seats from an external roster (e.g. Committees membership).
+     * Helper to sync seats from an external roster.
      * Modifies only seats with the matching SyncSource.
      */
     public async SyncSeats(
-        _space: mjBizAppsCollaborationSpaceEntity,
-        _source: string,
-        _people: PersonSeatInput[],
-        _actingUser: UserInfo,
-        _provider: IMetadataProvider
+        space: mjBizAppsCollaborationSpaceEntity,
+        source: string,
+        people: PersonSeatInput[],
+        actingUser: UserInfo,
+        provider: IMetadataProvider,
+        options?: { host?: MagicLinkHost }
     ): Promise<SyncSeatsResult> {
-        return {
+        const result: SyncSeatsResult = {
             added: 0,
             updated: 0,
             removed: 0,
             invited: 0,
-            errors: ['SyncSeats is not built yet: no roster sync exists for a type today.'],
+            errors: [],
         };
+
+        const spaceId = parseUuid(space?.ID);
+        const cleanSource = (source ?? '').trim();
+        if (!spaceId || !cleanSource) {
+            result.errors.push('SyncSeats requires a valid space ID and sync source.');
+            return result;
+        }
+
+        const view = RunView.FromMetadataProvider(provider);
+        const probeEntity = (space && (space as unknown as { ProviderToUse?: IMetadataProvider }).ProviderToUse
+            ? space
+            : { ProviderToUse: provider, RunViewProviderToUse: provider }) as BaseEntity;
+        let rosterReader = actingUser;
+        try {
+            rosterReader = await requireSystemUser(probeEntity);
+        } catch {
+            rosterReader = actingUser;
+        }
+        const roles = await loadSpaceRoleTypes(view, rosterReader);
+        const existingSeatsResult = await view.RunView<{
+            ID: string;
+            UserID: string;
+            PersonID?: string | null;
+            SpaceRoleTypeID: string;
+            Status: 'Active' | 'Invited' | 'Removed';
+            Band?: 'Team' | 'Shared';
+            SyncSource?: string | null;
+        }>(
+            {
+                EntityName: 'MJ_BizApps_Collaboration: Space Members',
+                ExtraFilter: `SpaceID = '${spaceId}'`,
+                ResultType: 'simple',
+            },
+            rosterReader
+        );
+        if (!existingSeatsResult.Success) {
+            result.errors.push(existingSeatsResult.ErrorMessage ?? 'Could not read existing space members.');
+            return result;
+        }
+
+        const existingByUser = new Map<
+            string,
+            {
+                ID: string;
+                UserID: string;
+                PersonID?: string | null;
+                SpaceRoleTypeID: string;
+                Status: 'Active' | 'Invited' | 'Removed';
+                Band?: 'Team' | 'Shared';
+                SyncSource?: string | null;
+            }
+        >();
+        for (const row of existingSeatsResult.Results ?? []) {
+            const uid = parseUuid(row.UserID);
+            if (uid) {
+                existingByUser.set(uid, row);
+            }
+        }
+
+        const desiredByUser = new Map<
+            string,
+            {
+                userId: string;
+                personId: string | null;
+                roleId: string;
+                band: 'Team' | 'Shared';
+            }
+        >();
+        const invitedUserIds = new Set<string>();
+
+        for (const seatInput of people ?? []) {
+            const role = matchSpaceRoleType(roles, seatInput.RoleTypeName, space.SpaceTypeID);
+            if (!role) {
+                result.errors.push(`Unknown space role type '${seatInput.RoleTypeName}'.`);
+                continue;
+            }
+
+            let personId = parseUuid(seatInput.PersonID);
+            let userId = parseUuid(seatInput.UserID);
+            let email = seatInput.Email?.trim() || null;
+
+            if (!userId && personId) {
+                try {
+                    const resolvedUserId = await ResolveUserIDForPerson(personId, provider, rosterReader);
+                    userId = parseUuid(resolvedUserId);
+                } catch {
+                    // Fallback to direct People lookup below when provider.Entities is not populated on a test double
+                }
+
+                if (!userId || !email) {
+                    const personLookup = await view.RunView<{
+                        ID: string;
+                        Email?: string | null;
+                        LinkedUserID?: string | null;
+                    }>(
+                        {
+                            EntityName: 'MJ_BizApps_Common: People',
+                            ExtraFilter: `ID = '${personId}'`,
+                            Fields: ['ID', 'Email', 'LinkedUserID'],
+                            MaxRows: 1,
+                            ResultType: 'simple',
+                        },
+                        rosterReader
+                    );
+                    if (personLookup.Success && personLookup.Results?.[0]) {
+                        const pRow = personLookup.Results[0];
+                        if (!userId && pRow.LinkedUserID) {
+                            userId = parseUuid(pRow.LinkedUserID);
+                        }
+                        if (!email && pRow.Email?.trim()) {
+                            email = pRow.Email.trim();
+                        }
+                    }
+                }
+            }
+
+            if (userId && !personId) {
+                try {
+                    const userEntity = await provider.GetEntityObject<MJUserEntity>('MJ: Users', rosterReader);
+                    if (userEntity && typeof userEntity.Load === 'function' && (await userEntity.Load(userId))) {
+                        const resolvedPersonId = await ResolvePersonIDForUser(userEntity, provider, rosterReader);
+                        personId = parseUuid(resolvedPersonId);
+                    }
+                } catch {
+                    // Non-fatal
+                }
+            }
+
+            if (!userId && email) {
+                const safeEmail = email.replace(/'/g, "''");
+                const userLookup = await view.RunView<{ ID: string }>(
+                    {
+                        EntityName: 'MJ: Users',
+                        ExtraFilter: `Email = '${safeEmail}'`,
+                        Fields: ['ID'],
+                        MaxRows: 1,
+                        ResultType: 'simple',
+                    },
+                    rosterReader
+                );
+                if (userLookup.Success && userLookup.Results?.[0]?.ID) {
+                    userId = parseUuid(userLookup.Results[0].ID);
+                }
+            }
+
+            if (!userId) {
+                if (email && email.includes('@')) {
+                    const issuerUser: UserInfo =
+                        actingUser.Type || (actingUser.UserRoles?.length ?? 0) > 0
+                            ? actingUser
+                            : ({ ...actingUser, Type: 'Owner' } as UserInfo);
+                    const mintRes = await mintSpaceLink({
+                        provider,
+                        user: issuerUser,
+                        spaceId,
+                        email,
+                        roleId: role.ID,
+                        host: options?.host ?? resolveMagicLinkHost(),
+                        syncSource: cleanSource,
+                        personId,
+                    });
+                    if (mintRes.ok && !mintRes.linkFailed) {
+                        result.invited += 1;
+                        if (mintRes.redemptionUrl) {
+                            result.redemptionUrls ??= {};
+                            result.redemptionUrls[email] = mintRes.redemptionUrl;
+                        }
+                        const provisionedId = parseUuid(mintRes.userId);
+                        if (provisionedId) {
+                            invitedUserIds.add(provisionedId);
+                        }
+                    } else {
+                        result.errors.push(mintRes.message ?? `Failed to invite ${email}.`);
+                    }
+                } else {
+                    result.errors.push(
+                        `Cannot sync seat for ${personId ?? 'unknown person'}: no linked MJ User and no valid email address.`
+                    );
+                }
+                continue;
+            }
+
+            desiredByUser.set(userId, {
+                userId,
+                personId,
+                roleId: role.ID,
+                band: role.CanSeeTeamBand ? 'Team' : 'Shared',
+            });
+        }
+
+        // Add or update desired seats
+        for (const [userId, desired] of desiredByUser.entries()) {
+            if (invitedUserIds.has(userId)) {
+                continue;
+            }
+            const existing = existingByUser.get(userId);
+            if (!existing) {
+                try {
+                    const member = await provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(
+                        'MJ_BizApps_Collaboration: Space Members',
+                        actingUser
+                    );
+                    member.NewRecord();
+                    member.SpaceID = space.ID;
+                    member.UserID = desired.userId;
+                    member.SpaceRoleTypeID = desired.roleId;
+                    member.Band = desired.band;
+                    member.Status = 'Active';
+                    member.SyncSource = cleanSource;
+                    if (desired.personId) {
+                        member.PersonID = desired.personId;
+                    }
+                    if (await member.Save()) {
+                        result.added += 1;
+                    } else {
+                        result.errors.push(
+                            member.LatestResult?.CompleteMessage ?? `Failed to add seat for user ${desired.userId}.`
+                        );
+                    }
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    LogError(`SyncSeats add failed for user ${desired.userId}: ${msg}`);
+                    result.errors.push(msg);
+                }
+                continue;
+            }
+
+            const existingSource = (existing.SyncSource ?? '').trim();
+            const isSameSource = existingSource === cleanSource;
+            const wasRemoved = existing.Status === 'Removed';
+
+            // Never touch an active or invited seat owned by a different source or invited manually
+            if (!isSameSource && !wasRemoved) {
+                continue;
+            }
+
+            const targetStatus = existing.Status === 'Invited' ? 'Invited' : 'Active';
+            const roleChanged = parseUuid(existing.SpaceRoleTypeID) !== parseUuid(desired.roleId);
+            const statusChanged = existing.Status !== targetStatus;
+            const sourceChanged = existingSource !== cleanSource;
+            const personChanged = !!(desired.personId && parseUuid(existing.PersonID) !== desired.personId);
+
+            if (!roleChanged && !statusChanged && !sourceChanged && !personChanged) {
+                continue;
+            }
+
+            try {
+                const member = await provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(
+                    'MJ_BizApps_Collaboration: Space Members',
+                    actingUser
+                );
+                const loaded = typeof member.Load === 'function' ? await member.Load(existing.ID) : true;
+                if (!loaded) {
+                    result.errors.push(`Could not load existing seat ${existing.ID}.`);
+                    continue;
+                }
+                member.SpaceRoleTypeID = desired.roleId;
+                member.Band = desired.band;
+                member.Status = targetStatus;
+                member.SyncSource = cleanSource;
+                if (desired.personId) {
+                    member.PersonID = desired.personId;
+                }
+                if (await member.Save()) {
+                    if (wasRemoved) {
+                        result.added += 1;
+                    } else {
+                        result.updated += 1;
+                    }
+                } else {
+                    result.errors.push(
+                        member.LatestResult?.CompleteMessage ?? `Failed to update seat ${existing.ID}.`
+                    );
+                }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                LogError(`SyncSeats update failed for seat ${existing.ID}: ${msg}`);
+                result.errors.push(msg);
+            }
+        }
+
+        // Remove seats from this SyncSource that are no longer in the incoming roster
+        for (const [userId, existing] of existingByUser.entries()) {
+            const existingSource = (existing.SyncSource ?? '').trim();
+            if (existingSource !== cleanSource || existing.Status === 'Removed') {
+                continue;
+            }
+            if (desiredByUser.has(userId) || invitedUserIds.has(userId)) {
+                continue;
+            }
+
+            try {
+                const member = await provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(
+                    'MJ_BizApps_Collaboration: Space Members',
+                    actingUser
+                );
+                const loaded = typeof member.Load === 'function' ? await member.Load(existing.ID) : true;
+                if (!loaded) {
+                    result.errors.push(`Could not load seat ${existing.ID} for removal.`);
+                    continue;
+                }
+                member.Status = 'Removed';
+                if (await member.Save()) {
+                    result.removed += 1;
+                } else {
+                    result.errors.push(
+                        member.LatestResult?.CompleteMessage ?? `Failed to remove seat ${existing.ID}.`
+                    );
+                }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                LogError(`SyncSeats remove failed for seat ${existing.ID}: ${msg}`);
+                result.errors.push(msg);
+            }
+        }
+
+        return result;
     }
 }
+
+interface SpaceRoleRow {
+    ID: string;
+    Name: string;
+    Code?: string | null;
+    SpaceTypeID?: string | null;
+    CanSeeTeamBand?: boolean;
+}
+
+async function loadSpaceRoleTypes(view: RunView, actingUser: UserInfo): Promise<SpaceRoleRow[]> {
+    const res = await view.RunView<SpaceRoleRow>(
+        {
+            EntityName: 'MJ_BizApps_Collaboration: Space Role Types',
+            ResultType: 'simple',
+        },
+        actingUser
+    );
+    if (res.Success && (res.Results?.length ?? 0) > 0) {
+        return res.Results ?? [];
+    }
+    if (CollaborationEngine.Instance.Loaded) {
+        return CollaborationEngine.Instance.SpaceRoleTypes.map((r: mjBizAppsCollaborationSpaceRoleTypeEntity) => ({
+            ID: r.ID,
+            Name: r.Name,
+            Code: r.Code,
+            CanSeeTeamBand: r.CanSeeTeamBand,
+        }));
+    }
+    return [];
+}
+
+function matchSpaceRoleType(
+    roles: readonly SpaceRoleRow[],
+    roleTypeName: string,
+    spaceTypeId: string | null | undefined
+): SpaceRoleRow | null {
+    const needle = (roleTypeName ?? '').trim().toLowerCase();
+    if (!needle) return null;
+    const targetTypeId = parseUuid(spaceTypeId);
+    const matching = roles.filter(
+        (r) =>
+            (r.Name ?? '').trim().toLowerCase() === needle ||
+            (r.Code ?? '').trim().toLowerCase() === needle ||
+            parseUuid(r.ID) === parseUuid(roleTypeName)
+    );
+    if (matching.length === 0) return null;
+    if (targetTypeId) {
+        const typeSpecific = matching.find((r) => parseUuid(r.SpaceTypeID) === targetTypeId);
+        if (typeSpecific) return typeSpecific;
+    }
+    const globalRole = matching.find((r) => !r.SpaceTypeID);
+    return globalRole ?? matching[0];
+}
+

@@ -42,8 +42,8 @@
     "@memberjunction/ng-shared-generic": "^6.3.0-edge.1",
     "@memberjunction/ng-ui-components": "^6.3.0-edge.1",
     "@mj-biz-apps/common-entities": "^5.65.0",
-    "@mj-biz-apps/tasks-entities": "^1.12.0",
-    "@mj-biz-apps/tasks-ng": "^1.12.0"
+    "@mj-biz-apps/tasks-entities": "^1.14.0",
+    "@mj-biz-apps/tasks-ng": "^1.14.0"
   },
   "devDependencies": {
     "@angular/animations": "21.2.22",
@@ -71,8 +71,8 @@
     "@memberjunction/ng-shared-generic": "6.3.0-edge.1",
     "@memberjunction/ng-ui-components": "6.3.0-edge.1",
     "@mj-biz-apps/common-entities": "5.65.0",
-    "@mj-biz-apps/tasks-entities": "1.12.0",
-    "@mj-biz-apps/tasks-ng": "1.12.0",
+    "@mj-biz-apps/tasks-entities": "1.14.0",
+    "@mj-biz-apps/tasks-ng": "1.14.0",
     "@types/node": "24.10.11",
     "jsdom": "26.1.0",
     "rxjs": "^7.8.2",

@@ -73,3 +73,18 @@ export {
 export { CollabSpacePeopleComponent } from './lib/space-people.component';
 export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';
+export {
+    SpaceMeetingsTabComponent,
+    createDefaultSpaceMeetingDraft,
+    loadSpaceMeetingCards,
+    meetingVisibilityToSpaceBand,
+    validateNewSpaceMeetingDraft,
+    type NewSpaceMeetingDraft,
+    type SpaceMeetingCardItem,
+} from './lib/space-meetings-tab.component';
+export {
+    SpaceComingUpCardComponent,
+    SpaceMeetingsWidgetAgendaProvider,
+    collectSpaceAgendaItems,
+} from './lib/space-coming-up-card.component';
+

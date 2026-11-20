@@ -62,6 +62,7 @@ import { FRAME_08_FIXTURE, type Frame08FixtureData } from '../fixtures/frame-08.
                     [ActiveSpaceId]="'audit-committee'"
                     [InboxCount]="f.rail.inboxCount"
                     [TaskCount]="f.rail.taskCount"
+                    [MyTaskCount]="f.rail.taskCount"
                 ></mjc-space-rail>
 
                 <main class="main">
