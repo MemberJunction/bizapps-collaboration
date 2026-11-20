@@ -16,6 +16,7 @@
     "permission-domains",
     "resource-types",
     "space-types",
+    "space-type-statuses",
     "space-role-types",
     "row-level-security-filters",
     "entities",

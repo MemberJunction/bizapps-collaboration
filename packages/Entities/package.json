@@ -17,8 +17,8 @@
   },
   "license": "UNLICENSED",
   "peerDependencies": {
-    "@memberjunction/core": "6.2.1",
-    "@memberjunction/global": "6.2.1"
+    "@memberjunction/core": "^6.2.1",
+    "@memberjunction/global": "^6.2.1"
   },
   "dependencies": {
     "@mj-biz-apps/collaboration-core": "0.1.0",
