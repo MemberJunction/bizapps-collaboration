@@ -721,6 +721,7 @@ describe('executeSpaceChatTurn', () => {
         const result = await executeSpaceChatTurn(provider, callerUser, {
             ...defaultInput,
             agentId: undefined,
+            decisionCalibration: { A: 1, B: 0 },
             decisionRunner: async ({ state }) => {
                 capturedState = state;
                 return {
