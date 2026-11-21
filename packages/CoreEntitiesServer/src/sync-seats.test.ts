@@ -43,6 +43,8 @@ function createMockProvider(options: {
     refuseRemoveSeatIds?: Set<string>;
     refuseInviteSave?: boolean;
     inviteApproval?: 'Approve' | 'AutoApprove';
+    /** Role types beside the three every world has, read before them. */
+    extraRoles?: Array<{ ID: string; Name: string; Code: string; CanSeeTeamBand: boolean }>;
 }) {
     const seats = new Map<string, SeatRecord>();
     for (const s of options.existingSeats ?? []) {
@@ -57,11 +59,19 @@ function createMockProvider(options: {
     let seq = 100;
 
     const roles = [
+        ...(options.extraRoles ?? []).map((role) => ({
+            Level: 20,
+            MaxGrantableLevel: 0,
+            CanInvite: false,
+            CanPromoteBand: false,
+            IsOwnerRole: false,
+            CanContribute: true,
+            ...role,
+        })),
         {
             ID: ROLE_OWNER,
             Name: 'Owner',
             Code: 'owner',
-            SpaceTypeID: null,
             Level: 100,
             MaxGrantableLevel: 100,
             CanInvite: true,
@@ -74,7 +84,6 @@ function createMockProvider(options: {
             ID: ROLE_MEMBER,
             Name: 'Team Member',
             Code: 'member',
-            SpaceTypeID: null,
             Level: 80,
             MaxGrantableLevel: 80,
             CanInvite: true,
@@ -87,7 +96,6 @@ function createMockProvider(options: {
             ID: ROLE_GUEST,
             Name: 'Participant',
             Code: 'guest',
-            SpaceTypeID: null,
             Level: 20,
             MaxGrantableLevel: 0,
             CanInvite: false,
@@ -500,6 +508,57 @@ describe('BaseSpaceTypeServerDriver.SyncSeats', () => {
         assert.ok(savedInvites[0]?.ExpiresAt instanceof Date);
         assert.equal(savedInvites[0]?.MaxUses, 1);
         assert.equal(savedInvites[0]?.UseCount, 0);
+    });
+
+    /** Alice holds a synced Member seat; the sync names her next role, and the role her seat ends on is the one the name resolved to. */
+    async function syncAliceAs(roleTypeName: string, extraRoles?: Array<{ ID: string; Name: string; Code: string; CanSeeTeamBand: boolean }>) {
+        const world = createMockProvider({
+            existingSeats: [
+                { ID: 'seat-alice', SpaceID: SPACE_ID, UserID: USER_ALICE, PersonID: PERSON_ALICE, SpaceRoleTypeID: ROLE_MEMBER, Band: 'Team', Status: 'Active', SyncSource: 'roster:main' },
+            ],
+            extraRoles,
+        });
+        const result = await new BaseSpaceTypeServerDriver().SyncSeats(
+            world.space,
+            'roster:main',
+            [{ PersonID: PERSON_ALICE, RoleTypeName: roleTypeName }],
+            ACTING_USER,
+            world.provider,
+        );
+        return { result, seat: world.seats.get('seat-alice') };
+    }
+
+    it('resolves a role type by its code, its ID or its name: role types are global, and the space\'s type plays no part', async () => {
+        const byCode = await syncAliceAs('guest');
+        assert.deepEqual(byCode.result.errors, []);
+        assert.equal(byCode.seat?.SpaceRoleTypeID, ROLE_GUEST, 'the code "guest" is the Participant role');
+        assert.equal(byCode.seat?.Band, 'Shared');
+
+        const byId = await syncAliceAs(ROLE_OWNER.toUpperCase());
+        assert.deepEqual(byId.result.errors, []);
+        assert.equal(byId.seat?.SpaceRoleTypeID, ROLE_OWNER);
+
+        const byName = await syncAliceAs('  participant ');
+        assert.deepEqual(byName.result.errors, []);
+        assert.equal(byName.seat?.SpaceRoleTypeID, ROLE_GUEST, 'a name is matched whatever its case and padding');
+    });
+
+    it('takes a role\'s code before another role\'s name, whichever was read first', async () => {
+        const ROLE_NAMED_GUEST = '66666666-6666-4666-8666-66666666aaaa';
+        // A Team-seeing role that is merely named "guest" is read before the role whose code is "guest"
+        const { result, seat } = await syncAliceAs('guest', [{ ID: ROLE_NAMED_GUEST, Name: 'guest', Code: 'visitor', CanSeeTeamBand: true }]);
+        assert.deepEqual(result.errors, []);
+        assert.equal(seat?.SpaceRoleTypeID, ROLE_GUEST, 'the code decides: codes are unique, names are not');
+        assert.equal(seat?.Band, 'Shared');
+    });
+
+    it('refuses a name that more than one role type carries, and gives the seat neither role', async () => {
+        const ROLE_SECOND_PARTICIPANT = '66666666-6666-4666-8666-66666666bbbb';
+        const { result, seat } = await syncAliceAs('Participant', [{ ID: ROLE_SECOND_PARTICIPANT, Name: 'Participant', Code: 'participant-2', CanSeeTeamBand: true }]);
+        assert.equal(result.updated, 0);
+        assert.equal(result.errors.length, 1);
+        assert.match(result.errors[0], /'Participant' is the name of more than one role/);
+        assert.equal(seat?.SpaceRoleTypeID, ROLE_MEMBER, 'the seat is given neither of the two roles');
     });
 
     it('seats an invitee as Invited without issuing a link when a non-owner invites onto an approval-gated space', async () => {
