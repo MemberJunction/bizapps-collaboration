@@ -23,7 +23,11 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # PRs into next (and next itself) build against MJ next and the sibling apps' next, from
+      # source, in one generated pnpm workspace; release PRs and lts/* lines install the committed
+      # lockfile, i.e. the published versions. See .github/actions/ci-install/action.yml.
+      - name: Install dependencies
+        uses: ./.github/actions/ci-install
       # These three read the source and the installed packages, not a build, so they run before the build and are not held up by it
       - run: node scripts/strip-sync-blocks.mjs --check
       - run: node scripts/check-mj-tokens.mjs --self-test && node scripts/check-mj-tokens.mjs
