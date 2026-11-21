@@ -6,6 +6,7 @@ import {
     audienceOfConversationKind,
     effectiveRetrievalScope,
     membershipReaches,
+    seatSpacesForSubtree,
     spaceAllowsAgentRetrieval,
     type Band,
     type MemberSnapshot,
@@ -17,6 +18,7 @@ import {
 import { IsPeopleEntity } from '@mj-biz-apps/common-entities';
 import type { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import { requireSystemUser, toNode, type SpaceRow } from './load-graph.js';
+import { readEveryRow } from './read-every-row.js';
 import { parseUuid } from './uuid.js';
 
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
@@ -66,11 +68,17 @@ export interface SpaceAgentRetrievalOptions {
     participantUserIds?: readonly string[];
     /**
      * Conversation kind (`'General'`, `'Topic'`, `'Private'`, `'Assistant'`). When provided without `audienceUserIds`,
-     * the room's active participants are resolved from the space roster (or `[callerId]` for `'Assistant'`), and `'General'`/`'Topic'`
+     * the room's audience is everyone with an Active seat that reaches the asked space (or `[callerId]` for `'Assistant'`),
+     * read from the seats on that space and on the ancestors it inherits from, and `'General'`/`'Topic'`
      * further bound the allowed band to `'Shared'`.
      */
     conversationKind?: string;
     narrowing?: RetrievalScopeNarrowing;
+    /**
+     * The seats asked for per round trip (`EVERY_ROW_PAGE_SIZE` when absent). The seats are read to their end at any size, so
+     * the result does not depend on it; a test sets it small to walk several pages.
+     */
+    rosterPageSize?: number;
 }
 
 export interface SpaceAgentRetrievalResult {
@@ -85,6 +93,7 @@ export interface SpaceAgentRetrievalResult {
 }
 
 interface MemberRow {
+    ID?: string | null;
     SpaceID: string;
     UserID: string;
     Status: string;
@@ -219,6 +228,121 @@ function getReachableSubtreeSpaceIds(
     return candidateIds;
 }
 
+/** The most space ids one seat read names; a larger tree is read in several. */
+const SEAT_SPACES_PER_READ = 200;
+
+/** What a refused retrieval tells its caller. The cause goes to the log. */
+const AUDIENCE_UNREADABLE = 'Refusing retrieval: the spaces, roles or seats could not be read, so the audience would be incomplete.';
+
+/**
+ * The space tree and the role flags, as the system user. A failed read is refused, not answered with less: a caller that
+ * went on without them would bound the agent by the asker alone, which is wider than the room.
+ */
+async function loadSpacesAndRoles(rvSystem: RunView, system: UserInfo): Promise<{ spaceNodes: SpaceNode[]; roleMap: Map<string, RoleFlags> }> {
+    const [spacesRes, rolesRes] = await rvSystem.RunViews([
+        {
+            EntityName: SPACES_ENTITY,
+            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID', 'SpaceTypeID'],
+            MaxRows: 2000, // row-cap-ok: refuses on a full page
+            ResultType: 'simple',
+        },
+        {
+            EntityName: ROLES_ENTITY,
+            Fields: ['ID', 'Level', 'MaxGrantableLevel', 'CanInvite', 'CanPromoteBand', 'CanSeeTeamBand', 'IsOwnerRole', 'CanContribute'],
+            MaxRows: 200, // row-cap-ok: refuses on a full page
+            ResultType: 'simple',
+        },
+    ], system);
+    if (!spacesRes?.Success || !rolesRes?.Success) {
+        LogError(`resolveSpaceAgentRetrieval failed to load space context: ${spacesRes?.ErrorMessage || rolesRes?.ErrorMessage || 'no result'}`);
+        throw new Error(AUDIENCE_UNREADABLE);
+    }
+    if ((spacesRes.Results?.length ?? 0) >= 2000) {
+        throw new Error('Refusing retrieval: spaces page came back full, so the check would be incomplete.');
+    }
+    if ((rolesRes.Results?.length ?? 0) >= 200) {
+        throw new Error('Refusing retrieval: roles page came back full, so the check would be incomplete.');
+    }
+    const roleMap = new Map<string, RoleFlags>();
+    for (const r of (rolesRes.Results as RoleRow[] ?? [])) {
+        const id = parseUuid(r.ID) ?? r.ID;
+        roleMap.set(id.toLowerCase(), {
+            level: Number(r.Level),
+            maxGrantableLevel: Number(r.MaxGrantableLevel),
+            canInvite: !!r.CanInvite,
+            canPromoteBand: !!r.CanPromoteBand,
+            canSeeTeamBand: !!r.CanSeeTeamBand,
+            isOwnerRole: !!r.IsOwnerRole,
+            canContribute: !!r.CanContribute,
+        });
+    }
+    return { spaceNodes: (spacesRes.Results as SpaceRow[] ?? []).map(toNode), roleMap };
+}
+
+/**
+ * The seat reads a room's roster needs: the Active seats on the asked space, on the ancestors it inherits membership from and
+ * on the spaces below it (`seatSpacesForSubtree`), and the asker's own seats wherever they are, which decide what the asker
+ * reaches when nobody else is in the audience.
+ */
+function rosterSeatFilters(spaceNodes: readonly SpaceNode[], spaceId: string, callerId: string): string[] {
+    const filters = [`UserID = '${callerId}' AND Status = 'Active'`];
+    const seatSpaceIds = seatSpacesForSubtree(spaceNodes, spaceId)
+        .map((id) => parseUuid(id))
+        .filter((id): id is string => !!id);
+    for (let start = 0; start < seatSpaceIds.length; start += SEAT_SPACES_PER_READ) {
+        const inClause = seatSpaceIds.slice(start, start + SEAT_SPACES_PER_READ).map((id) => `'${id}'`).join(', ');
+        filters.push(`SpaceID IN (${inClause}) AND Status = 'Active'`);
+    }
+    return filters;
+}
+
+/**
+ * Every seat the filters match, as the system user, each read to its end (`readEveryRow`). A failed read, and a seat whose
+ * role was not among the roles read, are refused: either would drop a person from the audience and so widen what the
+ * agent may use.
+ */
+async function loadSeats(
+    rvSystem: RunView,
+    system: UserInfo,
+    filters: readonly string[],
+    roleMap: ReadonlyMap<string, RoleFlags>,
+    pageSize: number | undefined,
+): Promise<MemberSnapshot[]> {
+    let pages: MemberRow[][];
+    try {
+        pages = await Promise.all(filters.map((filter) => readEveryRow<MemberRow>(
+            rvSystem,
+            { EntityName: MEMBERS_ENTITY, ExtraFilter: filter, Fields: ['ID', 'SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'] },
+            system,
+            pageSize,
+        )));
+    } catch (error: unknown) {
+        LogError(`resolveSpaceAgentRetrieval failed to load the seats: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(AUDIENCE_UNREADABLE);
+    }
+    const snapshots: MemberSnapshot[] = [];
+    const taken = new Set<string>();
+    for (const m of pages.flat()) {
+        // The asker's seats on the asked spaces come back from two of the reads
+        const seatId = parseUuid(m.ID);
+        if (seatId && taken.has(seatId)) continue;
+        if (seatId) taken.add(seatId);
+        const flags = roleMap.get((parseUuid(m.SpaceRoleTypeID) ?? m.SpaceRoleTypeID).toLowerCase());
+        if (!flags) {
+            LogError(`resolveSpaceAgentRetrieval: seat ${m.ID ?? '(no id)'} names role ${m.SpaceRoleTypeID}, which was not among the roles read`);
+            throw new Error(AUDIENCE_UNREADABLE);
+        }
+        snapshots.push({
+            spaceId: parseUuid(m.SpaceID) ?? m.SpaceID,
+            userId: parseUuid(m.UserID) ?? m.UserID,
+            status: m.Status as MemberSnapshot['status'],
+            band: m.Band as Band,
+            role: flags,
+        });
+    }
+    return snapshots;
+}
+
 /**
  * Resolves materials that the Collaboration Space Agent is permitted to quote
  * for a specific user (and optional room audience) asking from a specific space.
@@ -234,6 +358,9 @@ function getReachableSubtreeSpaceIds(
  *    - Items in Team band are dropped if any audience member cannot see the Team band or if the conversation is Shared-audience.
  *    - Spaces marked ExcludedEntirely are never quoted.
  *    - Spaces marked ExcludedFromParentScope are never quoted from ancestors.
+ *
+ * It throws ("Refusing retrieval: ...") when the spaces, roles or seats cannot be read, or a page that has a ceiling comes
+ * back full. It never answers from part of the audience: fewer people in the intersection means more for the agent to use.
  */
 export async function resolveSpaceAgentRetrieval(
     provider: IMetadataProvider,
@@ -272,97 +399,19 @@ export async function resolveSpaceAgentRetrieval(
 
     const isAssistantChat = (options?.conversationKind ?? '').trim().toLowerCase() === 'assistant';
     const loadRoomRoster = !!options?.conversationKind && !isAssistantChat && !rawAudienceIds?.length;
-    const memberQueries: RunViewParams[] = loadRoomRoster
-        ? [
-              {
-                  EntityName: MEMBERS_ENTITY,
-                  ExtraFilter: `Status = 'Active'`,
-                  Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
-                  MaxRows: 5000,
-                  ResultType: 'simple',
-              },
-          ]
-        : explicitAudienceIds.map((uid) => ({
-              EntityName: MEMBERS_ENTITY,
-              ExtraFilter: `UserID = '${uid}' AND Status = 'Active'`,
-              Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
-              MaxRows: 2000,
-              ResultType: 'simple',
-          }));
 
     // Load space hierarchy and role definitions as system user so full topological metadata is available
     const probe = await provider.GetEntityObject<BaseEntity>(SPACES_ENTITY, user);
     const system = await requireSystemUser(probe);
     const rvSystem = RunView.FromMetadataProvider(provider);
+    const { spaceNodes, roleMap } = await loadSpacesAndRoles(rvSystem, system);
 
-    const batchRes = await rvSystem.RunViews([
-        {
-            EntityName: SPACES_ENTITY,
-            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID', 'SpaceTypeID'],
-            MaxRows: 2000,
-            ResultType: 'simple',
-        },
-        {
-            EntityName: ROLES_ENTITY,
-            Fields: ['ID', 'Level', 'MaxGrantableLevel', 'CanInvite', 'CanPromoteBand', 'CanSeeTeamBand', 'IsOwnerRole', 'CanContribute'],
-            MaxRows: 200,
-            ResultType: 'simple',
-        },
-        ...memberQueries,
-    ], system);
-
-    const [spacesRes, rolesRes, ...memberResults] = batchRes;
-    const failedMemberRes = memberResults.find((r) => !r?.Success);
-
-    if (!spacesRes?.Success || !rolesRes?.Success || failedMemberRes) {
-        LogError(`resolveSpaceAgentRetrieval failed to load space context: ${spacesRes?.ErrorMessage || rolesRes?.ErrorMessage || failedMemberRes?.ErrorMessage}`);
-        return {
-            spaceId: cleanSpaceId,
-            askingUserId: cleanUserId,
-            callerCanSeeTeam: false,
-            audienceUserIds: [cleanUserId],
-            searchedSpaceIds: [],
-            candidateItems: [],
-            quotedItems: [],
-            decisions: [],
-        };
-    }
-
-    if ((spacesRes.Results?.length ?? 0) >= 2000) {
-        throw new Error('Refusing retrieval: spaces page came back full, so the check would be incomplete.');
-    }
-
-    const spaceNodes: SpaceNode[] = (spacesRes.Results as SpaceRow[] ?? []).map(toNode);
-    const roleMap = new Map<string, RoleFlags>();
-    for (const r of (rolesRes.Results as RoleRow[] ?? [])) {
-        const id = parseUuid(r.ID) ?? r.ID;
-        roleMap.set(id.toLowerCase(), {
-            level: Number(r.Level),
-            maxGrantableLevel: Number(r.MaxGrantableLevel),
-            canInvite: !!r.CanInvite,
-            canPromoteBand: !!r.CanPromoteBand,
-            canSeeTeamBand: !!r.CanSeeTeamBand,
-            isOwnerRole: !!r.IsOwnerRole,
-            canContribute: !!r.CanContribute,
-        });
-    }
-
-    const memberSnapshots: MemberSnapshot[] = [];
-    for (const membersRes of memberResults) {
-        for (const m of (membersRes.Results as MemberRow[] ?? [])) {
-            const roleId = (parseUuid(m.SpaceRoleTypeID) ?? m.SpaceRoleTypeID).toLowerCase();
-            const flags = roleMap.get(roleId);
-            if (flags) {
-                memberSnapshots.push({
-                    spaceId: parseUuid(m.SpaceID) ?? m.SpaceID,
-                    userId: parseUuid(m.UserID) ?? m.UserID,
-                    status: m.Status as MemberSnapshot['status'],
-                    band: m.Band as Band,
-                    role: flags,
-                });
-            }
-        }
-    }
+    // The seats that decide the audience and what each of its people reaches. A room's audience comes from the seats that can
+    // reach the asked space and the ones below it, never from every seat in the database.
+    const seatFilters = loadRoomRoster
+        ? rosterSeatFilters(spaceNodes, cleanSpaceId, cleanUserId)
+        : explicitAudienceIds.map((uid) => `UserID = '${uid}' AND Status = 'Active'`);
+    const memberSnapshots = await loadSeats(rvSystem, system, seatFilters, roleMap, options?.rosterPageSize);
 
     // Determine caller's reaching role in the asked space
     const reach = membershipReaches(spaceNodes, memberSnapshots, cleanUserId, cleanSpaceId);

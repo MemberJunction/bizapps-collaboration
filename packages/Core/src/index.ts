@@ -23,6 +23,7 @@ export {
     spaceReach,
     rosterActions,
     rosterBySeat,
+    seatSpacesForSubtree,
     parentCreatesCycle,
     planSpaceWrite,
     promotionStamps,

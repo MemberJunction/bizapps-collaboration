@@ -19,6 +19,7 @@ import { loadSpaceConfiguration } from './space-configuration.js';
 import { COLLABORATION_SPACE_SCOPE_ID, resolveTurnTools, type SpaceTurnContext } from './turn-tools.js';
 import type { AgentContextResult } from './base-space-type-server-driver.js';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
+import { readEveryRow } from './read-every-row.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
@@ -72,6 +73,8 @@ export interface ExecuteSpaceChatTurnInput {
     decisionRunner?: SpaceChatDecisionRunner;
     /** Optional Platt calibration override for unit tests using `decisionRunner` without a loaded `AIEngineBase` cache. */
     decisionCalibration?: ResolveTurnAgentViaDecisionParams['decisionCalibration'];
+    /** Optional unit-test seam: the seats asked for per round trip. The seats are read to their end at any size. */
+    rosterPageSize?: number;
 }
 
 /** Candidate item in retrieval scope for the turn (sources-in-scope chip). */
@@ -130,7 +133,9 @@ const ASSISTANT_FAILED_MESSAGE = 'The assistant could not answer that. Please tr
  * 5. Mention rule: decide from saved message alone via MentionParser. Under Always without tag,
  *    runs space default agent. Under MentionOnly without tag, refuses.
  * 6. Client's agentId is treated only as a consistency check.
- * 7. Runs agent with ConversationHistoryFrom set to room's history floor and audience bounded.
+ * 7. Runs agent with ConversationHistoryFrom set to room's history floor and audience bounded. The audience is everyone with an
+ *    Active seat that reaches the conversation's space, by its kind; when it cannot be read whole the turn is refused before
+ *    a reply row is written, and never runs bounded by the asker alone.
  * 8. Writes reply as system user and returns real AgentRunId.
  * 9. B20: the one configuration is loaded once; the grants in force for the conversation's audience become the run's tools
  *    (`actionChanges`, Run space data's context, the knowledge sources) and the agent grant's settings become the run's.
@@ -455,19 +460,17 @@ async function runClaimedTurn(
     }
     let typeContext: AgentContextResult = { instructions: [], contextData: {} };
     try {
-        const seats = await view.RunView<{ UserID: string; User?: string | null; Band: string }>({
+        // Every seat, read to its end: a viewer left out would let the type hand over what that viewer may not see
+        const seats = await readEveryRow<{ ID?: string | null; UserID: string; User?: string | null; Band: string }>(view, {
             EntityName: 'MJ_BizApps_Collaboration: Space Members',
             ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'${audience === 'Team' ? " AND Band = 'Team'" : ''}`,
-            Fields: ['UserID', 'User', 'Band'],
-            ResultType: 'simple',
-            MaxRows: 5000,
-        }, system);
-        if (!seats.Success) throw new Error(seats.ErrorMessage ?? 'the space\'s seats could not be read');
+            Fields: ['ID', 'UserID', 'User', 'Band'],
+        }, system, input.rosterPageSize);
         const viewerBands: Record<string, 'Team' | 'Shared'> = {};
         if (isOneToOneAssistant) {
             viewerBands[callerId.toUpperCase()] = reach.role.canSeeTeamBand ? 'Team' : 'Shared';
         } else {
-            for (const seat of seats.Results ?? []) {
+            for (const seat of seats) {
                 const seatUserId = parseUuid(seat.UserID) ?? seat.UserID;
                 viewerBands[seatUserId.toUpperCase()] = seat.Band === 'Team' ? 'Team' : 'Shared';
                 if (seat.User?.trim()) {
@@ -493,11 +496,23 @@ async function runClaimedTurn(
             : requestedScope === 'Everything' && isOneToOneAssistant
                 ? 'Everything'
                 : 'Subtree';
-    const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId, {
-        conversationKind: foundChat.Kind,
-        participantUserIds: isOneToOneAssistant ? [callerId] : undefined,
-        narrowing: effectiveNarrowing,
-    });
+    // A turn whose audience cannot be worked out is refused before its reply row is written: it never runs bounded by the asker alone
+    let retrieval: Awaited<ReturnType<typeof resolveSpaceAgentRetrieval>>;
+    try {
+        retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId, {
+            conversationKind: foundChat.Kind,
+            participantUserIds: isOneToOneAssistant ? [callerId] : undefined,
+            narrowing: effectiveNarrowing,
+            rosterPageSize: input.rosterPageSize,
+        });
+    } catch (retrievalError) {
+        const reason = retrievalError instanceof Error ? retrievalError.message : String(retrievalError);
+        LogError(`executeSpaceChatTurn: the turn in space ${spaceId} is refused, since what its audience may use could not be worked out: ${reason}`);
+        return { ok: false, message: reason };
+    }
+    if (retrieval.audienceUserIds.length === 0) {
+        return { ok: false, message: 'The turn was refused: the conversation\'s audience could not be worked out from the space\'s seats.' };
+    }
     const audienceQuoted = retrieval.quotedItems;
     const citations: SpaceAgentCitation[] = audienceQuoted.map((item) => ({
         SpaceItemID: item.ID,
@@ -507,7 +522,7 @@ async function runClaimedTurn(
         Name: item.Name,
         Band: item.Band,
     }));
-    const participantUserIds = retrieval.audienceUserIds.length > 0 ? retrieval.audienceUserIds : [callerId];
+    const participantUserIds = retrieval.audienceUserIds;
 
     // 10. Write reply as system user (Item 5 / A19 Part 2)
     const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);

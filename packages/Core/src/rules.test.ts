@@ -20,6 +20,7 @@ import {
     membershipReaches,
     rosterActions,
     rosterBySeat,
+    seatSpacesForSubtree,
     parentCreatesCycle,
     planSpaceWrite,
     promotionStamps,
@@ -84,6 +85,76 @@ const tree: SpaceNode[] = [
     space({ id: 'sealed', parentId: 'root', inheritsMembership: false }),
     space({ id: 'under-sealed', parentId: 'sealed' }),
 ];
+
+describe('seatSpacesForSubtree', () => {
+    const estate: SpaceNode[] = [
+        space({ id: 'top' }),
+        space({ id: 'client', parentId: 'top' }),
+        space({ id: 'project', parentId: 'client' }),
+        space({ id: 'task-room', parentId: 'project' }),
+        space({ id: 'sealed-room', parentId: 'project', inheritsMembership: false }),
+        space({ id: 'under-sealed-room', parentId: 'sealed-room' }),
+        space({ id: 'other-project', parentId: 'client' }),
+        space({ id: 'elsewhere' }),
+    ];
+
+    it('takes the target, the ancestors it inherits from, and everything below it', () => {
+        assert.deepEqual(
+            seatSpacesForSubtree(estate, 'project').sort(),
+            ['client', 'project', 'sealed-room', 'task-room', 'top', 'under-sealed-room'],
+        );
+    });
+
+    it('leaves out siblings and unrelated spaces', () => {
+        const ids = seatSpacesForSubtree(estate, 'project');
+        assert.ok(!ids.includes('other-project'));
+        assert.ok(!ids.includes('elsewhere'));
+    });
+
+    it('stops going up at a sealed target, and at a sealed ancestor', () => {
+        assert.deepEqual(seatSpacesForSubtree(estate, 'sealed-room').sort(), ['sealed-room', 'under-sealed-room']);
+        assert.deepEqual(seatSpacesForSubtree(estate, 'under-sealed-room').sort(), ['sealed-room', 'under-sealed-room']);
+    });
+
+    it('is empty for a target that was not loaded, and ends on a parent loop', () => {
+        assert.deepEqual(seatSpacesForSubtree(estate, 'missing'), []);
+        const loop = [space({ id: 'a', parentId: 'b' }), space({ id: 'b', parentId: 'a' })];
+        assert.deepEqual(seatSpacesForSubtree(loop, 'a').sort(), ['a', 'b']);
+    });
+
+    it('holds every seat membershipReaches reads for the target and for each space below it', () => {
+        const people = ['ada', 'bea', 'cy'];
+        const everySeat: MemberSnapshot[] = estate.flatMap((node, index) => [
+            member({ spaceId: node.id, userId: people[index % people.length], role: index % 2 ? guestRole : ownerRole }),
+        ]);
+        for (const target of estate) {
+            const scope = new Set(seatSpacesForSubtree(estate, target.id));
+            const scoped = everySeat.filter((seat) => scope.has(seat.spaceId));
+            const below = estate.filter((node) => scope.has(node.id) && isUnder(estate, node.id, target.id));
+            for (const node of below) {
+                for (const person of people) {
+                    assert.deepEqual(
+                        membershipReaches(estate, scoped, person, node.id),
+                        membershipReaches(estate, everySeat, person, node.id),
+                        `${person} at ${node.id}, asked from ${target.id}`,
+                    );
+                }
+            }
+        }
+    });
+});
+
+/** Whether `id` is `ancestorId` or below it. */
+function isUnder(spaces: readonly SpaceNode[], id: string, ancestorId: string): boolean {
+    const seen = new Set<string>();
+    let current = spaces.find((node) => node.id === id);
+    while (current && !seen.has(current.id)) {
+        if (current.id === ancestorId) return true;
+        seen.add(current.id);
+        current = spaces.find((node) => node.id === current!.parentId);
+    }
+    return false;
+}
 
 describe('membershipReaches', () => {
     it('treats a direct membership as reaching that space', () => {
