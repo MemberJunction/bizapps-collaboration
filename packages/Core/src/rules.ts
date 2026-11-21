@@ -238,6 +238,41 @@ export function visibleSpaces(
     return spaces.filter((space) => membershipReaches(spaces, memberships, userId, space.id) !== null);
 }
 
+/**
+ * The spaces whose seats decide who reaches `targetId`, and what each of those people reaches below it: the target, each
+ * ancestor on the walk `membershipReaches` makes from it (up while the space it is leaving inherits membership), and every
+ * descendant of the target. A seat on any other space changes neither answer, so a caller that needs both loads the seats of
+ * these spaces and no others. Empty when the target is not among `spaces`.
+ */
+export function seatSpacesForSubtree(spaces: readonly SpaceNode[], targetId: string): string[] {
+    const index = byId(spaces);
+    const target = index.get(idKey(targetId));
+    if (!target) return [];
+    const ids: string[] = [];
+    const taken = new Set<string>();
+    let current: SpaceNode | undefined = target;
+    while (current && !taken.has(idKey(current.id))) {
+        taken.add(idKey(current.id));
+        ids.push(current.id);
+        current = current.inheritsMembership && current.parentId ? index.get(idKey(current.parentId)) : undefined;
+    }
+    const children = new Map<string, SpaceNode[]>();
+    for (const space of spaces) {
+        if (!space.parentId) continue;
+        const siblings = children.get(idKey(space.parentId)) ?? [];
+        siblings.push(space);
+        children.set(idKey(space.parentId), siblings);
+    }
+    const queue: SpaceNode[] = [...(children.get(idKey(target.id)) ?? [])];
+    for (let next = queue.shift(); next; next = queue.shift()) {
+        if (taken.has(idKey(next.id))) continue;
+        taken.add(idKey(next.id));
+        ids.push(next.id);
+        queue.push(...(children.get(idKey(next.id)) ?? []));
+    }
+    return ids;
+}
+
 /** A person may set their own roster row to Removed. They may not change anything else that way. */
 export function isSelfRemoval(input: { callerUserId: string | null; inviteeUserId: string; nextStatus: MemberStatus }): boolean {
     return idKey(input.callerUserId) !== '' && idKey(input.callerUserId) === idKey(input.inviteeUserId) && input.nextStatus === 'Removed';

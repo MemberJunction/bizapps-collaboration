@@ -1823,3 +1823,227 @@ describe('resolveSpaceAgentRetrieval', () => {
         assert.ok(rendered.includes('| Progress: 100%'), 'Renders Progress: 100%');
     });
 });
+
+describe('resolveSpaceAgentRetrieval: the audience is read whole, from the seats that reach the room, or the retrieval is refused', () => {
+    const WORLD_ROOT = 'AB000000-1111-4000-8000-000000000001';
+    const WORLD_ROOM = 'AB000000-1111-4000-8000-000000000002'; // inherits from the root
+    const WORLD_SEALED = 'AB000000-1111-4000-8000-000000000003'; // sealed, under the room
+    const WORLD_SIDE = 'AB000000-1111-4000-8000-000000000004'; // the room's sibling
+    const WORLD_ELSEWHERE = 'AB000000-1111-4000-8000-000000000005'; // another root
+    const SEALED_ITEM_RECORD = '11111111-7777-4000-8000-000000000001';
+    const ROOM_ITEM_RECORD = '11111111-7777-4000-8000-000000000002';
+
+    const personId = (n: number): string => `CD000000-3333-4000-8000-${String(n).padStart(12, '0')}`;
+    const ASKER = personId(1);
+    const ABOVE = personId(2); // seated on the root, so reaches the room
+    const SEALED_ONLY = personId(3);
+    const ELSEWHERE_ONLY = personId(4);
+    const SIDE_ONLY = personId(5);
+
+    interface Seat { ID: string; SpaceID: string; UserID: string; Status: string; Band: string; SpaceRoleTypeID: string }
+    interface World {
+        seats: Seat[];
+        /** Every read the retrieval made, in order. */
+        reads: RunViewParams[];
+        failEntity?: string;
+        /** Fails the seat read from this page on (1 is the first page of each read). */
+        failSeatPageFrom?: number;
+        ignoreCursor?: boolean;
+    }
+
+    let nextSeat = 0;
+    function seat(spaceId: string, userId: string, roleId: string = OWNER_ROLE_ID, status: string = 'Active'): Seat {
+        nextSeat += 1;
+        return { ID: `EF000000-9999-4000-8000-${String(nextSeat).padStart(12, '0')}`, SpaceID: spaceId, UserID: userId, Status: status, Band: roleId === OWNER_ROLE_ID ? 'Team' : 'Shared', SpaceRoleTypeID: roleId };
+    }
+
+    const worldSpaces = [
+        { ID: WORLD_ROOT, ParentID: null, InheritsMembership: true, OwnerID: ASKER, AgentRetrieval: 'Included', AllowParentAssignees: true },
+        { ID: WORLD_ROOM, ParentID: WORLD_ROOT, InheritsMembership: true, OwnerID: ASKER, AgentRetrieval: 'Included', AllowParentAssignees: true },
+        { ID: WORLD_SEALED, ParentID: WORLD_ROOM, InheritsMembership: false, OwnerID: ASKER, AgentRetrieval: 'Included', AllowParentAssignees: true },
+        { ID: WORLD_SIDE, ParentID: WORLD_ROOT, InheritsMembership: true, OwnerID: ASKER, AgentRetrieval: 'Included', AllowParentAssignees: true },
+        { ID: WORLD_ELSEWHERE, ParentID: null, InheritsMembership: true, OwnerID: ASKER, AgentRetrieval: 'Included', AllowParentAssignees: true },
+    ];
+    const worldItems = [
+        { ID: 'EE000000-5555-4000-8000-000000000001', SpaceID: WORLD_SEALED, EntityID: FILES_ENTITY_ID, RecordID: SEALED_ITEM_RECORD, Band: 'Shared' },
+        { ID: 'EE000000-5555-4000-8000-000000000002', SpaceID: WORLD_ROOM, EntityID: FILES_ENTITY_ID, RecordID: ROOM_ITEM_RECORD, Band: 'Shared' },
+    ];
+    const worldFiles: Record<string, string> = { [SEALED_ITEM_RECORD]: 'sealed-minutes.pdf', [ROOM_ITEM_RECORD]: 'room-agenda.pdf' };
+
+    function ok(rows: readonly object[]): RunViewResult {
+        return { Success: true, Results: rows as Record<string, unknown>[], ErrorMessage: '', RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0 };
+    }
+    function failed(message: string): RunViewResult {
+        return { Success: false, Results: [], ErrorMessage: message, RowCount: 0, TotalRowCount: 0, ExecutionTime: 0 };
+    }
+
+    /** The seats a filter matches, paged as MemberJunction pages: ordered by ID, after the cursor, at most MaxRows. */
+    function seatPage(world: World, params: RunViewParams): RunViewResult {
+        const filter = String(params.ExtraFilter ?? '');
+        const spaceList = /SpaceID IN \(([^)]*)\)/i.exec(filter)?.[1].toLowerCase();
+        const userId = /UserID\s*=\s*'([^']+)'/i.exec(filter)?.[1].toLowerCase();
+        const after = !world.ignoreCursor && params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
+        const pageNumber = world.reads.filter((read) => read.EntityName === params.EntityName && read.ExtraFilter === params.ExtraFilter).length;
+        if (world.failSeatPageFrom && pageNumber >= world.failSeatPageFrom) return failed('the seats could not be read');
+        const matching = world.seats
+            .filter((row) => !filter.includes(`Status = 'Active'`) || row.Status === 'Active')
+            .filter((row) => spaceList === undefined || spaceList.includes(row.SpaceID.toLowerCase()))
+            .filter((row) => userId === undefined || row.UserID.toLowerCase() === userId)
+            .sort((a, b) => a.ID.localeCompare(b.ID))
+            .filter((row) => row.ID.toLowerCase() > after);
+        return ok(params.MaxRows ? matching.slice(0, params.MaxRows) : matching);
+    }
+
+    function runWorldView(world: World, params: RunViewParams): RunViewResult {
+        world.reads.push(params);
+        if (world.failEntity === params.EntityName) return failed(`${params.EntityName} could not be read`);
+        const filter = String(params.ExtraFilter ?? '').toLowerCase();
+        switch (params.EntityName) {
+            case 'MJ_BizApps_Collaboration: Spaces': return ok(worldSpaces);
+            case 'MJ_BizApps_Collaboration: Space Role Types': return ok(rolesData);
+            case 'MJ_BizApps_Collaboration: Space Members': return seatPage(world, params);
+            case 'MJ_BizApps_Collaboration: Space Items': return ok(worldItems.filter((item) => filter.includes(item.SpaceID.toLowerCase())));
+            case 'MJ_BizApps_Collaboration: Space Files':
+                return ok(Object.entries(worldFiles).filter(([id]) => filter.includes(id.toLowerCase())).map(([id, name]) => ({ ID: id, Name: name, Description: null })));
+            default: return ok([]);
+        }
+    }
+
+    function worldProvider(world: World): IMetadataProvider {
+        const mock = {
+            async GetEntityObject() {
+                return { RunViewProviderToUse: mock as unknown as IRunViewProvider, ProviderToUse: mock as unknown as IMetadataProvider } as unknown as BaseEntity;
+            },
+            EntityByID(id: string): EntityInfo | undefined {
+                return id.toLowerCase() === FILES_ENTITY_ID.toLowerCase() ? ({ Name: 'MJ_BizApps_Collaboration: Space Files' } as Partial<EntityInfo> as EntityInfo) : undefined;
+            },
+            EntityByName(): EntityInfo | undefined {
+                return undefined;
+            },
+            async RunView(params: RunViewParams) {
+                return runWorldView(world, params);
+            },
+            async RunViews(params: RunViewParams[]) {
+                return params.map((p) => runWorldView(world, p));
+            },
+        };
+        return mock as unknown as IMetadataProvider;
+    }
+
+    const seatReads = (world: World): RunViewParams[] => world.reads.filter((read) => read.EntityName === 'MJ_BizApps_Collaboration: Space Members');
+    const lower = (ids: readonly string[]): string[] => ids.map((id) => id.toLowerCase());
+    const asker = { ID: ASKER, Name: 'Asker' } as UserInfo;
+
+    function baseSeats(): Seat[] {
+        return [seat(WORLD_ROOM, ASKER), seat(WORLD_SEALED, ASKER), seat(WORLD_ROOT, ABOVE)];
+    }
+
+    it('refuses when the seats cannot be read, and never answers bounded by the asker alone', async () => {
+        const world: World = { seats: baseSeats(), reads: [], failEntity: 'MJ_BizApps_Collaboration: Space Members' };
+        await assert.rejects(
+            () => resolveSpaceAgentRetrieval(worldProvider(world), asker, WORLD_ROOM, { conversationKind: 'General' }),
+            /Refusing retrieval: the spaces, roles or seats could not be read, so the audience would be incomplete/,
+        );
+        assert.equal(world.reads.filter((read) => read.EntityName === 'MJ_BizApps_Collaboration: Space Items').length, 0, 'no item is read for a refused retrieval');
+    });
+
+    it('refuses when the spaces or the roles cannot be read', async () => {
+        for (const failEntity of ['MJ_BizApps_Collaboration: Spaces', 'MJ_BizApps_Collaboration: Space Role Types']) {
+            const world: World = { seats: baseSeats(), reads: [], failEntity };
+            await assert.rejects(
+                () => resolveSpaceAgentRetrieval(worldProvider(world), asker, WORLD_ROOM, { conversationKind: 'General' }),
+                /Refusing retrieval: the spaces, roles or seats could not be read/,
+                failEntity,
+            );
+        }
+    });
+
+    it('refuses when a later page of the seats fails: part of a roster is not a roster', async () => {
+        const crowd = Array.from({ length: 6 }, (_, index) => seat(WORLD_ROOM, personId(100 + index)));
+        const world: World = { seats: [...baseSeats(), ...crowd], reads: [], failSeatPageFrom: 2 };
+        await assert.rejects(
+            () => resolveSpaceAgentRetrieval(worldProvider(world), asker, WORLD_ROOM, { conversationKind: 'General', rosterPageSize: 3 }),
+            /Refusing retrieval: the spaces, roles or seats could not be read/,
+        );
+    });
+
+    it('refuses when the provider does not page: a full page that cannot be continued is not taken for the whole roster', async () => {
+        const crowd = Array.from({ length: 6 }, (_, index) => seat(WORLD_ROOM, personId(200 + index)));
+        const world: World = { seats: [...baseSeats(), ...crowd], reads: [], ignoreCursor: true };
+        await assert.rejects(
+            () => resolveSpaceAgentRetrieval(worldProvider(world), asker, WORLD_ROOM, { conversationKind: 'General', rosterPageSize: 3 }),
+            /Refusing retrieval: the spaces, roles or seats could not be read/,
+        );
+    });
+
+    it('refuses a seat whose role was not among the roles read, rather than dropping the person from the audience', async () => {
+        const world: World = { seats: [...baseSeats(), seat(WORLD_ROOM, personId(300), 'BBBBBBBB-2222-4000-8000-00000000FFFF')], reads: [] };
+        await assert.rejects(
+            () => resolveSpaceAgentRetrieval(worldProvider(world), asker, WORLD_ROOM, { conversationKind: 'General' }),
+            /Refusing retrieval: the spaces, roles or seats could not be read/,
+        );
+    });
+
+    it('includes every member of a roster longer than one page, and the last of them still bounds the answer', async () => {
+        // Eleven more people on the room, read three at a time. All but the last also sit on the sealed sub-space.
+        const crowdIds = Array.from({ length: 11 }, (_, index) => personId(400 + index));
+        const lastOnTheRoster = crowdIds[crowdIds.length - 1];
+        const crowd = crowdIds.map((id) => seat(WORLD_ROOM, id));
+        const everyoneSealed = [ABOVE, ...crowdIds].map((id) => seat(WORLD_SEALED, id));
+        const sealedForAll: World = { seats: [...baseSeats(), ...crowd, ...everyoneSealed], reads: [] };
+        const whole = await resolveSpaceAgentRetrieval(worldProvider(sealedForAll), asker, WORLD_ROOM, { conversationKind: 'General', rosterPageSize: 3 });
+
+        assert.deepEqual(lower(whole.audienceUserIds).sort(), lower([ASKER, ABOVE, ...crowdIds]).sort(), 'the audience is the asker, the person seated above and all eleven others');
+        assert.ok(seatReads(sealedForAll).filter((read) => read.AfterKey).length >= 3, 'the seats were read over several pages');
+        assert.ok(seatReads(sealedForAll).every((read) => read.MaxRows === 3), 'each page asked for the injected size');
+        assert.ok(whole.quotedItems.some((item) => item.Name === 'sealed-minutes.pdf'), 'with everyone seated on the sealed sub-space, its item may be used');
+
+        // The same roster, except the person on its last page has no seat on the sealed sub-space
+        const withoutLast: World = { seats: sealedForAll.seats.filter((row) => !(row.SpaceID === WORLD_SEALED && row.UserID === lastOnTheRoster)), reads: [] };
+        const bounded = await resolveSpaceAgentRetrieval(worldProvider(withoutLast), asker, WORLD_ROOM, { conversationKind: 'General', rosterPageSize: 3 });
+        assert.ok(lower(bounded.audienceUserIds).includes(lastOnTheRoster.toLowerCase()), 'the last person on the roster is in the audience');
+        assert.ok(!bounded.quotedItems.some((item) => item.Name === 'sealed-minutes.pdf'), 'so the sealed item, which they cannot read, is not used');
+        assert.ok(bounded.quotedItems.some((item) => item.Name === 'room-agenda.pdf'), 'the room\'s own Shared item still is');
+
+        // The page size changes nothing: one page of everything gives the same audience and the same items
+        const onePage = await resolveSpaceAgentRetrieval(worldProvider({ seats: withoutLast.seats, reads: [] }), asker, WORLD_ROOM, { conversationKind: 'General' });
+        assert.deepEqual(lower(onePage.audienceUserIds).sort(), lower(bounded.audienceUserIds).sort());
+        assert.deepEqual(onePage.quotedItems.map((item) => item.Name).sort(), bounded.quotedItems.map((item) => item.Name).sort());
+    });
+
+    it('reads only the seats that can reach the room or lie below it: a seat on a sealed child, a sibling or an unrelated space joins no audience', async () => {
+        const world: World = {
+            seats: [...baseSeats(), seat(WORLD_SEALED, SEALED_ONLY), seat(WORLD_ELSEWHERE, ELSEWHERE_ONLY), seat(WORLD_SIDE, SIDE_ONLY), seat(WORLD_ROOM, personId(500), OWNER_ROLE_ID, 'Removed')],
+            reads: [],
+        };
+        const result = await resolveSpaceAgentRetrieval(worldProvider(world), asker, WORLD_ROOM, { conversationKind: 'General' });
+
+        assert.deepEqual(lower(result.audienceUserIds).sort(), lower([ASKER, ABOVE]).sort(), 'the audience is the asker and the person seated above the room');
+        const reads = seatReads(world);
+        assert.ok(reads.length > 0);
+        for (const read of reads) {
+            const filter = String(read.ExtraFilter ?? '');
+            assert.match(filter, /SpaceID IN \(|UserID\s*=/, `every seat read names its spaces or its person: ${filter}`);
+            assert.match(filter, /Status = 'Active'/, 'and reads Active seats only');
+            assert.ok(!filter.toLowerCase().includes(WORLD_ELSEWHERE.toLowerCase()), 'no seat read names the unrelated space');
+            assert.ok(!filter.toLowerCase().includes(WORLD_SIDE.toLowerCase()), 'no seat read names the room\'s sibling');
+        }
+        const named = reads.map((read) => String(read.ExtraFilter ?? '').toLowerCase()).join(' ');
+        for (const id of [WORLD_ROOM, WORLD_ROOT, WORLD_SEALED]) {
+            assert.ok(named.includes(id.toLowerCase()), `the seats of ${id} are read`);
+        }
+    });
+
+    it('stops at a sealed room: the seats above it are not read and nobody seated there is in its audience', async () => {
+        const world: World = { seats: [...baseSeats(), seat(WORLD_ROOM, personId(600))], reads: [] };
+        const result = await resolveSpaceAgentRetrieval(worldProvider(world), asker, WORLD_SEALED, { conversationKind: 'General' });
+
+        assert.deepEqual(lower(result.audienceUserIds), [ASKER.toLowerCase()], 'only the asker holds a seat on the sealed room');
+        const spaceReads = seatReads(world).map((read) => String(read.ExtraFilter ?? '').toLowerCase()).filter((filter) => filter.includes('spaceid in'));
+        assert.ok(spaceReads.length > 0);
+        for (const filter of spaceReads) {
+            assert.ok(filter.includes(WORLD_SEALED.toLowerCase()));
+            assert.ok(!filter.includes(WORLD_ROOM.toLowerCase()) && !filter.includes(WORLD_ROOT.toLowerCase()), 'the sealed room\'s parents are not read');
+        }
+    });
+});

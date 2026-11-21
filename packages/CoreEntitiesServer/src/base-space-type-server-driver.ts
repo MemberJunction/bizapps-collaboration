@@ -145,6 +145,7 @@ export interface PersonSeatInput {
     PersonID?: string | null;
     UserID?: string | null;
     Email?: string | null;
+    /** A space role type's code, its ID, or its name when only one role carries that name. Role types are global, not per space type. */
     RoleTypeName: string;
 }
 
@@ -350,9 +351,14 @@ export class BaseSpaceTypeServerDriver {
         const invitedUserIds = new Set<string>();
 
         for (const seatInput of people ?? []) {
-            const role = matchSpaceRoleType(roles, seatInput.RoleTypeName, space.SpaceTypeID);
+            const matched = matchSpaceRoleType(roles, seatInput.RoleTypeName);
+            const role = matched.role;
             if (!role) {
-                result.errors.push(`Unknown space role type '${seatInput.RoleTypeName}'.`);
+                result.errors.push(
+                    matched.ambiguous
+                        ? `Space role type '${seatInput.RoleTypeName}' is the name of more than one role; give the role's code.`
+                        : `Unknown space role type '${seatInput.RoleTypeName}'.`
+                );
                 continue;
             }
 
@@ -603,7 +609,6 @@ interface SpaceRoleRow {
     ID: string;
     Name: string;
     Code?: string | null;
-    SpaceTypeID?: string | null;
     CanSeeTeamBand?: boolean;
 }
 
@@ -629,26 +634,18 @@ async function loadSpaceRoleTypes(view: RunView, actingUser: UserInfo): Promise<
     return [];
 }
 
-function matchSpaceRoleType(
-    roles: readonly SpaceRoleRow[],
-    roleTypeName: string,
-    spaceTypeId: string | null | undefined
-): SpaceRoleRow | null {
+/**
+ * The role type a roster names. Role types are global: `SpaceRoleType` has no space type column, so the space's type plays no
+ * part in the answer. The name is read as the role's ID, then as its Code (unique), then as its Name. A Name that more than
+ * one role carries names none of them, since a seat must not be given whichever role happened to be read first.
+ */
+function matchSpaceRoleType(roles: readonly SpaceRoleRow[], roleTypeName: string): { role: SpaceRoleRow | null; ambiguous: boolean } {
     const needle = (roleTypeName ?? '').trim().toLowerCase();
-    if (!needle) return null;
-    const targetTypeId = parseUuid(spaceTypeId);
-    const matching = roles.filter(
-        (r) =>
-            (r.Name ?? '').trim().toLowerCase() === needle ||
-            (r.Code ?? '').trim().toLowerCase() === needle ||
-            parseUuid(r.ID) === parseUuid(roleTypeName)
-    );
-    if (matching.length === 0) return null;
-    if (targetTypeId) {
-        const typeSpecific = matching.find((r) => parseUuid(r.SpaceTypeID) === targetTypeId);
-        if (typeSpecific) return typeSpecific;
-    }
-    const globalRole = matching.find((r) => !r.SpaceTypeID);
-    return globalRole ?? matching[0];
+    if (!needle) return { role: null, ambiguous: false };
+    const asId = parseUuid(roleTypeName);
+    const byId = asId ? roles.find((r) => parseUuid(r.ID) === asId) : undefined;
+    const byCode = roles.find((r) => (r.Code ?? '').trim().toLowerCase() === needle);
+    if (byId || byCode) return { role: byId ?? byCode ?? null, ambiguous: false };
+    const byName = roles.filter((r) => (r.Name ?? '').trim().toLowerCase() === needle);
+    return byName.length === 1 ? { role: byName[0], ambiguous: false } : { role: null, ambiguous: byName.length > 1 };
 }
-

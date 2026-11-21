@@ -120,6 +120,12 @@ describe('executeSpaceChatTurn', () => {
         allowedAgents?: string[];
         /** No agent is Active: the agents read comes back empty. */
         noActiveAgents?: boolean;
+        /** The read of the seats that reach the room (the audience's roster) fails. */
+        rosterReadFails?: boolean;
+        /** The caller's seat is there for the turn's first gate and gone by the time the audience is read. */
+        seatGoneAfterGate?: boolean;
+        /** Other people seated on the space. With it the seat reads honour their filter, MaxRows and AfterKey, as the database does. */
+        roomSeats?: ReadonlyArray<{ UserID: string; User: string }>;
     }
 
     interface SavedDetail {
@@ -144,7 +150,11 @@ describe('executeSpaceChatTurn', () => {
     type MockMetadataProvider = IMetadataProvider & {
         readonly savedDetails: SavedDetail[];
         readonly savedRuns: SavedRun[];
+        /** Every read of the seats, in order. */
+        readonly seatReads: RunViewParams[];
     };
+
+    const seatRowId = (n: number): string => `abababab-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
     function createMockProvider(options: MockWorldOptions = {}): MockMetadataProvider {
         const canContribute = options.canContribute !== false;
@@ -159,6 +169,7 @@ describe('executeSpaceChatTurn', () => {
 
         const savedDetails: SavedDetail[] = [];
         const savedRuns: SavedRun[] = [];
+        const seatReads: RunViewParams[] = [];
 
         const provider: Partial<IMetadataProvider & IRunViewProvider> = {
             EntityByName() {
@@ -272,8 +283,35 @@ describe('executeSpaceChatTurn', () => {
                 }
 
                 if (EntityName === 'MJ_BizApps_Collaboration: Space Members') {
+                    seatReads.push(params);
                     if (!callerHasReach) {
                         return mockResult<T>([]);
+                    }
+                    const seatFilter = String(ExtraFilter);
+                    const readsTheAudience = seatFilter.includes('SpaceID IN (') || /^UserID = '[^']+' AND Status = 'Active'$/.test(seatFilter);
+                    if (options.rosterReadFails && seatFilter.includes('SpaceID IN (')) {
+                        return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: 'Database connection failed while reading the seats.' };
+                    }
+                    if (options.seatGoneAfterGate && readsTheAudience) {
+                        return mockResult<T>([]);
+                    }
+                    if (options.roomSeats) {
+                        const everySeat = [{ UserID: CALLER_ID, User: 'Caller' }, ...options.roomSeats].map((person, index) => ({
+                            ID: seatRowId(index + 1),
+                            SpaceID: SPACE_ID,
+                            UserID: person.UserID,
+                            User: person.User,
+                            Status: 'Active',
+                            Band: 'Team',
+                            SpaceRoleTypeID: ROLE_CONTRIB_ID,
+                            __mj_CreatedAt: new Date('2026-01-01T00:00:00Z'),
+                        }));
+                        const onlyUser = /UserID = '([^']+)'/.exec(seatFilter)?.[1].toLowerCase();
+                        const after = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
+                        const matching = everySeat
+                            .filter((row) => !onlyUser || row.UserID.toLowerCase() === onlyUser)
+                            .filter((row) => row.ID > after);
+                        return mockResult<T>(params.MaxRows ? matching.slice(0, params.MaxRows) : matching);
                     }
                     return mockResult<T>([
                         {
@@ -469,6 +507,7 @@ describe('executeSpaceChatTurn', () => {
         const fullProvider = Object.assign(provider, {
             savedDetails,
             savedRuns,
+            seatReads,
         });
 
         return fullProvider as MockMetadataProvider;
@@ -950,6 +989,85 @@ describe('executeSpaceChatTurn', () => {
         assert.ok(provider.savedRuns.length >= 1, 'Should save stamped agent run');
         const stampedRun = provider.savedRuns.find((r) => r.ExternalReferenceID === USER_MESSAGE_ID);
         assert.ok(stampedRun, 'Agent run should have ExternalReferenceID stamped with user message ID');
+    });
+
+    /** Runs a turn with the agent runner watched: what the run was given, or undefined when no run was started. */
+    async function runWatchedTurn(provider: MockMetadataProvider, input: ExecuteSpaceChatTurnInput): Promise<{ result: Awaited<ReturnType<typeof executeSpaceChatTurn>>; runParams: Record<string, unknown> | undefined }> {
+        let runParams: Record<string, unknown> | undefined;
+        const heldRunAgent = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = async (params) => {
+            runParams = params as unknown as Record<string, unknown>;
+            return heldRunAgent.call(AgentRunner.prototype, params) as never;
+        };
+        try {
+            return { result: await executeSpaceChatTurn(provider, callerUser, input), runParams };
+        } finally {
+            AgentRunner.prototype.RunAgent = heldRunAgent;
+        }
+    }
+
+    it('refuses the turn, before a reply is written or an agent runs, when the seats that reach the room cannot be read', async () => {
+        const provider = createMockProvider({
+            messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`,
+            rosterReadFails: true,
+        });
+        const { result, runParams } = await runWatchedTurn(provider, defaultInput);
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message, /Refusing retrieval: the spaces, roles or seats could not be read, so the audience would be incomplete/);
+        }
+        assert.equal(runParams, undefined, 'no agent runs, so none runs bounded by the asker alone');
+        assert.equal(provider.savedDetails.length, 0, 'nothing is written for a refused turn');
+    });
+
+    it('refuses the turn when no audience comes back for it, rather than running for the asker alone', async () => {
+        const provider = createMockProvider({
+            messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`,
+            seatGoneAfterGate: true,
+        });
+        const { result, runParams } = await runWatchedTurn(provider, defaultInput);
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message, /the conversation's audience could not be worked out/);
+        }
+        assert.equal(runParams, undefined);
+        assert.equal(provider.savedDetails.length, 0);
+    });
+
+    it('gives the agent run, and the type\'s driver, every member of a roster longer than one page', async () => {
+        const others = Array.from({ length: 7 }, (_, index) => ({
+            UserID: `dddddddd-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+            User: `Member ${index + 1}`,
+        }));
+        const provider = createMockProvider({
+            messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`,
+            roomSeats: others,
+        });
+        let viewers: Record<string, 'Team' | 'Shared'> | undefined;
+        class WatchingDriver extends BaseSpaceTypeServerDriver {
+            public override BuildAgentContext(input: Parameters<BaseSpaceTypeServerDriver['BuildAgentContext']>[0]): ReturnType<BaseSpaceTypeServerDriver['BuildAgentContext']> {
+                viewers = input.viewerBands;
+                return super.BuildAgentContext(input);
+            }
+        }
+        const held = resolveDriver;
+        resolveDriver = async () => ({ space: {}, spaceType: {}, driver: new WatchingDriver() });
+        let watched: Awaited<ReturnType<typeof runWatchedTurn>>;
+        try {
+            watched = await runWatchedTurn(provider, { ...defaultInput, rosterPageSize: 3 });
+        } finally {
+            resolveDriver = held;
+        }
+        assert.equal(watched.result.ok, true);
+        const everyone = [CALLER_ID, ...others.map((person) => person.UserID)].map((id) => id.toLowerCase()).sort();
+        const audience = watched.runParams?.Audience as { Mode: string; UserIDs: string[] } | undefined;
+        assert.ok(audience, 'Audience was passed to AgentRunner.RunAgent');
+        assert.deepEqual(audience.UserIDs.map((id) => id.toLowerCase()).sort(), everyone, 'all eight people bound the run');
+        assert.ok(viewers, 'the type\'s driver was asked for its context');
+        assert.deepEqual(Object.keys(viewers).map((id) => id.toLowerCase()).sort(), everyone, 'the driver is told of all eight viewers');
+        const pagedReads = provider.seatReads.filter((read) => read.AfterKey);
+        assert.ok(pagedReads.length >= 4, `both seat reads went past their first page (${pagedReads.length} later pages)`);
+        assert.ok(pagedReads.every((read) => read.MaxRows === 3));
     });
 
     it('marks reply detail as Error when agent execution fails', async () => {

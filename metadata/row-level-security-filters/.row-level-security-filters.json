@@ -450,34 +450,6 @@
     }
   },
   {
-    "primaryKey": {
-      "ID": "00946333-EA10-4A0E-83D5-86C8AA224AF4"
-    },
-    "fields": {
-      "Name": "Collaboration: Visible Pages",
-      "Description": "A space's pages by band, as notes and items are (Team for a seat that sees Team, Shared for any seat that reaches the space).",
-      "FilterText": "((SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR (Band = N'Shared' AND CAST(SpaceID AS NVARCHAR(450)) = '{{ScopeResourceID}}'))"
-    },
-    "deleteRecord": {
-      "delete": true,
-      "deletedAt": "2026-11-05T21:13:49.197Z"
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "658D79AC-98A5-429D-A5A0-9C1CC69D179C"
-    },
-    "fields": {
-      "Name": "Collaboration: Pages The Caller May Change",
-      "Description": "Pages of a space where the caller is the owner or reaches the space: the coarse gate for a create, update, or delete. SpacePageEntityServer enforces the fine rule via pageEditVerdict.",
-      "FilterText": "(SpaceID IN (SELECT ID FROM [__mj_BizAppsCollaboration].[Space] WHERE OwnerID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
-    },
-    "deleteRecord": {
-      "delete": true,
-      "deletedAt": "2026-11-05T21:13:49.218Z"
-    }
-  },
-  {
     "fields": {
       "Name": "Collaboration: Files In Reach Or Outside Collaboration",
       "Description": "UI role: every MJ: Files row a space does not hold, plus the space files the user reaches (Files In Reach). A file a space item points at, or a file a Collaboration content source keeps, is shown only in reach.",
