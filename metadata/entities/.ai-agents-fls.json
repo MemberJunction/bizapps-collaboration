@@ -1,0 +1,10 @@
+[
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    },
+    "fields": {
+      "EnableFieldLevelSecurity": 1
+    }
+  }
+]

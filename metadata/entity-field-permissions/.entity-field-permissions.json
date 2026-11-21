@@ -430,5 +430,1157 @@
       "UpdateAccess": "No Access",
       "CreateAccess": "No Access"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "F610A2F0-AFDB-4052-8F44-8FAD770702CC"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Name&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "4C1F457F-E286-4EAC-A508-760743A3EFBC"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Description&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "4D4849E1-C3F6-47AF-8945-2624E5036C1B"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=LogoURL&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "F11370B0-9AB4-4D87-8498-0C1BA9E54180"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ParentID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DE2469ED-C74F-404B-AA14-AB4FEBC3A100"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ExposeAsAction&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C46CBA66-6F67-47E0-AF7B-4F01874AED40"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ExecutionOrder&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "372A4B14-6453-47CA-835E-BDF3198F75AE"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ExecutionMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "CAF41A93-ABCD-4A91-A01F-A4D4E7D7279F"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=EnableContextCompression&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "86BDB8EE-91BB-434B-AAAE-0A81ACDCF85B"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ContextCompressionMessageThreshold&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E1D72F3F-67B8-4113-B6D9-D65BB2EDAD6A"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ContextCompressionPromptID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3FE6DBBC-2C77-4E99-B5A9-72EF788B8988"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ContextCompressionMessageRetentionCount&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "5E50F2B7-53B2-4725-BA61-F81E5AD978E7"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=TypeID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "846814F0-9511-4BE0-8C84-D81EAD27A2F8"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Status&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "43E1BF65-2F84-4489-B1AF-551FE7AD9A48"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DriverClass&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "56A1D58B-4582-4E53-9B80-FDEEE93B9755"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=IconClass&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A403A694-D824-41FC-BCD6-AF8D47A06DE0"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ModelSelectionMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B49D69EA-23BE-4199-923C-48B5CB56885D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PayloadDownstreamPaths&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "AD3FE608-AC93-4698-B0DC-15A9685CAE39"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PayloadUpstreamPaths&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DCCAEDDE-7122-4953-A326-55DD33249AEE"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PayloadSelfReadPaths&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "78DBB608-591C-445A-B02F-BCD419744A54"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PayloadSelfWritePaths&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DD19B500-FCFA-4056-B918-856D43B7FB5F"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PayloadScope&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3289F58B-907E-4214-9ED6-E8B10BF3714C"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=FinalPayloadValidation&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D4CBDCAC-785C-4D31-88B3-903E5FA9B70F"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=FinalPayloadValidationMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "85163015-84BC-49C7-A8E6-CF9A865A6108"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=FinalPayloadValidationMaxRetries&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9746D002-6347-4F1A-9B29-D16B01E8CC44"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MaxCostPerRun&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "558B5AA4-5961-4D1C-A41E-385EEA3C0350"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MaxTokensPerRun&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B6AE34E9-60CC-48EF-A6A6-5376E763C481"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MaxIterationsPerRun&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DE0E7604-E397-484F-930A-51A14EA7DFF7"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MaxTimePerRun&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "ED67CA52-499D-4702-AF38-EFDC3378CC59"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MinExecutionsPerRun&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "2DBFAB30-3BF2-437A-A622-42F6D898C282"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MaxExecutionsPerRun&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "990514C6-196A-4AFE-90C6-A4146BDA0D2E"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=StartingPayloadValidation&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DB52AD83-39A8-491C-8588-8BA3630A40C0"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=StartingPayloadValidationMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9E6465EA-DDB0-421B-B4C2-97F7DEC8C7AE"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DefaultPromptEffortLevel&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "109CA45A-3536-463C-AACC-31F26482E66D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ChatHandlingOption&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A4E86A3D-0209-41DC-80B7-F7452B53C4FA"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DefaultArtifactTypeID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "1976B216-AB7A-469C-91D5-CD3A3BCAA5E0"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=OwnerUserID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "2AE8A398-E113-4DEE-9810-9EABEE4138CB"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=InvocationMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "491BE805-73C6-4542-9EEB-A5FCF880DC5D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ArtifactCreationMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C577E0B8-9D29-4314-A322-BD8B0EF6DEE9"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=FunctionalRequirements&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8D35E24C-5764-444E-A0FC-FCDF4194FC53"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=TechnicalDesign&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "68338704-BB98-4760-8F86-8D0AFE920D9C"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=InjectNotes&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A66FDFD1-F4CA-46F8-A066-BFCA5EFC55E1"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MaxNotesToInject&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "0D6A44BB-AD8D-4F88-B53B-676354B6652D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=NoteInjectionStrategy&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A37DC9A8-DC4E-4FCF-80E1-92BB3967B5B8"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=InjectExamples&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "7C64A21B-86F3-4BDB-984D-8E93EE566B67"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MaxExamplesToInject&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "4B6A3D2B-2817-4978-889C-65426D6EED77"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ExampleInjectionStrategy&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8EA506F1-8CE5-4B5D-B56D-01D24289EF5B"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=IsRestricted&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "F5DD6582-63F6-440D-B6AF-2C51BADE02DF"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MessageMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "937F0658-BE04-435A-B41C-7F9E6F5456C1"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MaxMessages&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "431781BA-0D68-4655-B8C7-5F31D46132AF"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=AttachmentStorageProviderID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8A71EB80-184B-4286-A3E2-5DFC045E0B97"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=AttachmentRootPath&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "927149B9-D95E-40C1-A307-D3AFB91EEF0F"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=InlineStorageThresholdBytes&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B9A2621E-E019-43D7-BED0-6CA165900F35"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=AgentTypePromptParams&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8A03F6A6-A014-408D-B40C-245B9A5479EB"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ScopeConfig&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E8822852-E9AF-4F21-8773-B1F4875CE960"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=NoteRetentionDays&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "1397021E-9AE4-4E74-965E-556530610DD0"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ExampleRetentionDays&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "1C0FB36A-6BA5-47B5-A625-B15F9D80E85D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=AutoArchiveEnabled&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E246E871-C1CD-497F-BDD7-6265150DC966"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=RerankerConfiguration&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "BE2BC7FF-80C1-4829-A7A4-271995DDDCBE"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=CategoryID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A80399A6-A90E-4209-AC07-573C3A51B875"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=AllowEphemeralClientTools&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "68A8B89E-0B03-4ECE-860D-C2B8BA32079C"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DefaultStorageAccountID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B12B08CF-89D2-497C-B1E3-088FEC136BD6"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=SearchScopeAccess&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "7D839837-445C-4025-9ED7-ACF59F4BA9E1"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=AcceptUnregisteredFiles&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B5A0DA2D-2A54-43F9-B36C-B1EB5C11F874"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DefaultCoAgentID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "0EC92CC6-D8BD-4087-9905-D08AF09E16D4"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=TypeConfiguration&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E5ACA62B-9F2E-47FB-BF32-BBEC86324D48"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=AllowMemoryWrite&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "2BA5531E-3D24-432C-B905-A53F64CEC6DD"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=RecordingDefault&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B3301BCC-3EFA-4476-83AB-A5DDFC5E51F0"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=RecordingStorageProviderID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "82EEC34F-128F-4A57-BF94-1040B00D0A52"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DefaultMediaCollectionID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "BD167C63-1636-4696-8251-CC99BE4928E9"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=SupportsPlanMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "0CA65712-B810-428F-A766-627EEF0BE11A"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=AcceptsSkills&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "870655F9-8795-482D-B2B4-EBC3B2757BE9"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=SkillActivationMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DE8D3042-A6ED-4AD3-9A7E-D74357FD4E6A"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=RequirePlanMode&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "EBEC482A-F963-4AC2-9BD7-2C1E05954672"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ContextWindowMaxTokens&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "629B8972-D29E-40F2-A142-74AEF1F68C7E"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=CompactionTriggerPercent&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "7BE3E83D-2076-4303-9C45-41439A04EA8D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=CompactionTargetPercent&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3B7CD282-29D6-42C3-BF31-D0FD10C727AC"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ConversationSummaryPromptID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "88E3F19A-CB2D-4F8F-978B-43F063D95573"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DeclareActionsAsNativeTools&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "384ACDCA-45DF-44F6-854A-735FB860C1B2"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MaxSubAgentConsultRounds&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "21F5FD22-7767-4C50-93DF-D718B52590B9"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Parent&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "13BAB0AF-D778-42A9-BCB6-BBBCEB9E3691"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ContextCompressionPrompt&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B4561187-C5FB-4F27-AD28-05910BDA52CB"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Type&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "6BF6EAEB-61E0-4CA8-9E7E-276C38B57938"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DefaultArtifactType&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "074B47E4-FE7B-498E-ACC0-12D52DD2DC20"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=OwnerUser&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "6B814D0C-9333-434D-A568-A9A95EA0043B"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=AttachmentStorageProvider&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9F81B082-972D-412A-A09B-CDA93B8E4831"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Category&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "EA393777-FB28-4F8F-A049-C70A7A12E97A"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DefaultStorageAccount&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "F88B5B8B-507C-48F8-9E3F-5B5489011C65"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DefaultCoAgent&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "5BCC9279-F29E-4337-944D-75E32F9E8D38"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=RecordingStorageProvider&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "517988BD-E4C4-4943-B14D-772ACA340FC2"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DefaultMediaCollection&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "525B6D9B-FA67-4394-A6F0-E529117A3727"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ConversationSummaryPrompt&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "43E2642F-688E-4FBC-8FCD-AFAA2CB631EA"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=RootParentID&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B0E868EC-14A1-49F8-AD8B-B330B4A5BE96"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ParentIDDepth&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9DBDAE4B-9D5F-4F40-B296-E20A3F2C660A"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ParentIDPath&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "6C827532-303A-408F-93E9-FA44D7CB0ABF"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ParentIDIsLeaf&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "95527AEF-1361-472E-9B24-8A370CDC4178"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=ParentIDChildCount&Entity=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
   }
 ]

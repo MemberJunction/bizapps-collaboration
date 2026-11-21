@@ -269,7 +269,9 @@
       "CanRead": 1,
       "CanUpdate": 1,
       "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Runs"
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Runs",
+      "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Runs",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Runs"
     }
   },
   {
@@ -284,7 +286,9 @@
       "CanRead": 1,
       "CanUpdate": 1,
       "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Run Steps"
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Run Steps",
+      "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Run Steps",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Run Steps"
     }
   },
   {
@@ -299,7 +303,8 @@
       "CanRead": 1,
       "CanUpdate": 1,
       "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Prompt Runs"
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Prompt Runs",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Prompt Runs"
     }
   }
 ]
