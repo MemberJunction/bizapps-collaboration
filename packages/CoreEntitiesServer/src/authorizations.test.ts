@@ -36,6 +36,7 @@ function createMockAuthorizations(grants: {
     spacesAllowedRoles: string[];
     lifecycleAllowedRoles?: string[];
     administerAllowedRoles?: string[];
+    issueInviteLinksAllowedRoles?: string[];
 }) {
     const root = new AuthorizationInfo();
     root.ID = ROOT_AUTH_ID;
@@ -82,7 +83,16 @@ function createMockAuthorizations(grants: {
         value: (user: UserInfo) => user?.UserRoles?.some(r => r.Role && (grants.administerAllowedRoles ?? []).includes(r.Role)) ?? false,
     });
 
-    return [root, typesAuth, spacesAuth, lifecycleAuth, administerAuth];
+    const issueLinksAuth = new AuthorizationInfo();
+    issueLinksAuth.ID = 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB';
+    issueLinksAuth.Name = 'Issue Space Invite Links';
+    issueLinksAuth.ParentID = ROOT_AUTH_ID;
+    issueLinksAuth.IsActive = true;
+    Object.defineProperty(issueLinksAuth, 'UserCanExecute', {
+        value: (user: UserInfo) => user?.UserRoles?.some(r => r.Role && (grants.issueInviteLinksAllowedRoles ?? []).includes(r.Role)) ?? false,
+    });
+
+    return [root, typesAuth, spacesAuth, lifecycleAuth, administerAuth, issueLinksAuth];
 }
 
 function createMockProvider(options: {
@@ -259,6 +269,22 @@ describe("the 'Administer Spaces' authorization", () => {
 
     it('is refused when the authorization is missing, rather than assumed', () => {
         assert.equal(CollaborationEngine.Instance.UserMayAdministerSpaces(withRoles('UI'), createMockProvider({ authorizations: [] })), false);
+    });
+
+    it('evaluates Issue Space Invite Links and staff authorizations by grant rather than role name', () => {
+        const engine = CollaborationEngine.Instance;
+        const issued = createMockProvider({
+            authorizations: createMockAuthorizations({
+                typesAllowedRoles: [],
+                spacesAllowedRoles: [],
+                issueInviteLinksAllowedRoles: ['Community Manager'],
+            }),
+        });
+        assert.equal(engine.UserCanIssueSpaceInviteLinks(withRoles('Community Manager'), issued), true);
+        assert.equal(engine.UserCanIssueSpaceInviteLinks(withRoles('UI'), issued), false);
+        assert.equal(engine.UserHasStaffAuthorization(withRoles('Community Manager'), issued), true);
+        assert.equal(engine.UserHasStaffAuthorization(withRoles('UI'), issued), false);
+        assert.equal(engine.UserHasStaffAuthorization(withRoles('Space Participant'), issued), false);
     });
 });
 

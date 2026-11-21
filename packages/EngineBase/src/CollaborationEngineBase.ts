@@ -344,7 +344,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
      */
     public FindCollaborationAuthorization(subAuthName: string, provider?: IMetadataProvider): AuthorizationInfo | null {
         const md = provider ?? Metadata.Provider;
-        const auths = md.Authorizations ?? [];
+        const auths = md?.Authorizations ?? [];
         const root = auths.find(a => (a.Name ?? '').trim().toLowerCase() === 'collaboration' && !a.ParentID);
         if (root) {
             const child = auths.find(a =>
@@ -415,6 +415,36 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             return false;
         }
         return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? []);
+    }
+
+    /**
+     * Whether a user holds the 'Issue Space Invite Links' authorization (or an ancestor such as 'Collaboration'),
+     * evaluated declaratively via MemberJunction Authorization metadata rather than hardcoded role names.
+     */
+    public UserCanIssueSpaceInviteLinks(user: UserInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        const auth = this.FindCollaborationAuthorization('Issue Space Invite Links', md);
+        if (!auth) {
+            return false;
+        }
+        return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md?.Authorizations ?? []);
+    }
+
+    /**
+     * Whether a user holds any staff-level Collaboration authorization ('Administer Spaces', 'Issue Space Invite Links',
+     * 'Configure Spaces', or 'Configure Space Types'), evaluated declaratively via MJ Authorization metadata.
+     */
+    public UserHasStaffAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        const auths = md?.Authorizations ?? [];
+        const evaluator = new AuthorizationEvaluator();
+        for (const name of ['Administer Spaces', 'Issue Space Invite Links', 'Configure Spaces', 'Configure Space Types']) {
+            const auth = this.FindCollaborationAuthorization(name, md);
+            if (auth && evaluator.UserCanExecuteWithAncestors(auth, user, auths)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether a user holds the 'Close and Reopen Spaces' authorization. It is granted apart from 'Configure Spaces', which changes settings. */

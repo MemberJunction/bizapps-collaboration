@@ -40,7 +40,7 @@ setMagicLinkHostProvider(() => {
         publicUrl,
         restrictedRoleName: magic?.restrictedRoleName || 'Magic Link Baseline',
         grantableRoleNames: magic?.grantableRoleNames ?? ['Space Participant'],
-        inviteIssuerRoleNames: magic?.inviteIssuerRoleNames ?? ['UI', 'Developer', 'Integration'],
+        inviteIssuerRoleNames: magic?.inviteIssuerRoleNames ?? [],
         communicationProvider: magic?.communicationProvider,
         fromAddress: magic?.fromAddress ?? '',
         defaultExpiresInHours: magic?.defaultExpiresInHours ?? 72,

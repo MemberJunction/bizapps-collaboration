@@ -58,5 +58,17 @@
       "UseAuditLog": true,
       "Description": "Administer spaces beyond an owner's rights: create a top-level space, move a space to the top level, change a space's allow-parent-assignees and agent-retrieval settings, give a task to someone seated above its space when the space doesn't allow it, and backdate a close."
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "A4D2C7E1-8B3F-4E9A-9C12-5D7F8E3B2A10"
+    },
+    "fields": {
+      "Name": "Issue Space Invite Links",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Collaboration",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Issue magic-link space invitations as an authorized Collaboration staff issuer and receive the redemption URL when no email channel is configured."
+    }
   }
 ]

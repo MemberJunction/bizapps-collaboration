@@ -216,6 +216,16 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         return this.Base.UserMayAdministerSpaces(user, provider);
     }
 
+    /** Whether a user holds the 'Issue Space Invite Links' authorization (see the base engine). */
+    public UserCanIssueSpaceInviteLinks(user: UserInfo, provider?: IMetadataProvider): boolean {
+        return this.Base.UserCanIssueSpaceInviteLinks(user, provider);
+    }
+
+    /** Whether a user holds any staff-level Collaboration authorization (see the base engine). */
+    public UserHasStaffAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
+        return this.Base.UserHasStaffAuthorization(user, provider);
+    }
+
     /** Whether a user may change a space's status: the lifecycle authorization and an owner seat, found with the status filter off. */
     public async UserCanChangeSpaceStatus(user: UserInfo, spaceId: string, provider?: IMetadataProvider): Promise<boolean> {
         return this.Base.UserCanChangeSpaceStatus(user, spaceId, provider);
