@@ -20,6 +20,7 @@ import '../checks/stage2.checks.js';
 import '../checks/stage3.checks.js';
 import '../checks/stage4.checks.js';
 import '../checks/space-meetings.checks.js';
+import '../checks/adversarial-persona.checks.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../../..');
@@ -56,4 +57,20 @@ describe('IntegrationCheckRegistry parity', () => {
             expect(typeof lifecycle!.Teardown).toBe('function');
         });
     }
+
+    it('keeps test-harnesses/integration.mjs and integration-client.mjs ALL_BUNDLES aligned with expected-bundles.ts', () => {
+        const readHarnessBundles = (relativePath: string): string[] => {
+            const source = readFileSync(resolve(repoRoot, relativePath), 'utf8');
+            const match = source.match(/ALL_BUNDLES\s*=\s*\[([\s\S]*?)\]/);
+            expect(match, `${relativePath} must declare ALL_BUNDLES`).not.toBeNull();
+            return [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+        };
+
+        expect(readHarnessBundles('test-harnesses/integration.mjs').sort()).toEqual(
+            Object.keys(EXPECTED_BUNDLES).sort(),
+        );
+        expect(readHarnessBundles('test-harnesses/integration-client.mjs').sort()).toEqual(
+            Object.keys(EXPECTED_CLIENT_BUNDLES).sort(),
+        );
+    });
 });

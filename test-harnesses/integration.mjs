@@ -33,6 +33,7 @@ const ALL_BUNDLES = [
     'stage3',
     'stage4',
     'space-meetings',
+    'adversarial-persona',
 ];
 
 const args = process.argv.slice(2);
