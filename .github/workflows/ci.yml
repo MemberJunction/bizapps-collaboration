@@ -34,6 +34,7 @@ jobs:
       - run: node scripts/check-downstream-names.mjs
       - run: node scripts/check-mj-inputs.mjs --self-test && node scripts/check-mj-inputs.mjs
       - run: node scripts/check-registered-exports.mjs --self-test && node scripts/check-registered-exports.mjs
+      - run: node scripts/check-no-role-name-auth.mjs --self-test && node scripts/check-no-role-name-auth.mjs
       - name: Check adopted MJ standards
         run: pnpm exec mj standards check
       - run: pnpm run build
