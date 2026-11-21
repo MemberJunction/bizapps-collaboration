@@ -44,7 +44,7 @@ About 1,000 unit tests, 118 server and 88 client harness checks, and 55 row-leve
 - **No live delivery.** Nothing pushes another person's message, presence, typing or unread state; the rail has an `unread` style that nothing populates.
 - **Notifications are in-app only** (share and status change): no mentions, email, digests or preferences (B6, A12).
 - **Only room-wide chats.** There are no direct or small-group messages; the only 1:1 is with the assistant.
-- **No documents or pages.** The page editor was reverted in `be19c01` / `V202611051155`, two orphan filters (*Visible Pages*, *Pages The Caller May Change*) remain, and notes are plain Markdown rows.
+- **No documents or pages.** The page editor was reverted in `be19c01` / `V202611051155`, the two filters it left behind (*Visible Pages*, *Pages The Caller May Change*) are gone from `metadata/` (H0.16), and notes are plain Markdown rows.
 - **No meetings.** The plan is [meetings-plan.md](meetings-plan.md), and the work is in draft PR #31.
 - **No phone layout** (two `@media` rules in the whole UI). Outsiders land in the MJ Explorer shell.
 - **Empty shells:** the Overview's *Needs you* list and the share check's assistant findings (`collaboration-section.component.ts:4424`, `shareFindings = []`).
