@@ -208,13 +208,22 @@ function runSingleView(params: RunViewParams): Record<string, unknown>[] {
         });
     }
     if (EntityName === 'MJ_BizApps_Collaboration: Space Items') {
-        if (mockItemsOverride) return mockItemsOverride;
-        return itemsData.filter((item) => {
+        const after = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
+        const source = mockItemsOverride ?? itemsData.filter((item) => {
             if (filter.includes('SpaceID IN')) {
                 return filter.toLowerCase().includes(item.SpaceID.toLowerCase());
             }
             return true;
         });
+        const filtered = source
+            .filter((item) => {
+                const sid = String((item as { SpaceID?: string }).SpaceID ?? '').toLowerCase();
+                if (filter.includes('SpaceID IN') && !filter.toLowerCase().includes(sid)) return false;
+                return true;
+            })
+            .sort((a, b) => String((a as { ID: string }).ID).localeCompare(String((b as { ID: string }).ID)))
+            .filter((item) => String((item as { ID: string }).ID).toLowerCase() > after);
+        return params.MaxRows ? filtered.slice(0, params.MaxRows) : filtered;
     }
     if (EntityName === 'MJ_BizApps_Collaboration: Space Files') {
         const matching: Record<string, unknown>[] = [];
@@ -347,15 +356,18 @@ describe('resolveSpaceAgentRetrieval', () => {
         }
     });
 
-    it('refuses retrieval if items page comes back full (2000 rows)', async () => {
+    it('pages beyond 2000 items without throwing a 2000-item refusal and bounds output to topK', async () => {
         const user = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
-        const fakeItems = Array.from({ length: 2000 }, () => itemsData[0]);
+        const fakeItems = Array.from({ length: 2500 }, (_, index) => ({
+            ...itemsData[0],
+            ID: `EEEEEEEE-5555-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        }));
         mockItemsOverride = fakeItems;
         try {
-            await assert.rejects(
-                () => resolveSpaceAgentRetrieval(provider, user, CHILD_SPACE_ID),
-                /items page came back full/
-            );
+            const res = await resolveSpaceAgentRetrieval(provider, user, CHILD_SPACE_ID, { topK: 15 });
+            assert.equal(res.quotedItems.length, 15);
+            assert.equal(res.stats?.totalInScopeCount, 2500);
+            assert.equal(res.suppliedSources?.length, 15);
         } finally {
             mockItemsOverride = null;
         }
