@@ -32,6 +32,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         [NotifyRecipients]="NotifyRecipients"
         [AuthorName]="AuthorName"
         [Timestamp]="Timestamp"
+        [AgentName]="AgentName"
         (ApplyFixRequested)="onApplyFix($event)"
         (ShareRequested)="onShareRequested($event)"
         (CancelRequested)="onCancel()"
@@ -88,6 +89,7 @@ export class CollabShareCheckDialogComponent {
   @Input() public NotifyRecipients = true;
   @Input() public AuthorName = '';
   @Input() public Timestamp = '';
+  @Input() public AgentName = '';
 
   @Output() public ApplyFixRequested = new EventEmitter<FindingModel>();
   @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; notify: boolean }>();

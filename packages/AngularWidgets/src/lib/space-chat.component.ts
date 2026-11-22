@@ -446,7 +446,7 @@ export class CollabChatScopeBarComponent {
                   <div class="agent-progress-left">
                     <i class="fa-solid fa-robot agent-progress-icon" aria-hidden="true"></i>
                     @if (isRoutingCheck && !isAgentWorking) {
-                      <span class="agent-progress-title">Deciding whether the Assistant should answer…</span>
+                      <span class="agent-progress-title">Deciding whether {{ activeAgentName || DefaultAgentName || 'the Assistant' }} should answer…</span>
                     } @else {
                       <span class="agent-progress-title">
                         {{ activeAgentName || DefaultAgentName || 'Assistant' }} is answering{{ activeAgentElapsed ? ' · ' + activeAgentElapsed : '' }}
@@ -808,7 +808,7 @@ export class CollabChatScopeBarComponent {
             }
 
             @if (pendingAgentPrompt) {
-              <div class="ask-agent-prompt-bar" data-testid="ask-agent-should-go-bar" role="region" aria-label="Ask if the Assistant should answer">
+              <div class="ask-agent-prompt-bar" data-testid="ask-agent-should-go-bar" role="region" [attr.aria-label]="'Ask if ' + (DefaultAgentName || 'the Assistant') + ' should answer'">
                 <div class="ask-agent-left">
                   <div class="ask-agent-icon">
                     <i class="fa-solid fa-robot" aria-hidden="true"></i>
@@ -2613,7 +2613,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       return;
     }
 
-    let reasonLabel = 'The Assistant only steps in when mentioned or in a thread.';
+    let reasonLabel = `${resolvedAgentName || 'The Assistant'} only steps in when mentioned or in a thread.`;
     if (hadReplyParent && !this.isAiMessage(hadReplyParent)) {
       reasonLabel = `You replied to ${this.getSpeakerName(hadReplyParent)}.`;
     } else if (text.includes('"type":"user"')) {

@@ -127,7 +127,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           </div>
           <div class="eff">
             <i class="fa-solid fa-wand-magic-sparkles"></i>
-            <span>The Assistant can quote it in this space's chats.</span>
+            <span>{{ AgentName || 'The Assistant' }} can quote it in this space's chats.</span>
           </div>
           <div class="eff">
             <i class="fa-solid fa-signature"></i>
@@ -481,6 +481,7 @@ export class CollabShareCheckComponent {
   @Input() public ItemName = '';
   @Input() public Kind: FileKind = 'doc';
   @Input() public ClientOrgName = '';
+  @Input() public AgentName = '';
   @Input() public RecipientCount = 0;
   @Input() public AudienceHeader = '';
   @Input() public AudienceStaffSub = '';
