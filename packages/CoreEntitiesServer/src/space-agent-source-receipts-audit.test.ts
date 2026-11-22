@@ -554,13 +554,24 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
 
         // Verify PG idempotent table DDL and CodeGen ordering (views/SPs/triggers/data after CodeGen banner)
         for (const pgTable of [
+            'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceType"',
+            'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceTypeStatus"',
+            'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceRoleType"',
             'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."Space"',
+            'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceMember"',
+            'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceGrant"',
             'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceChat"',
             'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceItem"',
             'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceAgentSourceReceipt"',
         ]) {
             assert.ok(pgsql.includes(pgTable), `PG migration must contain idempotent ${pgTable}`);
         }
+        assert.ok(pgsql.includes('fnEffectiveKnowledgeSourceGrants'), 'PG migration must define fnEffectiveKnowledgeSourceGrants');
+        assert.ok(pgsql.includes('fnCanReadSpaceAgentSourceReceipt'), 'PG migration must define fnCanReadSpaceAgentSourceReceipt');
+        assert.ok(pgsql.includes('vwSpaceAgentSourceReceiptsAuthorized'), 'PG migration must define vwSpaceAgentSourceReceiptsAuthorized');
+        assert.ok(tsql.includes('fnEffectiveKnowledgeSourceGrants'), 'T-SQL migration must define fnEffectiveKnowledgeSourceGrants');
+        assert.ok(tsql.includes('ListMode') && pgsql.includes('ListMode'), 'Both SQL dialects must enforce ListMode=Replace');
+        assert.ok(tsql.includes('SpaceOverridable') && pgsql.includes('SpaceOverridable'), 'Both SQL dialects must enforce SpaceOverridable');
         assert.ok(
             pgsql.indexOf('vwSpaceAgentSourceReceipts') > pgsql.indexOf(codegenBanner),
             'PG migration views/SPs/triggers/data must appear AFTER the CodeGen banner',
@@ -574,7 +585,7 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
         assert.ok(filterText.includes("Band = N'Shared'"), 'RLS must allow Shared receipts when Band = Shared');
         assert.ok(filterText.includes('SpaceChat'), 'RLS must also enforce SpaceChat conversation reach');
         assert.ok(filterText.includes('SpaceItem'), 'RLS must verify current SpaceItem existence, space, and band');
-        assert.ok(filterText.includes('SpaceGrant'), 'RLS must verify active KnowledgeSource SpaceGrant status');
+        assert.ok(filterText.includes('fnEffectiveKnowledgeSourceGrants'), 'RLS must verify active KnowledgeSource grants via fnEffectiveKnowledgeSourceGrants');
 
         const parsedSql = parseAndValidateSqlWherePredicate(filterText);
         assert.equal(parsedSql.parenDepth, 0, 'RLS FilterText parentheses must be balanced to 0');
@@ -1251,6 +1262,260 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
             ['Still Shared Doc', 'Active Shared Guide'],
         );
         assert.equal(res.filteredOutCount, 4);
+    });
+
+    it('enforces 3-level same-type ancestor overrides, ListMode=Replace, and SpaceTypeID boundary restarts in querySpaceAgentSourceReceipts (CR-1)', async () => {
+        const TYPE_A = '10000000-0000-4000-8000-000000000001';
+        const TYPE_B = '10000000-0000-4000-8000-000000000002';
+        const GP_ID = '20000000-0000-4000-8000-000000000001';
+        const PARENT_ID = '20000000-0000-4000-8000-000000000002';
+        const LEAF_ID = '20000000-0000-4000-8000-000000000003';
+        const DIFF_PARENT_ID = '20000000-0000-4000-8000-000000000004';
+        const RESTART_LEAF_ID = '20000000-0000-4000-8000-000000000005';
+        const REPLACE_LEAF_ID = '20000000-0000-4000-8000-000000000006';
+
+        const KS_GP_REMOVED = '30000000-0000-4000-8000-000000000001';
+        const KS_GP_TEAM = '30000000-0000-4000-8000-000000000002';
+        const KS_VALID = '30000000-0000-4000-8000-000000000003';
+
+        const storedReceipts: MockReceiptRow[] = [
+            {
+                ID: 'f0000000-0000-4000-8000-000000000801',
+                SpaceID: LEAF_ID,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: KS_GP_REMOVED,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${KS_GP_REMOVED}`,
+                SourceTitle: 'Removed at Grandparent',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 1,
+            },
+            {
+                ID: 'f0000000-0000-4000-8000-000000000802',
+                SpaceID: LEAF_ID,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: KS_GP_TEAM,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${KS_GP_TEAM}`,
+                SourceTitle: 'Demoted to Team at Grandparent',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 2,
+            },
+            {
+                ID: 'f0000000-0000-4000-8000-000000000803',
+                SpaceID: LEAF_ID,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: KS_VALID,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${KS_VALID}`,
+                SourceTitle: 'Valid Shared KS',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 3,
+            },
+            {
+                ID: 'f0000000-0000-4000-8000-000000000804',
+                SpaceID: RESTART_LEAF_ID,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: KS_GP_REMOVED,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${KS_GP_REMOVED}`,
+                SourceTitle: 'Valid Type-Restart KS',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 4,
+            },
+            {
+                ID: 'f0000000-0000-4000-8000-000000000805',
+                SpaceID: REPLACE_LEAF_ID,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: KS_VALID,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${KS_VALID}`,
+                SourceTitle: 'Cut Off By ListMode Replace',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 5,
+            },
+        ];
+
+        const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
+            Entities: [],
+            async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: SPACE_CHAT_ID, SpaceID: GP_ID, ConversationID: CONV_ID, Kind: 'General', OwnerUserID: null }] as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: 1,
+                        RowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === COLLABORATION_SOURCE_RECEIPT_ENTITY) {
+                    const afterId = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
+                    const page = storedReceipts.filter((r) => !afterId || r.ID.toLowerCase() > afterId);
+                    return {
+                        Success: true,
+                        Results: page as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: page.length,
+                        RowCount: page.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                    const spaces = [
+                        { ID: GP_ID, ParentID: null, SpaceTypeID: TYPE_A, Configuration: null },
+                        { ID: PARENT_ID, ParentID: GP_ID, SpaceTypeID: TYPE_A, Configuration: null },
+                        { ID: LEAF_ID, ParentID: PARENT_ID, SpaceTypeID: TYPE_A, Configuration: null },
+                        { ID: DIFF_PARENT_ID, ParentID: GP_ID, SpaceTypeID: TYPE_B, Configuration: null },
+                        { ID: RESTART_LEAF_ID, ParentID: DIFF_PARENT_ID, SpaceTypeID: TYPE_A, Configuration: null },
+                        {
+                            ID: REPLACE_LEAF_ID,
+                            ParentID: PARENT_ID,
+                            SpaceTypeID: TYPE_A,
+                            Configuration: JSON.stringify({ Grants: { KnowledgeSource: { ListMode: 'Replace' } } }),
+                        },
+                    ];
+                    return {
+                        Success: true,
+                        Results: spaces as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: spaces.length,
+                        RowCount: spaces.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Types') {
+                    const types = [
+                        { ID: TYPE_A, Configuration: JSON.stringify({ SpaceOverridable: ['Grants.KnowledgeSource'] }) },
+                        { ID: TYPE_B, Configuration: null },
+                    ];
+                    return {
+                        Success: true,
+                        Results: types as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: types.length,
+                        RowCount: types.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
+                    const grants = [
+                        { ID: '1', SpaceID: null, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: KS_GP_REMOVED, Sequence: 1 },
+                        { ID: '2', SpaceID: null, SpaceTypeID: TYPE_A, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: KS_GP_TEAM, Sequence: 2 },
+                        { ID: '3', SpaceID: null, SpaceTypeID: TYPE_A, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: KS_VALID, Sequence: 3 },
+                        { ID: '4', SpaceID: GP_ID, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Remove', Band: 'Shared', TargetRecordID: KS_GP_REMOVED, Sequence: 1 },
+                        { ID: '5', SpaceID: GP_ID, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Team', TargetRecordID: KS_GP_TEAM, Sequence: 2 },
+                    ];
+                    return {
+                        Success: true,
+                        Results: grants as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: grants.length,
+                        RowCount: grants.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: [] as T[],
+                    UserViewRunID: '',
+                    TotalRowCount: 0,
+                    RowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            },
+        };
+
+        const participant = makeUser(USER_A_ID, 'Space Participant');
+        const res = await querySpaceAgentSourceReceipts({
+            provider: providerObj as IMetadataProvider,
+            user: participant,
+            conversationId: CONV_ID,
+            inReachSpaceBands: new Map([
+                [LEAF_ID, new Set(['Shared'] as const)],
+                [RESTART_LEAF_ID, new Set(['Shared'] as const)],
+                [REPLACE_LEAF_ID, new Set(['Shared'] as const)],
+            ]),
+            callerCanSeeTeam: false,
+        });
+
+        assert.equal(res.ok, true);
+        assert.deepEqual(
+            res.receipts.map((r) => r.SourceTitle),
+            ['Valid Shared KS', 'Valid Type-Restart KS'],
+        );
+        assert.equal(res.filteredOutCount, 3);
     });
 });
 

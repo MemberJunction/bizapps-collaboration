@@ -155,6 +155,14 @@ describe('ResolveSpaceConfiguration: grants per kind', () => {
             Spaces: [space('s', TYPE_A, { Grants: { Action: { ListMode: 'Replace' } } }, [grant({ Kind: 'Action', TargetRecordID: 'mine' })])],
         });
         assert.deepEqual(ids(spaceAllowed.Grants.Action), ['mine']);
+
+        const emptyReplace = ResolveSpaceConfiguration({
+            App: { Settings: APP, Grants: [grant({ Kind: 'KnowledgeSource', TargetRecordID: 'app-ks' })] },
+            Type: { ID: TYPE_A, Settings: { SpaceOverridable: ['Grants.KnowledgeSource'] }, Grants: [] },
+            Spaces: [space('s', TYPE_A, { Grants: { KnowledgeSource: { ListMode: 'Replace' } } }, [])],
+        });
+        assert.deepEqual(ids(emptyReplace.Grants.KnowledgeSource), [], 'Replace with zero rows must still clear inherited grants');
+        assert.ok(emptyReplace.ReplacedKinds.includes('KnowledgeSource'));
     });
 
     it('the legacy Agents.ListMode still governs the Agent kind', () => {

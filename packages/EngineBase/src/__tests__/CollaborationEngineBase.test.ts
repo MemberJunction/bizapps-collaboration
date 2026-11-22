@@ -588,5 +588,314 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
 
             expect(loaded.map((r) => r.SourceTitle)).toEqual(['Valid Shared Item', 'Valid Shared KS']);
         });
+
+        it('enforces 3-level same-type hierarchy, ListMode=Replace, SpaceType boundary, and fail-closed Space Grants denial (CR-1)', async () => {
+            const typeA = '10000000-0000-4000-8000-000000000001';
+            const typeB = '10000000-0000-4000-8000-000000000002';
+            const gpId = '20000000-0000-4000-8000-000000000001';
+            const parentId = '20000000-0000-4000-8000-000000000002';
+            const leafId = '20000000-0000-4000-8000-000000000003';
+            const diffParentId = '20000000-0000-4000-8000-000000000004';
+            const restartLeafId = '20000000-0000-4000-8000-000000000005';
+            const replaceLeafId = '20000000-0000-4000-8000-000000000006';
+
+            const ksGpRemoved = '30000000-0000-4000-8000-000000000001';
+            const ksGpTeam = '30000000-0000-4000-8000-000000000002';
+            const ksValid = '30000000-0000-4000-8000-000000000003';
+
+            const receipts: mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[] = [
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000101',
+                    SpaceID: leafId,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'KnowledgeSource',
+                    SpaceItemID: null,
+                    ContentSourceID: ksGpRemoved,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Removed at Grandparent',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: false,
+                    RetrievalRank: null,
+                    RelevanceScore: null,
+                    RankingMode: 'grant',
+                    CitationOrdinal: null,
+                    EstimatedTokens: 0,
+                    WasTruncated: false,
+                    Sequence: 1,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Leaf',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000102',
+                    SpaceID: leafId,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'KnowledgeSource',
+                    SpaceItemID: null,
+                    ContentSourceID: ksGpTeam,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Demoted to Team at Grandparent',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: false,
+                    RetrievalRank: null,
+                    RelevanceScore: null,
+                    RankingMode: 'grant',
+                    CitationOrdinal: null,
+                    EstimatedTokens: 0,
+                    WasTruncated: false,
+                    Sequence: 2,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Leaf',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000103',
+                    SpaceID: leafId,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'KnowledgeSource',
+                    SpaceItemID: null,
+                    ContentSourceID: ksValid,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Valid Shared KS',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: false,
+                    RetrievalRank: null,
+                    RelevanceScore: null,
+                    RankingMode: 'grant',
+                    CitationOrdinal: null,
+                    EstimatedTokens: 0,
+                    WasTruncated: false,
+                    Sequence: 3,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Leaf',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000104',
+                    SpaceID: restartLeafId,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'KnowledgeSource',
+                    SpaceItemID: null,
+                    ContentSourceID: ksGpRemoved,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Valid Type-Restart KS',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: false,
+                    RetrievalRank: null,
+                    RelevanceScore: null,
+                    RankingMode: 'grant',
+                    CitationOrdinal: null,
+                    EstimatedTokens: 0,
+                    WasTruncated: false,
+                    Sequence: 4,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Restart Leaf',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000105',
+                    SpaceID: replaceLeafId,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'KnowledgeSource',
+                    SpaceItemID: null,
+                    ContentSourceID: ksValid,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Cut Off By ListMode Replace',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: false,
+                    RetrievalRank: null,
+                    RelevanceScore: null,
+                    RankingMode: 'grant',
+                    CitationOrdinal: null,
+                    EstimatedTokens: 0,
+                    WasTruncated: false,
+                    Sequence: 5,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Replace Leaf',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+            ];
+
+            let denySpaceGrants = false;
+            const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
+                async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
+                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
+                        if (denySpaceGrants) {
+                            return {
+                                Success: false,
+                                ErrorMessage: 'Permission denied: user does not have read access on MJ_BizApps_Collaboration: Space Grants',
+                                Results: [] as T[],
+                                UserViewRunID: '',
+                                TotalRowCount: 0,
+                                RowCount: 0,
+                                ExecutionTime: 1,
+                            };
+                        }
+                        return {
+                            Success: true,
+                            Results: [
+                                { ID: '1', SpaceID: null, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: ksGpRemoved, Sequence: 1 },
+                                { ID: '2', SpaceID: null, SpaceTypeID: typeA, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: ksGpTeam, Sequence: 2 },
+                                { ID: '3', SpaceID: null, SpaceTypeID: typeA, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: ksValid, Sequence: 3 },
+                                { ID: '4', SpaceID: gpId, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Remove', Band: 'Shared', TargetRecordID: ksGpRemoved, Sequence: 1 },
+                                { ID: '5', SpaceID: gpId, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Team', TargetRecordID: ksGpTeam, Sequence: 2 },
+                            ] as Partial<T>[] as T[],
+                            UserViewRunID: '',
+                            TotalRowCount: 5,
+                            RowCount: 5,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        };
+                    }
+                    if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                        return {
+                            Success: true,
+                            Results: [
+                                { ID: gpId, ParentID: null, SpaceTypeID: typeA, Configuration: null },
+                                { ID: parentId, ParentID: gpId, SpaceTypeID: typeA, Configuration: null },
+                                { ID: leafId, ParentID: parentId, SpaceTypeID: typeA, Configuration: null },
+                                { ID: diffParentId, ParentID: gpId, SpaceTypeID: typeB, Configuration: null },
+                                { ID: restartLeafId, ParentID: diffParentId, SpaceTypeID: typeA, Configuration: null },
+                                {
+                                    ID: replaceLeafId,
+                                    ParentID: parentId,
+                                    SpaceTypeID: typeA,
+                                    Configuration: JSON.stringify({ Grants: { KnowledgeSource: { ListMode: 'Replace' } } }),
+                                },
+                            ] as Partial<T>[] as T[],
+                            UserViewRunID: '',
+                            TotalRowCount: 6,
+                            RowCount: 6,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        };
+                    }
+                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Types') {
+                        return {
+                            Success: true,
+                            Results: [
+                                { ID: typeA, Configuration: JSON.stringify({ SpaceOverridable: ['Grants.KnowledgeSource'] }) },
+                                { ID: typeB, Configuration: null },
+                            ] as Partial<T>[] as T[],
+                            UserViewRunID: '',
+                            TotalRowCount: 2,
+                            RowCount: 2,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: receipts as Partial<T>[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: receipts.length,
+                        RowCount: receipts.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                },
+            };
+
+            // 1. Direct SpaceGrant + SpaceType + full ancestor chain resolution
+            const loadedDirect = await engine.LoadSpaceAgentSourceReceiptsForConversation(
+                CONV_UUID,
+                mockUser,
+                providerObj as IMetadataProvider,
+            );
+            expect(loadedDirect.map((r) => r.SourceTitle)).toEqual(['Valid Shared KS', 'Valid Type-Restart KS']);
+
+            // 2. When Space Grants read is denied and NO server config resolver is available -> fail closed (ZERO KnowledgeSource receipts)
+            denySpaceGrants = true;
+            const failClosedLoaded = await engine.LoadSpaceAgentSourceReceiptsForConversation(
+                CONV_UUID,
+                mockUser,
+                providerObj as IMetadataProvider,
+            );
+            expect(failClosedLoaded).toEqual([]);
+
+            // 3. When Space Grants read is denied and GetSpaceConfiguration (via ExecuteGQL) is available -> resolves via server config
+            const providerWithGql = {
+                ...providerObj,
+                async ExecuteGQL(_query: string, variables?: Record<string, unknown>) {
+                    const sid = String(variables?.spaceId ?? '').toLowerCase();
+                    if (sid === leafId) {
+                        return {
+                            GetSpaceConfiguration: {
+                                Success: true,
+                                CanSeeTeam: false,
+                                Full: false,
+                                ConfigurationJSON: JSON.stringify({
+                                    Grants: {
+                                        KnowledgeSource: [
+                                            { TargetRecordID: ksValid, Band: 'Shared' },
+                                            { TargetRecordID: ksGpTeam, Band: 'Team' },
+                                        ],
+                                    },
+                                }),
+                            },
+                        };
+                    }
+                    return {
+                        GetSpaceConfiguration: {
+                            Success: true,
+                            CanSeeTeam: false,
+                            Full: false,
+                            ConfigurationJSON: JSON.stringify({ Grants: { KnowledgeSource: [] } }),
+                        },
+                    };
+                },
+            };
+            const loadedViaGql = await engine.LoadSpaceAgentSourceReceiptsForConversation(
+                CONV_UUID,
+                mockUser,
+                providerWithGql as unknown as IMetadataProvider,
+            );
+            expect(loadedViaGql.map((r) => r.SourceTitle)).toEqual(['Valid Shared KS']);
+        });
     });
 });

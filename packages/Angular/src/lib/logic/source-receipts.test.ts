@@ -307,10 +307,50 @@ describe('Space chat source receipts client logic (CT-2)', () => {
             },
         ]);
 
-        const parsed = parseTurnSourceReceiptsPayload(payload, DETAIL_1, reach);
+        const parsed = parseTurnSourceReceiptsPayload(payload, DETAIL_1, reach, {
+            knowledgeSourceBandsBySpace: {
+                [SPACE_A]: {
+                    [CONTENT_SRC]: 'Shared',
+                },
+            },
+        });
         assert.equal(parsed.length, 1);
         assert.equal(parsed[0].sourceKind, 'KnowledgeSource');
         assert.equal(parsed[0].contentSourceId, CONTENT_SRC);
+    });
+
+    it('fails closed for KnowledgeSource receipts when live knowledge snapshot is unset or missing the space (CR-1)', () => {
+        const reach = buildClientReceiptReachContext({
+            chatAudience: 'Shared',
+            activeSpaceId: SPACE_A,
+            canSeeTeamOnActiveSpace: false,
+        });
+        const ksRow = makeEntityRow({
+            ID: 'r-ks-unset',
+            SpaceID: SPACE_A,
+            SourceKind: 'KnowledgeSource',
+            SpaceItemID: null,
+            ContentSourceID: CONTENT_SRC,
+            Band: 'Shared',
+            SourceTitle: 'Unverified Knowledge Source',
+        });
+
+        assert.equal(filterAndMapSourceReceipts([ksRow], reach).length, 0);
+        assert.equal(filterAndMapSourceReceipts([ksRow], reach, {}).length, 0);
+        assert.equal(filterAndMapSourceReceipts([ksRow], reach, { knowledgeSourceBandsBySpace: {} }).length, 0);
+
+        const streamedPayload = JSON.stringify([
+            {
+                sourceKind: 'KnowledgeSource',
+                spaceId: SPACE_A,
+                spaceItemId: null,
+                contentSourceId: CONTENT_SRC,
+                sourceTitle: 'Unverified Streamed KS',
+                band: 'Shared',
+            },
+        ]);
+        assert.equal(parseTurnSourceReceiptsPayload(streamedPayload, DETAIL_1, reach).length, 0);
+        assert.equal(parseTurnSourceReceiptsPayload(streamedPayload, DETAIL_1, reach, { knowledgeSourceBandsBySpace: {} }).length, 0);
     });
 
     it('excludes historical and streamed receipts whose SpaceItem demoted/moved or KnowledgeSource grant was revoked/demoted (CR-1)', () => {
