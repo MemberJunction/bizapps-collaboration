@@ -4,6 +4,7 @@
   "type": "module",
   "version": "0.1.0",
   "description": "UX Gallery for Collaboration visual regression testing against design frames.",
+  "license": "BUSL-1.1",
   "mjUILayer": "shell",
   "scripts": {
     "build": "ngc && node bundle.mjs"

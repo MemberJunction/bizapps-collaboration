@@ -1,12 +1,12 @@
 # The roadmap: from a sound engine to a world-class collaboration product
 
-**What this is.** A plan only. It sets the order of work for Collaboration after PR 10, from making its trust claims true through to running at scale for the BC client portal and the apps that build on `Space`. It adds no code. It sits beside [the plan](plan.md) and [PR 10's plan](pr10-plan.md): those stay the record of what each item means and why; this one decides **what comes next, in what order, and what "done" looks like for each horizon.** Where an item here already has a number in the plan (A5, B6, …), this plan uses that number and doesn't restate it.
+**What this is.** A plan only. It sets the order of work for Collaboration after PR 10, from making its trust claims true through to running at scale for client portals and downstream Open Apps that build on `Space`. It adds no code. It sits beside [the plan](plan.md) and [PR 10's plan](pr10-plan.md): those stay the record of what each item means and why; this one decides **what comes next, in what order, and what "done" looks like for each horizon.** Where an item here already has a number in the plan (A5, B6, …), this plan uses that number and doesn't restate it.
 
 **Who does what.**
-- **Ian runs it**, as for PR 10: an AI coding agent builds, Ian supervises and decides. The plan PR is assigned to him.
-- **Robert** is copied for review, especially on the substrate contract ([§ 4.3](#43-the-substrate-contract)) and the outsider shell ([§ 5.4](#54-a-room-built-for-outsiders)).
-- **Amith** settles the open calls in [§ 11](#11-open-calls) and merges.
-- **Each horizon is its own pull request (or several),** each with its own plan section, persona test and screenshots, reviewed the way [PR 10's § 13](pr10-plan.md#13-how-reviews-run) describes. Work that belongs in MJ, Tasks, Common or another app goes in that repo's PR and is tracked here.
+- **Maintainers run each horizon** with AI-assisted builders and reviewers.
+- **Platform reviewers** verify the substrate contract ([§ 4.3](#43-the-substrate-contract)) and the outsider shell ([§ 5.4](#54-a-room-built-for-outsiders)).
+- **Product leadership** settles the open calls in [§ 11](#11-open-calls) and merges.
+- **Each horizon is its own pull request (or several),** each with its own plan section, persona test and screenshots, reviewed the way [PR 10's § 13](pr10-plan.md#13-how-reviews-run) describes. Work that belongs in MJ, `bizapps-tasks`, `bizapps-common`, or a downstream Open App goes in that repo's PR and is tracked here.
 
 ## Contents
 
@@ -27,76 +27,67 @@
 
 ## 1. How we got here
 
-On 2026-11-12 Amith asked for a deep dive on this repo and a roadmap for "making this thing insanely world class", informed by what the BC client portal plans to build on top and by BC's business strategy. Four things were read, and this plan is what they add up to.
+On 2026-11-12 a deep dive on this repo set out a roadmap for making Collaboration a world-class product, informed by client portal requirements and downstream Open App substrate needs.
 
-### 1.1 This repo, as it stands at `99ae999`
+### 1.1 This repo, as it stands and across Horizon 0 waves
 
 **The engine is sound, and its core idea is the differentiator.** One object, the space, is both the permission boundary and the agent's retrieval boundary:
-- a space tree with sealed or inheriting sub-spaces, statuses and close/reopen;
+- a space tree with sealed or inheriting sub-spaces, `SpaceTypeStatus` lifecycles (`Active`, `Paused`, `Closed`, `Archived`), and resumable `Paused` vs terminal `Closed` rules;
 - Team and Shared bands with an audited promotion;
 - one published access function, `fnCollaborationAccess`, that other apps filter their own rows with;
-- space types as plug-ins (`SpaceType` rows, server and UI drivers, IsA subtypes);
-- agent turns that run on the server as the asking user, with grants as tools and band-bounded retrieval.
+- space types as plug-ins (`SpaceType` rows, server and UI drivers, IsA subtypes, and `TargetApplicationID` invite routing);
+- agent turns that run on the server as the asking user, with grants as tools, **structural chat scope** (`Collaboration Space Scope` via `SearchScopeIDs` + `Audience` intersection), and per-answer **source receipts** (`SpaceAgentSourceReceipt`).
 
-About 1,000 unit tests, 118 server and 88 client harness checks, and 55 row-level security filters stand behind it.
+**What started as Horizon 0 gaps (and subsequent wave progress):**
+- **No live delivery yet.** Nothing pushes another person's message, presence, typing or unread state; the rail has an `unread` style that nothing populates.
+- **Notifications are in-app only** (share, status change, and external IdP sign-in notifications): mentions, email digests, and preferences remain (B6, A12).
+- **Only room-wide chats and 1:1 Assistant chats.** Multi-person subset direct/group chats await `MJ: Conversation Participants` (A5).
+- **No documents or pages.** The page editor was reverted in `be19c01` / `V202611051155`, and notes (`SpaceNote`) bridge until MJ Docs (D55).
+- **Meetings:** `bizapps-tasks` ships meeting entities and `SyncSeats` has landed; full Space Meetings tabs/transcripts follow in Horizon 2.
+- **No phone layout** (two `@media` rules in the whole UI). Outsiders currently land in the configured MJ Application shell (now declarable per `SpaceType.TargetApplicationID`, with opt-in external IdP invite provisioning when `magicLink.enabled = false` and `magicLink.idpInvites = true`).
+- **UI extension points & branding (landed in C4):** dynamic agent display names, active application naming, `NeedsYouProvider`, `BaseSpaceHeaderChipProvider`, `GetHeaderChips`, `GetHeaderActions`, and `GetSettingsSections` are now wired with live `Space` records.
+- **Rights by authorization (landed in C2):** role-name staff checks were eliminated (`check-no-role-name-auth.mjs`).
+- **Structural chat scope & receipts (landed in C3):** `Collaboration Space Scope` (`ServerDerived` `SpaceID` + `Audience` dimensions with `strictValidation: true`) and `ExecuteAgentParams.Audience: { Mode: 'Intersection', UserIDs }` bound agent turns structurally, and `SpaceAgentSourceReceipt` records and renders bounded citations.
+- **Platform & licensing (landed in C4 / OPS-1 Prep):** MJ `6.3.0-edge.1` is pinned, **[MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) (A14–A19) has landed** in MJ 6.3, dual-dialect SQL Server + PostgreSQL migrations ship for new schema changes, and `BUSL-1.1` license metadata is set across workspace packages and `mj-app.json`.
+- **People field-level security** (`bizapps-common`) and **`collaboration-section.component.ts` modularization / paging** remain tracked hygiene items.
 
-**What's missing is everything that makes a room feel alive, and a few places where the trust claims aren't yet true.** The repo survey found:
-- **No live delivery.** Nothing pushes another person's message, presence, typing or unread state; the rail has an `unread` style that nothing populates.
-- **Notifications are in-app only** (share and status change): no mentions, email, digests or preferences (B6, A12).
-- **Only room-wide chats.** There are no direct or small-group messages; the only 1:1 is with the assistant.
-- **No documents or pages.** The page editor was reverted in `be19c01` / `V202611051155`, the two filters it left behind (*Visible Pages*, *Pages The Caller May Change*) are gone from `metadata/` (H0.16), and notes are plain Markdown rows.
-- **No meetings.** The plan is [meetings-plan.md](meetings-plan.md), and the work is in draft PR #31.
-- **No phone layout** (two `@media` rules in the whole UI). Outsiders land in the MJ Explorer shell.
-- **Empty shells:** the Overview's *Needs you* list and the share check's assistant findings (`collaboration-section.component.ts:4424`, `shareFindings = []`).
-- **`SyncSeats` is a stub** (`base-space-type-server-driver.ts:261`). PR #31 implements it.
-- **`mint-space-link.ts:40` decides who is staff by role name** (`'ui', 'developer', 'integration'`), against the doctrine of rights by authorization.
-- **The agent's bound is the band, not yet the intersection of everyone in a chat,** and no citations are stored. Both wait on MJ core (A4–A7).
-- **On MJ `next`, an outside participant's chat draws no messages:** MJ's conversation engine filters with a subquery its client-clause screen refuses for a row-filtered user (PR #38, "Not in this PR").
-- **People field-level security** (bizapps-common#186) is still open: without it a client reads every People field of anyone they share a space with ([PR 10 § 4](pr10-plan.md)).
-- **The platform pin is a prerelease:** every package pins MJ `6.2.0-edge.7`. CI's build job is red on the runner image (Ubuntu 26.04 against Playwright 1.58.1, per PR #38).
-- **`collaboration-section.component.ts` is 5,408 lines,** client lists use hard `MaxRows` caps with no paging, and `fnCollaborationAccess` is a recursive multi-statement function not yet measured at scale.
+### 1.2 The early pull requests and issues
 
-### 1.2 The open pull requests and issues
-
-| # | What | Where it lands here |
+| # | What | Where it lands |
 |---|---|---|
-| PR #38 | Member photos everywhere a space draws a person | Horizon 0, merge as is |
-| PR #31 (draft) | `SyncSeats` plus B23 space meetings with `fnCollaborationMeetingAccess` | Split: `SyncSeats` → Horizon 0; meetings → Horizon 2 once Tasks ships the meeting entities |
-| PR #33 (draft) | The reverted UI polish and Space Pages, kept for reference | Not revived. Its rail/header/Home ideas feed the approved UX process in Horizon 1; pages are replaced by MJ Docs (D55) |
-| PR #14 | Advisory caret-pin check | Horizon 0 hygiene |
-| Issue #37 | Downstream gaps: who owns the `community` type row, child types declaring their parents, a shared open-window helper and `Listed`/`Open` reads, cross-space item mounts | Horizon 0, the substrate contract |
-| Issues #25–#27 | Page comments as rows, a participation operation, save concurrency | Closed as superseded by MJ Docs (D55); their lessons carry over as acceptance tests for the Docs integration |
+| PR #38 | Member photos everywhere a space draws a person | Horizon 0 (landed) |
+| PR #31 | `SyncSeats` plus space meetings | `SyncSeats` landed; meetings follow in Horizon 2 on `bizapps-tasks` |
+| PR #33 (draft) | Reverted UI polish and Space Pages | Not revived. Rail/header/Home ideas feed the approved UX process in Horizon 1; pages move to MJ Docs (D55) |
+| PR #14 | Advisory caret-pin check | Horizon 0 hygiene (landed) |
+| Issue #37 | Substrate contract: downstream apps own their own type seed rows, `AllowedParentTypeCodes`, open-window helper, cross-space item mounts | Horizon 0, the substrate contract |
+| Issues #25–#27 | Page comments as rows, participation operation, save concurrency | Superseded by MJ Docs (D55); acceptance tests carry over |
 
-### 1.3 The BC client portal, and BC's strategy
+### 1.3 Client portal requirements and engagement continuity
 
-The portal plan (`new-products/bc-client-portal/plan.md`, v0.4, 2026-10-17) says: "the persistent agent is the product; the portal is what makes it possible". Each client organisation gets a perpetual root space, each engagement is a sub-space, and a named BC consultant agent stays after the engagement closes. v0.3 made it the base layer for all BC client services (BCC and Cimatri); v0.4 makes it "Blue Cypress's automated professional-services stack".
+Client portal builders rely on Collaboration as the foundational engagement layer ("the persistent agent is the product; the portal is what makes it possible"). Under the **post-close root chat pattern**, each external organization gets a perpetual root space (`ParentID IS NULL`) that stays `Active`, each time-bounded engagement or workstream is a child sub-space under it, and the space's configured agent remains available in the root space after individual child engagements move to `Paused` or terminal `Closed`.
 
-Its building starts once Collaboration lands, and it asks a lot of this repo. In its own words, audience-bounded retrieval ("in a chat the Assistant uses only what **every** person in it can see, recomputed each turn") is "the heart of the product". It needs:
-- the Team/Shared bands with the audited share check;
-- `EnsureSpaceForRecord` from a won deal, and `SyncSeats` from staffing;
-- an allowed-agent chain with per-space prompt parts;
-- after-close modes (`Closed | ReadOnly | ReadOnlyWithAgent`, gap U1) and "no agents at this level" (gap U2);
-- Teams/Slack channel binding (U3) and chat participants for all agents (U4, in MJ);
-- answer receipts naming their sources (U5);
-- an Approvals Desk with no owner yet;
-- digests on any cadence, and meeting transcripts filed to the Team band;
-- *Needs you* and agenda providers.
+Audience-bounded retrieval ("in a chat the Assistant uses only what **every** person in it can see, recomputed each turn") is the core security property. Portal builders require:
+- Team/Shared bands with audited promotion and share checks;
+- `EnsureSpaceForRecord` from a won engagement, and `SyncSeats` from staffing rosters;
+- an allowed-agent chain (`SpaceGrant` of kind `Agent`) with per-space prompt parts and dynamic agent naming;
+- lifecycle statuses (`SpaceTypeStatus`: `Active`, `Paused`, `Closed`, `Archived`) supporting the post-close root chat pattern and `AgentRetrieval` exclusion controls (`ExcludedEntirely`, `ExcludedFromParentScope`);
+- Teams/Slack channel binding (U3) and multi-agent chat participants (U4);
+- answer receipts naming their bounded sources (U5 — landed in C3);
+- an Approvals Desk unifying share promotions, `bizapps-tasks` `TaskDecision` approvals, and `MJ: AI Agent Requests`;
+- cadenced digests, meeting transcripts filed to the Team band, and *Needs you* / agenda providers.
 
-The portal's Phase 0 (dogfood) names one blocker in this repo: "the agent's search scope wired (today `agentMayQuote` is not called and agent retrieval is not enforced)".
+Collaboration remains free of per-seat or AI add-on pricing gates at the app layer and ships under `BUSL-1.1` (`OPS-1 Prep`).
 
-**BC's doctrine** (`new-products/market-analysis-2026.md` §10) is to be "the open, hosted system of engagement for the association world… while the PE rollups consolidate the systems of record we deliberately refuse to sell". Collaboration is free (decided 2026-09-22), "not per-seat — not priced at all", and "AI is the product, not an add-on SKU". The competitive frame (`archive/collaboration/plan.md` §2) is client portals (Copilot, Clinked, Moxo, SuiteDash: "file-plus-chat over the vendor's cloud… per-project by construction") and board portals that sell AI as a separate line item. **This is not Slack or Teams** — "a bounded space with outsiders in it" — so world class is measured against what an outsider expects of a room, not against a company chat tool.
+### 1.4 Downstream Open Apps using Collaboration as a substrate
 
-### 1.4 The sibling apps
+Multiple downstream Open Apps build on `Space` without Collaboration knowing about them:
+- **Community & member forum apps** extend `Space` (`IsA Space`, space-scoped forum tables filtered with `fnCollaborationAccess`), requiring an explicit, versioned substrate contract so schema or configuration changes (such as `SpaceTypeStatus` and `Configuration` JSON) are caught by contract tests rather than drifting silently.
+- **Governance & board apps** extend `Space` for boards and terms (`IsA Space`), use `SyncSeats` for rosters, bands for working vs published minutes, `SpaceItem` for board packets, `bizapps-tasks` for meetings/agendas, and `bizapps-tasks` `TaskDecision` for formal approvals and decisions.
+- **Ballot & poll apps** integrate seat-based eligibility sources and *Needs you* providers for open ballots.
+- **Recording & transcript apps** file recordings and transcripts into spaces via `EnsureSpaceForRecord`.
+- **Accreditation, peer-review, and external messaging apps** share the same bounded rooms, external IdP / magic-link access, anchored comments, notifications, and approvals instead of rebuilding duplicate subsystems.
 
-Collaboration is already a substrate, not a leaf app:
-- **bizapps-community** extends `Space` (`CommunitySpace` IsA `Space`, ten tables FK'd to `Space`, `fnCommunityForumAccess` built on `fnCollaborationAccess`). **It has already drifted:** it reads post-close settings as columns that are now Configuration JSON (D20/D21), uses `SpaceType` field names that don't exist (`Icon`, `DefaultVisibility`, `Sequence`, …), and rewrites the `community` type row this repo also seeds.
-- **bizapps-committees** plans to become IsA `Space` (C4, `COLLABORATION_REBUILD_PLAN.md`), using `SyncSeats`, bands for minutes and space items for papers.
-- **bizapps-voting** wants a "space seats" eligibility source and a *Needs you* provider for open ballots.
-- **bizapps-caliber** wants to file recordings and transcripts into a space (`EnsureSpaceForRecord`, decision deferred).
-- **bizapps-credentialing** describes a reviewer workspace that is a space by another name.
-- **bizapps-secure-messaging** runs its own magic links and sessions beside MJ's.
-
-Across them, comments, files, external access, notifications, meetings, anchors and membership are each built three to five times. A world-class substrate unifies them instead of adding a sixth copy.
+Across them, comments, files, external access, notifications, meetings, decisions, anchors, and membership unify onto one tested substrate.
 
 ### 1.5 The conclusion
 
@@ -105,7 +96,7 @@ Collaboration has to be world class at three things, in this order:
 2. **A room outsiders come back to.** Client staff judge it on day one against Slack and Notion; liveness, notifications and a clean outsider shell are table stakes.
 3. **A stable substrate.** At least six apps build on `Space`. The contract has to be explicit, versioned and tested, so drift like Community's fails CI rather than a host install.
 
-The horizons below follow from that order. Amith agreed to the order and to the four calls in [§ 3](#3-decisions) on 2026-11-12.
+The horizons below follow from that order, settled in [§ 3](#3-decisions).
 
 ## 2. What "world class" means for this product
 
@@ -126,18 +117,18 @@ These are the bars each horizon is judged against, not features:
 
 Numbering continues from the plan's D52.
 
-- **D53 (Amith, 2026-11-12): trust first, then liveness.** Horizon 0 makes the boundary true and freezes the substrate before Horizon 1 adds liveness. The alternative demos better sooner but puts clients in a room whose boundary isn't proven.
-- **D54 (Amith, 2026-11-12): the outsider shell is a standalone, brandable host on the widgets package,** not more polish inside Explorer. Staff keep Explorer; outsiders get the shell. The widgets package already runs outside Explorer (`packages/UXGallery` proves it), so this is the L3 surface the UI layering guide expects, not a rewrite.
-- **D55 (Amith, 2026-11-12): documents and pages come from MJ Docs, not from this repo.** MJ Docs (documents, including pages) ships in **MJ 6.3**, which is expected to enter LTS candidacy in **about 30 days** (around 2026-12-12). Collaboration adopts it then (Horizon 2, [§ 6.2](#62-documents-and-pages-on-mj-docs)). Until then:
+- **D53 (2026-11-12): trust first, then liveness.** Horizon 0 makes the boundary true and freezes the substrate before Horizon 1 adds liveness. The alternative demos better sooner but puts clients in a room whose boundary isn't proven.
+- **D54 (2026-11-12): the outsider shell is a standalone, brandable host on the widgets package,** not more polish inside Explorer. Staff keep Explorer; outsiders get the shell (and `SpaceType.TargetApplicationID` lets each space type declare the MJ Application invited users land in). The widgets package already runs outside Explorer (`packages/UXGallery` proves it), so this is the L3 surface the UI layering guide expects, not a rewrite.
+- **D55 (2026-11-12): documents and pages come from MJ Docs, not from this repo.** MJ Docs (documents, including pages) ships in **MJ 6.3** (alongside **[MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)**, which has landed in MJ 6.3). Collaboration adopts MJ Docs in Horizon 2 ([§ 6.2](#62-documents-and-pages-on-mj-docs)). Until then:
   - **`SpaceNote` stays, and is marked temporary.** Its README line, entity description and Notes tab say it will move to MJ Docs. It gets no new features (no rich text, no comments, no versioning) and no new dependants.
   - **Space Pages are not revived.** Draft PR #33 stays closed as a reference; issues #25–#27 are closed as superseded, and their lessons become acceptance tests for the Docs integration.
   - **The two orphan page filters are removed** in Horizon 0.
-- **D56 (Amith, 2026-11-12): the Approvals Desk lives in Collaboration** as a generic, public inbox over three existing sources (share promotions, `TaskDecision`, `MJ: AI Agent Requests`). Policy that is specific to the portal (tiers, flag budgets) stays in the portal. CIT §18.4 calls it "a unification, not an invention", and the portal, CIT, Sales, Certification and Ethics all need it.
+- **D56 (2026-11-12): the Approvals Desk lives in Collaboration** as a generic, public inbox over three existing sources: share promotions, **`bizapps-tasks` `TaskDecision`** (`MJ_BizApps_Tasks: Task Decisions`, with `TaskDecisionEntityServer` attribution), and `MJ: AI Agent Requests`. Downstream policy (such as domain-specific tiers or approval budgets) stays in the owning app, while decisions themselves are recorded uniformly via `bizapps-tasks` rather than duplicating decision tables per app.
 - **D57 (this plan): the substrate contract is versioned and tested.** What a downstream app may rely on is listed in one document, carries a contract version in `mj-app.json`, and is pinned by contract tests that downstream repos also run. Changing it is a minor bump with a migration note; removing from it is a major bump, per MJ's publish-then-no-breaking-changes policy.
 
 ## 4. Horizon 0: make it true
 
-**Goal:** the boundary is real, the substrate is explicit, and the repo is release-ready. **Exit:** the portal's Phase 0 (dogfood) can start, and Community and Committees can build against a fixed contract.
+**Goal:** the boundary is real, the substrate is explicit, and the repo is release-ready. **Exit:** client portals and downstream Open Apps (governance, community forums, anchored rooms) can build against a fixed, verified contract.
 
 ### 4.1 Unblock the participant
 
@@ -151,35 +142,35 @@ Numbering continues from the plan's D52.
 
 | Item | Detail | Done when |
 |---|---|---|
-| H0.4 Audience-bounded runs | A5 conversation participants, A6 runs bounded by an audience (intersection via `fnCollaborationCommonAccess` and MJ `SearchParams.Audience.Readers`), A7 sealing on a change of audience, B2 retrieval by audience, B3 conversations in a space. Answers [the plan's § 11](plan.md#11-open-decisions) calls 4, 5 and 6 first. | A consultant joining a client chat re-bounds the next answer; adversarial persona checks (Team-only file, sealed sub-space, private note, another client's space) all refuse |
-| H0.5 Provenance and receipts | A1–A4 in MJ, B4 here: each agent answer stores the records it used, and the chat shows them (the portal's U5). | Every agent message in the harness has a receipt; a receipt never names a source a reader in the chat can't open |
-| H0.6 Agent scope enforcement | The portal's Phase 0 blocker: `agentMayQuote` called on every retrieval path, and `AgentRetrieval = ExcludedEntirely` honoured | A check that deletes the call fails; an `ExcludedEntirely` space never appears in any agent's sources |
-| H0.7 Rights by authorization, everywhere | Replace the role-name staff test in `mint-space-link.ts:40` with an authorization | No role name compared anywhere in shipped code (a guard script fails on it) |
+| H0.4 Audience-bounded runs & structural chat scope | A5 conversation participants, A6 runs bounded by an audience (`fnCollaborationCommonAccess` and `ExecuteAgentParams.Audience: { Mode: 'Intersection', UserIDs }`), **structural chat scope** (`Collaboration Space Scope` via `SearchScopeIDs` with `ServerDerived` `SpaceID` and `Audience` dimensions and `strictValidation: true`), B2 retrieval by audience, B3 conversations in a space. | Structural scope + intersection audience landed (C3); adversarial persona checks refuse any Team/sealed/private/cross-space leak |
+| H0.5 Provenance and receipts | `SpaceAgentSourceReceipt` stores and renders bounded sources for every agent answer, filtered by live reader reach. | Landed in C3: every agent message records receipts; never names an out-of-reach source |
+| H0.6 Agent scope enforcement | `agentMayQuote` called on every retrieval path, `AgentRetrieval = ExcludedEntirely` / `ExcludedFromParentScope` honoured, and `SpaceTypeStatus.AgentRetrieval` enforced across child and root spaces. | Enforced (C1–C3): an `ExcludedEntirely` space never appears in any agent's sources |
+| H0.7 Rights by authorization, everywhere | Replace role-name staff checks with MJ Authorizations (`Administer Spaces`, `Configure Spaces`, `Configure Space Types`, `Close and Reopen Spaces`). | Landed in C2 (`check-no-role-name-auth.mjs` enforces zero role-name auth) |
 
 ### 4.3 The substrate contract
 
 | Item | Detail | Done when |
 |---|---|---|
-| H0.8 Write the contract | One document, `docs/SUBSTRATE_CONTRACT.md`: the tables, columns and functions a downstream app may use (`Space`, `SpaceMember`, `SpaceItem`, `fnCollaborationAccess`, …), the driver hooks, `EnsureSpaceForRecord`, `SyncSeats`, UI contributions, the configuration keys, and the rule for who owns which seed row. Brings `EXTENSIBILITY_PLAN.md` up to date with the code. | Reviewed by the Community and Committees builders |
-| H0.9 Issue #37 | (1) This repo stops seeding `community`; Community owns it, as Committees owns `committee`. (2) A child type declares `AllowedParentTypeCodes`, merged with the parent's `AllowedTypeCodes`. (3) Export the open-window test as an inline function, and decide `Listed`/`Open` reads for non-members (call 18). (4) Allow one record in more than one space: `UQ_SpaceItem_Entity_Record` becomes `(SpaceID, EntityID, RecordID)`, with a mount operation that checks the target space's rules. | Each item has a test; Community's forum can graduate a thread to a working group with its files |
-| H0.10 `SyncSeats` | Taken from PR #31 as its own PR | Committees' C4 can sync a term's seats; the harness covers create, update, remove and the auto-invite path |
-| H0.11 After-close modes and "no agents here" | Portal gaps U1 and U2: `Lifecycle.AfterClose` = `Closed`, `ReadOnly` or `ReadOnlyWithAgent` with a duration, as configuration; an explicit setting that no agent may run at a level | The portal driver's interim enforcement can be deleted |
-| H0.12 Contract tests | A published test bundle, run here and in each consumer's CI, that fails on a renamed column, a removed hook or a changed function signature (D57) | Community's drift (§ 1.4) would have failed it |
-| H0.13 Ship the extension points | Wire what's declared but unused: signal providers, *Needs you*, agenda and header-chip providers, header chips and actions, settings sections, new-space steps, vocabulary (EXTENSIBILITY_PLAN.md) | Each has a working example in `packages/ExampleSpaceTypes` and a harness check |
+| H0.8 Write the contract | One document, `docs/SUBSTRATE_CONTRACT.md`: the tables, columns and functions a downstream app may use (`Space`, `SpaceMember`, `SpaceItem`, `fnCollaborationAccess`, …), the driver hooks, `EnsureSpaceForRecord`, `SyncSeats`, UI contributions, `TargetApplicationID`, `SpaceTypeStatus`, `bizapps-tasks` `TaskDecision`, and the rule for who owns which seed row. `EXTENSIBILITY_PLAN.md` updated to match the code. | Reviewed by downstream app maintainers |
+| H0.9 Issue #37 | (1) Downstream apps own their domain space-type seed rows. (2) A child type declares `AllowedParentTypeCodes`, merged with the parent's `AllowedTypeCodes`. (3) Export the open-window test as an inline function, and decide `Listed`/`Open` reads for non-members (call 18). (4) Allow one record in more than one space: `UQ_SpaceItem_Entity_Record` becomes `(SpaceID, EntityID, RecordID)`, with a mount operation that checks the target space's rules. | Each item has a test; downstream apps can mount shared items across spaces |
+| H0.10 `SyncSeats` | Taken from PR #31 | Landed: roster-backed apps can sync `SyncSource` seats; harness covers create, update, remove, and invites |
+| H0.11 Post-close root chat pattern & status lifecycle | `SpaceTypeStatus` (`Active`, `Paused`, `Closed`, `Archived`) governs `ReadOnly`, `Visible`, `AgentRetrieval`, and terminal `IsTerminal` (`Closed` is terminal; `Paused` resumes to `Active`). Perpetual root spaces remain `Active` for ongoing agent chats while closed child spaces refuse writes/turns (`post-close root chat pattern`). `AgentRetrieval` settings allow level-level exclusion. | Landed across C1–C4 (`Closed` vs `Paused` UI/server parity verified) |
+| H0.12 Contract tests | A published test bundle, run here and in each consumer's CI, that fails on a renamed column, a removed hook or a changed function signature (D57) | Downstream schema/API drift fails CI automatically |
+| H0.13 Ship the extension points | Wire what's declared: `NeedsYouProvider`, `BaseSpaceHeaderChipProvider`, `GetHeaderChips`, `GetHeaderActions`, `GetSettingsSections` (with live non-null `Space` passed to `GetTabs` / `GetOverviewCards`), plus agenda, new-space steps, and vocabulary | Wired in C4; `packages/ExampleSpaceTypes` and unit/render suites cover them |
 
 ### 4.4 Hygiene and release readiness
 
 | Item | Detail | Done when |
 |---|---|---|
 | H0.14 CI green | Pin the runner to `ubuntu-24.04` or bump Playwright; run the client harness in CI | Both jobs green on `next` |
-| H0.15 A released MJ | Move off `6.2.0-edge.7` to a published MJ release, then onto 6.3 LTS when it's a candidate (D55) | `mjVersionRange` and every peer pin a release |
-| H0.16 Remove leftovers | The two orphan page filters; mark `SpaceNote` temporary (D55); merge PR #14 | No metadata references a table that doesn't exist |
-| H0.17 Stage 5 from PR 10 | Owner, licence, clean `mj app install`, the release metadata migration ([PR 10 § 7](pr10-plan.md)) | A host installs from npm and migrations alone, and the persona suite passes there |
-| H0.18 Split the page component | `collaboration-section.component.ts` (5,408 lines) becomes a shell over per-tab components, without behaviour changes | No file over 1,000 lines in `packages/Angular`; every existing render test still passes |
+| H0.15 MJ 6.3 & MJ#4789 | Pin MJ `>=6.3.0-edge.1 <7.0.0` (with **[MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)** A14–A19 landed in MJ 6.3); follow-up lifts pre-MJ#4789 grant guards in `SpaceGrantEntityServer` / `grant-operations.ts` | `mjVersionRange` and package pins target MJ 6.3 |
+| H0.16 Remove leftovers | Remove orphan page filters; mark `SpaceNote` temporary (D55); merge PR #14 | No metadata references a missing table |
+| H0.17 Release readiness & BUSL-1.1 (`OPS-1 Prep`) | Set `license: "BUSL-1.1"` across root/workspace `package.json` and `mj-app.json`, dual-dialect SQL Server + PostgreSQL migrations, opt-in external IdP invites (`magicLink.enabled = false`, `magicLink.idpInvites = true`), clean `mj app install` | Clean-install SQL Server & PostgreSQL migrations and package/manifest checks pass |
+| H0.18 Split the page component | Break `collaboration-section.component.ts` into a shell over per-tab components, without behaviour changes | No file over 1,000 lines in `packages/Angular`; every existing render test still passes |
 
 ## 5. Horizon 1: make it alive
 
-**Goal:** a room people want to be in, for staff and outsiders alike. **Exit:** the portal's Phase 1 (persistence) runs with real clients on phones.
+**Goal:** a room people want to be in, for staff and outsiders alike. **Exit:** client portals run live with external participants on phones.
 
 ### 5.1 Live delivery
 
@@ -192,15 +183,15 @@ Numbering continues from the plan's D52.
 
 - **In-app, email and digest channels** through MJ's notification engine, for mentions, replies, shares, status changes, tasks and approvals (B6).
 - **Preferences per member and per space,** including for outsiders, with one-click unsubscribe from email.
-- **Digests on a cadence** (daily or weekly), the same skill the portal's advisory cadences reuse.
-- **Reply by email** posts into the thread as the sender. Community asks for it too.
+- **Digests on a cadence** (daily or weekly), reusable by advisory and portal workflows.
+- **Reply by email** posts into the thread as the sender.
 - **Done when:** no event in the harness is delivered against a member's preference, and a digest never names a record outside the reader's reach.
 
 ### 5.3 Conversations people expect
 
-- **Direct and small-group chats** with a chosen set of seats, bounded by that set (they reuse H0.4's audience bound).
+- **Direct and small-group chats** with a chosen set of seats, bounded by that set (they reuse H0.4's structural chat scope and audience bound).
 - **Threads, reactions, edit and delete** with history, and pinned messages.
-- **History-on-add choice** when someone joins (the portal's default is *All* for staff).
+- **History-on-add choice** when someone joins (configurable per space/type, e.g., *All* for staff).
 - **Move the thread and agent-indicator work upstream** into `ng-conversations`, as `ui-polish.md` already intends, so every MJ app gets it.
 
 ### 5.4 A room built for outsiders
@@ -222,42 +213,42 @@ The approved UX process (`docs/ux/IMPLEMENTATION_PLAN.md`) takes the useful idea
 
 ## 6. Horizon 2: where work gets decided
 
-**Goal:** decisions, documents and meetings happen in the space, not around it. **Exit:** the portal's Phase 2 delivery loop (Plan → Build → Verify → Present → Feedback → Approve → Promote) runs end to end in a space.
+**Goal:** decisions, documents and meetings happen in the space, not around it. **Exit:** the full delivery and approval loop (Plan → Build → Verify → Present → Feedback → Approve → Promote) runs end to end in a space.
 
 ### 6.1 The Approvals Desk (D56)
 
-- **One inbox** for share-check promotions, `TaskDecision` sign-offs and `MJ: AI Agent Requests` (A8/B7 proposed posts included), filtered to what the viewer may decide.
-- **A deterministic follow-up** for each decision type, through a registered handler (for example: an approved milestone raises the invoice in Orders, via the portal's driver).
+- **One inbox** for share-check promotions, **`bizapps-tasks` `TaskDecision`** sign-offs (`MJ_BizApps_Tasks: Task Decisions`, with `TaskDecisionEntityServer` stamping `DecidedByPersonID`), and `MJ: AI Agent Requests` (A8/B7 proposed posts included), filtered to what the viewer may decide.
+- **A deterministic follow-up** for each decision type, through a registered handler (for example: an approved deliverable triggers downstream billing or fulfillment via an app driver).
 - **Delegation, due dates and escalation,** and an audit trail queryable in SQL.
 - **The share check's findings** come from the assistant instead of `shareFindings = []`.
 
 ### 6.2 Documents and pages on MJ Docs
 
-- **Adopt MJ Docs from MJ 6.3** (D55) as soon as 6.3 is an LTS candidate (around 2026-12-12): a document lives as a space item on a band, with its own reach, comments, versions and concurrency from MJ.
+- **Adopt MJ Docs from MJ 6.3** (D55): a document lives as a space item on a band, with its own reach, comments, versions and concurrency from MJ.
 - **Migrate `SpaceNote`** rows into documents with a one-time, idempotent operation, then retire the table and the Notes tab in a later minor release, under the no-breaking-changes policy.
 - **Acceptance tests carried from issues #25–#27:** a comment is its own row written by its author; a member may tick a checklist or comment without edit rights; two editors never silently overwrite each other.
 - **Agents read and propose edits to documents** within the audience bound; an agent's edit is a proposed change, never a silent write.
 
 ### 6.3 Meetings
 
-- **bizapps-tasks ships the meeting entities** (T1, [meetings-plan.md](meetings-plan.md)); then the space Meetings tab, *Coming up* and the meeting chat from PR #31 land here.
-- **Notetaker files transcripts** into the Team band, with a Shared summary that goes through the share check.
+- **`bizapps-tasks` ships the meeting entities** (T1, [meetings-plan.md](meetings-plan.md)); then the space Meetings tab, *Coming up* and the meeting chat from PR #31 land here.
+- **Automated meeting capture files transcripts** into the Team band, with a Shared summary that goes through the share check.
 - **Action items become proposed tasks** on the Approvals Desk.
-- **Calendars** (A18) and video providers after.
+- **Calendars** (A18, landed in MJ#4789) and video providers after.
 
 ### 6.4 Files that work like documents
 
-- **Versions, comments and approvals on files,** and **e-signature** through MJ's `eSignature` package, so secure-messaging's signature flow and the portal's acceptance step use one path.
+- **Versions, comments and approvals on files,** and **e-signature** through MJ's `eSignature` package, so external signature flows and client acceptance steps use one path.
 - **File requests** (call 10): ask an outsider for a document, with a due date and a reminder.
 - **Per-space storage accounts,** which are validated today but not used on upload.
 
 ## 7. Horizon 3: the agent everywhere the client already is
 
-**Goal:** the agent is a teammate the client reaches from where they already work. **Exit:** the portal's Phase 5 target holds: at least a third of conversations happen outside the portal.
+**Goal:** the agent is a teammate the client reaches from where they already work. **Exit:** a significant share of client-facing conversations happen outside the primary portal UI with identical boundary guarantees.
 
-- **The agent over MCP** (A9/B5): `AgentTurnHandler` as a server operation MCP calls, never a raw search tool, carrying the same audience bound.
-- **Teams and Slack channel binding** (portal U3): the audience is the channel roster, and the binding suspends when an unmapped member joins.
-- **Named specialist agents** in a chat (portal U4, in MJ): the fleet becomes visible, each agent bounded by the same audience.
+- **The agent over MCP** (A9/B5): `AgentTurnHandler` as a server operation MCP calls, never a raw search tool, carrying the same structural chat scope and audience bound.
+- **Teams and Slack channel binding** (U3): the audience is the channel roster, and the binding suspends when an unmapped member joins.
+- **Named specialist agents** in a chat (U4, in MJ): multiple configured agents become visible, each bounded by the same audience.
 - **Space memory:** a per-space and per-client profile built from MJ agent notes, Team band only, editable by staff.
 - **Cadenced advisory:** weekly, monthly and quarterly reports through the digest skill, filed as space items and promoted through the share check.
 - **Live sessions:** realtime rooms in a space, with transcripts landing as Team-band items (MJ's realtime and session-capture guides).
@@ -266,33 +257,33 @@ The approved UX process (`docs/ux/IMPLEMENTATION_PLAN.md`) takes the useful idea
 
 **Goal:** Collaboration is something a large host and an auditor are both comfortable with.
 
-- **PostgreSQL** (B11) through the release conversion.
+- **PostgreSQL** (B11): dual-dialect schema parity and runtime execution across SQL Server and PostgreSQL.
 - **Performance:** measure `fnCollaborationAccess` in a scale world (10,000 spaces, 100,000 items, 1,000-member spaces); replace it with an inline or materialised reach if p95 budgets fail; add server-side paging everywhere a list has a hard `MaxRows` cap.
 - **The admin console:** edit space types, the assistant and grants in screens, not raw records (frame 09); usage and health per space.
 - **Compliance:** SOC 2 evidence (audit logs, access reviews, retention), data export and offboarding for a departing client, retention rules per space type.
-- **The community surface** for bizapps-community: self-serve join, join requests, directory and member cap (B12), with `Listed`/`Open` reads decided in H0.9.
-- **Unify the duplicates** (§ 1.4) as each app is next touched: comments on MJ anchored comments, files as space items, external access on MJ magic links (secure-messaging included), notifications on the engine, anchors on one shape.
-- **Multi-organisation people:** one person with seats in two clients' spaces, or a client of both BCC and Cimatri, with one identity.
+- **The community surface** for forum-backed Open Apps: self-serve join, join requests, directory and member cap (B12), with `Listed`/`Open` reads decided in H0.9.
+- **Unify the duplicates** (§ 1.4) as each app is next touched: comments on MJ anchored comments, files as space items, external access on MJ magic links and external IdP flows, notifications on the engine, anchors on one shape.
+- **Multi-organisation people:** one person with seats across multiple client or organization spaces with one unified identity.
 
-## 9. What the portal and the sibling apps get, and when
+## 9. What downstream Open Apps get, and when
 
-| Need | Asked by | Horizon |
+| Need | Consumer category | Horizon |
 |---|---|---|
-| Audience-bounded agent, receipts, scope enforcement | Portal (heart of the product), Committees, Community | 0 |
-| `SyncSeats`, `EnsureSpaceForRecord`, after-close modes, no-agents setting | Portal, Committees, Caliber | 0 |
-| A versioned substrate contract and contract tests | Community, Committees, Voting | 0 |
-| *Needs you* and agenda providers | Portal, Voting | 0 |
-| Cross-space item mounts, parent-declared child types | Community, Committees | 0 |
-| Live chat, notifications, digests, reply by email | Portal, Community, Credentialing | 1 |
-| Outsider shell, phone layout, onboarding | Portal, CIT, Certification, Awards | 1 |
-| Approvals Desk | Portal, CIT, Sales, Certification, Ethics, Sonar | 2 |
-| Documents and pages (MJ Docs) | Portal, Committees (minutes), Community (co-authoring) | 2 |
-| Meetings and transcripts | Portal, Committees, Notetaker | 2 |
-| E-signature, file requests | Portal, secure-messaging, Certification | 2 |
-| MCP, Teams, Slack | Portal, CIT, Notetaker | 3 |
+| Audience-bounded agent, structural chat scope, receipts, scope enforcement | Client portals, governance apps, community apps | 0 |
+| `SyncSeats`, `EnsureSpaceForRecord`, post-close root chat pattern, `SpaceTypeStatus`, `TargetApplicationID` | Client portals, governance apps, recording apps | 0 |
+| A versioned substrate contract and contract tests | All downstream Open Apps | 0 |
+| *Needs you*, header chips/actions, settings sections, and agenda providers | Client portals, ballot/poll apps, governance apps | 0 |
+| Cross-space item mounts, parent-declared child types | Community apps, governance apps | 0 |
+| Live chat, notifications, digests, reply by email | Client portals, community apps, review/accreditation apps | 1 |
+| Outsider shell, phone layout, external IdP onboarding | Client portals, accreditation/peer-review apps | 1 |
+| Approvals Desk (`bizapps-tasks` `TaskDecision` + promotions + AI requests) | Client portals, governance, opportunity, review, compliance apps | 2 |
+| Documents and pages (MJ Docs) | Client portals, governance apps (minutes), community co-authoring | 2 |
+| Meetings and transcripts | Client portals, governance apps, meeting capture apps | 2 |
+| E-signature, file requests | Client portals, secure signature apps, accreditation apps | 2 |
+| MCP, Teams, Slack | Client portals, meeting capture apps | 3 |
 | PostgreSQL, scale, SOC 2, export | Every host | 4 |
 
-**The portal's own phases map onto this:** its Phase −1 (knowledge) needs nothing here and can start now; Phase 0 (dogfood) gates on Horizon 0; Phase 1 (persistence) on Horizon 1; Phase 2 (delivery loop) on Horizon 2; Phase 5 (Teams, Slack, MCP) on Horizon 3.
+**Portal delivery phases map onto this:** knowledge ingestion needs nothing here and can start anytime; dogfood gates on Horizon 0; client persistence on Horizon 1; full delivery loop on Horizon 2; Teams, Slack, and MCP on Horizon 3.
 
 ## 10. How we know it's working
 
@@ -305,12 +296,12 @@ Each horizon reports these, measured rather than claimed:
 | Message delivery to another browser | p95 under 1 second |
 | Email-to-first-answer for an outsider on a phone | Under 60 seconds |
 | p95 per screen in the scale world | Under 1.5 seconds |
-| Consumer repos running the contract tests | Community and Committees in Horizon 0; every consumer after |
-| The portal's own kill criterion | At least a third of closed-engagement clients using the agent 60 days after close |
+| Consumer repos running the contract tests | Primary downstream Open Apps in Horizon 0; every consumer after |
+| Post-close root chat continuity | Ongoing root-space agent engagement after child spaces move to `Closed` |
 
 ## 11. Open calls
 
-New calls for Amith, numbered after [the plan's § 11](plan.md#11-open-decisions):
+New calls for product leadership, numbered after [the plan's § 11](plan.md#11-open-decisions):
 
 | # | Call | Needed by |
 |---|---|---|
@@ -321,7 +312,7 @@ New calls for Amith, numbered after [the plan's § 11](plan.md#11-open-decisions
 | 21 | The Approvals Desk's first follow-up handlers, and who owns their policy | Horizon 2 |
 | 22 | The scale world's sizes and p95 budgets | H0.12 onward |
 
-The plan's existing calls 1 (owner), 2 (licence), 4–6 (audience) and 14 (calendars) are still open and gate Horizon 0 and Horizon 2.
+The plan's existing calls 1 (owner), 4–6 (audience) and 14 (calendars) guide remaining Horizon 0/2 work; call 2 (licence) has progressed via `OPS-1 Prep` (`BUSL-1.1` license metadata in `package.json` and `mj-app.json`).
 
 ## 12. Rules for the work
 

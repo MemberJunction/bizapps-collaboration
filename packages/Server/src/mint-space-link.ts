@@ -4,11 +4,18 @@ import { type UserInfo } from '@memberjunction/core';
 import { configInfo } from '@memberjunction/server';
 import { handInviteToEngine, type InviteEmail } from '@mj-biz-apps/collaboration-core';
 import {
+    inviteSpaceMember as inviteSpaceMemberCore,
     mintSpaceLink as mintSpaceLinkCore,
+    resolveInvitedSeatsForUser,
     resolveMagicLinkHost,
     setMagicLinkHostProvider,
+    SPACE_INVITE_NOTIFICATION_TYPE,
+    type IdpSignInNotification,
     type MagicLinkHost,
     type MintSpaceLinkResult,
+    type ResolvedInvitedSeat,
+    type ResolveInvitedSeatsResult,
+    type ResolvedTargetApplication,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 
 async function sendInviteEmailViaEngine(system: UserInfo, providerName: string, draft: InviteEmail): Promise<boolean> {
@@ -30,6 +37,11 @@ async function sendInviteEmailViaEngine(system: UserInfo, providerName: string, 
     );
 }
 
+function resolveIdpInvitesEnabled(magic: typeof configInfo.magicLink): boolean {
+    const fromConfig = magic != null && 'idpInvites' in magic ? magic.idpInvites === true : false;
+    return fromConfig || process.env.MAGIC_LINK_IDP_INVITES === 'true' || process.env.COLLABORATION_IDP_INVITES === 'true';
+}
+
 setMagicLinkHostProvider(() => {
     const magic = configInfo?.magicLink;
     const publicUrl =
@@ -37,6 +49,7 @@ setMagicLinkHostProvider(() => {
         (configInfo?.baseUrl ? `${configInfo.baseUrl}:${configInfo.graphqlPort ?? 4000}${configInfo.graphqlRootPath || ''}` : 'http://localhost:4000');
     return {
         enabled: magic?.enabled ?? true,
+        idpInvites: resolveIdpInvitesEnabled(magic),
         publicUrl,
         restrictedRoleName: magic?.restrictedRoleName || 'Magic Link Baseline',
         grantableRoleNames: magic?.grantableRoleNames ?? ['Space Participant'],
@@ -54,4 +67,19 @@ export async function mintSpaceLink(input: Parameters<typeof mintSpaceLinkCore>[
     return mintSpaceLinkCore({ ...input, host });
 }
 
-export { resolveMagicLinkHost, setMagicLinkHostProvider, type MagicLinkHost, type MintSpaceLinkResult };
+export async function inviteSpaceMember(input: Parameters<typeof inviteSpaceMemberCore>[0]): Promise<MintSpaceLinkResult> {
+    return mintSpaceLink(input);
+}
+
+export {
+    resolveInvitedSeatsForUser,
+    resolveMagicLinkHost,
+    setMagicLinkHostProvider,
+    SPACE_INVITE_NOTIFICATION_TYPE,
+    type IdpSignInNotification,
+    type MagicLinkHost,
+    type MintSpaceLinkResult,
+    type ResolvedInvitedSeat,
+    type ResolveInvitedSeatsResult,
+    type ResolvedTargetApplication,
+};

@@ -262,6 +262,10 @@ export interface SpaceSettingsModel {
   agentRetrieval: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' | string;
   /** The name of the space's status (stage 1: one of its type's statuses). */
   status: string;
+  /** True when the current status is terminal (Closed / Archived) and cannot be reopened. */
+  isTerminal?: boolean;
+  /** True when the current status is read-only (e.g. Paused, Closed, Archived). */
+  isReadOnly?: boolean;
 }
 
 

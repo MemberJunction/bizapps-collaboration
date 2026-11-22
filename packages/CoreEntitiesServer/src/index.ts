@@ -12,7 +12,7 @@ export { LoadSpaceTypeEntityServer, SpaceTypeEntityServer } from './SpaceTypeEnt
 export { LoadItemUseEntityServer, ItemUseEntityServer } from './ItemUseEntityServer.js';
 export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNoticeEntityServer.js';
 export { LoadSpaceAnchorEntityServer, SpaceAnchorEntityServer, primaryAnchorCollision, recordKeyParses, releaseAnchorWrite, vouchAnchorWrite } from './SpaceAnchorEntityServer.js';
-export { spaceSeatsParticipants, spaceTypeAudience, type SeatsAudience } from './space-audience.js';
+export { spaceSeatsParticipants, spaceTypeAudience, spaceTypeConfigurationAudience, type SeatsAudience } from './space-audience.js';
 export { LoadSpaceGrantEntityServer, SpaceGrantEntityServer, grantRuleRefusal } from './SpaceGrantEntityServer.js';
 export { LoadSpaceNoteEntityServer, SpaceNoteEntityServer } from './SpaceNoteEntityServer.js';
 export { LoadSpaceMemberPinEntityServer, SpaceMemberPinEntityServer } from './SpaceMemberPinEntityServer.js';
@@ -171,11 +171,18 @@ export type {
     SpaceMeetingsResult,
 } from './space-meetings.js';
 export {
+    inviteSpaceMember,
     mintSpaceLink,
+    resolveInvitedSeatsForUser,
     resolveMagicLinkHost,
     setMagicLinkHostProvider,
+    SPACE_INVITE_NOTIFICATION_TYPE,
+    type IdpSignInNotification,
     type MagicLinkHost,
     type MintSpaceLinkResult,
+    type ResolvedInvitedSeat,
+    type ResolveInvitedSeatsResult,
+    type ResolvedTargetApplication,
 } from './mint-space-link.js';
 export {
     COLLABORATION_AGENT_TURN_OPERATION,

@@ -4,6 +4,7 @@
   "type": "module",
   "version": "0.1.0",
   "description": "Private reference implementation: the example space type's UI driver, tabs, cards and subtype form (example-board).",
+  "license": "BUSL-1.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "mjUILayer": "widgets",

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import type { SpaceSettingsSectionDescriptor } from './base-space-type-ui-driver';
 import type { SpaceSettingsModel } from './types';
 import { MJAlertComponent, MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -163,7 +164,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   />
                   <div>
                     <div class="radio-title">Included</div>
-                    <div class="radio-sub">The Assistant synthesizes files, conversations, and tasks from this space.</div>
+                    <div class="radio-sub">{{ AgentName || 'The Assistant' }} synthesizes files, conversations, and tasks from this space.</div>
                   </div>
                 </label>
 
@@ -275,16 +276,44 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </section>
       }
 
+      @if (ContributedSections && ContributedSections.length > 0) {
+        <div class="settings-sections contributed-settings-sections">
+          @for (section of ContributedSections; track section.key) {
+            @if (section.component) {
+              <div class="settings-card">
+                @if (section.title) {
+                  <div class="card-title-row">
+                    <i class="fa-solid fa-puzzle-piece section-ic" aria-hidden="true"></i>
+                    <span class="card-title">{{ section.title }}</span>
+                  </div>
+                }
+                <ng-container *ngComponentOutlet="section.component; inputs: { SpaceId: SpaceId, SpaceTypeCode: SpaceTypeCode, Sequence: section.sortKey ?? 0 }"></ng-container>
+              </div>
+            } @else {
+              <div class="settings-card" [attr.data-section-key]="section.key">
+                <div class="card-title-row">
+                  <i class="fa-solid fa-sliders section-ic" aria-hidden="true"></i>
+                  <span class="card-title">{{ section.title }}</span>
+                </div>
+                @if (section.description) {
+                  <div class="settings-sub">{{ section.description }}</div>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+
       <ng-template #lifecycle>
             <div class="form-field full-width">
               <div class="cb-title">Status: {{ formData.status }}</div>
-              @if (!CanChangeLifecycle) {
+              @if (!CanChangeLifecycle || isTerminalStatus) {
               } @else if (confirmingLifecycle) {
-                <div class="cb-sub">{{ formData.status === 'Closed' ? 'Reopen this space? People can add and change things again.' : 'Close this space? ' + CloseConsequence }}</div>
-                <button type="button" mjButton [Variant]="formData.status === 'Closed' ? 'primary' : 'danger'" Size="sm" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
+                <div class="cb-sub">{{ isReopenLifecycleAction ? 'Reopen this space? People can add and change things again.' : 'Close this space? ' + CloseConsequence }}</div>
+                <button type="button" mjButton [Variant]="isReopenLifecycleAction ? 'primary' : 'danger'" Size="sm" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ isReopenLifecycleAction ? 'Reopen space' : 'Close space' }}</button>
                 <button type="button" mjButton Variant="flat" Size="sm" (click)="confirmingLifecycle = false">Cancel</button>
               } @else {
-                <button type="button" mjButton Variant="outline" Size="sm" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
+                <button type="button" mjButton Variant="outline" Size="sm" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ isReopenLifecycleAction ? 'Reopen…' : 'Close…' }}</button>
               }
             </div>
       </ng-template>
@@ -533,18 +562,29 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   @Input() ReadOnlyNote = '';
   /** What closing does under this space's post-close access, shown where the close is confirmed. */
   @Input() CloseConsequence = 'It becomes read-only for everyone.';
+  /** Display name of the configured space assistant agent. */
+  @Input() AgentName = '';
+  /** Current space ID passed to contributed settings section components. */
+  @Input() SpaceId = '';
+  /** Current space type code passed to contributed settings section components. */
+  @Input() SpaceTypeCode = '';
+  /** Settings sections contributed by space-type UI drivers or BaseSpaceSettingsSection plugins. */
+  @Input() ContributedSections: SpaceSettingsSectionDescriptor[] = [];
   private baselineJson = '';
 
   /** The fields the person changed from what the form was built from. Status is the space's own, not a field they edit. */
   private changedFields(): Partial<SpaceSettingsModel> {
     if (!this.formData || !this.baselineJson) return {};
-    const baseline = JSON.parse(this.baselineJson) as Record<string, unknown>;
-    const changed: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(this.formData as unknown as Record<string, unknown>)) {
+    const baseline = JSON.parse(this.baselineJson) as Partial<SpaceSettingsModel>;
+    const changed: Partial<SpaceSettingsModel> = {};
+    const keys = Object.keys(this.formData) as Array<keyof SpaceSettingsModel>;
+    for (const key of keys) {
       if (key === 'status') continue;
-      if (JSON.stringify(value) !== JSON.stringify(baseline[key])) changed[key] = value;
+      if (JSON.stringify(this.formData[key]) !== JSON.stringify(baseline[key])) {
+        copySettingsField(changed, this.formData, key);
+      }
     }
-    return changed as Partial<SpaceSettingsModel>;
+    return changed;
   }
 
   private isFormDirty(): boolean {
@@ -556,9 +596,18 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
     this.bannerVisible = false;
   }
 
+  public get isTerminalStatus(): boolean {
+    return !!this.formData?.isTerminal;
+  }
+
+  public get isReopenLifecycleAction(): boolean {
+    return !this.isTerminalStatus && (this.formData?.status === 'Paused' || this.formData?.status === 'Closed' || !!this.formData?.isReadOnly);
+  }
+
   public confirmLifecycle(): void {
     this.confirmingLifecycle = false;
-    if (this.formData.status === 'Closed') this.ReopenSpaceRequested.emit();
+    if (this.isTerminalStatus) return;
+    if (this.isReopenLifecycleAction) this.ReopenSpaceRequested.emit();
     else this.CloseSpaceRequested.emit();
   }
 
@@ -596,4 +645,12 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   public saveChanges(): void {
     this.SaveSettingsRequested.emit(this.formData);
   }
+}
+
+function copySettingsField<K extends keyof SpaceSettingsModel>(
+  target: Partial<SpaceSettingsModel>,
+  source: SpaceSettingsModel,
+  key: K,
+): void {
+  target[key] = source[key];
 }

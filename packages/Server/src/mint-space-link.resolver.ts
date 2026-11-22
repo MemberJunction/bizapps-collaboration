@@ -31,6 +31,12 @@ export class MintSpaceLinkPayload {
 
     @Field({ nullable: true })
     ErrorMessage?: string;
+
+    @Field({ nullable: true })
+    NotificationFailed?: boolean;
+
+    @Field({ nullable: true })
+    TargetApplicationID?: string;
 }
 
 @Resolver()
@@ -43,7 +49,14 @@ export class MintSpaceLinkResolver extends ResolverBase {
         const provider = GetReadWriteProvider(context.providers);
         const user = this.GetUserFromPayload(context.userPayload);
         const magic = configInfo.magicLink;
-        const publicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
+        const idpInvites =
+            (magic != null && 'idpInvites' in magic && magic.idpInvites === true) ||
+            process.env.MAGIC_LINK_IDP_INVITES === 'true' ||
+            process.env.COLLABORATION_IDP_INVITES === 'true';
+        const publicUrl = configInfo.publicUrl
+            || (configInfo.baseUrl
+                ? `${configInfo.baseUrl}${configInfo.graphqlPort ? `:${configInfo.graphqlPort}` : ''}${configInfo.graphqlRootPath || ''}`
+                : '');
         try {
             const result = await mintSpaceLink({
                 provider,
@@ -53,6 +66,7 @@ export class MintSpaceLinkResolver extends ResolverBase {
                 roleId: input.RoleID,
                 host: {
                     enabled: !!magic?.enabled,
+                    idpInvites,
                     publicUrl,
                     restrictedRoleName: magic?.restrictedRoleName || 'Magic Link Baseline',
                     grantableRoleNames: magic?.grantableRoleNames ?? [],
@@ -64,7 +78,14 @@ export class MintSpaceLinkResolver extends ResolverBase {
                 },
             });
             if (!result.ok) return { Success: false, Sent: false, ErrorMessage: result.message };
-            return { Success: true, Sent: !!result.sent, RedemptionUrl: result.redemptionUrl, Message: result.message };
+            return {
+                Success: true,
+                Sent: !!result.sent,
+                RedemptionUrl: result.redemptionUrl,
+                Message: result.message,
+                NotificationFailed: result.notificationFailed,
+                TargetApplicationID: result.targetApplicationId,
+            };
         } catch (error) {
             LogError(error);
             return { Success: false, Sent: false, ErrorMessage: 'Invite refused.' };

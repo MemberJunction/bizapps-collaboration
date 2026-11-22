@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Loads the Collaboration sample world through the entity gates.",
+  "license": "BUSL-1.1",
   "main": "dist/index.js",
   "exports": {
     ".": "./dist/index.js",

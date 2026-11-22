@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { WellKnownUserSource, type UserInfo } from '@memberjunction/core';
+import {
+    WellKnownUserSource,
+    type EntityInfo,
+    type IEntityDataProvider,
+    type IRunViewProvider,
+    type RunViewResult,
+    type UserInfo,
+} from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
 import { loadMemberReach, loadWriteContext } from '../dist/load-graph.js';
 
@@ -70,7 +77,7 @@ function listed(id: string, filter: string): boolean {
     return filter.toLowerCase().includes(id.toLowerCase());
 }
 
-function select(entityName: string, filter = ''): unknown[] {
+function select(entityName: string, filter = ''): Array<Record<string, string | number | boolean | null>> {
     if (entityName.endsWith('Space Members')) {
         return tables.members.filter((row) => {
             if (filter.includes('UserID') && !filter.includes('SpaceID')) return same(row.UserID, quoted(filter, 'UserID'));
@@ -94,16 +101,31 @@ function select(entityName: string, filter = ''): unknown[] {
     return [];
 }
 
+function toRunViewResult<T>(rows: T[]): RunViewResult<T> {
+    return {
+        Success: true,
+        Results: rows,
+        UserViewRunID: '',
+        RowCount: rows.length,
+        TotalRowCount: rows.length,
+        ExecutionTime: 0,
+        ErrorMessage: '',
+    };
+}
+
 const provider = {
-    async RunView(params: { EntityName: string; ExtraFilter?: string }) {
-        return { Success: true, Results: select(params.EntityName, params.ExtraFilter ?? '') };
+    async RunView<T>(params: { EntityName: string; ExtraFilter?: string }): Promise<RunViewResult<T>> {
+        return toRunViewResult(select(params.EntityName, params.ExtraFilter ?? '') as T[]);
     },
-    async RunViews(params: { EntityName: string; ExtraFilter?: string }[]) {
-        return params.map((item) => ({ Success: true, Results: select(item.EntityName, item.ExtraFilter ?? '') }));
+    async RunViews<T>(params: { EntityName: string; ExtraFilter?: string }[]): Promise<RunViewResult<T>[]> {
+        return params.map((item) => toRunViewResult(select(item.EntityName, item.ExtraFilter ?? '') as T[]));
     },
     GetEntityObject() { return undefined; },
-    EntityByID() { return { Name: 'x' }; },
+    EntityByID() { return { Name: 'x' } as Partial<EntityInfo> as EntityInfo; },
 };
+
+const runViewProvider = provider as Partial<IRunViewProvider> as IRunViewProvider;
+const entityDataProvider = provider as Partial<IEntityDataProvider> as IEntityDataProvider;
 
 describe('loadWriteContext on SQL Server ids', () => {
     it('keeps the owner flag when the database returns uppercase GUIDs', async () => {
@@ -112,9 +134,9 @@ describe('loadWriteContext on SQL Server ids', () => {
         source.GetSystemUser = async () => ({ ID: USER }) as UserInfo;
         try {
             const entity = {
-                RunViewProviderToUse: provider,
-                ProviderToUse: provider,
-            } as unknown as BaseEntity;
+                RunViewProviderToUse: runViewProvider,
+                ProviderToUse: entityDataProvider,
+            } as Partial<BaseEntity> as BaseEntity;
             const context = await loadWriteContext(entity, { ID: USER } as UserInfo, SPACE, ROLE);
             assert.equal(context.memberships[0]?.role.isOwnerRole, true);
             assert.equal(context.memberships[0]?.role.canInvite, true);
@@ -127,10 +149,20 @@ describe('loadWriteContext on SQL Server ids', () => {
             source.GetSystemUser = original;
         }
     });
+
+    it('refuses when neither an entity nor an explicit provider override is supplied', async () => {
+        await assert.rejects(
+            () => loadWriteContext(null, { ID: USER } as UserInfo, SPACE, ROLE),
+            /provider or entity is required/,
+        );
+    });
 });
 
 describe('loadMemberReach', () => {
-    const entity = { RunViewProviderToUse: provider, ProviderToUse: provider } as unknown as BaseEntity;
+    const entity = {
+        RunViewProviderToUse: runViewProvider,
+        ProviderToUse: entityDataProvider,
+    } as Partial<BaseEntity> as BaseEntity;
     const reader = { ID: USER } as UserInfo;
 
     it('uses the assignee seat and ignores the reader seat', async () => {

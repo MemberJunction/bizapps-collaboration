@@ -15,7 +15,7 @@
     "build": "tsc",
     "test": "npm test --prefix ../Core"
   },
-  "license": "UNLICENSED",
+  "license": "BUSL-1.1",
   "peerDependencies": {
     "@memberjunction/core": "^6.3.0-edge.1",
     "@memberjunction/global": "^6.3.0-edge.1"

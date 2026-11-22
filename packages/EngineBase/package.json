@@ -16,7 +16,7 @@
     "test": "vitest run"
   },
   "author": "MemberJunction.com",
-  "license": "UNLICENSED",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@mj-biz-apps/collaboration-core": "0.1.0",
     "@mj-biz-apps/collaboration-entities": "0.1.0"

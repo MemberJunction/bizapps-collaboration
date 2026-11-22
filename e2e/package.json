@@ -4,6 +4,7 @@
   "type": "module",
   "version": "0.1.0",
   "description": "Playwright e2e and visual regression testing harness for BizApps Collaboration.",
+  "license": "BUSL-1.1",
   "scripts": {
     "test": "playwright test",
     "test:ui-pass": "playwright test -c playwright.ui-pass.config.ts"

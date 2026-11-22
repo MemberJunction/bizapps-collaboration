@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { CommonModule } from '@angular/common';
 import { CollabTypeTileComponent } from './type-tile.component';
+import type { SpaceHeaderChipDescriptor } from './base-space-type-ui-driver';
 import { BreadcrumbItem } from './types';
 
 @Component({
@@ -43,10 +44,20 @@ import { BreadcrumbItem } from './types';
             }
             @if (Status === 'Active') {
               <span class="chip ok"><i class="fa-solid fa-circle" style="font-size:6px"></i>Active</span>
+            } @else if (Status === 'Paused') {
+              <span class="chip warn"><i class="fa-solid fa-pause" style="font-size:8px"></i>Paused</span>
             } @else if (Status === 'Closed') {
               <span class="chip plain">Closed</span>
             } @else if (Status) {
               <span class="chip plain">{{ Status }}</span>
+            }
+            @for (chip of Chips; track chip.key) {
+              <span [class]="'chip ' + (chip.variant || 'plain')" [style.border-color]="chip.color || null">
+                @if (chip.icon) {
+                  <i [class]="chip.icon" aria-hidden="true"></i>
+                }
+                <span>{{ chip.label }}</span>
+              </span>
             }
             <ng-content select="[chips]"></ng-content>
           </div>
@@ -188,6 +199,16 @@ import { BreadcrumbItem } from './types';
       background: var(--mj-status-success-bg, #f0fdf4);
       border-color: color-mix(in srgb, var(--mj-status-success, #22c55e) 35%, transparent);
     }
+    .chip.warn {
+      color: var(--mj-status-warning-text);
+      background: var(--mj-status-warning-bg);
+      border-color: var(--mj-status-warning-border);
+    }
+    .chip.info {
+      color: var(--mj-status-info-text);
+      background: var(--mj-status-info-bg);
+      border-color: var(--mj-status-info-border);
+    }
   `]
 })
 export class CollabSpaceHeaderComponent {
@@ -199,10 +220,11 @@ export class CollabSpaceHeaderComponent {
   @Input() TypeName = '';
   @Input() TypeIconClass = '';
   @Input() TypeColor = '';
-  @Input() Status: 'Active' | 'Closed' | string = 'Active';
+  @Input() Status: 'Active' | 'Paused' | 'Closed' | string = 'Active';
   @Input() Subtitle = '';
   @Input() Breadcrumbs: BreadcrumbItem[] = [];
   @Input() BackgroundImageUrl: string | null = null;
+  @Input() Chips: SpaceHeaderChipDescriptor[] = [];
 
   @Output() BreadcrumbSelectRequested = new EventEmitter<BreadcrumbItem>();
   @Output() StarToggleRequested = new EventEmitter<void>();

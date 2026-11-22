@@ -16,7 +16,7 @@
     "build": "ngc",
     "test": "tsc -p tsconfig.test.json && node --experimental-strip-types --test 'src/lib/logic/*.test.ts' && vitest run"
   },
-  "license": "UNLICENSED",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@mj-biz-apps/collaboration-core": "0.1.0",
     "@mj-biz-apps/collaboration-engine-base": "0.1.0",

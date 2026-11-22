@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc"
   },
-  "license": "UNLICENSED",
+  "license": "BUSL-1.1",
   "peerDependencies": {
     "@memberjunction/actions": "^6.3.0-edge.1",
     "@memberjunction/actions-base": "^6.3.0-edge.1",

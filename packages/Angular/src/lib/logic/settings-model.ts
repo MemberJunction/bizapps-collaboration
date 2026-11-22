@@ -18,6 +18,10 @@ export interface SettingsSpaceRow {
     ClosedAt?: Date | string | null;
     /** The name of the space's effective status (stage 1), when the caller knows it; else Closed or Active is read from ClosedAt. */
     StatusName?: string | null;
+    /** Whether the space's effective status is terminal (Closed / Archived) and cannot be reopened. */
+    IsTerminal?: boolean;
+    /** Whether the space's effective status is read-only (e.g. Paused, Closed, Archived). */
+    IsReadOnly?: boolean;
 }
 
 /** What the screen shows about the space's type. */
@@ -29,6 +33,9 @@ export interface SettingsTypeInfo {
 
 
 export function buildSettingsModel(space: SettingsSpaceRow, type: SettingsTypeInfo): SpaceSettingsModel {
+    const status = space.StatusName || (space.ClosedAt ? 'Closed' : 'Active');
+    const isTerminal = space.IsTerminal !== undefined ? space.IsTerminal : (status === 'Closed' || status === 'Archived');
+    const isReadOnly = space.IsReadOnly !== undefined ? space.IsReadOnly : (isTerminal || status === 'Paused' || !!space.ClosedAt);
     return {
         id: space.ID,
         name: space.Name,
@@ -40,7 +47,9 @@ export function buildSettingsModel(space: SettingsSpaceRow, type: SettingsTypeIn
         backgroundImageUrl: space.BackgroundImageURL || '',
         inheritsMembership: space.InheritsMembership === true,
         agentRetrieval: space.AgentRetrieval || 'Included',
-        status: space.StatusName || (space.ClosedAt ? 'Closed' : 'Active'),
+        status,
+        isTerminal,
+        isReadOnly,
     };
 }
 

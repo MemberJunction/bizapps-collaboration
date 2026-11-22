@@ -550,13 +550,50 @@ export interface InviteEmail {
     body: string;
 }
 
+const RULE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const FALLBACK_COLLAB_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
+
+/** Resolves the SpaceType's configured target MJ Application ID, falling back to `defaultApplicationId` when unset or invalid. */
+export function resolveTargetApplicationId(
+    typeTargetApplicationId: string | null | undefined,
+    defaultApplicationId: string = FALLBACK_COLLAB_APP_ID,
+): string {
+    const trimmed = (typeTargetApplicationId ?? '').trim();
+    if (RULE_UUID_RE.test(trimmed)) return trimmed;
+    const trimmedDefault = (defaultApplicationId ?? '').trim();
+    return RULE_UUID_RE.test(trimmedDefault) ? trimmedDefault : FALLBACK_COLLAB_APP_ID;
+}
+
 /** The message MJ's mailer is asked to send. `from` is the host's magicLink.fromAddress. */
-export function inviteEmail(input: { from: string; to: string; url: string }): InviteEmail {
+export function inviteEmail(input: { from: string; to: string; url: string; applicationName?: string }): InviteEmail {
+    const appName = input.applicationName?.trim() || 'Collaboration';
     return {
         from: input.from,
         to: input.to,
-        subject: "You've been invited to Collaboration",
-        body: `Open this link to sign in:\n\n${input.url}\n\nThis link is single-use and will expire.`,
+        subject: `You've been invited to ${appName}`,
+        body: `Open this link to sign in to ${appName}:\n\n${input.url}\n\nThis link is single-use and will expire.`,
+    };
+}
+
+/**
+ * The sign-in notification email sent when magic links are disabled and the invited person
+ * authenticates through an external identity provider (such as Auth0 or WorkOS).
+ */
+export function idpInviteEmail(input: {
+    from: string;
+    to: string;
+    signInUrl: string;
+    applicationName?: string;
+    spaceName?: string | null;
+}): InviteEmail {
+    const appName = input.applicationName?.trim() || 'Collaboration';
+    const space = input.spaceName?.trim();
+    const location = space ? `"${space}" in ${appName}` : appName;
+    return {
+        from: input.from,
+        to: input.to,
+        subject: `You've been invited to ${appName}`,
+        body: `You have been invited to ${location}.\n\nSign in with your organization account at:\n\n${input.signInUrl}\n\nUse the email address ${input.to} when signing in.`,
     };
 }
 

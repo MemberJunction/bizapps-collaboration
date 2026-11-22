@@ -2899,6 +2899,14 @@ export class mjBizAppsCollaborationSpaceType_ {
     @Field({nullable: true}) 
     Configuration?: string;
         
+    @Field({nullable: true, description: "Optional target MJ Application ID that invited users land in for spaces of this type. NULL defaults to the Collaboration application."}) 
+    @MaxLength(36)
+    TargetApplicationID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    TargetApplication?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -2978,6 +2986,9 @@ export class CreatemjBizAppsCollaborationSpaceTypeInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field({ nullable: true })
+    TargetApplicationID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -3056,6 +3067,9 @@ export class UpdatemjBizAppsCollaborationSpaceTypeInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field({ nullable: true })
+    TargetApplicationID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
