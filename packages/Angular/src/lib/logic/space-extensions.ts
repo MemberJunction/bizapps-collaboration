@@ -21,7 +21,7 @@ export interface SpaceExtensionCollectionContext {
     viewerId: string;
     spaceType?: string;
     provider?: IRunViewProvider;
-    onError?: (error: unknown) => void;
+    onError?: (error: Error) => void;
 }
 
 export interface CollectedNeedsYouResult {
@@ -33,7 +33,7 @@ export interface CollectedNeedsYouResult {
  * Checks whether a registration's `Metadata.spaceTypes` targets the given space type code (or `'*'`).
  * Registrations without a `spaceTypes` array are treated as matching all space types.
  */
-export function matchesSpaceTypeMetadata(meta: Record<string, unknown> | undefined, spaceTypeCode: string): boolean {
+export function matchesSpaceTypeMetadata(meta: ClassRegistration['Metadata'], spaceTypeCode: string): boolean {
     const rawSpaceTypes = meta?.['spaceTypes'];
     if (!Array.isArray(rawSpaceTypes) || rawSpaceTypes.length === 0) {
         return true;
@@ -129,7 +129,7 @@ export async function collectSpaceNeedsYouItems(context: SpaceExtensionCollectio
                 for (const item of items) pushItem(item);
             }
         } catch (err) {
-            if (context.onError) context.onError(err);
+            if (context.onError) context.onError(err instanceof Error ? err : new Error(String(err)));
             else LogError(`NeedsYou provider '${reg.Key ?? 'unknown'}' failed: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
@@ -144,7 +144,7 @@ export async function collectSpaceNeedsYouItems(context: SpaceExtensionCollectio
                 for (const item of items) pushItem(item);
             }
         } catch (err) {
-            if (context.onError) context.onError(err);
+            if (context.onError) context.onError(err instanceof Error ? err : new Error(String(err)));
             else LogError(`NeedsYou provider '${reg.Key ?? 'unknown'}' failed: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
@@ -201,7 +201,7 @@ export async function collectSpaceHeaderChips(context: SpaceExtensionCollectionC
                 collected.push(mapChipToDescriptor(chip, order++));
             }
         } catch (err) {
-            if (context.onError) context.onError(err);
+            if (context.onError) context.onError(err instanceof Error ? err : new Error(String(err)));
             else LogError(`SpaceHeaderChip provider '${reg.Key ?? 'unknown'}' failed: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
@@ -218,7 +218,7 @@ export async function collectSpaceHeaderChips(context: SpaceExtensionCollectionC
                 }
             }
         } catch (err) {
-            if (context.onError) context.onError(err);
+            if (context.onError) context.onError(err instanceof Error ? err : new Error(String(err)));
             else LogError(`SpaceHeaderChip provider '${reg.Key ?? 'unknown'}' failed: ${err instanceof Error ? err.message : String(err)}`);
         }
     }

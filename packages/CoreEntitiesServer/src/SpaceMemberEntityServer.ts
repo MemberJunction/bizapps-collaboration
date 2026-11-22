@@ -29,10 +29,12 @@ export function decideMemberKind(change: { isNew: boolean; status: string; statu
     return null;
 }
 
+type SpaceMemberFieldValue = string | number | boolean | Date | object | null | undefined;
+
 /** What a seat save changes: its kind (none when it touches no status, role or band), what the fields held, and whether it is a change. */
 interface SeatChangeReading {
     kind: MemberChangeKind | null;
-    oldValues: Record<string, unknown>;
+    oldValues: Record<string, SpaceMemberFieldValue>;
     changed: boolean;
 }
 
@@ -137,7 +139,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     }
 
     /** Asks the space type's driver to judge this seat change. Null when it accepts. */
-    private async judgeWithDriver(user: UserInfo, spaceId: string, kind: MemberChangeKind, oldValues?: Record<string, unknown>): Promise<{ field: string; message: string } | null> {
+    private async judgeWithDriver(user: UserInfo, spaceId: string, kind: MemberChangeKind, oldValues?: Record<string, SpaceMemberFieldValue>): Promise<{ field: string; message: string } | null> {
         try {
             const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(spaceId, this);
             const verdict = await spaceInfo.driver.ValidateMemberChange({
@@ -178,8 +180,8 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     }
 
     /** What each changed field held before this save, by field name. System columns are left out. */
-    private dirtyOldValues(): Record<string, unknown> {
-        const old: Record<string, unknown> = {};
+    private dirtyOldValues(): Record<string, SpaceMemberFieldValue> {
+        const old: Record<string, SpaceMemberFieldValue> = {};
         for (const field of this.Fields) {
             if (field.Dirty && !field.Name.startsWith('__mj_')) old[field.Name] = field.OldValue;
         }

@@ -122,7 +122,7 @@ describe('space-extensions helpers (CX-9)', () => {
         factory.Register(BaseNeedsYouProvider, ThrowingNeedsYouProvider, 'cx9-test:bad-needs', 1, true, false, { spaceTypes: ['*'] });
         factory.Register(NeedsYouProvider, LegacyNeedsYouProvider, 'cx9-test:legacy-needs', 1, true, false, { spaceTypes: ['example-board'] });
 
-        const errors: unknown[] = [];
+        const errors: Error[] = [];
         const result = await collectSpaceNeedsYouItems({
             spaceId: SPACE_ID,
             viewerId: VIEWER_ID,

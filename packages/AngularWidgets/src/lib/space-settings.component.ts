@@ -575,13 +575,16 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   /** The fields the person changed from what the form was built from. Status is the space's own, not a field they edit. */
   private changedFields(): Partial<SpaceSettingsModel> {
     if (!this.formData || !this.baselineJson) return {};
-    const baseline = JSON.parse(this.baselineJson) as Record<string, unknown>;
-    const changed: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(this.formData as unknown as Record<string, unknown>)) {
+    const baseline = JSON.parse(this.baselineJson) as Partial<SpaceSettingsModel>;
+    const changed: Partial<SpaceSettingsModel> = {};
+    const keys = Object.keys(this.formData) as Array<keyof SpaceSettingsModel>;
+    for (const key of keys) {
       if (key === 'status') continue;
-      if (JSON.stringify(value) !== JSON.stringify(baseline[key])) changed[key] = value;
+      if (JSON.stringify(this.formData[key]) !== JSON.stringify(baseline[key])) {
+        copySettingsField(changed, this.formData, key);
+      }
     }
-    return changed as Partial<SpaceSettingsModel>;
+    return changed;
   }
 
   private isFormDirty(): boolean {
@@ -642,4 +645,12 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   public saveChanges(): void {
     this.SaveSettingsRequested.emit(this.formData);
   }
+}
+
+function copySettingsField<K extends keyof SpaceSettingsModel>(
+  target: Partial<SpaceSettingsModel>,
+  source: SpaceSettingsModel,
+  key: K,
+): void {
+  target[key] = source[key];
 }

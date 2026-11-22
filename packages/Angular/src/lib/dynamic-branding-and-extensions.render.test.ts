@@ -75,7 +75,27 @@ beforeAll(() => {
     getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
 });
 
+const providerCleanups: Array<() => void> = [];
+
+function spyOnSectionProviders(providerStub: ReturnType<typeof createProviderMock>['providerStub']): void {
+    const proto = CollaborationSectionResource.prototype;
+    const origProvider = Object.getOwnPropertyDescriptor(proto, 'ProviderToUse');
+    const origRunView = Object.getOwnPropertyDescriptor(proto, 'RunViewToUse');
+    Object.defineProperty(proto, 'ProviderToUse', { configurable: true, get: () => providerStub });
+    Object.defineProperty(proto, 'RunViewToUse', { configurable: true, get: () => providerStub });
+    providerCleanups.push(() => {
+        if (origProvider) Object.defineProperty(proto, 'ProviderToUse', origProvider);
+        else Reflect.deleteProperty(proto, 'ProviderToUse');
+        if (origRunView) Object.defineProperty(proto, 'RunViewToUse', origRunView);
+        else Reflect.deleteProperty(proto, 'RunViewToUse');
+    });
+}
+
 afterEach(() => {
+    while (providerCleanups.length > 0) {
+        const cleanup = providerCleanups.pop();
+        cleanup?.();
+    }
     TestBed.resetTestingModule();
     document.body.innerHTML = '';
     vi.restoreAllMocks();
@@ -296,7 +316,7 @@ async function flushAsyncWork(cycles = 4): Promise<void> {
 
 function createProviderMock(options: {
     spaceEntityInfo: EntityInfo;
-    rawSpaces: Array<Record<string, unknown>>;
+    rawSpaces: CollaborationSectionResource['rawSpaces'];
     loadSpaceEntity: () => Promise<mjBizAppsCollaborationSpaceEntity>;
     spaceType: mjBizAppsCollaborationSpaceTypeEntity;
     statusEntities: mjBizAppsCollaborationSpaceTypeStatusEntity[];
@@ -421,8 +441,7 @@ describe('CX-8 Dynamic Agent & Application Naming (production template)', () => 
             ],
         });
 
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
+        spyOnSectionProviders(providerStub);
 
         const fixture = TestBed.createComponent(CollaborationSectionResource);
         const comp = fixture.componentInstance;
@@ -632,8 +651,7 @@ describe('CX-9 & CR-2/CR-4 Real Selection/Load Lifecycle & Live Space Entity', (
         });
 
         configureProductionSectionTestBed({ queryParams: { view: 'home' } });
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
+        spyOnSectionProviders(providerStub);
 
         const fixture = TestBed.createComponent(CollaborationSectionResource);
         const comp = fixture.componentInstance;
@@ -746,8 +764,7 @@ describe('CX-9 & CR-2/CR-4 Real Selection/Load Lifecycle & Live Space Entity', (
         });
 
         configureProductionSectionTestBed({ queryParams: { view: 'space', space: SPACE_ID } });
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
+        spyOnSectionProviders(providerStub);
 
         const fixture = TestBed.createComponent(CollaborationSectionResource);
         const comp = fixture.componentInstance;
@@ -823,8 +840,7 @@ describe('CX-9 & CR-2/CR-4 Real Selection/Load Lifecycle & Live Space Entity', (
         });
 
         configureProductionSectionTestBed({ queryParams: { view: 'space', space: SPACE_ID } });
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
+        spyOnSectionProviders(providerStub);
 
         const fixture = TestBed.createComponent(CollaborationSectionResource);
         const comp = fixture.componentInstance;
@@ -936,8 +952,7 @@ describe('CX-12 Terminal Closed vs Resumable Paused UI Reopen Alignment', () => 
         } as SharedService);
 
         configureProductionSectionTestBed({ queryParams: { view: 'home' } });
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
-        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
+        spyOnSectionProviders(providerStub);
 
         const fixture = TestBed.createComponent(CollaborationSectionResource);
         const comp = fixture.componentInstance;
