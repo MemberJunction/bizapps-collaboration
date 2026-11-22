@@ -1228,7 +1228,7 @@ export const mjBizAppsCollaborationSpaceTypeSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings`),
     TargetApplicationID: z.string().nullable().describe(`
-        * * Field Name: Target Application ID
+        * * Field Name: TargetApplicationID
         * * Display Name: Target Application ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)

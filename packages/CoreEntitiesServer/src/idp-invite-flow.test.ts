@@ -617,6 +617,7 @@ describe('External IdP invite flow when magicLink.enabled = false (CX-7 & CX-6)'
     ): MagicLinkHost {
         return {
             enabled: false,
+            idpInvites: true,
             publicUrl: 'https://portal.acme.example',
             restrictedRoleName: 'Magic Link Baseline',
             grantableRoleNames: ['Space Participant'],
@@ -631,6 +632,73 @@ describe('External IdP invite flow when magicLink.enabled = false (CX-7 & CX-6)'
             },
         };
     }
+
+    it('refuses with zero writes on default host config (enabled: false, idpInvites omitted/false, grantableRoleNames: [])', async () => {
+        const state = createStatefulIdpProvider();
+        const caller = new UserInfo(state.provider, {
+            ID: OWNER_USER_ID,
+            Type: 'User',
+            UserRoles: [{ UserID: OWNER_USER_ID, RoleID: STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+        });
+
+        // Probe 1: Exact MJ default host built by MintSpaceLinkResolver when neither switch is opted in
+        const defaultRes = await mintSpaceLink({
+            provider: state.provider,
+            user: caller,
+            spaceId: SPACE_ALPHA_ID,
+            email: 'anyone@elsewhere.test',
+            roleId: GUEST_SPACE_ROLE_ID,
+            host: {
+                enabled: false,
+                publicUrl: 'https://portal.acme.example',
+                restrictedRoleName: 'Magic Link Baseline',
+                grantableRoleNames: [],
+                inviteIssuerRoleNames: [],
+                fromAddress: '',
+                defaultExpiresInHours: 72,
+                provisioningGuard: 'block',
+            },
+        });
+
+        assert.equal(defaultRes.ok, false);
+        assert.equal(defaultRes.kind, 'refused');
+        assert.equal(defaultRes.reason, 'invites-disabled');
+        assert.match(defaultRes.message ?? '', /turned off/i);
+        assert.equal(state.users.length, 0);
+        assert.equal(state.userRoles.length, 0);
+        assert.equal(state.userApps.length, 0);
+        assert.equal(state.seats.length, 2); // Only the 2 pre-seeded owner seats
+        assert.equal(state.magicLinkInvites.length, 0);
+
+        // Probe 2: Even if grantableRoleNames includes Space Participant, idpInvites: false still refuses with zero writes
+        const explicitOffRes = await mintSpaceLink({
+            provider: state.provider,
+            user: caller,
+            spaceId: SPACE_ALPHA_ID,
+            email: 'still-blocked@elsewhere.test',
+            roleId: GUEST_SPACE_ROLE_ID,
+            host: {
+                enabled: false,
+                idpInvites: false,
+                publicUrl: 'https://portal.acme.example',
+                restrictedRoleName: 'Magic Link Baseline',
+                grantableRoleNames: ['Space Participant'],
+                inviteIssuerRoleNames: [],
+                fromAddress: '',
+                defaultExpiresInHours: 72,
+                provisioningGuard: 'block',
+            },
+        });
+
+        assert.equal(explicitOffRes.ok, false);
+        assert.equal(explicitOffRes.kind, 'refused');
+        assert.equal(explicitOffRes.reason, 'invites-disabled');
+        assert.equal(state.users.length, 0);
+        assert.equal(state.userRoles.length, 0);
+        assert.equal(state.userApps.length, 0);
+        assert.equal(state.seats.length, 2);
+        assert.equal(state.magicLinkInvites.length, 0);
+    });
 
     it('pre-creates MJ User with Space Participant role only, SpaceType TargetApplication, SpaceMember seat, and sends sign-in notification without magic links', async () => {
         const state = createStatefulIdpProvider();
@@ -896,6 +964,7 @@ describe('External IdP invite flow when magicLink.enabled = false (CX-7 & CX-6)'
 
     it('resolves seats and target applications strictly from the authenticated UserInfo and computes lockout notices when no seat is active', async () => {
         const invitedUserId = '33333333-3333-4333-8333-333333333399';
+        const otherUserId = '33333333-3333-4333-8333-333333333398';
         const state = createStatefulIdpProvider({
             initialUsers: [
                 {
@@ -904,6 +973,15 @@ describe('External IdP invite flow when magicLink.enabled = false (CX-7 & CX-6)'
                     FirstName: 'Seated',
                     LastName: 'User',
                     Email: 'seated@vendor.test',
+                    Type: 'User',
+                    IsActive: true,
+                },
+                {
+                    ID: otherUserId,
+                    Name: 'other.person@vendor.test',
+                    FirstName: 'Other',
+                    LastName: 'User',
+                    Email: 'other.person@vendor.test',
                     Type: 'User',
                     IsActive: true,
                 },
@@ -929,6 +1007,27 @@ describe('External IdP invite flow when magicLink.enabled = false (CX-7 & CX-6)'
                     Band: 'Shared',
                     SyncSource: null,
                 },
+                // Second user's active seats pin the UserID = '${verifiedUserId}' filter so seats of other users never leak
+                {
+                    ID: 'seat-other-active-alpha',
+                    SpaceID: SPACE_ALPHA_ID,
+                    UserID: otherUserId,
+                    PersonID: null,
+                    SpaceRoleTypeID: GUEST_SPACE_ROLE_ID,
+                    Status: 'Active',
+                    Band: 'Shared',
+                    SyncSource: null,
+                },
+                {
+                    ID: 'seat-other-active-beta',
+                    SpaceID: SPACE_BETA_ID,
+                    UserID: otherUserId,
+                    PersonID: null,
+                    SpaceRoleTypeID: GUEST_SPACE_ROLE_ID,
+                    Status: 'Active',
+                    Band: 'Shared',
+                    SyncSource: null,
+                },
             ],
         });
         const verifiedUser = new UserInfo(state.provider, {
@@ -944,6 +1043,8 @@ describe('External IdP invite flow when magicLink.enabled = false (CX-7 & CX-6)'
 
         assert.equal(activeResolution.ok, true);
         assert.equal(activeResolution.userId, invitedUserId);
+        assert.equal(activeResolution.seats.length, 2);
+        assert.deepEqual(activeResolution.seats.map((s) => s.seatId), ['seat-active-alpha', 'seat-invited-beta']);
         assert.equal(activeResolution.activeSeats.length, 1);
         assert.equal(activeResolution.invitedSeats.length, 1);
         assert.equal(activeResolution.lockoutMessage, null);
@@ -952,26 +1053,28 @@ describe('External IdP invite flow when magicLink.enabled = false (CX-7 & CX-6)'
         assert.equal(activeResolution.invitedSeats[0]?.targetApplicationId, COLLABORATION_APP_ID);
         assert.deepEqual(activeResolution.landingApplications.map((a) => a.id), [VENDOR_PORTAL_APP_ID]);
 
-        // Now mark the only active seat Removed -> verified resolution prioritizes the pending Invited seat in lockout message
+        // Now mark the only active seat Removed (while otherUserId remains Active) -> verified resolution prioritizes the pending Invited seat in lockout message
         state.seats[0].Status = 'Removed';
         const lockedWithInvite = await resolveInvitedSeatsForUser({
             provider: state.provider,
             user: verifiedUser,
         });
         assert.equal(lockedWithInvite.ok, true);
+        assert.equal(lockedWithInvite.seats.length, 2);
         assert.equal(lockedWithInvite.activeSeats.length, 0);
         assert.equal(lockedWithInvite.removedSeats.length, 1);
         assert.equal(lockedWithInvite.invitedSeats.length, 1);
         assert.ok(lockedWithInvite.lockoutMessage);
         assert.match(lockedWithInvite.lockoutMessage, /Internal Collaboration Room/);
 
-        // When all seats are Removed -> lockout message reports the removed space
+        // When all seats of verifiedUser are Removed (otherUserId still holds active seats) -> lockout message reports the removed space
         state.seats[1].Status = 'Removed';
         const lockedRemovedOnly = await resolveInvitedSeatsForUser({
             provider: state.provider,
             user: verifiedUser,
         });
         assert.equal(lockedRemovedOnly.ok, true);
+        assert.equal(lockedRemovedOnly.seats.length, 2);
         assert.equal(lockedRemovedOnly.activeSeats.length, 0);
         assert.equal(lockedRemovedOnly.removedSeats.length, 2);
         assert.ok(lockedRemovedOnly.lockoutMessage);

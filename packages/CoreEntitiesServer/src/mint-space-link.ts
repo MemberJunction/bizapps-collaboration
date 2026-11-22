@@ -5,10 +5,12 @@
  * who the person is. It is an app session, not a resource share, so access ends when the seat is
  * removed. The raw URL is emailed to that address, or returned to a host issuer.
  *
- * When magic links are turned off (`host.enabled === false`, e.g., Auth0 / WorkOS external IdP),
+ * When magic links are turned off (`host.enabled === false`) and the host has explicitly opted in
+ * to external IdP invites (`host.idpInvites === true`, e.g., Auth0 / WorkOS external IdP),
  * the invite pre-creates the MJ User (assigned the Space Participant role only) and SpaceMember
  * seat, grants access to the SpaceType's target MJ Application (falling back gracefully when not
  * overridden), and dispatches a sign-in notification without requiring or minting a magic link.
+ * A host with both `enabled: false` and `idpInvites` falsy refuses invites with zero writes.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { type BaseEntity, LogError, Metadata, RunView, type IMetadataProvider, UserInfo, WellKnownUserSource } from '@memberjunction/core';
@@ -81,7 +83,15 @@ export interface IdpSignInNotification {
 }
 
 export interface MagicLinkHost {
+    /** Master switch for one-time magic-link invites. */
     enabled: boolean;
+    /**
+     * Explicit opt-in enabling external IdP invite provisioning (pre-creating the MJ User with
+     * Space Participant, TargetApplication, and SpaceMember seat plus sign-in notification) when
+     * `enabled` is `false`. Defaults to `false`. A host with both `enabled: false` and `idpInvites`
+     * falsy refuses invites with zero writes.
+     */
+    idpInvites?: boolean;
     publicUrl: string;
     restrictedRoleName: string;
     grantableRoleNames: readonly string[];
@@ -94,14 +104,14 @@ export interface MagicLinkHost {
     /** Optional host-level fallback MJ Application ID when a SpaceType does not override TargetApplicationID. */
     defaultApplicationId?: string;
     sendInviteEmail?: (system: UserInfo, providerName: string, message: InviteEmail) => Promise<boolean>;
-    /** Optional notification handler used when magic links are disabled (`enabled: false`) for external IdP sign-in. */
+    /** Optional notification handler used when magic links are disabled (`enabled: false`) and `idpInvites: true`. */
     sendSignInNotification?: (system: UserInfo, notification: IdpSignInNotification) => Promise<boolean>;
 }
 
 export interface MintSpaceLinkResult {
     ok: boolean;
     kind?: 'refused';
-    reason?: 'role-not-grantable' | 'type-is-staff-only';
+    reason?: 'invites-disabled' | 'role-not-grantable' | 'type-is-staff-only';
     sent?: boolean;
     redemptionUrl?: string;
     message?: string;
@@ -149,6 +159,7 @@ export function resolveMagicLinkHost(override?: Partial<MagicLinkHost>): MagicLi
         ? hostProvider()
         : {
               enabled: process.env.MAGIC_LINK_ENABLED !== 'false',
+              idpInvites: process.env.MAGIC_LINK_IDP_INVITES === 'true' || process.env.COLLABORATION_IDP_INVITES === 'true',
               publicUrl: process.env.PUBLIC_URL || 'http://localhost:4000',
               restrictedRoleName: process.env.MAGIC_LINK_RESTRICTED_ROLE || 'Magic Link Baseline',
               grantableRoleNames: ['Space Participant'],
@@ -175,7 +186,9 @@ interface ResolvedParticipantRole {
 /**
  * Invites a person into a space: provisions or reuses their MJ User and SpaceMember seat, grants the
  * SpaceType's target MJ Application (falling back gracefully when unset), and either mints a magic link
- * (`host.enabled === true`) or sends an external-IdP sign-in notification (`host.enabled === false`).
+ * (`host.enabled === true`) or sends an external-IdP sign-in notification when the host has explicitly
+ * opted in (`host.enabled === false && host.idpInvites === true`). Refuses with zero writes when both
+ * switches are off.
  */
 export async function mintSpaceLink(input: {
     provider: IMetadataProvider;
@@ -191,6 +204,14 @@ export async function mintSpaceLink(input: {
     const email = input.email.trim();
     if (!email.includes('@') || /\s/.test(email)) return { ok: false, message: 'Invite refused: enter an email address.' };
     if (!UUID.test(input.spaceId) || !UUID.test(input.roleId)) return { ok: false, message: 'Invite refused: the space and role must be real ids.' };
+    if (!host.enabled && !host.idpInvites) {
+        return {
+            ok: false,
+            kind: 'refused',
+            reason: 'invites-disabled',
+            message: 'Invite refused: magic links are turned off on this host, and external IdP invites are not enabled (set magicLink.idpInvites: true to opt in).',
+        };
+    }
 
     const rawSpace = await input.provider.GetEntityObject<BaseEntity>(SPACES, input.user);
     const space = rawSpace ?? null;

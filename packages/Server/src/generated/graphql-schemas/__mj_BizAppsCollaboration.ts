@@ -2900,9 +2900,11 @@ export class mjBizAppsCollaborationSpaceType_ {
     Configuration?: string;
         
     @Field({nullable: true, description: "Optional target MJ Application ID that invited users land in for spaces of this type. NULL defaults to the Collaboration application."}) 
+    @MaxLength(36)
     TargetApplicationID?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     TargetApplication?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })

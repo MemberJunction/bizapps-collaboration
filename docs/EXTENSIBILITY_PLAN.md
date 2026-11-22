@@ -104,7 +104,7 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 | `ServerDriverClass` | `NVARCHAR(255) NULL` | The ClassFactory key under `BaseSpaceTypeServerDriver`. Empty means Collaboration's base driver. |
 | `UIDriverClass` | `NVARCHAR(255) NULL` | The ClassFactory key under `BaseSpaceTypeUIDriver`. Empty means the base driver. |
 | `SpaceExtensionEntity` | `NVARCHAR(255) NULL` | The MJ entity name of the IsA child that every space of this type has, for example `Domain: ExtensionRecords`. Empty means a plain space. The server checks on save that it names an existing entity that is an IsA child of Spaces, and that every role that reads it does so under the same row filter as Spaces ([§ 7](#7-isa-subtypes-and-their-forms)). |
-| `TargetApplicationID` | `UNIQUEIDENTIFIER NULL`, FK to `__mj.Application` | Optional target MJ Application that invited users land in for spaces of this type. `NULL` falls back gracefully to the Collaboration application. |
+| `TargetApplicationID` | `UNIQUEIDENTIFIER NULL`, FK to `__mj.Application` (`ON DELETE SET NULL`) | Optional target MJ Application that invited users land in for spaces of this type. `NULL` falls back gracefully to the Collaboration application, and uninstalling a referenced application resets the column to `NULL`. |
 | `Configuration` | `NVARCHAR(MAX) NULL` | The type's rules and defaults, as `ISpaceTypeConfiguration` ([§ 4](#4-configuration-one-bag-per-type-and-per-space)). |
 
 - **Removed:** the legacy governance seed row, in PR #3 (the plan's B0.11); each downstream app ships its own type. **Still to remove:** the `GovernancePanel` column.
@@ -319,7 +319,7 @@ export class GovernanceSpaceServerDriver extends BaseSpaceTypeServerDriver { …
 - Drivers hold no state. One instance per driver class is cached in a `BaseSingleton` registry, `ServerDriverRegistry`, which is cleared when a `SpaceType` row is saved.
 
 **Seats from an app's roster.** The base driver declares a helper, `SyncSeats(space, source, people, actingUser, provider)`. It isn't built yet: the base changes nothing and returns an error. Once built, it adds, updates and removes the seats marked with that `SyncSource`, and leaves every other seat alone.
-- **People without an MJ user,** such as an Employee or a Person with no linked user, get an email invite through Collaboration's pending invites.
+- **People without an MJ user,** such as an Employee or a Person with no linked user, get an email invite through Collaboration's pending invites (`mintSpaceLink` / `inviteSpaceMember`). Hosts must explicitly opt in to either magic-link invites (`magicLink.enabled: true`) or external IdP invite provisioning (`magicLink.enabled: false` with `magicLink.idpInvites: true` or `MAGIC_LINK_IDP_INVITES=true` / `COLLABORATION_IDP_INVITES=true`), and list `Space Participant` in `magicLink.grantableRoleNames` on both paths; hosts with neither switch enabled refuse invites with zero writes. When opting in to external IdP provisioning, configure the IdP to require verified email ownership before issuing tokens (or bind `MJ: Identity Claims`), because MJ matches incoming IdP logins to pre-created `MJ: Users` rows by email and pre-creating a `Space Participant` row can pre-empt future staff first-login auto-provisioning for that address.
 - **A sync is a write like any other,** so the type's `ValidateMemberChange` can still refuse a seat.
 - **A governance app** syncs from its memberships, and a deal room from a deal's team and its buyer contacts ([§ 10](#10-examples)).
 

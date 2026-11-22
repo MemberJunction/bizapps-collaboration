@@ -44,7 +44,7 @@ On 2026-11-12 a deep dive on this repo set out a roadmap for making Collaboratio
 - **Only room-wide chats and 1:1 Assistant chats.** Multi-person subset direct/group chats await `MJ: Conversation Participants` (A5).
 - **No documents or pages.** The page editor was reverted in `be19c01` / `V202611051155`, and notes (`SpaceNote`) bridge until MJ Docs (D55).
 - **Meetings:** `bizapps-tasks` ships meeting entities and `SyncSeats` has landed; full Space Meetings tabs/transcripts follow in Horizon 2.
-- **No phone layout** (two `@media` rules in the whole UI). Outsiders currently land in the configured MJ Application shell (now declarable per `SpaceType.TargetApplicationID`, with external IdP invite provisioning when `magicLink.enabled = false`).
+- **No phone layout** (two `@media` rules in the whole UI). Outsiders currently land in the configured MJ Application shell (now declarable per `SpaceType.TargetApplicationID`, with opt-in external IdP invite provisioning when `magicLink.enabled = false` and `magicLink.idpInvites = true`).
 - **UI extension points & branding (landed in C4):** dynamic agent display names, active application naming, `NeedsYouProvider`, `BaseSpaceHeaderChipProvider`, `GetHeaderChips`, `GetHeaderActions`, and `GetSettingsSections` are now wired with live `Space` records.
 - **Rights by authorization (landed in C2):** role-name staff checks were eliminated (`check-no-role-name-auth.mjs`).
 - **Structural chat scope & receipts (landed in C3):** `Collaboration Space Scope` (`ServerDerived` `SpaceID` + `Audience` dimensions with `strictValidation: true`) and `ExecuteAgentParams.Audience: { Mode: 'Intersection', UserIDs }` bound agent turns structurally, and `SpaceAgentSourceReceipt` records and renders bounded citations.
@@ -165,7 +165,7 @@ Numbering continues from the plan's D52.
 | H0.14 CI green | Pin the runner to `ubuntu-24.04` or bump Playwright; run the client harness in CI | Both jobs green on `next` |
 | H0.15 MJ 6.3 & MJ#4789 | Pin MJ `>=6.3.0-edge.1 <7.0.0` (with **[MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)** A14–A19 landed in MJ 6.3); follow-up lifts pre-MJ#4789 grant guards in `SpaceGrantEntityServer` / `grant-operations.ts` | `mjVersionRange` and package pins target MJ 6.3 |
 | H0.16 Remove leftovers | Remove orphan page filters; mark `SpaceNote` temporary (D55); merge PR #14 | No metadata references a missing table |
-| H0.17 Release readiness & BUSL-1.1 (`OPS-1 Prep`) | Set `license: "BUSL-1.1"` across root/workspace `package.json` and `mj-app.json`, dual-dialect SQL Server + PostgreSQL migrations, external IdP invites (`magicLink.enabled = false`), clean `mj app install` | Clean-install SQL Server & PostgreSQL migrations and package/manifest checks pass |
+| H0.17 Release readiness & BUSL-1.1 (`OPS-1 Prep`) | Set `license: "BUSL-1.1"` across root/workspace `package.json` and `mj-app.json`, dual-dialect SQL Server + PostgreSQL migrations, opt-in external IdP invites (`magicLink.enabled = false`, `magicLink.idpInvites = true`), clean `mj app install` | Clean-install SQL Server & PostgreSQL migrations and package/manifest checks pass |
 | H0.18 Split the page component | Break `collaboration-section.component.ts` into a shell over per-tab components, without behaviour changes | No file over 1,000 lines in `packages/Angular`; every existing render test still passes |
 
 ## 5. Horizon 1: make it alive

@@ -49,6 +49,10 @@ export class MintSpaceLinkResolver extends ResolverBase {
         const provider = GetReadWriteProvider(context.providers);
         const user = this.GetUserFromPayload(context.userPayload);
         const magic = configInfo.magicLink;
+        const idpInvites =
+            (magic != null && 'idpInvites' in magic && magic.idpInvites === true) ||
+            process.env.MAGIC_LINK_IDP_INVITES === 'true' ||
+            process.env.COLLABORATION_IDP_INVITES === 'true';
         const publicUrl = configInfo.publicUrl
             || (configInfo.baseUrl
                 ? `${configInfo.baseUrl}${configInfo.graphqlPort ? `:${configInfo.graphqlPort}` : ''}${configInfo.graphqlRootPath || ''}`
@@ -62,6 +66,7 @@ export class MintSpaceLinkResolver extends ResolverBase {
                 roleId: input.RoleID,
                 host: {
                     enabled: !!magic?.enabled,
+                    idpInvites,
                     publicUrl,
                     restrictedRoleName: magic?.restrictedRoleName || 'Magic Link Baseline',
                     grantableRoleNames: magic?.grantableRoleNames ?? [],

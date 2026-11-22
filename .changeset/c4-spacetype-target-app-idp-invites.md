@@ -6,4 +6,4 @@
 '@mj-biz-apps/collaboration-ng': minor
 ---
 
-Add nullable `TargetApplicationID` to `SpaceType` (dual-dialect SQL Server & PostgreSQL migrations and updated metadata/generated entity schemas) so space invites target the declared MJ Application with graceful Collaboration fallback (`CX-6`), and add first-class external IdP invite provisioning and server-verified seat resolution when `magicLink.enabled` is false (`CX-7`).
+Add nullable `TargetApplicationID` to `SpaceType` (`ON DELETE SET NULL`, dual-dialect SQL Server & PostgreSQL migrations and updated metadata/generated entity schemas) so space invites target the declared MJ Application with graceful Collaboration fallback (`CX-6`), and add opt-in external IdP invite provisioning (`magicLink.idpInvites: true`, default off, enforcing `grantableRoleNames` on both paths) and server-verified seat resolution (`CX-7`).

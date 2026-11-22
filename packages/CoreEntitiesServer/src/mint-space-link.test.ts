@@ -690,6 +690,7 @@ describe('mintSpaceLink declarative MJ Authorization (CT-5)', () => {
                 host: {
                     ...hostConfig,
                     enabled: false,
+                    idpInvites: true,
                     publicUrl: 'https://portal.isolated.test',
                     sendSignInNotification: async (_system, notification) => {
                         notifications.push(notification);

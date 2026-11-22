@@ -37,6 +37,11 @@ async function sendInviteEmailViaEngine(system: UserInfo, providerName: string, 
     );
 }
 
+function resolveIdpInvitesEnabled(magic: typeof configInfo.magicLink): boolean {
+    const fromConfig = magic != null && 'idpInvites' in magic ? magic.idpInvites === true : false;
+    return fromConfig || process.env.MAGIC_LINK_IDP_INVITES === 'true' || process.env.COLLABORATION_IDP_INVITES === 'true';
+}
+
 setMagicLinkHostProvider(() => {
     const magic = configInfo?.magicLink;
     const publicUrl =
@@ -44,6 +49,7 @@ setMagicLinkHostProvider(() => {
         (configInfo?.baseUrl ? `${configInfo.baseUrl}:${configInfo.graphqlPort ?? 4000}${configInfo.graphqlRootPath || ''}` : 'http://localhost:4000');
     return {
         enabled: magic?.enabled ?? true,
+        idpInvites: resolveIdpInvitesEnabled(magic),
         publicUrl,
         restrictedRoleName: magic?.restrictedRoleName || 'Magic Link Baseline',
         grantableRoleNames: magic?.grantableRoleNames ?? ['Space Participant'],

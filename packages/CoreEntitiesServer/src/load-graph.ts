@@ -110,7 +110,10 @@ export async function loadWriteContext(
     previousRoleId: string | null = null,
     providerOverride?: IMetadataProvider,
 ): Promise<WriteContext> {
-    const rv = providerOverride ? RunView.FromMetadataProvider(providerOverride) : entity ? runViewFor(entity) : new RunView();
+    if (!providerOverride && !entity) {
+        throw new Error('Refusing the write: a provider or entity is required to load the write context.');
+    }
+    const rv = providerOverride ? RunView.FromMetadataProvider(providerOverride) : runViewFor(entity!);
     const caller = parseUuid(user.ID);
     const space = parseUuid(spaceId);
     if (!caller || !space) {
