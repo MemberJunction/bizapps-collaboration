@@ -14,6 +14,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { type BaseEntity, LogError, Metadata, RunView, type IMetadataProvider, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { NormalizeUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import '@memberjunction/core-entities';
 import {
     MJMagicLinkInviteApplicationEntity,
@@ -501,7 +502,7 @@ export async function resolveInvitedSeatsForUser(input: {
     }
 
     const spaceIds = [...new Set(memberRows.map((r) => parseUuid(r.SpaceID)).filter((id): id is string => !!id))];
-    const spaceMap = new Map<string, { ID: string; Name: string; SpaceTypeID: string }>();
+    const spaceMap = new UUIDMap<{ ID: string; Name: string; SpaceTypeID: string }>();
     if (spaceIds.length > 0) {
         const spaceFilter = `ID IN (${spaceIds.map((id) => `'${id}'`).join(', ')})`;
         const spaceResult = await rv.RunView<{ ID: string; Name: string; SpaceTypeID: string }>(
@@ -544,12 +545,12 @@ export async function resolveInvitedSeatsForUser(input: {
         }
         for (const row of spaceResult.Results ?? []) {
             const id = parseUuid(row.ID);
-            if (id) spaceMap.set(id.toLowerCase(), row);
+            if (id) spaceMap.Set(id, row);
         }
     }
 
-    const typeIds = [...new Set([...spaceMap.values()].map((s) => parseUuid(s.SpaceTypeID)).filter((id): id is string => !!id))];
-    const typeMap = new Map<string, { ID: string; TargetApplicationID?: string | null; TargetApplication?: string | null }>();
+    const typeIds = [...new Set([...spaceMap.Values()].map((s) => parseUuid(s.SpaceTypeID)).filter((id): id is string => !!id))];
+    const typeMap = new UUIDMap<{ ID: string; TargetApplicationID?: string | null; TargetApplication?: string | null }>();
     if (typeIds.length > 0) {
         const typeFilter = `ID IN (${typeIds.map((id) => `'${id}'`).join(', ')})`;
         const typeResult = await rv.RunView<{ ID: string; TargetApplicationID?: string | null; TargetApplication?: string | null }>(
@@ -579,7 +580,7 @@ export async function resolveInvitedSeatsForUser(input: {
             }
             for (const row of typeResult.Results ?? []) {
                 const id = parseUuid(row.ID);
-                if (id) typeMap.set(id.toLowerCase(), row);
+                if (id) typeMap.Set(id, row);
             }
         }
     }
@@ -589,10 +590,10 @@ export async function resolveInvitedSeatsForUser(input: {
     for (const member of memberRows) {
         const spaceId = parseUuid(member.SpaceID);
         if (!spaceId) continue;
-        const spaceRow = spaceMap.get(spaceId.toLowerCase());
+        const spaceRow = spaceMap.Get(spaceId);
         const spaceTypeId = parseUuid(spaceRow?.SpaceTypeID ?? '') ?? '';
-        const typeRow = spaceTypeId ? typeMap.get(spaceTypeId.toLowerCase()) : undefined;
-        const cacheKey = `${spaceTypeId.toLowerCase()}|${(typeRow?.TargetApplicationID ?? '').toLowerCase()}`;
+        const typeRow = spaceTypeId ? typeMap.Get(spaceTypeId) : undefined;
+        const cacheKey = `${NormalizeUUID(spaceTypeId)}|${NormalizeUUID(typeRow?.TargetApplicationID)}`;
         let targetApp = resolvedAppCache.get(cacheKey);
         if (!targetApp) {
             targetApp = await resolveTargetApplication(input.provider, system, {
@@ -623,11 +624,10 @@ export async function resolveInvitedSeatsForUser(input: {
     const activeSeats = seats.filter((s) => s.status === 'Active');
     const invitedSeats = seats.filter((s) => s.status === 'Invited');
     const removedSeats = seats.filter((s) => s.status === 'Removed');
-    const landingAppsMap = new Map<string, ResolvedTargetApplication>();
+    const landingAppsMap = new UUIDMap<ResolvedTargetApplication>();
     for (const s of activeSeats) {
-        const key = s.targetApplicationId.toLowerCase();
-        if (!landingAppsMap.has(key)) {
-            landingAppsMap.set(key, {
+        if (!landingAppsMap.Has(s.targetApplicationId)) {
+            landingAppsMap.Set(s.targetApplicationId, {
                 id: s.targetApplicationId,
                 name: s.targetApplicationName,
                 path: s.targetApplicationPath,
@@ -643,7 +643,7 @@ export async function resolveInvitedSeatsForUser(input: {
         activeSeats,
         invitedSeats,
         removedSeats,
-        landingApplications: [...landingAppsMap.values()],
+        landingApplications: [...landingAppsMap.Values()],
         lockoutMessage:
             activeSeats.length === 0
                 ? lockoutMessage(seats.map((s) => ({ spaceName: s.spaceName, status: s.status })))
@@ -860,7 +860,7 @@ async function deliverLink(
 async function resolveParticipantRole(provider: IMetadataProvider, system: UserInfo): Promise<ResolvedParticipantRole> {
     const candidates = provider.Roles ?? [];
     const matched =
-        candidates.find((role) => role.ID?.toLowerCase() === DEFAULT_PARTICIPANT_ROLE_ID.toLowerCase()) ??
+        candidates.find((role) => UUIDsEqual(role.ID, DEFAULT_PARTICIPANT_ROLE_ID)) ??
         candidates.find((role) => (role.Name ?? '').trim().toLowerCase() === DEFAULT_PARTICIPANT_ROLE_NAME.toLowerCase());
     if (matched?.ID) {
         return {
@@ -882,7 +882,7 @@ async function resolveParticipantRole(provider: IMetadataProvider, system: UserI
             system,
         );
         if (rows.Success && rows.Results?.length) {
-            const byId = rows.Results.find((r) => r.ID?.toLowerCase() === DEFAULT_PARTICIPANT_ROLE_ID.toLowerCase());
+            const byId = rows.Results.find((r) => UUIDsEqual(r.ID, DEFAULT_PARTICIPANT_ROLE_ID));
             const byName = rows.Results.find((r) => (r.Name ?? '').trim().toLowerCase() === DEFAULT_PARTICIPANT_ROLE_NAME.toLowerCase());
             const chosen = byId ?? byName ?? rows.Results[0];
             if (chosen?.ID && parseUuid(chosen.ID)) {
@@ -931,7 +931,7 @@ async function resolveTargetApplication(
             );
             if (typeRows.Success && typeRows.Results?.length) {
                 const typeRow =
-                    typeRows.Results.find((r) => r.ID?.toLowerCase() === params.typeId!.toLowerCase()) ??
+                    typeRows.Results.find((r) => UUIDsEqual(r.ID, params.typeId)) ??
                     typeRows.Results[0];
                 typeTargetId = parseUuid(typeRow?.TargetApplicationID ?? '');
                 if (!typeTargetName && typeRow?.TargetApplication?.trim()) {
@@ -946,7 +946,7 @@ async function resolveTargetApplication(
     const hostDefaultId = parseUuid(params.hostDefaultApplicationId ?? '');
     const knownApps = provider.Applications ?? [];
     let collabApp: { ID?: string; Name?: string | null; Path?: string | null } | undefined =
-        knownApps.find((app) => app.ID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase()) ??
+        knownApps.find((app) => UUIDsEqual(app.ID, COLLABORATION_APP_ID)) ??
         knownApps.find((app) => (app.Name ?? '').trim().toLowerCase() === 'collaboration');
 
     let loadedAppRows: Array<{ ID: string; Name?: string | null; Path?: string | null }> | null = null;
@@ -966,7 +966,7 @@ async function resolveTargetApplication(
             if (rows.Success && rows.Results?.length) {
                 loadedAppRows = rows.Results;
                 const matchedCollab =
-                    rows.Results.find((r) => r.ID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase()) ??
+                    rows.Results.find((r) => UUIDsEqual(r.ID, COLLABORATION_APP_ID)) ??
                     rows.Results.find((r) => (r.Name ?? '').trim().toLowerCase() === 'collaboration');
                 if (matchedCollab?.ID && parseUuid(matchedCollab.ID)) {
                     collabApp = matchedCollab;
@@ -980,8 +980,8 @@ async function resolveTargetApplication(
     const fallbackAppId = hostDefaultId ?? (collabApp?.ID ? parseUuid(collabApp.ID) : null) ?? COLLABORATION_APP_ID;
     const appId = resolveTargetApplicationId(typeTargetId, fallbackAppId);
     const matchedApp =
-        knownApps.find((app) => app.ID?.toLowerCase() === appId.toLowerCase()) ??
-        (collabApp && collabApp.ID?.toLowerCase() === appId.toLowerCase() ? collabApp : undefined);
+        knownApps.find((app) => UUIDsEqual(app.ID, appId)) ??
+        (collabApp && UUIDsEqual(collabApp.ID, appId) ? collabApp : undefined);
 
     let appName = (typeTargetId && typeTargetName) || matchedApp?.Name?.trim() || '';
     let appPath: string | null = matchedApp?.Path?.trim() || null;
@@ -1004,7 +1004,7 @@ async function resolveTargetApplication(
                 candidateRows = rows.Success ? rows.Results ?? [] : [];
             }
             if (candidateRows.length > 0) {
-                const row = candidateRows.find((r) => r.ID?.toLowerCase() === appId.toLowerCase()) ?? candidateRows[0];
+                const row = candidateRows.find((r) => UUIDsEqual(r.ID, appId)) ?? candidateRows[0];
                 if (row) {
                     if (!appName && row.Name?.trim()) appName = row.Name.trim();
                     if (appPath === null && row.Path?.trim()) appPath = row.Path.trim();
@@ -1016,7 +1016,7 @@ async function resolveTargetApplication(
     }
 
     if (!appName) {
-        appName = appId.toLowerCase() === COLLABORATION_APP_ID.toLowerCase() ? 'Collaboration' : 'the application';
+        appName = UUIDsEqual(appId, COLLABORATION_APP_ID) ? 'Collaboration' : 'the application';
     }
 
     return { id: appId, name: appName, path: appPath };
@@ -1194,7 +1194,7 @@ async function ensureAccess(
     }, system);
     if (!links.Success) return { ok: false, message: 'Invite refused: the account roles could not be read.' };
     const roleIds = (links.Results ?? []).map((row) => row.RoleID).filter((id) => UUID.test(id));
-    const hasParticipant = roleIds.some((id) => id.toLowerCase() === participantRoleId.toLowerCase());
+    const hasParticipant = roleIds.some((id) => UUIDsEqual(id, participantRoleId));
     if (!hasParticipant) {
         const authProvider = resolveAuthProvider(provider);
         const hasStaffAuthorization = authProvider

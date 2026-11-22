@@ -794,4 +794,55 @@ describe('mintSpaceLink declarative MJ Authorization (CT-5)', () => {
             CollaborationEngine.Instance.SpaceTypeById = origSpaceTypeById;
         }
     });
+
+    it('matches TargetApplicationID, Application.ID, and Role.ID case-insensitively via UUIDsEqual (CR-C4-UUID-COMPARISON)', async () => {
+        const lowerCustomAppId = 'bb000000-0000-4000-8000-000000000088';
+        const upperCustomAppId = lowerCustomAppId.toUpperCase();
+        const lowerParticipantRoleId = PARTICIPANT_ROLE_ID.toLowerCase();
+        const state = createMintMockProvider({
+            inviteeRoleIds: [lowerParticipantRoleId],
+            authGrants: { issueLinksRoleIds: [CUSTOM_STAFF_ROLE_ID] },
+            targetApplicationId: lowerCustomAppId,
+            targetApplicationName: 'Deal Rooms',
+            applications: [
+                { ID: COLLABORATION_APP_ID.toLowerCase(), Name: 'Collaboration', Path: 'collaboration' },
+                { ID: upperCustomAppId, Name: 'Deal Rooms', Path: 'deal-rooms' },
+            ],
+            roles: [
+                { ID: lowerParticipantRoleId, Name: 'Space Participant' },
+            ],
+        });
+        const caller = new UserInfo(state.provider, {
+            ID: OWNER_USER_ID,
+            Type: 'User',
+            UserRoles: [{ UserID: OWNER_USER_ID, RoleID: CUSTOM_STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+        });
+
+        const notifications: IdpSignInNotification[] = [];
+        const res = await mintSpaceLink({
+            provider: state.provider,
+            user: caller,
+            spaceId: SPACE_ID.toLowerCase(),
+            email: 'mixedcase-uuid@example.test',
+            roleId: GUEST_SPACE_ROLE_ID.toLowerCase(),
+            host: {
+                ...hostConfig,
+                enabled: false,
+                idpInvites: true,
+                publicUrl: 'https://portal.example.test',
+                sendSignInNotification: async (_system, notification) => {
+                    notifications.push(notification);
+                    return true;
+                },
+            },
+        });
+
+        assert.equal(res.ok, true);
+        assert.equal(res.sent, true);
+        assert.equal(res.targetApplicationId, lowerCustomAppId);
+        assert.equal(res.targetApplicationName, 'Deal Rooms');
+        assert.equal(notifications[0]?.signInUrl, 'https://portal.example.test/app/deal-rooms');
+        // No duplicate MJ: User Role grant when invitee already holds the lowercase participant role ID
+        assert.deepEqual(state.grantedUserRoles, []);
+    });
 });
