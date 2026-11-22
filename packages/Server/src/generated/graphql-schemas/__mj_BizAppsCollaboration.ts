@@ -17,7 +17,7 @@ import { MaxLength } from 'class-validator';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
-import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity, mjBizAppsCollaborationSpaceAnchorEntity, mjBizAppsCollaborationSpaceChatEntity, mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberPinEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceNoteEntity, mjBizAppsCollaborationSpaceRoleTypeEntity, mjBizAppsCollaborationSpaceTypeStatusEntity, mjBizAppsCollaborationSpaceTypeEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity, mjBizAppsCollaborationSpaceAgentSourceReceiptEntity, mjBizAppsCollaborationSpaceAnchorEntity, mjBizAppsCollaborationSpaceChatEntity, mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberPinEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceNoteEntity, mjBizAppsCollaborationSpaceRoleTypeEntity, mjBizAppsCollaborationSpaceTypeStatusEntity, mjBizAppsCollaborationSpaceTypeEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
     
 
 //****************************************************************************
@@ -381,6 +381,360 @@ export class mjBizAppsCollaborationShareNoticeResolver extends ResolverBase {
         return this.DeleteRecord('MJ_BizApps_Collaboration: Share Notices', key, options, provider, userPayload, pubSub);
     }
     
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ_BizApps_Collaboration: Space Agent Source Receipts
+//****************************************************************************
+@ObjectType({ description: "Relational provenance receipt on a space agent answer message, recording each in-reach space item or knowledge source supplied to the turn and whether it was cited in the answer." })
+export class mjBizAppsCollaborationSpaceAgentSourceReceipt_ {
+    @Field()
+    @MaxLength(36)
+    ID: string;
+
+    @Field({ nullable: true, description: "The space that owns the source (for SpaceItem) or the chat anchor space (for KnowledgeSource)." })
+    @MaxLength(36)
+    SpaceID?: string;
+
+    @Field({ nullable: true, description: "The SpaceChat record in which the agent turn ran." })
+    @MaxLength(36)
+    SpaceChatID?: string;
+
+    @Field({ nullable: true, description: "The MJ Conversation in which the agent message was authored." })
+    @MaxLength(36)
+    ConversationID?: string;
+
+    @Field({ nullable: true, description: "The assistant ConversationDetail message this receipt belongs to." })
+    @MaxLength(36)
+    ConversationDetailID?: string;
+
+    @Field({ nullable: true, description: "The AI Agent Run associated with this answer turn, when available." })
+    @MaxLength(36)
+    AgentRunID?: string;
+
+    @Field({ nullable: true, description: "Discriminator identifying whether the source is a SpaceItem or a KnowledgeSource." })
+    @MaxLength(30)
+    SourceKind?: string;
+
+    @Field({ nullable: true, description: "The in-reach SpaceItem supplied or cited when SourceKind is SpaceItem." })
+    @MaxLength(36)
+    SpaceItemID?: string;
+
+    @Field({ nullable: true, description: "The in-reach ContentSource supplied or cited when SourceKind is KnowledgeSource." })
+    @MaxLength(36)
+    ContentSourceID?: string;
+
+    @Field({ nullable: true, description: "The underlying target MJ Entity ID for this source (polymorphic pair with TargetRecordID)." })
+    @MaxLength(36)
+    TargetEntityID?: string;
+
+    @Field({ nullable: true, description: "The canonical target record key (e.g. ID|<uuid>) for opening the in-reach source." })
+    @MaxLength(450)
+    TargetRecordID?: string;
+
+    @Field({ nullable: true, description: "Display title of the validated in-reach source captured at turn execution time." })
+    @MaxLength(500)
+    SourceTitle?: string;
+
+    @Field({ nullable: true, description: "Visibility band of the source (Shared or Team), strictly bounded by the chat audience." })
+    @MaxLength(20)
+    Band?: string;
+
+    @Field(() => Boolean, { nullable: true, description: "True when this source was supplied into the agent turn prompt or tools context." })
+    WasSupplied?: boolean;
+
+    @Field(() => Boolean, { nullable: true, description: "True when this in-reach source was specifically cited in the generated agent answer." })
+    WasCited?: boolean;
+
+    @Field(() => Int, { nullable: true, description: "1-based retrieval rank assigned during bounded top-k retrieval." })
+    RetrievalRank?: number;
+
+    @Field(() => Number, { nullable: true, description: "Relevance score computed by vector search or lexical BM25 fallback." })
+    RelevanceScore?: number;
+
+    @Field({ nullable: true, description: "How the source was selected for the turn: vector, lexical, grant, or none." })
+    @MaxLength(20)
+    RankingMode?: string;
+
+    @Field(() => Int, { nullable: true, description: "1-based citation order within the generated answer when WasCited is true." })
+    CitationOrdinal?: number;
+
+    @Field(() => Int, { nullable: true, description: "Estimated prompt tokens consumed by this source under the bounded context budget." })
+    EstimatedTokens?: number;
+
+    @Field(() => Boolean, { nullable: true, description: "True when source content was truncated to fit the per-source token ceiling." })
+    WasTruncated?: boolean;
+
+    @Field(() => Int, { nullable: true, description: "Deterministic display sequence of the receipt on the assistant message." })
+    Sequence?: number;
+
+    @Field()
+    _mj__CreatedAt: Date;
+
+    @Field()
+    _mj__UpdatedAt: Date;
+
+    @Field({ nullable: true })
+    @MaxLength(200)
+    Space?: string;
+
+    @Field({ nullable: true })
+    @MaxLength(255)
+    SpaceChat?: string;
+
+    @Field({ nullable: true })
+    @MaxLength(255)
+    Conversation?: string;
+
+    @Field({ nullable: true })
+    @MaxLength(255)
+    ContentSource?: string;
+
+    @Field({ nullable: true })
+    @MaxLength(255)
+    TargetEntity?: string;
+
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Agent Source Receipts
+//****************************************************************************
+@InputType()
+export class CreatemjBizAppsCollaborationSpaceAgentSourceReceiptInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SpaceID?: string;
+
+    @Field({ nullable: true })
+    SpaceChatID?: string;
+
+    @Field({ nullable: true })
+    ConversationID?: string;
+
+    @Field({ nullable: true })
+    ConversationDetailID?: string;
+
+    @Field({ nullable: true })
+    AgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    SourceKind?: string;
+
+    @Field({ nullable: true })
+    SpaceItemID?: string | null;
+
+    @Field({ nullable: true })
+    ContentSourceID?: string | null;
+
+    @Field({ nullable: true })
+    TargetEntityID?: string | null;
+
+    @Field({ nullable: true })
+    TargetRecordID?: string | null;
+
+    @Field({ nullable: true })
+    SourceTitle?: string;
+
+    @Field({ nullable: true })
+    Band?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    WasSupplied?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    WasCited?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    RetrievalRank?: number | null;
+
+    @Field(() => Number, { nullable: true })
+    RelevanceScore?: number | null;
+
+    @Field({ nullable: true })
+    RankingMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    CitationOrdinal?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EstimatedTokens?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    WasTruncated?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Agent Source Receipts
+//****************************************************************************
+@InputType()
+export class UpdatemjBizAppsCollaborationSpaceAgentSourceReceiptInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SpaceID?: string;
+
+    @Field({ nullable: true })
+    SpaceChatID?: string;
+
+    @Field({ nullable: true })
+    ConversationID?: string;
+
+    @Field({ nullable: true })
+    ConversationDetailID?: string;
+
+    @Field({ nullable: true })
+    AgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    SourceKind?: string;
+
+    @Field({ nullable: true })
+    SpaceItemID?: string | null;
+
+    @Field({ nullable: true })
+    ContentSourceID?: string | null;
+
+    @Field({ nullable: true })
+    TargetEntityID?: string | null;
+
+    @Field({ nullable: true })
+    TargetRecordID?: string | null;
+
+    @Field({ nullable: true })
+    SourceTitle?: string;
+
+    @Field({ nullable: true })
+    Band?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    WasSupplied?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    WasCited?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    RetrievalRank?: number | null;
+
+    @Field(() => Number, { nullable: true })
+    RelevanceScore?: number | null;
+
+    @Field({ nullable: true })
+    RankingMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    CitationOrdinal?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EstimatedTokens?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    WasTruncated?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+
+//****************************************************************************
+// RESOLVER for MJ_BizApps_Collaboration: Space Agent Source Receipts
+//****************************************************************************
+@ObjectType()
+export class RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewResult {
+    @Field(() => [mjBizAppsCollaborationSpaceAgentSourceReceipt_])
+    Results: mjBizAppsCollaborationSpaceAgentSourceReceipt_[];
+
+    @Field(() => String, { nullable: true })
+    UserViewRunID?: string;
+
+    @Field(() => Int, { nullable: true })
+    RowCount: number;
+
+    @Field(() => Int, { nullable: true })
+    TotalRowCount: number;
+
+    @Field(() => Int, { nullable: true })
+    ExecutionTime: number;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, { nullable: false })
+    Success: boolean;
+}
+
+@Resolver(mjBizAppsCollaborationSpaceAgentSourceReceipt_)
+export class mjBizAppsCollaborationSpaceAgentSourceReceiptResolver extends ResolverBase {
+    @Query(() => RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewResult)
+    async RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewResult)
+    async RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewResult)
+    async RunmjBizAppsCollaborationSpaceAgentSourceReceiptDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ_BizApps_Collaboration: Space Agent Source Receipts';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => mjBizAppsCollaborationSpaceAgentSourceReceipt_, { nullable: true })
+    async mjBizAppsCollaborationSpaceAgentSourceReceipt(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpaceAgentSourceReceipt_ | null> {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Agent Source Receipts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceAgentSourceReceipts')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Agent Source Receipts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Agent Source Receipts', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceAgentSourceReceipt_)
+    async CreatemjBizAppsCollaborationSpaceAgentSourceReceipt(
+        @Arg('input', () => CreatemjBizAppsCollaborationSpaceAgentSourceReceiptInput) input: CreatemjBizAppsCollaborationSpaceAgentSourceReceiptInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ_BizApps_Collaboration: Space Agent Source Receipts', input, provider, userPayload, pubSub);
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceAgentSourceReceipt_)
+    async UpdatemjBizAppsCollaborationSpaceAgentSourceReceipt(
+        @Arg('input', () => UpdatemjBizAppsCollaborationSpaceAgentSourceReceiptInput) input: UpdatemjBizAppsCollaborationSpaceAgentSourceReceiptInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ_BizApps_Collaboration: Space Agent Source Receipts', input, provider, userPayload, pubSub);
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceAgentSourceReceipt_)
+    async DeletemjBizAppsCollaborationSpaceAgentSourceReceipt(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{ FieldName: 'ID', Value: ID }]);
+        return this.DeleteRecord('MJ_BizApps_Collaboration: Space Agent Source Receipts', key, options, provider, userPayload, pubSub);
+    }
 }
 
 //****************************************************************************

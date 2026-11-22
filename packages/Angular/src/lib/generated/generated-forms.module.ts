@@ -17,6 +17,7 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 // Import Generated Components
 import { mjBizAppsCollaborationItemUseFormComponent } from "./Entities/mjBizAppsCollaborationItemUse/mjbizappscollaborationitemuse.form.component";
 import { mjBizAppsCollaborationShareNoticeFormComponent } from "./Entities/mjBizAppsCollaborationShareNotice/mjbizappscollaborationsharenotice.form.component";
+import { mjBizAppsCollaborationSpaceAgentSourceReceiptFormComponent } from "./Entities/mjBizAppsCollaborationSpaceAgentSourceReceipt/mjbizappscollaborationspaceagentsourcereceipt.form.component";
 import { mjBizAppsCollaborationSpaceAnchorFormComponent } from "./Entities/mjBizAppsCollaborationSpaceAnchor/mjbizappscollaborationspaceanchor.form.component";
 import { mjBizAppsCollaborationSpaceChatFormComponent } from "./Entities/mjBizAppsCollaborationSpaceChat/mjbizappscollaborationspacechat.form.component";
 import { mjBizAppsCollaborationSpaceFormComponent } from "./Entities/mjBizAppsCollaborationSpace/mjbizappscollaborationspace.form.component";
@@ -180,6 +181,7 @@ export class GeneratedForms_SubModule_23 { }
 
 @NgModule({
 declarations: [
+    mjBizAppsCollaborationSpaceAgentSourceReceiptFormComponent,
     mjBizAppsCollaborationSpaceAnchorFormComponent
 ],
 imports: [

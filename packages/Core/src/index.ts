@@ -184,3 +184,23 @@ export {
 export { mimeTypeForFileName } from './file-types.js';
 export { agentGrantFor, agentRunSettingsFor, audienceOfConversationKind, turnToolsFor } from './turn-tools.js';
 export type { AgentRunSettings, ChatAudience, TurnTools, WithheldAction } from './turn-tools.js';
+export {
+    canReaderAccessSourceReceipt,
+    extractAndValidateSourceReceipts,
+    isSourceReceiptBand,
+    isSourceReceiptKind,
+    isSourceReceiptRankingMode,
+    normalizeReceiptId,
+    normalizeReceiptUuid,
+    stripRecordKeyPrefix,
+} from './source-receipts.js';
+export type {
+    ExtractAndValidateSourceReceiptsResult,
+    RejectedSourceCitation,
+    SourceReceiptBand,
+    SourceReceiptKind,
+    SourceReceiptRankingMode,
+    SourceReceiptReachContext,
+    SpaceAgentSourceReceiptEntry,
+    ValidatedSuppliedSourceCandidate,
+} from './source-receipts.js';

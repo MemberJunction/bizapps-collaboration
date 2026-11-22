@@ -43,6 +43,7 @@ import {
     ValidateCollaborationSettings,
 } from '@mj-biz-apps/collaboration-core';
 import type {
+    mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
     mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
     mjBizAppsCollaborationSpaceTypeStatusEntity,
@@ -634,6 +635,34 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             LogError(`Error resolving the seat of user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
             return null;
         }
+    }
+
+    /**
+     * Loads the source receipts persisted for a space chat conversation, ordered deterministically by Sequence.
+     * Enforces read security via the caller's UserInfo and the entity's row-level security filter.
+     */
+    public async LoadSpaceAgentSourceReceiptsForConversation(
+        conversationId: string,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[]> {
+        if (!conversationId || !user) {
+            return [];
+        }
+        const rv = RunView.FromMetadataProvider(provider ?? Metadata.Provider);
+        const result = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Agent Source Receipts',
+            ExtraFilter: `ConversationID = '${conversationId}'`,
+            OrderBy: 'Sequence ASC, __mj_CreatedAt ASC',
+            ResultType: 'simple',
+            // row-cap-ok: conversation receipt window bounded for UI inspection
+            MaxRows: 500,
+        }, user);
+        if (!result.Success || !result.Results) {
+            LogError(`LoadSpaceAgentSourceReceiptsForConversation failed for ${conversationId}: ${result.ErrorMessage ?? 'unknown error'}`);
+            return [];
+        }
+        return result.Results;
     }
 }
 
