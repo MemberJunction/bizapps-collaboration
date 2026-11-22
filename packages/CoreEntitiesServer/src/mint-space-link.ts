@@ -41,7 +41,7 @@ import { COLLABORATION_APP_ID } from '@mj-biz-apps/collaboration-engine-base';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
-import { spaceTypeAudience } from './space-audience.js';
+import { spaceTypeConfigurationAudience } from './space-audience.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
@@ -101,7 +101,7 @@ export interface MagicLinkHost {
 export interface MintSpaceLinkResult {
     ok: boolean;
     kind?: 'refused';
-    reason?: 'role-not-grantable';
+    reason?: 'role-not-grantable' | 'type-is-staff-only';
     sent?: boolean;
     redemptionUrl?: string;
     message?: string;
@@ -205,8 +205,13 @@ export async function mintSpaceLink(input: {
     const granted = context.role;
     if (!granted) return { ok: false, message: 'Invite refused: that role is not on this host.' };
     // The staff-only promise (item 157): a type that seats staff only issues no Space Participant invite
-    if (spaceTypeAudience(context.typeId) === 'StaffOnly') {
-        return { ok: false, message: "Invite refused: this space's type seats staff only, so no Space Participant link is issued for it." };
+    if (spaceTypeConfigurationAudience(context.typeConfiguration) === 'StaffOnly') {
+        return {
+            ok: false,
+            kind: 'refused',
+            reason: 'type-is-staff-only',
+            message: "Invite refused: this space's type seats staff only, so no Space Participant link is issued for it.",
+        };
     }
 
     const system = await requireSystemUserForInvite(input.provider, space);

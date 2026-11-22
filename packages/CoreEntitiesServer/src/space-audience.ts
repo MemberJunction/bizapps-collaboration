@@ -19,16 +19,24 @@ export type SeatsAudience = 'StaffOnly' | 'StaffAndParticipants';
 
 interface SpaceLink { ID: string; ParentID: string | null; InheritsMembership: boolean }
 
-/** Who a type seats, from its configuration as the engine holds it. Absent, unreadable or unknown fails closed to StaffAndParticipants. */
-export function spaceTypeAudience(typeId: string | null | undefined): SeatsAudience {
-    const id = parseUuid(typeId ?? '');
-    const type = id ? CollaborationEngine.Instance.SpaceTypeById(id) : undefined;
-    if (!type?.Configuration) return 'StaffAndParticipants';
+/** Who a type seats, from a raw SpaceType Configuration JSON string. Absent, unreadable or unknown fails closed to StaffAndParticipants. */
+export function spaceTypeConfigurationAudience(configuration: string | null | undefined): SeatsAudience {
+    if (!configuration) return 'StaffAndParticipants';
     try {
-        return typeSeatsAudience(JSON.parse(type.Configuration) as CollaborationSettings);
+        return typeSeatsAudience(JSON.parse(configuration) as CollaborationSettings);
     } catch {
         return 'StaffAndParticipants';
     }
+}
+
+/** Who a type seats, from its configuration as the engine holds it (or an explicit configuration override). Absent, unreadable or unknown fails closed to StaffAndParticipants. */
+export function spaceTypeAudience(typeId: string | null | undefined, configurationOverride?: string | null): SeatsAudience {
+    if (configurationOverride !== undefined) {
+        return spaceTypeConfigurationAudience(configurationOverride);
+    }
+    const id = parseUuid(typeId ?? '');
+    const type = id ? CollaborationEngine.Instance.SpaceTypeById(id) : undefined;
+    return spaceTypeConfigurationAudience(type?.Configuration);
 }
 
 /**

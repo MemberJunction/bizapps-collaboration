@@ -20,6 +20,8 @@ export interface WriteContext {
     ownerCount: number;
     /** The target space's type, for the rules that read the type's promise (item 157). */
     typeId?: string | null;
+    /** Raw SpaceType.Configuration JSON resolved from the provider's Space Types row (or null when unset/absent). */
+    typeConfiguration?: string | null;
     /** Target space's display name when returned by the space query. */
     spaceName?: string | null;
     /** Target MJ Application ID declared on the space's type, or null for the host default. */
@@ -112,7 +114,7 @@ export async function loadWriteContext(
     const caller = parseUuid(user.ID);
     const space = parseUuid(spaceId);
     if (!caller || !space) {
-        return { spaces: [], memberships: [], role: null, roles: new Map(), approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0, typeId: null, spaceName: null, targetApplicationId: null, targetApplicationName: null };
+        return { spaces: [], memberships: [], role: null, roles: new Map(), approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0, typeId: null, typeConfiguration: null, spaceName: null, targetApplicationId: null, targetApplicationName: null };
     }
     const results = await rv.RunViews([
         { EntityName: MEMBERS, ExtraFilter: `UserID = '${caller}'`, MaxRows: 2000 },
@@ -143,9 +145,22 @@ export async function loadWriteContext(
     const walked = await chain(rv, space, system);
     const spaces = walked.nodes;
     const typeId = walked.typeId;
-    const typeRows = typeId && parseUuid(typeId)
-        ? await one<{ InviteApproval: 'Approve' | 'AutoApprove'; MemberCap: number | null; TargetApplicationID?: string | null; TargetApplication?: string | null }>(rv, TYPES, `ID = '${parseUuid(typeId)}'`, user)
+    const resolvedTypeId = typeId ? parseUuid(typeId) : null;
+    const typeRows = resolvedTypeId
+        ? await one<{
+            InviteApproval: 'Approve' | 'AutoApprove';
+            MemberCap: number | null;
+            TargetApplicationID?: string | null;
+            TargetApplication?: string | null;
+            Configuration?: string | null;
+        }>(rv, TYPES, `ID = '${resolvedTypeId}'`, user)
         : [];
+    const resolvedTypeRow = typeRows[0];
+    const typeConfiguration = providerOverride
+        ? (resolvedTypeRow?.Configuration ?? null)
+        : (resolvedTypeRow && 'Configuration' in resolvedTypeRow
+            ? (resolvedTypeRow.Configuration ?? null)
+            : (resolvedTypeId ? CollaborationEngine.Instance.SpaceTypeById(resolvedTypeId)?.Configuration ?? null : null));
     const memberRows = (results[0].Results ?? []) as { SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: MemberSnapshot['band']; SpaceRoleTypeID: string }[];
     const roleRows = (results[1].Results ?? []) as { Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean; ID: string }[];
     const roleIds = [...new Set(memberRows.map((row) => row.SpaceRoleTypeID).filter((id) => parseUuid(id)))];
@@ -179,7 +194,8 @@ export async function loadWriteContext(
         memberCap: typeRows[0]?.MemberCap ?? null,
         memberCount: counted.length,
         ownerCount: owners.length,
-        typeId: typeId ? parseUuid(typeId) : null,
+        typeId: resolvedTypeId,
+        typeConfiguration,
         spaceName: walked.spaceName,
         targetApplicationId: parseUuid(typeRows[0]?.TargetApplicationID ?? ''),
         targetApplicationName: typeRows[0]?.TargetApplication?.trim() || null,

@@ -761,6 +761,83 @@ describe('CX-9 & CR-2/CR-4 Real Selection/Load Lifecycle & Live Space Entity', (
         expect(capturedHooks).toEqual([]);
         expect(comp.tabs.map((t) => t.id)).toContain('Overview');
     });
+
+    it('never calls extension hooks when entity.Load rejects with an Error (CR-2)', async () => {
+        const capturedHooks: string[] = [];
+
+        class ThrowingLoadUIDriver extends BaseSpaceTypeUIDriver {
+            public override GetTabs(ctx: SpaceUIContext, defaultTabs: SpaceTabDescriptor[]): SpaceTabDescriptor[] {
+                capturedHooks.push(`GetTabs:${ctx.space ? 'hasSpace' : 'null'}`);
+                return defaultTabs;
+            }
+            public override GetOverviewCards(ctx: SpaceUIContext, defaultCards: SpaceOverviewCardDescriptor[]): SpaceOverviewCardDescriptor[] {
+                capturedHooks.push(`GetOverviewCards:${ctx.space ? 'hasSpace' : 'null'}`);
+                return defaultCards;
+            }
+            public override GetHeaderChips(ctx: SpaceUIContext, defaultChips: SpaceHeaderChipDescriptor[]): SpaceHeaderChipDescriptor[] {
+                capturedHooks.push(`GetHeaderChips:${ctx.space ? 'hasSpace' : 'null'}`);
+                return defaultChips;
+            }
+            public override GetHeaderActions(ctx: SpaceUIContext, defaultActions: SpaceHeaderActionDescriptor[]): SpaceHeaderActionDescriptor[] {
+                capturedHooks.push(`GetHeaderActions:${ctx.space ? 'hasSpace' : 'null'}`);
+                return defaultActions;
+            }
+            public override GetSettingsSections(ctx: SpaceUIContext, defaultSections: SpaceSettingsSectionDescriptor[]): SpaceSettingsSectionDescriptor[] {
+                capturedHooks.push(`GetSettingsSections:${ctx.space ? 'hasSpace' : 'null'}`);
+                return defaultSections;
+            }
+        }
+
+        MJGlobal.Instance.ClassFactory.Register(BaseSpaceTypeUIDriver, ThrowingLoadUIDriver, 'cx-cr2-throw-driver', 1);
+
+        const spaceEntityInfo = buildSpaceEntityInfo();
+        const throwingEntity = new mjBizAppsCollaborationSpaceEntity(spaceEntityInfo);
+        throwingEntity.ID = SPACE_ID;
+        vi.spyOn(throwingEntity, 'Load').mockRejectedValue(new Error('Simulated database load failure'));
+        const loadFromDataSpy = vi.spyOn(throwingEntity, 'LoadFromData');
+
+        const spaceTypeInfo = buildEntityInfoWithFields(
+            'entity-space-types-1',
+            'MJ_BizApps_Collaboration: Space Types',
+            ['ID', 'Code', 'Name', 'UIDriverClass', 'MessagingPanel', 'LibraryPanel', 'WorkPanel', 'DefaultBand'],
+        );
+        const spaceType = new mjBizAppsCollaborationSpaceTypeEntity(spaceTypeInfo);
+        spaceType.ID = TYPE_ID;
+        spaceType.Code = 'board-throw';
+        spaceType.Name = 'Board';
+        spaceType.UIDriverClass = 'cx-cr2-throw-driver';
+        spaceType.MessagingPanel = true;
+        spaceType.LibraryPanel = true;
+        spaceType.WorkPanel = true;
+
+        const { providerStub } = createProviderMock({
+            spaceEntityInfo,
+            rawSpaces: [{ ID: SPACE_ID, Name: 'Audit Committee', SpaceTypeID: TYPE_ID, OwnerID: USER_ID, InheritsMembership: true }],
+            loadSpaceEntity: async () => throwingEntity,
+            spaceType,
+            statusEntities: [
+                makeStatusEntity(ACTIVE_STATUS_ID, SHIPPED_STATUSES[0]),
+                makeStatusEntity(PAUSED_STATUS_ID, SHIPPED_STATUSES[1]),
+                makeStatusEntity(CLOSED_STATUS_ID, SHIPPED_STATUSES[2]),
+            ],
+        });
+
+        configureProductionSectionTestBed({ queryParams: { view: 'space', space: SPACE_ID } });
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
+
+        const fixture = TestBed.createComponent(CollaborationSectionResource);
+        const comp = fixture.componentInstance;
+        comp.Data = { Configuration: { tabId: 'tab-1', queryParams: { view: 'space', space: SPACE_ID } } } as CollaborationSectionResource['Data'];
+
+        fixture.detectChanges();
+        await flushAsyncWork();
+        fixture.detectChanges();
+
+        expect(loadFromDataSpy).not.toHaveBeenCalled();
+        expect(capturedHooks).toEqual([]);
+        expect(comp.tabs.map((t) => t.id)).toContain('Overview');
+    });
 });
 
 describe('CX-12 Terminal Closed vs Resumable Paused UI Reopen Alignment', () => {

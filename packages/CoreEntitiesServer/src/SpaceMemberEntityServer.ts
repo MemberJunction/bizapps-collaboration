@@ -93,7 +93,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         }
         // The staff-only promise (item 157): a type that seats staff only takes no seat whose role cannot see the Team band
         if (!context.role.canSeeTeamBand && this.Status !== 'Removed' && (!this.IsSaved || this.Fields.some((field) => (field.Name === 'SpaceRoleTypeID' || field.Name === 'Status') && field.Dirty))) {
-            if (spaceTypeAudience(context.typeId) === 'StaffOnly') {
+            if (spaceTypeAudience(context.typeId, context.typeConfiguration) === 'StaffOnly') {
                 return fail(result, 'SpaceRoleTypeID', "Invite refused: this space's type seats staff only, so a role that cannot see the Team band has no seat here.");
             }
         }

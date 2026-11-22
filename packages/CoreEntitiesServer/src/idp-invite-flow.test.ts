@@ -13,6 +13,7 @@ import {
     WellKnownUserSource,
 } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import {
     inviteSpaceMember,
@@ -99,6 +100,7 @@ interface StoredSpaceType {
     MemberCap: number | null;
     TargetApplicationID: string | null;
     TargetApplication: string | null;
+    Configuration?: string | null;
 }
 
 interface StatefulMockOptions {
@@ -1065,5 +1067,99 @@ describe('External IdP invite flow when magicLink.enabled = false (CX-7 & CX-6)'
         assert.equal(state.userApps.length, 0);
         assert.equal(state.seats.length, 2);
         assert.equal(sentNotifications.length, 0);
+    });
+
+    it('uses input.provider SpaceType Configuration for StaffOnly refusal and StaffAndParticipants success regardless of conflicting CollaborationEngine.Instance state (CR-5)', async () => {
+        const origSpaceTypeById = CollaborationEngine.Instance.SpaceTypeById.bind(CollaborationEngine.Instance);
+
+        try {
+            // 1. Global engine says StaffAndParticipants, while input.provider's Space Types row says StaffOnly -> refuse with zero writes
+            CollaborationEngine.Instance.SpaceTypeById = () => ({
+                ID: TYPE_VENDOR_PORTAL_ID,
+                Configuration: JSON.stringify({ Seats: { Audience: 'StaffAndParticipants' } }),
+            } as Partial<ReturnType<typeof origSpaceTypeById> & object> as ReturnType<typeof origSpaceTypeById>);
+
+            const staffOnlyState = createStatefulIdpProvider({
+                spaceTypes: [
+                    {
+                        ID: TYPE_VENDOR_PORTAL_ID,
+                        InviteApproval: 'AutoApprove',
+                        MemberCap: null,
+                        TargetApplicationID: VENDOR_PORTAL_APP_ID,
+                        TargetApplication: 'Vendor Portal',
+                        Configuration: JSON.stringify({ Seats: { Audience: 'StaffOnly' } }),
+                    },
+                ],
+            });
+            const staffOnlyNotifications: IdpSignInNotification[] = [];
+            const caller1 = new UserInfo(staffOnlyState.provider, {
+                ID: OWNER_USER_ID,
+                Type: 'User',
+                UserRoles: [{ UserID: OWNER_USER_ID, RoleID: STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+            });
+
+            const refusedRes = await mintSpaceLink({
+                provider: staffOnlyState.provider,
+                user: caller1,
+                spaceId: SPACE_ALPHA_ID,
+                email: 'staff-only-blocked@vendor.test',
+                roleId: GUEST_SPACE_ROLE_ID,
+                host: buildIdpHost(staffOnlyNotifications),
+            });
+
+            assert.equal(refusedRes.ok, false);
+            assert.equal(refusedRes.kind, 'refused');
+            assert.equal(refusedRes.reason, 'type-is-staff-only');
+            assert.match(refusedRes.message ?? '', /seats staff only/i);
+            assert.equal(staffOnlyState.users.length, 0);
+            assert.equal(staffOnlyState.userRoles.length, 0);
+            assert.equal(staffOnlyState.userApps.length, 0);
+            assert.equal(staffOnlyState.seats.length, 2); // Only the 2 pre-seeded owner seats
+            assert.equal(staffOnlyNotifications.length, 0);
+
+            // 2. Global engine says StaffOnly, while input.provider's Space Types row says StaffAndParticipants -> succeed
+            CollaborationEngine.Instance.SpaceTypeById = () => ({
+                ID: TYPE_VENDOR_PORTAL_ID,
+                Configuration: JSON.stringify({ Seats: { Audience: 'StaffOnly' } }),
+            } as Partial<ReturnType<typeof origSpaceTypeById> & object> as ReturnType<typeof origSpaceTypeById>);
+
+            const participantAllowedState = createStatefulIdpProvider({
+                spaceTypes: [
+                    {
+                        ID: TYPE_VENDOR_PORTAL_ID,
+                        InviteApproval: 'AutoApprove',
+                        MemberCap: null,
+                        TargetApplicationID: VENDOR_PORTAL_APP_ID,
+                        TargetApplication: 'Vendor Portal',
+                        Configuration: JSON.stringify({ Seats: { Audience: 'StaffAndParticipants' } }),
+                    },
+                ],
+            });
+            const allowedNotifications: IdpSignInNotification[] = [];
+            const caller2 = new UserInfo(participantAllowedState.provider, {
+                ID: OWNER_USER_ID,
+                Type: 'User',
+                UserRoles: [{ UserID: OWNER_USER_ID, RoleID: STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+            });
+
+            const allowedRes = await mintSpaceLink({
+                provider: participantAllowedState.provider,
+                user: caller2,
+                spaceId: SPACE_ALPHA_ID,
+                email: 'participants-allowed@vendor.test',
+                roleId: GUEST_SPACE_ROLE_ID,
+                host: buildIdpHost(allowedNotifications),
+            });
+
+            assert.equal(allowedRes.ok, true);
+            assert.equal(allowedRes.sent, true);
+            assert.equal(participantAllowedState.users.length, 1);
+            assert.equal(participantAllowedState.userRoles.length, 1);
+            assert.equal(participantAllowedState.userApps.length, 1);
+            assert.equal(participantAllowedState.seats.length, 3);
+            assert.equal(allowedNotifications.length, 1);
+        } finally {
+            CollaborationEngine.Instance.SpaceTypeById = origSpaceTypeById;
+        }
     });
 });

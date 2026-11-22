@@ -79,13 +79,16 @@ interface MockLinkTestOptions {
     };
     targetApplicationId?: string | null;
     targetApplicationName?: string | null;
+    spaceTypeConfiguration?: string | null;
     applications?: Array<{ ID: string; Name: string; Path?: string | null }>;
     roles?: Array<{ ID: string; Name: string }>;
 }
 
 function createMintMockProvider(options: MockLinkTestOptions) {
+    const savedUsers: Array<{ Email: string }> = [];
     const grantedUserRoles: Array<{ UserID: string; RoleID: string }> = [];
     const grantedUserApps: Array<{ UserID: string; ApplicationID: string }> = [];
+    const savedSeats: Array<{ SpaceID: string; UserID: string; SpaceRoleTypeID: string; Status: string; Band: string }> = [];
     const savedInvites: Array<{ Email: string; RoleID: string; ApplicationID: string }> = [];
     const savedInviteApps: Array<{ InviteID: string; ApplicationID: string }> = [];
     const savedInviteRoles: Array<{ InviteID: string; RoleID: string }> = [];
@@ -124,6 +127,7 @@ function createMintMockProvider(options: MockLinkTestOptions) {
                     MemberCap: null,
                     TargetApplicationID: options.targetApplicationId ?? null,
                     TargetApplication: options.targetApplicationName ?? null,
+                    Configuration: options.spaceTypeConfiguration ?? null,
                 }],
             };
         }
@@ -222,6 +226,23 @@ function createMintMockProvider(options: MockLinkTestOptions) {
             if (entityName === 'MJ_BizApps_Collaboration: Spaces') {
                 return { ProviderToUse: providerObj, RunViewProviderToUse: providerObj };
             }
+            if (entityName === 'MJ: Users') {
+                const draft = { Email: '' };
+                return {
+                    ID: INVITEE_USER_ID,
+                    set Name(_v: string) {},
+                    set Email(v: string) { draft.Email = v; },
+                    set FirstName(_v: string) {},
+                    set LastName(_v: string) {},
+                    set Type(_v: string) {},
+                    set IsActive(_v: boolean) {},
+                    NewRecord() {},
+                    async Save() {
+                        savedUsers.push({ ...draft });
+                        return true;
+                    },
+                };
+            }
             if (entityName === 'MJ_BizApps_Collaboration: Space Members') {
                 const draft = { SpaceID: '', UserID: '', SpaceRoleTypeID: '', Status: 'Active', Band: 'Shared' };
                 return {
@@ -232,7 +253,10 @@ function createMintMockProvider(options: MockLinkTestOptions) {
                     set SpaceRoleTypeID(v: string) { draft.SpaceRoleTypeID = v; },
                     set Band(v: string) { draft.Band = v; },
                     NewRecord() {},
-                    async Save() { return true; },
+                    async Save() {
+                        savedSeats.push({ ...draft });
+                        return true;
+                    },
                 };
             }
             if (entityName === 'MJ: User Roles') {
@@ -324,7 +348,7 @@ function createMintMockProvider(options: MockLinkTestOptions) {
         }, provider));
     }
     authMeta.attachProvider(provider);
-    return { provider, grantedUserRoles, grantedUserApps, savedInvites, savedInviteApps, savedInviteRoles };
+    return { provider, savedUsers, grantedUserRoles, grantedUserApps, savedSeats, savedInvites, savedInviteApps, savedInviteRoles };
 }
 
 describe('mintSpaceLink declarative MJ Authorization (CT-5)', () => {
@@ -688,6 +712,85 @@ describe('mintSpaceLink declarative MJ Authorization (CT-5)', () => {
             if (prevProviderDescriptor) {
                 Object.defineProperty(Metadata, 'Provider', prevProviderDescriptor);
             }
+        }
+    });
+
+    it('refuses invite as type-is-staff-only with zero writes when input.provider SpaceType is StaffOnly even if global CollaborationEngine.Instance says StaffAndParticipants (CR-5)', async () => {
+        const origSpaceTypeById = CollaborationEngine.Instance.SpaceTypeById.bind(CollaborationEngine.Instance);
+        CollaborationEngine.Instance.SpaceTypeById = () => ({
+            ID: SPACE_TYPE_ID,
+            Configuration: JSON.stringify({ Seats: { Audience: 'StaffAndParticipants' } }),
+        } as Partial<ReturnType<typeof origSpaceTypeById> & object> as ReturnType<typeof origSpaceTypeById>);
+
+        try {
+            const state = createMintMockProvider({
+                inviteeRoleIds: [],
+                authGrants: { issueLinksRoleIds: [CUSTOM_STAFF_ROLE_ID] },
+                spaceTypeConfiguration: JSON.stringify({ Seats: { Audience: 'StaffOnly' } }),
+            });
+            const caller = new UserInfo(state.provider, {
+                ID: OWNER_USER_ID,
+                Type: 'User',
+                UserRoles: [{ UserID: OWNER_USER_ID, RoleID: CUSTOM_STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+            });
+
+            const res = await mintSpaceLink({
+                provider: state.provider,
+                user: caller,
+                spaceId: SPACE_ID,
+                email: 'blocked-staffonly@example.test',
+                roleId: GUEST_SPACE_ROLE_ID,
+                host: hostConfig,
+            });
+
+            assert.equal(res.ok, false);
+            assert.equal(res.kind, 'refused');
+            assert.equal(res.reason, 'type-is-staff-only');
+            assert.match(res.message ?? '', /seats staff only/i);
+            assert.deepEqual(state.savedUsers, []);
+            assert.deepEqual(state.grantedUserRoles, []);
+            assert.deepEqual(state.grantedUserApps, []);
+            assert.deepEqual(state.savedSeats, []);
+            assert.deepEqual(state.savedInvites, []);
+        } finally {
+            CollaborationEngine.Instance.SpaceTypeById = origSpaceTypeById;
+        }
+    });
+
+    it('succeeds when input.provider SpaceType is StaffAndParticipants even if global CollaborationEngine.Instance says StaffOnly (CR-5)', async () => {
+        const origSpaceTypeById = CollaborationEngine.Instance.SpaceTypeById.bind(CollaborationEngine.Instance);
+        CollaborationEngine.Instance.SpaceTypeById = () => ({
+            ID: SPACE_TYPE_ID,
+            Configuration: JSON.stringify({ Seats: { Audience: 'StaffOnly' } }),
+        } as Partial<ReturnType<typeof origSpaceTypeById> & object> as ReturnType<typeof origSpaceTypeById>);
+
+        try {
+            const state = createMintMockProvider({
+                inviteeRoleIds: [PARTICIPANT_ROLE_ID],
+                authGrants: { issueLinksRoleIds: [CUSTOM_STAFF_ROLE_ID] },
+                spaceTypeConfiguration: JSON.stringify({ Seats: { Audience: 'StaffAndParticipants' } }),
+            });
+            const caller = new UserInfo(state.provider, {
+                ID: OWNER_USER_ID,
+                Type: 'User',
+                UserRoles: [{ UserID: OWNER_USER_ID, RoleID: CUSTOM_STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+            });
+
+            const res = await mintSpaceLink({
+                provider: state.provider,
+                user: caller,
+                spaceId: SPACE_ID,
+                email: 'allowed-participants@example.test',
+                roleId: GUEST_SPACE_ROLE_ID,
+                host: hostConfig,
+            });
+
+            assert.equal(res.ok, true);
+            assert.match(res.redemptionUrl ?? '', /\/magic-link\/redeem\?token=mj_ml_/);
+            assert.equal(state.savedSeats.length, 1);
+            assert.equal(state.savedInvites.length, 1);
+        } finally {
+            CollaborationEngine.Instance.SpaceTypeById = origSpaceTypeById;
         }
     });
 });
