@@ -14,11 +14,15 @@ import {
     type LiveReceiptSourceSnapshot,
     type LiveSpaceChainNodeInput,
     type LiveSpaceTypeConfigInput,
+    membershipReaches,
+    type MemberSnapshot,
     normalizeReceiptUuid,
     resolveEffectiveKnowledgeSourceBandsBySpace,
+    type RoleFlags,
     type SourceReceiptBand,
     type SourceReceiptReachContext,
     type SpaceAgentSourceReceiptEntry,
+    type SpaceNode,
     stripRecordKeyPrefix,
     type ValidatedSuppliedSourceCandidate,
 } from '@mj-biz-apps/collaboration-core';
@@ -28,6 +32,7 @@ import {
 } from '@mj-biz-apps/collaboration-entities';
 import { COLLABORATION_SOURCE_RECEIPT_ENTITY, runWithCollaborationAgentTurnAuthority } from './ai-run-lockdown.js';
 import { CollaborationEngine } from './CollaborationEngine.js';
+import { toNode, type SpaceRow } from './load-graph.js';
 import { readEveryRow } from './read-every-row.js';
 import type { TurnToolSourceHit } from './turn-tools.js';
 
@@ -35,11 +40,107 @@ const CONTENT_SOURCES_ENTITY = 'MJ: Content Sources';
 const SPACE_CHATS_ENTITY = 'MJ_BizApps_Collaboration: Space Chats';
 const SPACE_GRANTS_ENTITY = 'MJ_BizApps_Collaboration: Space Grants';
 const SPACE_ITEMS_ENTITY = 'MJ_BizApps_Collaboration: Space Items';
+const SPACE_MEMBERS_ENTITY = 'MJ_BizApps_Collaboration: Space Members';
+const SPACE_ROLES_ENTITY = 'MJ_BizApps_Collaboration: Space Role Types';
 const SPACE_TYPES_ENTITY = 'MJ_BizApps_Collaboration: Space Types';
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 const TASKS_ENTITY = 'MJ_BizApps_Tasks: Tasks';
 const FILES_ENTITY = 'MJ: Files';
 const LIVE_CHECK_BATCH_SIZE = 200;
+const PG_ROLE_IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export interface PostgresQueryable {
+    query(sql: string, params?: unknown[]): Promise<unknown>;
+}
+
+export interface PostgresPoolClientLike extends PostgresQueryable {
+    release?: (err?: boolean | Error) => void;
+}
+
+export interface PostgresPoolLike {
+    connect(): Promise<PostgresPoolClientLike>;
+}
+
+export interface PostgresReceiptUserContextOptions {
+    /** Optional PostgreSQL role to assume within the local transaction (e.g. `cdp_UI`). */
+    role?: string;
+    /** Explicit system/server bypass flag; ignored when `role === 'cdp_UI'`. */
+    bypassRls?: boolean;
+}
+
+function isPostgresPool(target: PostgresPoolLike | PostgresQueryable): target is PostgresPoolLike {
+    return typeof (target as PostgresPoolLike).connect === 'function';
+}
+
+/**
+ * Executes `fn` inside a PostgreSQL transaction scoped to `userId` using `SET LOCAL app.current_user_id`
+ * and guarantees `RESET app.current_user_id` (plus role/bypass cleanup) in a `finally` block so
+ * consecutive different-user requests on a reused pooled connection never leak user state.
+ */
+export async function withPostgresReceiptUserContext<T>(
+    target: PostgresPoolLike | PostgresQueryable,
+    userId: string | null | undefined,
+    fn: (client: PostgresQueryable) => Promise<T>,
+    options?: PostgresReceiptUserContextOptions,
+): Promise<T> {
+    const hasUserId = userId !== undefined && userId !== null && String(userId).trim().length > 0;
+    const cleanUserId = hasUserId ? normalizeReceiptUuid(userId) : null;
+    if (hasUserId && !cleanUserId) {
+        throw new Error('Cannot establish PostgreSQL receipt user context with invalid userId UUID.');
+    }
+
+    const roleName = options?.role?.trim();
+    if (roleName && !PG_ROLE_IDENTIFIER_RE.test(roleName)) {
+        throw new Error(`Invalid PostgreSQL role identifier: ${roleName}`);
+    }
+
+    const poolClient: PostgresPoolClientLike | null = isPostgresPool(target) ? await target.connect() : null;
+    const client: PostgresQueryable = poolClient ?? (target as PostgresQueryable);
+    let inTransaction = false;
+
+    try {
+        await client.query('BEGIN');
+        inTransaction = true;
+        if (roleName) {
+            await client.query(`SET LOCAL ROLE "${roleName}"`);
+        }
+        if (options?.bypassRls && roleName !== 'cdp_UI') {
+            await client.query(`SET LOCAL app.bypass_rls = 'true'`);
+        } else {
+            await client.query('RESET app.bypass_rls');
+        }
+        if (cleanUserId) {
+            await client.query(`SET LOCAL app.current_user_id = '${cleanUserId}'`);
+        } else {
+            await client.query('RESET app.current_user_id');
+            await client.query('RESET mj.current_user_id');
+        }
+
+        const result = await fn(client);
+        await client.query('COMMIT');
+        inTransaction = false;
+        return result;
+    } catch (err) {
+        if (inTransaction) {
+            try {
+                await client.query('ROLLBACK');
+            } catch {
+                // Best-effort rollback before resetting session state
+            }
+        }
+        throw err;
+    } finally {
+        try {
+            await client.query('RESET app.current_user_id');
+            await client.query('RESET mj.current_user_id');
+            await client.query('RESET app.bypass_rls');
+            await client.query('RESET ROLE');
+        } catch {
+            // Best-effort session GUC reset on connection return
+        }
+        poolClient?.release?.();
+    }
+}
 
 interface ContentSourceRow {
     ID: string;
@@ -690,6 +791,28 @@ export async function querySpaceAgentSourceReceipts(
                 ? 'Team'
                 : 'Shared';
 
+    if (chat.Kind === 'Private' && !params.callerCanSeeTeam) {
+        return {
+            ok: false,
+            receipts: [],
+            filteredOutCount: 0,
+            errorMessage: 'Private SpaceChat is not in caller reach.',
+        };
+    }
+
+    if (chat.Kind === 'Assistant') {
+        const cleanUserId = normalizeReceiptUuid(params.user.ID);
+        const ownerUserId = normalizeReceiptUuid(chat.OwnerUserID);
+        if (!cleanUserId || !ownerUserId || cleanUserId !== ownerUserId) {
+            return {
+                ok: false,
+                receipts: [],
+                filteredOutCount: 0,
+                errorMessage: 'Assistant SpaceChat belongs to another user.',
+            };
+        }
+    }
+
     const detailClause = cleanDetailId ? ` AND ConversationDetailID = '${cleanDetailId}'` : '';
 
     let allRows: mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[];
@@ -897,5 +1020,342 @@ export async function querySpaceAgentSourceReceipts(
         ok: true,
         receipts: allowed,
         filteredOutCount,
+    };
+}
+
+export interface SingleReceiptAuthorizationInput {
+    ID: string;
+    SpaceID: string;
+    SpaceChatID: string;
+    ConversationID: string;
+    SourceKind: string;
+    SpaceItemID: string | null | undefined;
+    ContentSourceID: string | null | undefined;
+    Band: string;
+}
+
+export interface VerifySingleSourceReceiptParams {
+    provider: IMetadataProvider;
+    user: UserInfo;
+    receipt: SingleReceiptAuthorizationInput;
+}
+
+/**
+ * Verifies live SpaceChat reach, caller space/band membership reach, and live underlying
+ * SpaceItem / effective KnowledgeSource grant authorization for a single source receipt.
+ * Always fails closed (`false`) on missing, inconsistent, or denied metadata.
+ */
+export async function isSingleSourceReceiptAuthorizedForUser(
+    params: VerifySingleSourceReceiptParams,
+): Promise<boolean> {
+    const { provider, user, receipt } = params;
+    const cleanUserId = normalizeReceiptUuid(user?.ID);
+    const cleanSpaceId = normalizeReceiptUuid(receipt.SpaceID);
+    const cleanChatId = normalizeReceiptUuid(receipt.SpaceChatID);
+    const cleanConversationId = normalizeReceiptUuid(receipt.ConversationID);
+    const band = receipt.Band === 'Team' ? 'Team' : receipt.Band === 'Shared' ? 'Shared' : null;
+    if (!cleanUserId || !cleanSpaceId || !cleanChatId || !cleanConversationId || !band) {
+        return false;
+    }
+    if (receipt.SourceKind !== 'SpaceItem' && receipt.SourceKind !== 'KnowledgeSource') {
+        return false;
+    }
+
+    let systemReader: UserInfo = user;
+    try {
+        const resolvedSystem = await WellKnownUserSource.Instance?.GetSystemUser(provider);
+        if (resolvedSystem) systemReader = resolvedSystem;
+    } catch {
+        // Fall back to caller in mocked unit test providers without WellKnownUserSource initialization
+    }
+
+    const rv = RunView.FromMetadataProvider(provider);
+    const chatRes = await rv.RunView<{
+        ID: string;
+        SpaceID: string;
+        ConversationID: string;
+        Kind: string;
+        OwnerUserID: string | null;
+    }>({
+        EntityName: SPACE_CHATS_ENTITY,
+        ExtraFilter: `ID = '${cleanChatId}'`,
+        Fields: ['ID', 'SpaceID', 'ConversationID', 'Kind', 'OwnerUserID'],
+        ResultType: 'simple',
+        // row-cap-ok: primary key lookup by SpaceChatID returns at most one row
+        MaxRows: 2,
+    }, systemReader);
+
+    const chat = chatRes.Success && chatRes.Results ? chatRes.Results[0] : undefined;
+    const chatSpaceId = chat ? normalizeReceiptUuid(chat.SpaceID) : null;
+    if (!chat || !chatSpaceId || normalizeReceiptUuid(chat.ConversationID) !== cleanConversationId) {
+        return false;
+    }
+
+    if ((chat.Kind === 'General' || chat.Kind === 'Topic') && band !== 'Shared') {
+        return false;
+    }
+    if (chat.Kind === 'Assistant' && normalizeReceiptUuid(chat.OwnerUserID) !== cleanUserId) {
+        return false;
+    }
+
+    interface SpaceGraphRow extends SpaceRow {
+        Configuration?: string | null;
+    }
+
+    let spaceRows: SpaceGraphRow[];
+    try {
+        spaceRows = await readEveryRow<SpaceGraphRow>(
+            rv,
+            {
+                EntityName: SPACES_ENTITY,
+                ExtraFilter: '',
+                Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID', 'SpaceTypeID', 'Configuration'],
+            },
+            systemReader,
+        );
+    } catch {
+        return false;
+    }
+
+    if (user.Type !== 'Owner') {
+        const [membersRes, rolesRes] = await Promise.all([
+            rv.RunView<{
+                SpaceID: string;
+                UserID: string;
+                Status: string;
+                Band: string;
+                SpaceRoleTypeID: string;
+            }>({
+                EntityName: SPACE_MEMBERS_ENTITY,
+                ExtraFilter: `UserID = '${cleanUserId}' AND Status = 'Active'`,
+                Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
+                ResultType: 'simple',
+                // row-cap-ok: bounded by single user's active memberships
+                MaxRows: 2000,
+            }, systemReader),
+            rv.RunView<{
+                ID: string;
+                Level: number;
+                MaxGrantableLevel: number;
+                CanInvite: boolean;
+                CanPromoteBand: boolean;
+                CanSeeTeamBand: boolean;
+                IsOwnerRole: boolean;
+                CanContribute: boolean;
+            }>({
+                EntityName: SPACE_ROLES_ENTITY,
+                Fields: ['ID', 'Level', 'MaxGrantableLevel', 'CanInvite', 'CanPromoteBand', 'CanSeeTeamBand', 'IsOwnerRole', 'CanContribute'],
+                ResultType: 'simple',
+                // row-cap-ok: bounded space role catalog
+                MaxRows: 200,
+            }, systemReader),
+        ]);
+
+        if (!membersRes.Success || !rolesRes.Success) {
+            return false;
+        }
+
+        const roleMap = new Map<string, RoleFlags>();
+        for (const r of rolesRes.Results ?? []) {
+            const rid = normalizeReceiptUuid(r.ID);
+            if (!rid) continue;
+            roleMap.set(rid, {
+                level: Number(r.Level),
+                maxGrantableLevel: Number(r.MaxGrantableLevel),
+                canInvite: !!r.CanInvite,
+                canPromoteBand: !!r.CanPromoteBand,
+                canSeeTeamBand: !!r.CanSeeTeamBand,
+                isOwnerRole: !!r.IsOwnerRole,
+                canContribute: !!r.CanContribute,
+            });
+        }
+
+        const snapshots: MemberSnapshot[] = [];
+        for (const m of membersRes.Results ?? []) {
+            const roleId = normalizeReceiptUuid(m.SpaceRoleTypeID);
+            const flags = roleId ? roleMap.get(roleId) : undefined;
+            if (!flags) continue;
+            snapshots.push({
+                spaceId: m.SpaceID,
+                userId: m.UserID,
+                status: m.Status as MemberSnapshot['status'],
+                band: m.Band as SourceReceiptBand,
+                role: flags,
+            });
+        }
+
+        const spaceNodes: SpaceNode[] = spaceRows.map(toNode);
+        const chatReach = membershipReaches(spaceNodes, snapshots, cleanUserId, chatSpaceId);
+        const receiptReach = membershipReaches(spaceNodes, snapshots, cleanUserId, cleanSpaceId);
+        if (!chatReach || !receiptReach) {
+            return false;
+        }
+        if (chat.Kind === 'Private' && !chatReach.role.canSeeTeamBand) {
+            return false;
+        }
+        if (band === 'Team' && !receiptReach.role.canSeeTeamBand) {
+            return false;
+        }
+    }
+
+    const liveSnapshot: LiveReceiptSourceSnapshot = {};
+    if (receipt.SourceKind === 'SpaceItem') {
+        const cleanItemId = normalizeReceiptUuid(receipt.SpaceItemID);
+        if (!cleanItemId) {
+            return false;
+        }
+        const itemRes = await rv.RunView<{ ID: string; SpaceID: string; Band: string }>({
+            EntityName: SPACE_ITEMS_ENTITY,
+            ExtraFilter: `ID = '${cleanItemId}'`,
+            Fields: ['ID', 'SpaceID', 'Band'],
+            ResultType: 'simple',
+            // row-cap-ok: primary key lookup by SpaceItemID returns at most one row
+            MaxRows: 2,
+        }, systemReader);
+        if (!itemRes.Success || !itemRes.Results) {
+            return false;
+        }
+        const spaceItemsById = new Map<string, { spaceId: string; band: SourceReceiptBand }>();
+        for (const item of itemRes.Results) {
+            const id = normalizeReceiptUuid(item.ID);
+            const itemSpaceId = normalizeReceiptUuid(item.SpaceID);
+            if (id && itemSpaceId && isSourceReceiptBand(item.Band)) {
+                spaceItemsById.set(id, { spaceId: itemSpaceId, band: item.Band });
+            }
+        }
+        liveSnapshot.spaceItemsById = spaceItemsById;
+    } else {
+        const cleanContentSourceId = normalizeReceiptUuid(receipt.ContentSourceID);
+        if (!cleanContentSourceId) {
+            return false;
+        }
+        let spaceTypeRows: Array<LiveSpaceTypeConfigInput & { ID: string }>;
+        let grantRows: Array<LiveKnowledgeSourceGrantInput & { ID: string }>;
+        try {
+            spaceTypeRows = await readEveryRow<LiveSpaceTypeConfigInput & { ID: string }>(
+                rv,
+                {
+                    EntityName: SPACE_TYPES_ENTITY,
+                    ExtraFilter: '',
+                    Fields: ['ID', 'Configuration'],
+                },
+                systemReader,
+            );
+            grantRows = await readEveryRow<LiveKnowledgeSourceGrantInput & { ID: string }>(
+                rv,
+                {
+                    EntityName: SPACE_GRANTS_ENTITY,
+                    ExtraFilter: `Kind = 'KnowledgeSource'`,
+                    Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetEntityID', 'TargetRecordID', 'Sequence'],
+                },
+                systemReader,
+            );
+        } catch {
+            return false;
+        }
+
+        let appSettings: CollaborationSettings = DEFAULT_COLLABORATION_SETTINGS;
+        try {
+            if (CollaborationEngine.Instance.Loaded) {
+                appSettings = CollaborationEngine.Instance.CollaborationSettings;
+            }
+        } catch {
+            // Fall back to default settings in mocked test environments
+        }
+
+        liveSnapshot.knowledgeSourceBandsBySpace = resolveEffectiveKnowledgeSourceBandsBySpace({
+            spaceIds: [cleanSpaceId],
+            spaces: spaceRows,
+            grants: grantRows,
+            spaceTypes: spaceTypeRows,
+            appSettings,
+        });
+    }
+
+    return isReceiptAuthorizedByLiveSources(
+        {
+            spaceId: cleanSpaceId,
+            sourceKind: receipt.SourceKind,
+            spaceItemId: normalizeReceiptUuid(receipt.SpaceItemID),
+            contentSourceId: normalizeReceiptUuid(receipt.ContentSourceID),
+            band,
+        },
+        liveSnapshot,
+    );
+}
+
+export interface LoadSpaceAgentSourceReceiptByIdParams {
+    provider: IMetadataProvider;
+    user: UserInfo;
+    receiptId: string;
+}
+
+export interface LoadSpaceAgentSourceReceiptByIdResult {
+    ok: boolean;
+    receipt: mjBizAppsCollaborationSpaceAgentSourceReceiptEntity | null;
+    errorMessage?: string;
+}
+
+/**
+ * Loads a single source receipt by ID through `GetEntityObject` + `Load()` and enforces
+ * fail-closed caller reach and live SpaceItem / KnowledgeSource authorization.
+ */
+export async function loadSpaceAgentSourceReceiptById(
+    params: LoadSpaceAgentSourceReceiptByIdParams,
+): Promise<LoadSpaceAgentSourceReceiptByIdResult> {
+    const cleanReceiptId = normalizeReceiptUuid(params.receiptId);
+    const cleanUserId = normalizeReceiptUuid(params.user?.ID);
+    if (!cleanReceiptId || !cleanUserId) {
+        return {
+            ok: false,
+            receipt: null,
+            errorMessage: 'Invalid receiptId or user UUID.',
+        };
+    }
+
+    const entity = await params.provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>(
+        COLLABORATION_SOURCE_RECEIPT_ENTITY,
+        params.user,
+    );
+    if (!entity) {
+        return {
+            ok: false,
+            receipt: null,
+            errorMessage: 'Unable to instantiate Space Agent Source Receipt entity.',
+        };
+    }
+
+    const loaded = await entity.Load(cleanReceiptId);
+    if (!loaded) {
+        return {
+            ok: true,
+            receipt: null,
+        };
+    }
+
+    const authorized = await isSingleSourceReceiptAuthorizedForUser({
+        provider: params.provider,
+        user: params.user,
+        receipt: {
+            ID: entity.ID,
+            SpaceID: entity.SpaceID,
+            SpaceChatID: entity.SpaceChatID,
+            ConversationID: entity.ConversationID,
+            SourceKind: entity.SourceKind,
+            SpaceItemID: entity.SpaceItemID,
+            ContentSourceID: entity.ContentSourceID,
+            Band: entity.Band,
+        },
+    });
+    if (!authorized) {
+        return {
+            ok: true,
+            receipt: null,
+        };
+    }
+
+    return {
+        ok: true,
+        receipt: entity,
     };
 }

@@ -14,6 +14,7 @@ import { describe, it } from 'node:test';
 import {
     BaseEntity,
     BaseEntityResult,
+    CompositeKey,
     type EntityFieldInfo,
     type EntityInfo,
     type IMetadataProvider,
@@ -30,9 +31,12 @@ import {
 import { COLLABORATION_SOURCE_RECEIPT_ENTITY } from '../dist/ai-run-lockdown.js';
 import { SpaceAgentSourceReceiptEntityServer } from '../dist/SpaceAgentSourceReceiptEntityServer.js';
 import {
+    loadSpaceAgentSourceReceiptById,
     persistSpaceAgentSourceReceipts,
+    type PostgresPoolLike,
     querySpaceAgentSourceReceipts,
     resolveSuppliedKnowledgeSources,
+    withPostgresReceiptUserContext,
 } from '../dist/space-agent-source-receipts.js';
 
 const SPACE_A = '11111111-1111-4111-8111-111111111111';
@@ -568,7 +572,16 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
         }
         assert.ok(pgsql.includes('fnEffectiveKnowledgeSourceGrants'), 'PG migration must define fnEffectiveKnowledgeSourceGrants');
         assert.ok(pgsql.includes('fnCanReadSpaceAgentSourceReceipt'), 'PG migration must define fnCanReadSpaceAgentSourceReceipt');
+        assert.ok(pgsql.includes('fnIsSpaceAgentSourceReceiptRowVisible'), 'PG migration must define fnIsSpaceAgentSourceReceiptRowVisible');
+        assert.ok(pgsql.includes('ENABLE ROW LEVEL SECURITY'), 'PG migration must enable native RLS on SpaceAgentSourceReceipt');
+        assert.ok(pgsql.includes('FORCE ROW LEVEL SECURITY'), 'PG migration must force native RLS on SpaceAgentSourceReceipt');
+        assert.ok(pgsql.includes('p_space_agent_source_receipt_read_in_reach'), 'PG migration must define SELECT RLS policy');
+        assert.ok(pgsql.includes('WITH (security_invoker = true)'), 'PG migration must mark production BaseView vwSpaceAgentSourceReceipts security_invoker = true');
         assert.ok(pgsql.includes('vwSpaceAgentSourceReceiptsAuthorized'), 'PG migration must define vwSpaceAgentSourceReceiptsAuthorized');
+        assert.ok(
+            pgsql.includes('__mj_bizappscollaboration."fnCanReadSpaceAgentSourceReceipt"(__mj_bizappscollaboration."fnTryParseUuid"(\'\'{{UserID}}\'\'), "ID")'),
+            'PG migration must upsert PostgreSQL-native RowLevelSecurityFilter predicate for Collaboration: Source Receipts In Reach',
+        );
         assert.ok(tsql.includes('fnEffectiveKnowledgeSourceGrants'), 'T-SQL migration must define fnEffectiveKnowledgeSourceGrants');
         assert.ok(tsql.includes('ListMode') && pgsql.includes('ListMode'), 'Both SQL dialects must enforce ListMode=Replace');
         assert.ok(tsql.includes('SpaceOverridable') && pgsql.includes('SpaceOverridable'), 'Both SQL dialects must enforce SpaceOverridable');
@@ -1516,6 +1529,423 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
             ['Valid Shared KS', 'Valid Type-Restart KS'],
         );
         assert.equal(res.filteredOutCount, 3);
+    });
+
+    it('enforces live source authorization on SpaceAgentSourceReceiptEntityServer.InnerLoad and loadSpaceAgentSourceReceiptById (CR-2)', async () => {
+        const ROLE_SHARED_ID = 'bbbb0000-0000-4000-8000-000000000011';
+        const ROLE_TEAM_ID = 'bbbb0000-0000-4000-8000-000000000012';
+        const OUTSIDER_USER_ID = '88888888-8888-4888-8888-888888888899';
+        const ASST_CHAT_ID = '44444444-4444-4444-8444-444444444499';
+        const ASST_CONV_ID = '55555555-5555-4555-8555-555555555599';
+        const VALID_ITEM_ID = 'dddd0000-0000-4000-8000-000000000901';
+        const MOVED_ITEM_ID = 'dddd0000-0000-4000-8000-000000000902';
+        const DEMOTED_ITEM_ID = 'dddd0000-0000-4000-8000-000000000903';
+        const VALID_KS_ID = 'eeee0000-0000-4000-8000-000000000901';
+        const REVOKED_KS_ID = 'eeee0000-0000-4000-8000-000000000902';
+
+        const RECEIPT_VALID_ITEM = 'f0000000-0000-4000-8000-000000000901';
+        const RECEIPT_MOVED_ITEM = 'f0000000-0000-4000-8000-000000000902';
+        const RECEIPT_DEMOTED_ITEM = 'f0000000-0000-4000-8000-000000000903';
+        const RECEIPT_VALID_KS = 'f0000000-0000-4000-8000-000000000904';
+        const RECEIPT_REVOKED_KS = 'f0000000-0000-4000-8000-000000000905';
+        const RECEIPT_OTHER_ASST = 'f0000000-0000-4000-8000-000000000906';
+
+        const storedReceipts: MockReceiptRow[] = [
+            {
+                ID: RECEIPT_VALID_ITEM,
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'SpaceItem',
+                SpaceItemID: VALID_ITEM_ID,
+                ContentSourceID: null,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${VALID_ITEM_ID}`,
+                SourceTitle: 'Valid Shared Item',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: true,
+                RetrievalRank: 1,
+                RelevanceScore: 0.91,
+                RankingMode: 'lexical',
+                CitationOrdinal: 1,
+                EstimatedTokens: 40,
+                WasTruncated: false,
+                Sequence: 1,
+            },
+            {
+                ID: RECEIPT_MOVED_ITEM,
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'SpaceItem',
+                SpaceItemID: MOVED_ITEM_ID,
+                ContentSourceID: null,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${MOVED_ITEM_ID}`,
+                SourceTitle: 'Moved Space Item',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: 2,
+                RelevanceScore: 0.7,
+                RankingMode: 'lexical',
+                CitationOrdinal: null,
+                EstimatedTokens: 40,
+                WasTruncated: false,
+                Sequence: 2,
+            },
+            {
+                ID: RECEIPT_DEMOTED_ITEM,
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'SpaceItem',
+                SpaceItemID: DEMOTED_ITEM_ID,
+                ContentSourceID: null,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${DEMOTED_ITEM_ID}`,
+                SourceTitle: 'Demoted Space Item',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: 3,
+                RelevanceScore: 0.65,
+                RankingMode: 'lexical',
+                CitationOrdinal: null,
+                EstimatedTokens: 40,
+                WasTruncated: false,
+                Sequence: 3,
+            },
+            {
+                ID: RECEIPT_VALID_KS,
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: VALID_KS_ID,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${VALID_KS_ID}`,
+                SourceTitle: 'Valid Shared KS',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 4,
+            },
+            {
+                ID: RECEIPT_REVOKED_KS,
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: REVOKED_KS_ID,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${REVOKED_KS_ID}`,
+                SourceTitle: 'Revoked Shared KS',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 5,
+            },
+            {
+                ID: RECEIPT_OTHER_ASST,
+                SpaceID: SPACE_A,
+                SpaceChatID: ASST_CHAT_ID,
+                ConversationID: ASST_CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'SpaceItem',
+                SpaceItemID: VALID_ITEM_ID,
+                ContentSourceID: null,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${VALID_ITEM_ID}`,
+                SourceTitle: 'Other User Assistant Receipt',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: 1,
+                RelevanceScore: 0.9,
+                RankingMode: 'lexical',
+                CitationOrdinal: null,
+                EstimatedTokens: 30,
+                WasTruncated: false,
+                Sequence: 1,
+            },
+        ];
+
+        const sampleFields: EntityFieldInfo[] = (Object.keys(storedReceipts[0]) as Array<keyof MockReceiptRow>).map((name) => ({
+            Name: name,
+            CodeName: name,
+            DisplayName: name,
+            AllowsNull: true,
+            IsPrimaryKey: name === 'ID',
+            ReadOnly: false,
+            AutoIncrement: false,
+            Type: typeof storedReceipts[0][name] === 'boolean'
+                ? 'bit'
+                : typeof storedReceipts[0][name] === 'number'
+                    ? 'int'
+                    : 'nvarchar',
+            EntityFieldValues: [],
+            Validate() {
+                return { Success: true, Errors: [] };
+            },
+        } as Partial<EntityFieldInfo> as EntityFieldInfo));
+        const entityInfoObj: Partial<EntityInfo> = {
+            Name: COLLABORATION_SOURCE_RECEIPT_ENTITY,
+            IncludeInAPI: true,
+            AllowAllRowsAPI: false,
+            AllowCreateAPI: true,
+            AllowUpdateAPI: true,
+            AllowDeleteAPI: true,
+            TrackRecordChanges: false,
+            Fields: sampleFields,
+            PrimaryKeys: sampleFields.filter((f) => f.IsPrimaryKey),
+            FirstPrimaryKey: sampleFields.find((f) => f.IsPrimaryKey),
+            RelatedEntities: [],
+            GetUserPermisions: (user: UserInfo) => ({
+                ID: 'perm-1',
+                Entity: entityInfoObj as EntityInfo,
+                User: user,
+                CanRead: true,
+                CanCreate: false,
+                CanUpdate: false,
+                CanDelete: false,
+            }),
+            GetEffectiveRowFilterWhereClause: () => '',
+        };
+        const entityInfo = entityInfoObj as EntityInfo;
+
+        const mockProviderObj: {
+            Entities: EntityInfo[];
+            EntityByID: (id: string) => EntityInfo | undefined;
+            EntityByName: (name: string) => EntityInfo | undefined;
+            Load: (entity: BaseEntity, key: CompositeKey) => Promise<Record<string, unknown> | null>;
+            GetEntityObject: IMetadataProvider['GetEntityObject'];
+            RunView: IRunViewProvider['RunView'];
+        } = {
+            Entities: [entityInfo],
+            EntityByID(id: string) {
+                return id === entityInfo.ID ? entityInfo : undefined;
+            },
+            EntityByName(name: string) {
+                return name === COLLABORATION_SOURCE_RECEIPT_ENTITY ? entityInfo : undefined;
+            },
+            async Load(_entity: BaseEntity, key: CompositeKey): Promise<Record<string, unknown> | null> {
+                const targetId = String(key.GetValueByFieldName('ID') ?? '').toLowerCase();
+                const found = storedReceipts.find((r) => r.ID.toLowerCase() === targetId);
+                return found ? ({ ...found } as Record<string, unknown>) : null;
+            },
+            async GetEntityObject<T extends BaseEntity>(
+                entityName: string,
+                loadKeyOrUser?: CompositeKey | UserInfo,
+                contextUser?: UserInfo,
+            ): Promise<T> {
+                if (entityName !== COLLABORATION_SOURCE_RECEIPT_ENTITY) {
+                    throw new Error(`Unexpected entity ${entityName}`);
+                }
+                const isCompositeKey = loadKeyOrUser instanceof CompositeKey;
+                const user = isCompositeKey ? contextUser : loadKeyOrUser;
+                const ent = new SpaceAgentSourceReceiptEntityServer(entityInfo);
+                const metaProvider: IMetadataProvider = mockProviderObj as Partial<IMetadataProvider> as IMetadataProvider;
+                const rvProvider: IRunViewProvider = mockProviderObj as Partial<IRunViewProvider> as IRunViewProvider;
+                Object.defineProperty(ent, 'ContextCurrentUser', { get: () => user });
+                Object.defineProperty(ent, 'ProviderToUse', { get: () => metaProvider });
+                Object.defineProperty(ent, 'RunViewProviderToUse', { get: () => rvProvider });
+                Object.defineProperty(ent, 'ActiveUser', { get: () => user });
+                if (isCompositeKey) {
+                    await ent.InnerLoad(loadKeyOrUser);
+                }
+                const baseEnt: BaseEntity = ent;
+                return baseEnt as T;
+            },
+            async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
+                const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter.toLowerCase() : '';
+                let results: object[] = [];
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    const chats = [
+                        { ID: SPACE_CHAT_ID, SpaceID: SPACE_A, ConversationID: CONV_ID, Kind: 'General', OwnerUserID: null },
+                        { ID: ASST_CHAT_ID, SpaceID: SPACE_A, ConversationID: ASST_CONV_ID, Kind: 'Assistant', OwnerUserID: OUTSIDER_USER_ID },
+                    ];
+                    results = chats.filter((c) => filter.includes(c.ID.toLowerCase()));
+                } else if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                    results = [
+                        { ID: SPACE_A, ParentID: null, InheritsMembership: true, OwnerID: USER_A_ID, AgentRetrieval: 'Included', AllowParentAssignees: true, ClosedAt: null, StatusID: null, SpaceTypeID: null, Configuration: null },
+                        { ID: SPACE_B, ParentID: null, InheritsMembership: true, OwnerID: OUTSIDER_USER_ID, AgentRetrieval: 'Included', AllowParentAssignees: true, ClosedAt: null, StatusID: null, SpaceTypeID: null, Configuration: null },
+                    ];
+                } else if (params.EntityName === 'MJ_BizApps_Collaboration: Space Members') {
+                    const members = [
+                        { SpaceID: SPACE_A, UserID: USER_A_ID, Status: 'Active', Band: 'Shared', SpaceRoleTypeID: ROLE_SHARED_ID },
+                    ];
+                    results = members.filter((m) => filter.includes(m.UserID.toLowerCase()));
+                } else if (params.EntityName === 'MJ_BizApps_Collaboration: Space Role Types') {
+                    results = [
+                        { ID: ROLE_SHARED_ID, Level: 10, MaxGrantableLevel: 10, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: false, IsOwnerRole: false, CanContribute: true },
+                        { ID: ROLE_TEAM_ID, Level: 40, MaxGrantableLevel: 40, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true },
+                    ];
+                } else if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                    const items = [
+                        { ID: VALID_ITEM_ID, SpaceID: SPACE_A, Band: 'Shared' },
+                        { ID: MOVED_ITEM_ID, SpaceID: SPACE_B, Band: 'Shared' },
+                        { ID: DEMOTED_ITEM_ID, SpaceID: SPACE_A, Band: 'Team' },
+                    ];
+                    results = items.filter((i) => filter.includes(i.ID.toLowerCase()));
+                } else if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
+                    results = [
+                        { ID: '1', SpaceID: SPACE_A, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: VALID_KS_ID, Sequence: 1 },
+                        { ID: '2', SpaceID: null, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: REVOKED_KS_ID, Sequence: 1 },
+                        { ID: '3', SpaceID: SPACE_A, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Remove', Band: 'Shared', TargetRecordID: REVOKED_KS_ID, Sequence: 2 },
+                    ];
+                }
+                return {
+                    Success: true,
+                    Results: results as T[],
+                    UserViewRunID: '',
+                    TotalRowCount: results.length,
+                    RowCount: results.length,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            },
+        };
+
+        const mockProvider: IMetadataProvider = mockProviderObj as Partial<IMetadataProvider> as IMetadataProvider;
+        const participant = makeUser(USER_A_ID, 'Space Participant');
+        const outsider = makeUser(OUTSIDER_USER_ID, 'Space Participant');
+
+        const okItem = await loadSpaceAgentSourceReceiptById({ provider: mockProvider, user: participant, receiptId: RECEIPT_VALID_ITEM });
+        assert.equal(okItem.ok, true);
+        assert.equal(okItem.receipt?.SourceTitle, 'Valid Shared Item');
+
+        const okKs = await loadSpaceAgentSourceReceiptById({ provider: mockProvider, user: participant, receiptId: RECEIPT_VALID_KS });
+        assert.equal(okKs.ok, true);
+        assert.equal(okKs.receipt?.SourceTitle, 'Valid Shared KS');
+
+        for (const deniedId of [RECEIPT_MOVED_ITEM, RECEIPT_DEMOTED_ITEM, RECEIPT_REVOKED_KS, RECEIPT_OTHER_ASST]) {
+            const denied = await loadSpaceAgentSourceReceiptById({ provider: mockProvider, user: participant, receiptId: deniedId });
+            assert.equal(denied.ok, true);
+            assert.equal(denied.receipt, null, `Participant single-record Load must deny ${deniedId}`);
+
+            const directEntity = await mockProvider.GetEntityObject<SpaceAgentSourceReceiptEntityServer>(
+                COLLABORATION_SOURCE_RECEIPT_ENTITY,
+                participant,
+            );
+            const loaded = await directEntity.Load(deniedId);
+            assert.equal(loaded, false, `Direct InnerLoad must return false for ${deniedId}`);
+            assert.equal(directEntity.SourceTitle, null, `Direct InnerLoad must clear fields when denying ${deniedId}`);
+        }
+
+        const outsiderLoad = await loadSpaceAgentSourceReceiptById({ provider: mockProvider, user: outsider, receiptId: RECEIPT_VALID_ITEM });
+        assert.equal(outsiderLoad.ok, true);
+        assert.equal(outsiderLoad.receipt, null, 'Outsider single-record Load must fail closed');
+    });
+
+    it('isolates pooled PostgreSQL connection user context across consecutive different-user requests (CR-2)', async () => {
+        let activeUserId: string | null = null;
+        let activeRole: string | null = null;
+        const executedSql: string[] = [];
+
+        const singlePooledClient = {
+            releasedCount: 0,
+            async query(sqlText: string): Promise<{ rows: Array<{ userId: string | null; role: string | null }> }> {
+                executedSql.push(sqlText);
+                const roleMatch = /^SET LOCAL ROLE "([A-Za-z_][A-Za-z0-9_]*)"$/.exec(sqlText);
+                if (roleMatch) {
+                    activeRole = roleMatch[1];
+                } else if (sqlText === 'RESET ROLE') {
+                    activeRole = null;
+                }
+                const userMatch = /^SET LOCAL app\.current_user_id = '([^']+)'$/.exec(sqlText);
+                if (userMatch) {
+                    activeUserId = userMatch[1];
+                } else if (sqlText === 'RESET app.current_user_id' || sqlText === 'COMMIT' || sqlText === 'ROLLBACK') {
+                    activeUserId = null;
+                    if (sqlText !== 'RESET app.current_user_id') {
+                        activeRole = null;
+                    }
+                }
+                return { rows: [{ userId: activeUserId, role: activeRole }] };
+            },
+            release(): void {
+                this.releasedCount += 1;
+            },
+        };
+
+        const mockPool: PostgresPoolLike = {
+            async connect() {
+                return singlePooledClient;
+            },
+        };
+
+        const firstResult = await withPostgresReceiptUserContext(
+            mockPool,
+            USER_A_ID,
+            async (client) => {
+                const res = await client.query('SELECT current_setting(\'app.current_user_id\', true)') as {
+                    rows: Array<{ userId: string | null; role: string | null }>;
+                };
+                return res.rows[0];
+            },
+            { role: 'cdp_UI' },
+        );
+        assert.deepEqual(firstResult, { userId: USER_A_ID, role: 'cdp_UI' });
+        assert.equal(activeUserId, null, 'Reused pooled connection must clear app.current_user_id after Request 1');
+        assert.equal(activeRole, null, 'Reused pooled connection must clear ROLE after Request 1');
+
+        const outsiderId = '88888888-8888-4888-8888-888888888899';
+        const secondResult = await withPostgresReceiptUserContext(
+            mockPool,
+            outsiderId,
+            async (client) => {
+                const res = await client.query('SELECT current_setting(\'app.current_user_id\', true)') as {
+                    rows: Array<{ userId: string | null; role: string | null }>;
+                };
+                return res.rows[0];
+            },
+            { role: 'cdp_UI' },
+        );
+        assert.deepEqual(secondResult, { userId: outsiderId, role: 'cdp_UI' });
+        assert.equal(activeUserId, null);
+
+        await assert.rejects(
+            withPostgresReceiptUserContext(
+                mockPool,
+                USER_A_ID,
+                async () => {
+                    throw new Error('simulated query failure');
+                },
+                { role: 'cdp_UI' },
+            ),
+            /simulated query failure/,
+        );
+        assert.equal(activeUserId, null, 'Session user context must still reset after an error');
+        assert.equal(singlePooledClient.releasedCount, 3);
+        assert.ok(executedSql.includes('ROLLBACK'));
+        assert.ok(executedSql.filter((s) => s === 'RESET app.current_user_id').length >= 3);
     });
 });
 

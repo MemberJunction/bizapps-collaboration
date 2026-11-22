@@ -8,11 +8,13 @@
 import {
     BaseEntity,
     BaseEntityResult,
+    CompositeKey,
     type EntityDeleteOptions,
     type EntitySaveOptions,
     LogError,
     Metadata,
     RunView,
+    ServerOperationScopeManager,
     ValidationErrorInfo,
     ValidationErrorType,
     type ValidationResult,
@@ -38,6 +40,8 @@ import {
 } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceAgentSourceReceiptEntity } from '@mj-biz-apps/collaboration-entities';
 import {
+    COLLABORATION_AGENT_TURN_OPERATION,
+    COLLABORATION_ITEM_DELETE_OPERATION,
     COLLABORATION_SOURCE_RECEIPT_ENTITY,
     evaluateParticipantSourceReceiptWriteAccess,
     getCollaborationTurnAuthorityContext,
@@ -45,6 +49,8 @@ import {
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { toNode, type SpaceRow } from './load-graph.js';
 import { readEveryRow } from './read-every-row.js';
+import { isSingleSourceReceiptAuthorizedForUser } from './space-agent-source-receipts.js';
+import { isSpaceParticipant } from './task-attribution.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const CONVERSATION_DETAILS_ENTITY = 'MJ: Conversation Details';
@@ -195,6 +201,64 @@ function failValidation(result: ValidationResult, field: string, message: string
 export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationSpaceAgentSourceReceiptEntity {
     public override get DefaultSkipAsyncValidation(): boolean {
         return false;
+    }
+
+    public override async Load(
+        ID: string,
+        EntityRelationshipsToLoad?: string[],
+    ): Promise<boolean> {
+        const compositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return this.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    public override async InnerLoad(
+        CompositeKey: CompositeKey,
+        EntityRelationshipsToLoad?: string[],
+    ): Promise<boolean> {
+        const loaded = await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad);
+        if (!loaded) {
+            return false;
+        }
+
+        const actingUser = this.ContextCurrentUser ?? asMetadata(this.ProviderToUse)?.CurrentUser;
+        if (!actingUser) {
+            this.NewRecord();
+            return false;
+        }
+
+        if (
+            !isSpaceParticipant(actingUser) &&
+            ServerOperationScopeManager.Instance.IsOperationActive(
+                [COLLABORATION_AGENT_TURN_OPERATION, COLLABORATION_ITEM_DELETE_OPERATION],
+                COLLABORATION_SOURCE_RECEIPT_ENTITY,
+                actingUser,
+            )
+        ) {
+            return true;
+        }
+
+        const provider = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        const authorized = await isSingleSourceReceiptAuthorizedForUser({
+            provider,
+            user: actingUser,
+            receipt: {
+                ID: this.ID,
+                SpaceID: this.SpaceID,
+                SpaceChatID: this.SpaceChatID,
+                ConversationID: this.ConversationID,
+                SourceKind: this.SourceKind,
+                SpaceItemID: this.SpaceItemID,
+                ContentSourceID: this.ContentSourceID,
+                Band: this.Band,
+            },
+        });
+        if (!authorized) {
+            this.NewRecord();
+            return false;
+        }
+
+        return true;
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
