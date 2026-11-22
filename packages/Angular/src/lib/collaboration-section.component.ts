@@ -1900,26 +1900,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (this.activeSpaceEntity && UUIDsEqual(this.activeSpaceEntity.ID, space.ID)) {
             return this.activeSpaceEntity;
         }
-        const entityInfo = this.ProviderToUse?.EntityByName('MJ_BizApps_Collaboration: Spaces');
-        if (!entityInfo) {
-            return null;
-        }
-        const entity = new mjBizAppsCollaborationSpaceEntity(entityInfo);
-        entity.ID = space.ID;
-        entity.Name = space.Name;
-        entity.Description = space.Description ?? null;
-        entity.ParentID = space.ParentID ?? null;
-        entity.SpaceTypeID = space.SpaceTypeID;
-        entity.InheritsMembership = space.InheritsMembership === true;
-        if (space.AgentRetrieval !== undefined) entity.AgentRetrieval = space.AgentRetrieval;
-        if (space.ClosedAt !== undefined) entity.ClosedAt = space.ClosedAt ? new Date(space.ClosedAt) : null;
-        if (space.StatusID !== undefined) entity.StatusID = space.StatusID ?? null;
-        if (space.OwnerID !== undefined) entity.OwnerID = space.OwnerID;
-        if (space.IconClass !== undefined) entity.IconClass = space.IconClass ?? null;
-        if (space.Color !== undefined) entity.Color = space.Color ?? null;
-        if (space.BackgroundImageURL !== undefined) entity.BackgroundImageURL = space.BackgroundImageURL ?? null;
-        if (space.Configuration !== undefined) entity.Configuration = space.Configuration ?? null;
-        return entity;
+        return null;
     }
 
     protected async loadActiveSpaceEntity(space: RawSpaceRecord, isCurrent: () => boolean): Promise<void> {
@@ -1933,12 +1914,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             );
             const loaded = await entity.Load(space.ID);
             if (!loaded) {
-                await entity.LoadFromData(space);
+                this.logOnce(`space-entity:${space.ID}`, `Could not load live Space entity ${space.ID}: Load returned false.`);
+                if (isCurrent()) {
+                    this.activeSpaceEntity = null;
+                }
+                return;
             }
             if (isCurrent()) {
                 this.activeSpaceEntity = entity;
             }
         } catch (err) {
+            if (isCurrent()) {
+                this.activeSpaceEntity = null;
+            }
             this.logOnce(`space-entity:${space.ID}`, `Could not load live Space entity ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
@@ -1956,17 +1944,37 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         // the chain the browser can see. A participant cannot read the app's settings row, so the browser's walk fails for them and
         // only the server's document carries the type's labels; that failure is reported only if the server's document fails too.
         const serverRules = this.serverRulesBySpace.get(space.ID.toLowerCase()) ?? null;
-        const liveSpace = this.resolveLiveSpaceForUi(space);
-        let ctx: SpaceUIContext = { space: liveSpace, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: serverRules ?? structuredClone(DEFAULT_SPACE_RULES) };
         let browserWalkError: string | null = null;
+        let resolvedRules: EffectiveSpaceRules = serverRules ?? structuredClone(DEFAULT_SPACE_RULES);
         if (!serverRules) {
             try {
-                ctx = { ...ctx, rules: rulesForSpace(space, this.rawSpaces, engine) };
+                resolvedRules = rulesForSpace(space, this.rawSpaces, engine);
             } catch (err) {
                 browserWalkError = err instanceof Error ? err.message : String(err);
             }
         }
         if (!serverRules || refreshRules) void this.loadServerRules(space, browserWalkError);
+        void SpaceMeetingsTabComponent;
+        void SpaceComingUpCardComponent;
+        void SpaceMeetingsWidgetAgendaProvider;
+        const panels = { MessagingPanel: type?.MessagingPanel ?? true, LibraryPanel: type?.LibraryPanel ?? true, WorkPanel: type?.WorkPanel ?? true };
+        const liveSpace = this.resolveLiveSpaceForUi(space);
+        // Do not invoke Space-dependent extension hooks until activeSpaceEntity has been loaded from the provider for this space.
+        if (!liveSpace) {
+            this.uiContext = null;
+            this.spaceTabModel = buildSpaceTabs({
+                panels,
+                offersData: this.spaceOffersData(space.ID),
+                finalize: (defaults) => defaults,
+                labelFor: (_key, label) => label,
+            });
+            this.overviewContributedCards = [];
+            this.headerContributedChips = normalizeHeaderChips(this.providerHeaderChips);
+            this.headerContributedActions = [];
+            this.settingsContributedSections = [];
+            return;
+        }
+        const ctx: SpaceUIContext = { space: liveSpace, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: resolvedRules };
         const tabFactory = (reg: { SubClass: SpaceTabDescriptor['component'] | object }, meta: { contributionKey: string; label?: string; icon?: string; sortKey?: number }): SpaceTabDescriptor => ({
             key: meta.contributionKey,
             label: meta.label ?? meta.contributionKey,
@@ -1974,10 +1982,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             sortKey: meta.sortKey,
             component: reg.SubClass as SpaceTabDescriptor['component'],
         });
-        void SpaceMeetingsTabComponent;
-        void SpaceComingUpCardComponent;
-        void SpaceMeetingsWidgetAgendaProvider;
-        const panels = { MessagingPanel: type?.MessagingPanel ?? true, LibraryPanel: type?.LibraryPanel ?? true, WorkPanel: type?.WorkPanel ?? true };
         // A driver or a contribution that throws must not take the space down: log it, and fall back to the built-in parts
         this.spaceTabModel = buildSpaceTabsSafely({
             panels,
@@ -2048,10 +2052,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             });
             if (!isCurrent() || this.headerChipsRequestId !== requestId) return;
             this.providerHeaderChips = chips;
-            if (this.uiContext) {
+            if (this.uiContext && this.activeSpaceEntity && UUIDsEqual(this.activeSpaceEntity.ID, space.ID)) {
                 this.applyHeaderChipsForContext(this.uiContext, space.ID, code);
             } else {
-                this.headerContributedChips = chips;
+                this.headerContributedChips = normalizeHeaderChips(chips);
             }
             this.RefreshView();
         } catch (err) {
@@ -3558,6 +3562,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         // The last space's save message must not greet the next space's Settings, its drawer is closed, and both bands start narrow
         Object.assign(this, freshSelectionState());
         this.spaceTabModel = null;
+        this.uiContext = null;
         this.activeSpaceEntity = null;
         this.overviewContributedCards = [];
         this.overviewNeedsYou = [];

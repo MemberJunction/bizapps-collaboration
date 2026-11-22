@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import { ChangeDetectionStrategy, Component, type Type } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { NO_ERRORS_SCHEMA, type Type } from '@angular/core';
+import { Component } from '@angular/core';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +10,9 @@ import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { EntityFieldInfo, EntityInfo, UserInfo } from '@memberjunction/core';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { MJGlobal } from '@memberjunction/global';
+import { FormResolverService } from '@memberjunction/ng-base-forms';
+import { BaseResourceComponent, NavigationService, SharedService } from '@memberjunction/ng-shared';
 import {
     BaseNeedsYouProvider,
     BaseSpaceHeaderChipProvider,
@@ -31,13 +32,22 @@ import {
     BaseSpaceSettingsSection,
     BaseSpaceTab,
     BaseSpaceTypeUIDriver,
+    CollabAudiencePillComponent,
+    CollabHomeListComponent,
+    CollabNewConversationDialogComponent,
+    CollabNewSpaceDialogComponent,
+    CollabPinnedStripComponent,
     CollabShareCheckComponent,
     CollabShareCheckDialogComponent,
     CollabSpaceChatComponent,
-    CollabSpaceHeaderComponent,
-    CollabSpaceOverviewComponent,
+    CollabSpaceDataComponent,
+    CollabSpaceLibraryComponent,
+    CollabSpaceNotesComponent,
+    CollabSpacePeopleComponent,
+    CollabSpaceRailComponent,
     CollabSpaceSettingsComponent,
-    CollabSpaceTabsComponent,
+    CollabSpaceWorkComponent,
+    CollabUploadDialogComponent,
     type SpaceHeaderActionDescriptor,
     type SpaceHeaderChipDescriptor,
     type SpaceOverviewCardDescriptor,
@@ -46,9 +56,10 @@ import {
     type SpaceTabDescriptor,
     type SpaceUIContext,
 } from '@mj-biz-apps/collaboration-ng-widgets';
-import { BaseResourceComponent, NavigationService, SharedService } from '@memberjunction/ng-shared';
-import { MJAlertComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJPageBodyComponent, MJPageLayoutComponent } from '@memberjunction/ng-ui-components';
-import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { ApprovalInboxComponent, MyTasksComponent, TaskEditPanelComponent, TaskGanttComponent, TaskKanbanComponent } from '@mj-biz-apps/tasks-ng';
+import { MJReactModule } from '@memberjunction/ng-react';
+import { CollaborationNoAccessComponent } from './no-access.component.ts';
+import { SpaceDetailsViewComponent } from './space-details-view.component.ts';
 import { CollaborationSectionResource } from './collaboration-section.component.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -105,6 +116,55 @@ declareComponent(CustomSpaceTabComponent, {
     template: `<div class="custom-tab">Tab for {{ SpaceId }}</div>`,
     inputs: ['SpaceId', 'SpaceTypeCode', 'Sequence'],
 });
+
+class RailStub {
+    public Mode = 'home';
+    public ActiveNav = 'home';
+    public Spaces: object[] = [];
+    public ActiveSpaceId = '';
+    public SpaceTitle = '';
+    public SpaceIcon = '';
+    public SpaceBand = 'Shared';
+    public ActiveTab = 'Overview';
+    public Tabs: object[] = [];
+    public Conversations: object[] = [];
+    public CanConfigure = false;
+    public ActiveConversationId = '';
+    public CanStartConversation = false;
+    public LibraryCount = 0;
+    public TaskCount = 0;
+    public MyTaskCount = 0;
+    public MemberCount = 0;
+    public InboxCount = 0;
+    public CanCreateSpace = false;
+}
+declareComponent(RailStub, {
+    selector: 'mjc-space-rail',
+    template: `<nav class="rail-stub"></nav>`,
+    inputs: [
+        'Mode', 'ActiveNav', 'Spaces', 'ActiveSpaceId', 'SpaceTitle', 'SpaceIcon',
+        'SpaceBand', 'ActiveTab', 'Tabs', 'Conversations', 'CanConfigure',
+        'ActiveConversationId', 'CanStartConversation', 'LibraryCount', 'TaskCount',
+        'MyTaskCount', 'MemberCount', 'InboxCount', 'CanCreateSpace',
+    ],
+});
+
+class AudiencePillStub {
+    public StaffAvatars: object[] = [];
+    public OutsideAvatars: object[] = [];
+    public TotalPeople = 0;
+    public Summary = '';
+}
+declareComponent(AudiencePillStub, {
+    selector: 'mjc-audience-pill',
+    template: `<span class="aud-stub">{{ TotalPeople }}</span>`,
+    inputs: ['StaffAvatars', 'OutsideAvatars', 'TotalPeople', 'Summary'],
+});
+
+class NoAccessStub {
+    public Seats: object[] = [];
+}
+declareComponent(NoAccessStub, { selector: 'mjc-no-access', template: '', inputs: ['Seats'] });
 
 function buildEntityInfoWithFields(id: string, name: string, fieldNames: readonly string[]): EntityInfo {
     const entityInfo = new EntityInfo({
@@ -166,185 +226,211 @@ function makeStatusEntity(
     return status;
 }
 
-class RailStub {
-    public Mode = 'home';
-    public ActiveNav = 'home';
-    public Spaces: object[] = [];
-    public ActiveSpaceId = '';
-    public SpaceTitle = '';
-    public SpaceIcon = '';
-    public SpaceBand = 'Shared';
-    public ActiveTab = 'Overview';
-    public Tabs: object[] = [];
-    public Conversations: object[] = [];
-    public CanConfigure = false;
-    public ActiveConversationId = '';
-    public CanStartConversation = false;
-    public LibraryCount = 0;
-    public TaskCount = 0;
-    public MyTaskCount = 0;
-    public MemberCount = 0;
-    public InboxCount = 0;
-    public CanCreateSpace = false;
-}
-declareComponent(RailStub, {
-    selector: 'mjc-space-rail',
-    template: `<nav class="rail-stub"></nav>`,
-    inputs: [
-        'Mode', 'ActiveNav', 'Spaces', 'ActiveSpaceId', 'SpaceTitle', 'SpaceIcon',
-        'SpaceBand', 'ActiveTab', 'Tabs', 'Conversations', 'CanConfigure',
-        'ActiveConversationId', 'CanStartConversation', 'LibraryCount', 'TaskCount',
-        'MyTaskCount', 'MemberCount', 'InboxCount', 'CanCreateSpace',
-    ],
-});
+function configureProductionSectionTestBed(options: {
+    activeApp$?: BehaviorSubject<{ Name: string } | null>;
+    queryParams?: Record<string, string>;
+}): { navStub: object } {
+    const activeApp$ = options.activeApp$ ?? new BehaviorSubject<{ Name: string } | null>({ Name: 'Board Portal' });
+    const navStub = {
+        AppManager: {
+            GetActiveApp: () => activeApp$.value,
+            ActiveApp: activeApp$.asObservable(),
+        },
+        QueryParamChanged$: new Subject(),
+        ObserveTabQueryParams: () => new BehaviorSubject(options.queryParams ?? {}),
+        IsTabShowingResource: () => true,
+        GetTabQueryParams: () => options.queryParams ?? {},
+        SetAgentContext: vi.fn(),
+        UpdateTabQueryParams: vi.fn(),
+    };
 
-class AudiencePillStub {
-    public StaffAvatars: object[] = [];
-    public OutsideAvatars: object[] = [];
-    public TotalPeople = 0;
-    public Summary = '';
-}
-declareComponent(AudiencePillStub, {
-    selector: 'mjc-audience-pill',
-    template: `<span class="aud-stub">{{ TotalPeople }}</span>`,
-    inputs: ['StaffAvatars', 'OutsideAvatars', 'TotalPeople', 'Summary'],
-});
+    TestBed.configureTestingModule({
+        providers: [
+            { provide: NavigationService, useValue: navStub },
+            { provide: FormResolverService, useValue: { ResolveFormForEntity: async () => ({ kind: 'none' }) } },
+        ],
+    });
 
-class NoopStub {}
-declareComponent(NoopStub, { selector: 'mjc-no-access', template: '', inputs: ['Seats'] });
+    // Keep CollaborationSectionResource's real production template intact while stubbing heavy sibling/unrelated child selectors.
+    TestBed.overrideComponent(CollaborationSectionResource, {
+        remove: {
+            imports: [
+                CollabSpaceRailComponent,
+                CollabAudiencePillComponent,
+                CollaborationNoAccessComponent,
+                SpaceDetailsViewComponent,
+                CollabSpaceLibraryComponent,
+                CollabSpaceWorkComponent,
+                CollabSpaceChatComponent,
+                CollabSpacePeopleComponent,
+                CollabSpaceNotesComponent,
+                CollabPinnedStripComponent,
+                CollabSpaceDataComponent,
+                CollabNewConversationDialogComponent,
+                CollabNewSpaceDialogComponent,
+                CollabUploadDialogComponent,
+                CollabShareCheckDialogComponent,
+                CollabHomeListComponent,
+                TaskEditPanelComponent,
+                MJReactModule,
+                TaskKanbanComponent,
+                TaskGanttComponent,
+                MyTasksComponent,
+                ApprovalInboxComponent,
+            ],
+        },
+        add: {
+            imports: [RailStub, AudiencePillStub, NoAccessStub],
+            schemas: [NO_ERRORS_SCHEMA],
+        },
+    });
 
-@Component({
-    selector: 'mjc-testable-collaboration-section',
-    standalone: true,
-    imports: [
-        CommonModule,
-        FormsModule,
-        MJPageLayoutComponent,
-        MJPageBodyComponent,
-        MJButtonDirective,
-        MJClickableDirective,
-        MJEmptyStateComponent,
-        RailStub,
-        NoopStub,
-    ],
-    template: `
-        <mj-page-layout>
-            <mj-page-body [Padding]="false">
-                <h1 class="home-title">Welcome to {{ activeApplicationName }}</h1>
-            </mj-page-body>
-        </mj-page-layout>
-    `,
-})
-class TestableHomeSection extends CollaborationSectionResource {
-    public override async loadRealData(): Promise<void> {}
+    return { navStub };
 }
 
-@Component({
-    selector: 'mjc-testable-extensions-section',
-    standalone: true,
-    imports: [
-        CommonModule,
-        FormsModule,
-        SharedGenericModule,
-        MJPageLayoutComponent,
-        MJPageBodyComponent,
-        MJButtonDirective,
-        MJAlertComponent,
-        MJClickableDirective,
-        MJEmptyStateComponent,
-        CollabSpaceHeaderComponent,
-        CollabSpaceTabsComponent,
-        CollabSpaceOverviewComponent,
-        CollabSpaceSettingsComponent,
-        RailStub,
-        AudiencePillStub,
-        NoopStub,
-    ],
-    template: `
-        <mj-page-layout>
-            <mj-page-body [Padding]="false">
-                <mjc-space-header
-                    [Title]="spaceTitle"
-                    [TypeName]="spaceTypeName"
-                    [Status]="spaceStatus"
-                    [Chips]="headerContributedChips">
-                    <div actions class="row gap8">
-                        @for (act of headerContributedActions; track act.key) {
-                            <button type="button" mjButton [Variant]="act.primary ? 'primary' : 'secondary'" Size="md" (click)="onHeaderActionClicked(act)">
-                                <span>{{ act.label }}</span>
-                            </button>
-                        }
-                    </div>
-                    <mjc-space-tabs [Tabs]="tabs" [ActiveTab]="activeTab" (TabSelectRequested)="onTabSelectRequested($event)" />
-                </mjc-space-header>
-                <mjc-space-overview
-                    [SpaceId]="activeSpaceId"
-                    [SpaceName]="spaceTitle"
-                    [NeedsYouItems]="overviewNeedsYou"
-                    [ContributedCards]="overviewContributedCards"
-                    (NeedsYouActionRequested)="onNeedsYouAction($event)"
-                />
-                <mjc-space-settings
-                    [Settings]="spaceSettings"
-                    [CanEdit]="true"
-                    [AgentName]="'Board Copilot'"
-                    [SpaceId]="activeSpaceId"
-                    [SpaceTypeCode]="activeSpaceTypeCode"
-                    [ContributedSections]="settingsContributedSections"
-                />
-            </mj-page-body>
-        </mj-page-layout>
-    `,
-})
-class TestableExtensionsSection extends CollaborationSectionResource {
-    public override async loadRealData(): Promise<void> {}
-    public async runLoadActiveSpaceEntity(space: CollaborationSectionResource['rawSpaces'][number]): Promise<void> {
-        await this.loadActiveSpaceEntity(space, () => true);
-    }
-    public runBuildSpaceUi(space: CollaborationSectionResource['rawSpaces'][number]): void {
-        this.buildSpaceUi(space);
-    }
-    public async runLoadSpaceNeedsYou(space: CollaborationSectionResource['rawSpaces'][number]): Promise<void> {
-        await this.loadSpaceNeedsYou(space, () => true);
-    }
-    public async runLoadSpaceHeaderChips(space: CollaborationSectionResource['rawSpaces'][number]): Promise<void> {
-        await this.loadSpaceHeaderChips(space, () => true);
+async function flushAsyncWork(cycles = 4): Promise<void> {
+    for (let i = 0; i < cycles; i += 1) {
+        await new Promise((resolveFn) => setTimeout(resolveFn, 0));
     }
 }
 
-@Component({
-    selector: 'mjc-testable-lifecycle-section',
-    standalone: true,
-    imports: [CommonModule, MJPageLayoutComponent, MJPageBodyComponent],
-    template: '<mj-page-layout><mj-page-body></mj-page-body></mj-page-layout>',
-})
-class TestableLifecycleSection extends CollaborationSectionResource {
-    public override async loadRealData(): Promise<void> {}
-    protected override async selectSpaceInternal(_spaceId: string, _quiet = false): Promise<void> {}
+function createProviderMock(options: {
+    spaceEntityInfo: EntityInfo;
+    rawSpaces: Array<Record<string, unknown>>;
+    loadSpaceEntity: () => Promise<mjBizAppsCollaborationSpaceEntity>;
+    spaceType: mjBizAppsCollaborationSpaceTypeEntity;
+    statusEntities: mjBizAppsCollaborationSpaceTypeStatusEntity[];
+}) {
+    const currentUser = new UserInfo(undefined, { ID: USER_ID, Name: 'Ada Owner', Type: 'Owner', UserRoles: [] });
+
+    const runSingleView = async (params: { EntityName: string; ExtraFilter?: string }) => {
+        if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+            return { Success: true, Results: options.rawSpaces };
+        }
+        if (params.EntityName === 'MJ_BizApps_Collaboration: Space Members') {
+            return {
+                Success: true,
+                Results: [{
+                    ID: 'seat-1',
+                    SpaceID: SPACE_ID,
+                    UserID: USER_ID,
+                    SpaceRoleTypeID: 'role-owner-1',
+                    Status: 'Active',
+                    Band: 'Team',
+                }],
+            };
+        }
+        return { Success: true, Results: [] };
+    };
+
+    const providerStub = {
+        CurrentUser: currentUser,
+        Authorizations: [],
+        AuthorizationRoles: [],
+        EntityByName: (name: string) => (name === 'MJ_BizApps_Collaboration: Spaces' ? options.spaceEntityInfo : undefined),
+        GetEntityObject: async (entityName: string) => {
+            if (entityName === 'MJ_BizApps_Collaboration: Spaces') {
+                return options.loadSpaceEntity();
+            }
+            return {};
+        },
+        RunView: runSingleView,
+        RunViews: async (queries: Array<{ EntityName: string; ExtraFilter?: string }>) =>
+            Promise.all(queries.map((q) => runSingleView(q))),
+        GetRecordFavoriteStatus: async () => false,
+        ExecuteGQL: async (query: string) => {
+            if (query.includes('GetSpaceConfiguration')) {
+                return {
+                    GetSpaceConfiguration: {
+                        Success: true,
+                        ConfigurationJSON: JSON.stringify({
+                            Grants: [],
+                            DataReach: [],
+                            Rules: {},
+                        }),
+                        Full: false,
+                    },
+                };
+            }
+            if (query.includes('GetHomeCounts')) {
+                return { GetHomeCounts: { Success: true, SharedFiles: 0, OpenTasks: 0, AwaitingApproval: 0 } };
+            }
+            return {};
+        },
+    };
+
+    vi.spyOn(CollaborationEngineBase.Instance, 'Config').mockResolvedValue();
+    vi.spyOn(CollaborationEngineBase.Instance, 'SpaceTypes', 'get').mockReturnValue([options.spaceType]);
+    vi.spyOn(CollaborationEngineBase.Instance, 'SpaceTypeById').mockReturnValue(options.spaceType);
+    vi.spyOn(CollaborationEngineBase.Instance, 'StatusesForType').mockReturnValue(options.statusEntities);
+    vi.spyOn(CollaborationEngineBase.Instance, 'EffectiveStatusForSpace').mockReturnValue(options.statusEntities[0]);
+    vi.spyOn(CollaborationEngineBase.Instance, 'DefaultStatusForType').mockReturnValue(options.statusEntities[0]);
+    vi.spyOn(CollaborationEngineBase.Instance, 'FirstTerminalStatusForType').mockReturnValue(options.statusEntities[2]);
+    vi.spyOn(CollaborationEngineBase.Instance, 'UserMayAdministerSpaces').mockReturnValue(true);
+    vi.spyOn(CollaborationEngineBase.Instance, 'UserCanConfigureSpaces').mockResolvedValue(true);
+    vi.spyOn(CollaborationEngineBase.Instance, 'UserCanReopenSpace').mockResolvedValue(true);
+    vi.spyOn(CollaborationEngineBase.Instance, 'UserCanCloseSpace').mockResolvedValue(true);
+    vi.spyOn(CollaborationEngineBase.Instance, 'ReachedSeat').mockResolvedValue({
+        seat: { spaceId: SPACE_ID, userId: USER_ID, status: 'Active', band: 'Team', roleId: 'role-owner-1' },
+        role: {
+            level: 100,
+            maxGrantableLevel: 100,
+            canInvite: true,
+            canPromoteBand: true,
+            canSeeTeamBand: true,
+            isOwnerRole: true,
+            canContribute: true,
+        },
+        inherited: false,
+    });
+
+    return { currentUser, providerStub };
 }
 
-describe('CX-8 Dynamic Agent & Application Naming', () => {
-    it('renders the active application name on Home and falls back cleanly to Collaboration when unavailable', async () => {
+describe('CX-8 Dynamic Agent & Application Naming (production template)', () => {
+    it('renders the active application name on Home via CollaborationSectionResource real template and falls back cleanly to Collaboration when unavailable', async () => {
         const activeApp$ = new BehaviorSubject<{ Name: string } | null>({ Name: 'Deal Rooms' });
-        const navStub = {
-            AppManager: {
-                GetActiveApp: () => activeApp$.value,
-                ActiveApp: activeApp$.asObservable(),
-            },
-            QueryParamChanged$: new Subject(),
-            GetTabQueryParams: () => ({}),
-            SetAgentContext: vi.fn(),
-            UpdateTabQueryParams: vi.fn(),
-        };
+        configureProductionSectionTestBed({ activeApp$, queryParams: { view: 'home' } });
 
-        TestBed.configureTestingModule({
-            providers: [{ provide: NavigationService, useValue: navStub }],
+        const spaceEntityInfo = buildSpaceEntityInfo();
+        const liveSpace = new mjBizAppsCollaborationSpaceEntity(spaceEntityInfo);
+        liveSpace.ID = SPACE_ID;
+        liveSpace.Name = 'Audit Committee';
+        liveSpace.SpaceTypeID = TYPE_ID;
+        vi.spyOn(liveSpace, 'Load').mockResolvedValue(true);
+
+        const spaceTypeInfo = buildEntityInfoWithFields(
+            'entity-space-types-1',
+            'MJ_BizApps_Collaboration: Space Types',
+            ['ID', 'Code', 'Name', 'UIDriverClass', 'MessagingPanel', 'LibraryPanel', 'WorkPanel', 'DefaultBand'],
+        );
+        const spaceType = new mjBizAppsCollaborationSpaceTypeEntity(spaceTypeInfo);
+        spaceType.ID = TYPE_ID;
+        spaceType.Code = 'board';
+        spaceType.Name = 'Board';
+
+        const { providerStub } = createProviderMock({
+            spaceEntityInfo,
+            rawSpaces: [{ ID: SPACE_ID, Name: 'Audit Committee', SpaceTypeID: TYPE_ID, OwnerID: USER_ID, InheritsMembership: true }],
+            loadSpaceEntity: async () => liveSpace,
+            spaceType,
+            statusEntities: [
+                makeStatusEntity(ACTIVE_STATUS_ID, SHIPPED_STATUSES[0]),
+                makeStatusEntity(PAUSED_STATUS_ID, SHIPPED_STATUSES[1]),
+                makeStatusEntity(CLOSED_STATUS_ID, SHIPPED_STATUSES[2]),
+            ],
         });
 
-        const fixture = TestBed.createComponent(TestableHomeSection);
-        const comp = fixture.componentInstance;
-        vi.spyOn(comp, 'GetQueryParams').mockReturnValue({});
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
 
+        const fixture = TestBed.createComponent(CollaborationSectionResource);
+        const comp = fixture.componentInstance;
+        comp.Data = { Configuration: { tabId: 'tab-1', queryParams: { view: 'home' } } } as CollaborationSectionResource['Data'];
+
+        fixture.detectChanges();
+        await flushAsyncWork();
+        comp['changeDetector'].markForCheck();
         fixture.detectChanges();
         await fixture.whenStable();
 
@@ -352,6 +438,7 @@ describe('CX-8 Dynamic Agent & Application Naming', () => {
         expect(titleEl?.textContent?.trim()).toBe('Welcome to Deal Rooms');
 
         activeApp$.next(null);
+        comp['changeDetector'].markForCheck();
         fixture.detectChanges();
         expect(titleEl?.textContent?.trim()).toBe('Welcome to Collaboration');
     });
@@ -416,8 +503,8 @@ describe('CX-8 Dynamic Agent & Application Naming', () => {
     });
 });
 
-describe('CX-9 UI Extension Points & Live Non-Null Space in SpaceUIContext', () => {
-    it('passes live non-null Space to GetTabs/GetOverviewCards/GetHeaderChips/GetHeaderActions/GetSettingsSections and wires all extension points', async () => {
+describe('CX-9 & CR-2/CR-4 Real Selection/Load Lifecycle & Live Space Entity', () => {
+    it('does not invoke GetTabs/GetOverviewCards before entity.Load succeeds, and passes the exact loaded entity instance once Load resolves', async () => {
         const capturedContexts: Array<{ hook: string; space: SpaceUIContext['space'] }> = [];
         const headerActionSpy = vi.fn();
 
@@ -493,13 +580,18 @@ describe('CX-9 UI Extension Points & Live Non-Null Space in SpaceUIContext', () 
         factory.Register(BaseSpaceHeaderChipProvider, LiveChipProvider, 'cx-render:chips', 1, true, false, { spaceTypes: ['example-board'] });
 
         const spaceEntityInfo = buildSpaceEntityInfo();
-        const liveSpace = new mjBizAppsCollaborationSpaceEntity(spaceEntityInfo);
-        liveSpace.ID = SPACE_ID;
-        liveSpace.Name = 'Audit Committee';
-        liveSpace.SpaceTypeID = TYPE_ID;
-        liveSpace.OwnerID = USER_ID;
-        liveSpace.InheritsMembership = true;
-        vi.spyOn(liveSpace, 'Load').mockResolvedValue(true);
+        const loadedEntity = new mjBizAppsCollaborationSpaceEntity(spaceEntityInfo);
+        loadedEntity.ID = SPACE_ID;
+        loadedEntity.Name = 'Audit Committee';
+        loadedEntity.SpaceTypeID = TYPE_ID;
+        loadedEntity.OwnerID = USER_ID;
+        loadedEntity.InheritsMembership = true;
+
+        let resolveLoad!: (value: boolean) => void;
+        const loadDeferred = new Promise<boolean>((resolveFn) => {
+            resolveLoad = resolveFn;
+        });
+        vi.spyOn(loadedEntity, 'Load').mockReturnValue(loadDeferred);
 
         const spaceTypeInfo = buildEntityInfoWithFields(
             'entity-space-types-1',
@@ -516,22 +608,6 @@ describe('CX-9 UI Extension Points & Live Non-Null Space in SpaceUIContext', () 
         spaceType.WorkPanel = true;
         spaceType.DefaultBand = 'Shared';
 
-        vi.spyOn(CollaborationEngineBase.Instance, 'SpaceTypeById').mockReturnValue(spaceType);
-        vi.spyOn(CollaborationEngineBase.Instance, 'StatusesForType').mockReturnValue([
-            makeStatusEntity(ACTIVE_STATUS_ID, SHIPPED_STATUSES[0]),
-            makeStatusEntity(PAUSED_STATUS_ID, SHIPPED_STATUSES[1]),
-            makeStatusEntity(CLOSED_STATUS_ID, SHIPPED_STATUSES[2]),
-        ]);
-        vi.spyOn(CollaborationEngineBase.Instance, 'EffectiveStatusForSpace').mockReturnValue(
-            makeStatusEntity(ACTIVE_STATUS_ID, SHIPPED_STATUSES[0]),
-        );
-
-        const providerStub = {
-            CurrentUser: new UserInfo(undefined, { ID: USER_ID, Name: 'Ada Owner', UserRoles: [] }),
-            EntityByName: (name: string) => (name === 'MJ_BizApps_Collaboration: Spaces' ? spaceEntityInfo : undefined),
-            GetEntityObject: async () => liveSpace,
-        };
-
         const rawSpace = {
             ID: SPACE_ID,
             Name: 'Audit Committee',
@@ -543,67 +619,62 @@ describe('CX-9 UI Extension Points & Live Non-Null Space in SpaceUIContext', () 
             ClosedAt: null,
         };
 
-        const navStub = {
-            AppManager: { GetActiveApp: () => ({ Name: 'Board Portal' }), ActiveApp: new Subject() },
-            QueryParamChanged$: new Subject(),
-            GetTabQueryParams: () => ({}),
-            SetAgentContext: vi.fn(),
-            UpdateTabQueryParams: vi.fn(),
-        };
-
-        TestBed.configureTestingModule({
-            providers: [{ provide: NavigationService, useValue: navStub }],
+        const { providerStub } = createProviderMock({
+            spaceEntityInfo,
+            rawSpaces: [rawSpace],
+            loadSpaceEntity: async () => loadedEntity,
+            spaceType,
+            statusEntities: [
+                makeStatusEntity(ACTIVE_STATUS_ID, SHIPPED_STATUSES[0]),
+                makeStatusEntity(PAUSED_STATUS_ID, SHIPPED_STATUSES[1]),
+                makeStatusEntity(CLOSED_STATUS_ID, SHIPPED_STATUSES[2]),
+            ],
         });
 
-        const fixture = TestBed.createComponent(TestableExtensionsSection);
+        configureProductionSectionTestBed({ queryParams: { view: 'home' } });
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
+
+        const fixture = TestBed.createComponent(CollaborationSectionResource);
         const comp = fixture.componentInstance;
-        vi.spyOn(comp, 'GetQueryParams').mockReturnValue({});
-        Object.defineProperty(comp, 'ProviderToUse', { get: () => providerStub });
+        comp.Data = { Configuration: { tabId: 'tab-1', queryParams: { view: 'home' } } } as CollaborationSectionResource['Data'];
 
-        comp.currentUser = providerStub.CurrentUser;
-        comp.rawSpaces = [rawSpace];
-        comp.activeSpaceId = SPACE_ID;
-        comp.spaceTitle = 'Audit Committee';
-        comp.spaceTypeName = 'Board';
-        comp.spaceStatus = 'Active';
-        comp.spaceSettings = {
-            id: SPACE_ID,
-            name: 'Audit Committee',
-            description: 'External audit oversight',
-            spaceType: 'Board',
-            spaceTypeId: TYPE_ID,
-            iconClass: 'fa-solid fa-landmark',
-            color: '#0076b6',
-            backgroundImageUrl: '',
-            inheritsMembership: true,
-            agentRetrieval: 'Included',
-            status: 'Active',
-        };
+        fixture.detectChanges();
+        await flushAsyncWork();
 
-        await comp.runLoadActiveSpaceEntity(rawSpace);
-        comp.runBuildSpaceUi(rawSpace);
-        await comp.runLoadSpaceNeedsYou(rawSpace);
-        await comp.runLoadSpaceHeaderChips(rawSpace);
+        // Selecting the space triggers resetForSelection + selectSpaceBody -> loadActiveSpaceEntity (blocked on loadDeferred)
+        comp.onSpaceOpenRequested(SPACE_ID);
+        await flushAsyncWork();
+        fixture.detectChanges();
 
+        // CR-2: While Load has NOT resolved yet, GetTabs / GetOverviewCards / extension hooks MUST NOT be called
+        expect(capturedContexts).toHaveLength(0);
+        // Default built-in tabs render safely while awaiting load
+        expect(comp.tabs.map((t) => t.id)).toContain('Overview');
+
+        // Now resolve entity.Load(SPACE_ID) -> true
+        resolveLoad(true);
+        await flushAsyncWork();
+        comp['changeDetector'].markForCheck();
         fixture.detectChanges();
         await fixture.whenStable();
 
-        // 1. Live non-null Space passed to GetTabs, GetOverviewCards, GetHeaderChips, GetHeaderActions, GetSettingsSections
+        // 1. Live loadedEntity instance (=== loadedEntity) passed to all extension hooks
         for (const hook of ['GetTabs', 'GetOverviewCards', 'GetHeaderChips', 'GetHeaderActions', 'GetSettingsSections']) {
-            const match = capturedContexts.find((c) => c.hook === hook);
-            expect(match, `expected ${hook} to be called`).toBeDefined();
-            expect(match?.space, `${hook} must receive non-null Space`).not.toBeNull();
-            expect(match?.space?.ID).toBe(SPACE_ID);
-            expect(match?.space?.Name).toBe('Audit Committee');
+            const matches = capturedContexts.filter((c) => c.hook === hook);
+            expect(matches.length, `expected ${hook} to be called`).toBeGreaterThan(0);
+            for (const match of matches) {
+                expect(match.space, `${hook} must receive the exact loaded entity instance`).toBe(loadedEntity);
+            }
         }
 
-        // 2. NeedsYou cards rendered and action handler switches to target tab
+        // 2. NeedsYou cards rendered inside real template and action handler switches to target tab
         const hostEl = fixture.nativeElement as HTMLElement;
         expect(hostEl.querySelector('mjc-needs-you-card')?.textContent).toContain('Motion 2026-14: External Auditor');
         comp.onNeedsYouAction(comp.overviewNeedsYou[0]);
         expect(comp.activeTab).toBe('motions');
 
-        // 3. Header chips (provider + UI driver) and header actions rendered & clickable
+        // 3. Header chips (provider + UI driver) and header actions rendered & clickable in real template
         const headerEl = hostEl.querySelector('mjc-space-header')!;
         expect(headerEl.textContent).toContain('Committee');
         expect(headerEl.textContent).toContain('FY2026 term');
@@ -612,11 +683,83 @@ describe('CX-9 UI Extension Points & Live Non-Null Space in SpaceUIContext', () 
         downloadBtn!.click();
         expect(headerActionSpy).toHaveBeenCalledTimes(1);
 
-        // 4. Settings sections (component + descriptor) rendered inside mjc-space-settings
+        // 4. Switching to Settings tab renders contributed Settings sections (component + descriptor) and dynamic AgentName
+        comp.chatDefaultAgentName = 'Board Copilot';
+        comp.onTabSelectRequested('Settings');
+        comp['changeDetector'].markForCheck();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
         const settingsEl = hostEl.querySelector('mjc-space-settings')!;
         expect(settingsEl.querySelector('.custom-settings-section-body')?.textContent).toContain(`Custom quorum rules for ${SPACE_ID}`);
         expect(settingsEl.textContent).toContain('Committee Charter');
         expect(settingsEl.textContent).toContain('Governs meeting cadence.');
+        expect(settingsEl.textContent).toContain('Board Copilot synthesizes files, conversations, and tasks from this space.');
+    });
+
+    it('never calls GetTabs or GetOverviewCards when entity.Load returns false or throws (CR-2)', async () => {
+        const capturedHooks: string[] = [];
+
+        class GuardedUIDriver extends BaseSpaceTypeUIDriver {
+            public override GetTabs(ctx: SpaceUIContext, defaultTabs: SpaceTabDescriptor[]): SpaceTabDescriptor[] {
+                capturedHooks.push(`GetTabs:${ctx.space ? 'hasSpace' : 'null'}`);
+                return defaultTabs;
+            }
+            public override GetOverviewCards(ctx: SpaceUIContext, defaultCards: SpaceOverviewCardDescriptor[]): SpaceOverviewCardDescriptor[] {
+                capturedHooks.push(`GetOverviewCards:${ctx.space ? 'hasSpace' : 'null'}`);
+                return defaultCards;
+            }
+        }
+
+        MJGlobal.Instance.ClassFactory.Register(BaseSpaceTypeUIDriver, GuardedUIDriver, 'cx-cr2-fail-driver', 1);
+
+        const spaceEntityInfo = buildSpaceEntityInfo();
+        const failingEntity = new mjBizAppsCollaborationSpaceEntity(spaceEntityInfo);
+        failingEntity.ID = SPACE_ID;
+        vi.spyOn(failingEntity, 'Load').mockResolvedValue(false);
+        const loadFromDataSpy = vi.spyOn(failingEntity, 'LoadFromData');
+
+        const spaceTypeInfo = buildEntityInfoWithFields(
+            'entity-space-types-1',
+            'MJ_BizApps_Collaboration: Space Types',
+            ['ID', 'Code', 'Name', 'UIDriverClass', 'MessagingPanel', 'LibraryPanel', 'WorkPanel', 'DefaultBand'],
+        );
+        const spaceType = new mjBizAppsCollaborationSpaceTypeEntity(spaceTypeInfo);
+        spaceType.ID = TYPE_ID;
+        spaceType.Code = 'board-fail';
+        spaceType.Name = 'Board';
+        spaceType.UIDriverClass = 'cx-cr2-fail-driver';
+        spaceType.MessagingPanel = true;
+        spaceType.LibraryPanel = true;
+        spaceType.WorkPanel = true;
+
+        const { providerStub } = createProviderMock({
+            spaceEntityInfo,
+            rawSpaces: [{ ID: SPACE_ID, Name: 'Audit Committee', SpaceTypeID: TYPE_ID, OwnerID: USER_ID, InheritsMembership: true }],
+            loadSpaceEntity: async () => failingEntity,
+            spaceType,
+            statusEntities: [
+                makeStatusEntity(ACTIVE_STATUS_ID, SHIPPED_STATUSES[0]),
+                makeStatusEntity(PAUSED_STATUS_ID, SHIPPED_STATUSES[1]),
+                makeStatusEntity(CLOSED_STATUS_ID, SHIPPED_STATUSES[2]),
+            ],
+        });
+
+        configureProductionSectionTestBed({ queryParams: { view: 'space', space: SPACE_ID } });
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
+
+        const fixture = TestBed.createComponent(CollaborationSectionResource);
+        const comp = fixture.componentInstance;
+        comp.Data = { Configuration: { tabId: 'tab-1', queryParams: { view: 'space', space: SPACE_ID } } } as CollaborationSectionResource['Data'];
+
+        fixture.detectChanges();
+        await flushAsyncWork();
+        fixture.detectChanges();
+
+        expect(loadFromDataSpy).not.toHaveBeenCalled();
+        expect(capturedHooks).toEqual([]);
+        expect(comp.tabs.map((t) => t.id)).toContain('Overview');
     });
 });
 
@@ -678,20 +821,13 @@ describe('CX-12 Terminal Closed vs Resumable Paused UI Reopen Alignment', () => 
         expect(pausedReopenSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('enforces Closed terminal refusal and resumes Paused spaces to Active in CollaborationSectionResource', async () => {
+    it('enforces Closed terminal refusal and resumes Paused spaces to Active in CollaborationSectionResource real template', async () => {
         const activeStatus = makeStatusEntity(ACTIVE_STATUS_ID, SHIPPED_STATUSES[0]);
         const pausedStatus = makeStatusEntity(PAUSED_STATUS_ID, SHIPPED_STATUSES[1]);
         const closedStatus = makeStatusEntity(CLOSED_STATUS_ID, SHIPPED_STATUSES[2]);
 
-        vi.spyOn(CollaborationEngineBase.Instance, 'StatusesForType').mockReturnValue([activeStatus, pausedStatus, closedStatus]);
-        vi.spyOn(CollaborationEngineBase.Instance, 'DefaultStatusForType').mockReturnValue(activeStatus);
-        vi.spyOn(CollaborationEngineBase.Instance, 'FirstTerminalStatusForType').mockReturnValue(closedStatus);
-        vi.spyOn(CollaborationEngineBase.Instance, 'UserCanConfigureSpaces').mockResolvedValue(true);
-        vi.spyOn(CollaborationEngineBase.Instance, 'UserCanReopenSpace').mockResolvedValue(true);
-        vi.spyOn(CollaborationEngineBase.Instance, 'UserCanCloseSpace').mockResolvedValue(true);
-
-        const entityInfo = buildSpaceEntityInfo();
-        const spaceEntity = new mjBizAppsCollaborationSpaceEntity(entityInfo);
+        const spaceEntityInfo = buildSpaceEntityInfo();
+        const spaceEntity = new mjBizAppsCollaborationSpaceEntity(spaceEntityInfo);
         spaceEntity.ID = SPACE_ID;
         spaceEntity.SpaceTypeID = TYPE_ID;
         spaceEntity.StatusID = PAUSED_STATUS_ID;
@@ -699,21 +835,39 @@ describe('CX-12 Terminal Closed vs Resumable Paused UI Reopen Alignment', () => 
         const loadSpy = vi.spyOn(spaceEntity, 'Load').mockResolvedValue(true);
         const saveSpy = vi.spyOn(spaceEntity, 'Save').mockResolvedValue(true);
 
-        const providerStub = {
-            CurrentUser: new UserInfo(undefined, { ID: USER_ID, Name: 'Ada Owner', UserRoles: [] }),
-            EntityByName: (name: string) => (name === 'MJ_BizApps_Collaboration: Spaces' ? entityInfo : undefined),
-            GetEntityObject: async () => spaceEntity,
-        };
+        const spaceTypeInfo = buildEntityInfoWithFields(
+            'entity-space-types-1',
+            'MJ_BizApps_Collaboration: Space Types',
+            ['ID', 'Code', 'Name', 'UIDriverClass', 'MessagingPanel', 'LibraryPanel', 'WorkPanel', 'DefaultBand'],
+        );
+        const spaceType = new mjBizAppsCollaborationSpaceTypeEntity(spaceTypeInfo);
+        spaceType.ID = TYPE_ID;
+        spaceType.Code = 'project';
+        spaceType.Name = 'Project';
+
+        const { providerStub } = createProviderMock({
+            spaceEntityInfo,
+            rawSpaces: [{ ID: SPACE_ID, Name: 'Paused Space', SpaceTypeID: TYPE_ID, OwnerID: USER_ID, StatusID: PAUSED_STATUS_ID, ClosedAt: null }],
+            loadSpaceEntity: async () => spaceEntity,
+            spaceType,
+            statusEntities: [activeStatus, pausedStatus, closedStatus],
+        });
 
         const notifySpy = vi.fn();
         vi.spyOn(SharedService, 'Instance', 'get').mockReturnValue({
             CreateSimpleNotification: notifySpy,
         } as SharedService);
 
-        const fixture = TestBed.createComponent(TestableLifecycleSection);
+        configureProductionSectionTestBed({ queryParams: { view: 'home' } });
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { ProviderToUse: unknown }, 'ProviderToUse', 'get').mockReturnValue(providerStub);
+        vi.spyOn(CollaborationSectionResource.prototype as unknown as { RunViewToUse: unknown }, 'RunViewToUse', 'get').mockReturnValue(providerStub);
+
+        const fixture = TestBed.createComponent(CollaborationSectionResource);
         const comp = fixture.componentInstance;
-        Object.defineProperty(comp, 'ProviderToUse', { get: () => providerStub });
-        comp.currentUser = providerStub.CurrentUser;
+        comp.Data = { Configuration: { tabId: 'tab-1', queryParams: { view: 'home' } } } as CollaborationSectionResource['Data'];
+        fixture.detectChanges();
+        await flushAsyncWork();
+
         comp.activeSpaceId = SPACE_ID;
 
         // 1. Closed space: terminal -> canReopenCurrentSpace is false and settingsAccessNow hides Reopen
