@@ -25,7 +25,7 @@ import {
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { DEFAULT_SPACE_RULES, reachableStatuses, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, type NeedsYouItem, GrantsForViewer, noteDocument, notePromotionVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, type NeedsYouItem, GrantsForViewer, noteDocument, notePromotionVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { photosByUser, type PersonPhotoRow, type UserPhotoRow } from './logic/member-photos.js';
 import { LatestOnly } from './logic/latest-only.js';
@@ -1625,10 +1625,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (!space) return false;
         const status = this.effectiveStatusOf(space);
         if (!status) return !!space.ClosedAt;
-        if (!status.IsTerminal) return false;
-        const allStatuses = CollaborationEngineBase.Instance.StatusesForType(space.SpaceTypeID);
-        if (allStatuses.length === 0) return true;
-        return !reachableStatuses(status, allStatuses).some((s) => !s.ReadOnly);
+        return status.IsTerminal === true;
     }
 
     public async updateCanConfigureCurrentSpace(): Promise<void> {

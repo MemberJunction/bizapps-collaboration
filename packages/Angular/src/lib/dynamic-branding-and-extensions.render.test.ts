@@ -987,6 +987,114 @@ describe('CX-12 Terminal Closed vs Resumable Paused UI Reopen Alignment', () => 
         expect(spaceEntity.ClosedAt).toBeNull();
     });
 
+    it('treats Closed (IsTerminal: true) as terminal even when followed by a later writable status, hiding Reopen while Paused still resumes', async () => {
+        const REOPENED_STATUS_ID = '33333333-3333-4333-8333-333333333304';
+        const activeStatus = makeStatusEntity(ACTIVE_STATUS_ID, SHIPPED_STATUSES[0]);
+        const pausedStatus = makeStatusEntity(PAUSED_STATUS_ID, SHIPPED_STATUSES[1]);
+        const closedStatus = makeStatusEntity(CLOSED_STATUS_ID, SHIPPED_STATUSES[2]);
+        const laterWritableStatus = makeStatusEntity(REOPENED_STATUS_ID, {
+            Code: 'reopened',
+            Name: 'Reopened',
+            Sequence: 4,
+            IsDefault: false,
+            ReadOnly: false,
+            Visible: true,
+            AgentRetrieval: true,
+            CanChangeAfter: true,
+            NotifyMembersOnEnter: false,
+            IsTerminal: false,
+        });
+
+        const spaceEntityInfo = buildSpaceEntityInfo();
+        const spaceEntity = new mjBizAppsCollaborationSpaceEntity(spaceEntityInfo);
+        spaceEntity.ID = SPACE_ID;
+        spaceEntity.Name = 'Engagement';
+        spaceEntity.SpaceTypeID = TYPE_ID;
+        spaceEntity.StatusID = CLOSED_STATUS_ID;
+        spaceEntity.ClosedAt = new Date('2026-10-01T00:00:00Z');
+        const loadSpy = vi.spyOn(spaceEntity, 'Load').mockResolvedValue(true);
+        const saveSpy = vi.spyOn(spaceEntity, 'Save').mockResolvedValue(true);
+
+        const spaceTypeInfo = buildEntityInfoWithFields(
+            'entity-space-types-1',
+            'MJ_BizApps_Collaboration: Space Types',
+            ['ID', 'Code', 'Name', 'UIDriverClass', 'MessagingPanel', 'LibraryPanel', 'WorkPanel', 'DefaultBand'],
+        );
+        const spaceType = new mjBizAppsCollaborationSpaceTypeEntity(spaceTypeInfo);
+        spaceType.ID = TYPE_ID;
+        spaceType.Code = 'project';
+        spaceType.Name = 'Project';
+
+        const closedRaw = {
+            ID: SPACE_ID,
+            Name: 'Engagement',
+            SpaceTypeID: TYPE_ID,
+            OwnerID: USER_ID,
+            StatusID: CLOSED_STATUS_ID,
+            ClosedAt: new Date('2026-10-01T00:00:00Z'),
+        };
+
+        const { providerStub } = createProviderMock({
+            spaceEntityInfo,
+            rawSpaces: [closedRaw],
+            loadSpaceEntity: async () => spaceEntity,
+            spaceType,
+            statusEntities: [activeStatus, pausedStatus, closedStatus, laterWritableStatus],
+        });
+        const effectiveSpy = vi.spyOn(CollaborationEngineBase.Instance, 'EffectiveStatusForSpace').mockReturnValue(closedStatus);
+
+        const notifySpy = vi.fn();
+        vi.spyOn(SharedService, 'Instance', 'get').mockReturnValue({
+            CreateSimpleNotification: notifySpy,
+        } as SharedService);
+
+        configureProductionSectionTestBed({ queryParams: { view: 'space', space: SPACE_ID, tab: 'settings' } });
+        spyOnSectionProviders(providerStub);
+
+        const fixture = TestBed.createComponent(CollaborationSectionResource);
+        const comp = fixture.componentInstance;
+        comp.Data = { Configuration: { tabId: 'tab-1', queryParams: { view: 'space', space: SPACE_ID, tab: 'settings' } } } as CollaborationSectionResource['Data'];
+        fixture.detectChanges();
+        await flushAsyncWork();
+        comp['changeDetector'].markForCheck();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        // Terminal Closed must remain terminal even when a later Sequence=4 writable status exists
+        expect(comp.spaceSettings?.isTerminal).toBe(true);
+        expect(comp.canReopenCurrentSpace).toBe(false);
+        expect(comp.settingsAccessNow.canChangeLifecycle).toBe(false);
+        const settingsEl = (fixture.nativeElement as HTMLElement).querySelector('mjc-space-settings');
+        expect(settingsEl?.textContent).not.toContain('Reopen');
+
+        await comp.onChangeSpaceLifecycle(false);
+        expect(saveSpy).not.toHaveBeenCalled();
+        expect(notifySpy).toHaveBeenCalled();
+
+        // Paused (IsTerminal: false) still offers Reopen and resumes to Active
+        effectiveSpy.mockReturnValue(pausedStatus);
+        spaceEntity.StatusID = PAUSED_STATUS_ID;
+        spaceEntity.ClosedAt = null;
+        comp.rawSpaces = [{ ID: SPACE_ID, Name: 'Engagement', SpaceTypeID: TYPE_ID, OwnerID: USER_ID, StatusID: PAUSED_STATUS_ID, ClosedAt: null }];
+        comp.onSpaceOpenRequested(SPACE_ID);
+        await flushAsyncWork();
+        comp.onTabSelectRequested('Settings');
+        comp['changeDetector'].markForCheck();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(comp.spaceSettings?.isTerminal).toBe(false);
+        expect(comp.canReopenCurrentSpace).toBe(true);
+        expect(comp.settingsAccessNow.canChangeLifecycle).toBe(true);
+        expect((fixture.nativeElement as HTMLElement).querySelector('mjc-space-settings')?.textContent).toContain('Reopen…');
+
+        await comp.onChangeSpaceLifecycle(false);
+        expect(loadSpy).toHaveBeenCalledWith(SPACE_ID);
+        expect(saveSpy).toHaveBeenCalledTimes(1);
+        expect(spaceEntity.StatusID).toBe(ACTIVE_STATUS_ID);
+        expect(spaceEntity.ClosedAt).toBeNull();
+    });
+
     it('keeps OpenApp v3 registrations, <mj-page-layout>, NotifyLoadComplete, and zero raw CSS literals', () => {
         const collabSource = readFileSync(resolve(here, 'collaboration-section.component.ts'), 'utf8');
         expect(collabSource).toContain("@RegisterClass(BaseResourceComponent, 'CollaborationSectionResource')");
