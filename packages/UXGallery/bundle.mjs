@@ -65,6 +65,9 @@ export async function bundleGalleryApp() {
 
     const collabTokens = `
 :root {
+  /* UXGallery ships local Inter and JetBrains Mono woff2 fonts and asserts Inter is active; override MJ next's Montserrat default. */
+  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mj-font-family-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
   --mjc-shared: var(--mj-brand-tertiary-active);
   --mjc-shared-strong: var(--mj-brand-tertiary-hover);
   --mjc-shared-bg: var(--mj-brand-tertiary-subtle);
