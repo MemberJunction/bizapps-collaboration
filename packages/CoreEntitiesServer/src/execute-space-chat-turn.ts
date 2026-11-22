@@ -20,7 +20,13 @@ import { COLLABORATION_SPACE_SCOPE_ID, resolveTurnTools, type SpaceTurnContext }
 import type { AgentContextResult } from './base-space-type-server-driver.js';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { readEveryRow } from './read-every-row.js';
-import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
+import {
+    resolveSpaceAgentRetrieval,
+    stripMentionMarkup,
+    type SpaceAgentRetrievalStats,
+    type SpaceAgentSuppliedSource,
+    type SpaceAgentVectorSearchAdapter,
+} from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
 import { buildSpaceMeetingsAgentContext } from './space-meetings.js';
@@ -76,6 +82,16 @@ export interface ExecuteSpaceChatTurnInput {
     decisionCalibration?: ResolveTurnAgentViaDecisionParams['decisionCalibration'];
     /** Optional unit-test seam: the seats asked for per round trip. The seats are read to their end at any size. */
     rosterPageSize?: number;
+    /** Optional top-k retrieval cap (clamped to server bounds `[1, MAX_RETRIEVAL_TOP_K]`). */
+    topK?: number;
+    /** Optional per-source prompt token limit (clamped to server bounds). */
+    maxTokensPerSource?: number;
+    /** Optional aggregate retrieval prompt token ceiling (clamped to server bounds). */
+    maxContextTokens?: number;
+    /** Optional vector search adapter for testing or host injection. */
+    vectorSearch?: SpaceAgentVectorSearchAdapter;
+    /** Optional page size for keyset-paged `Space Items` reads. */
+    itemsPageSize?: number;
 }
 
 /** Candidate item in retrieval scope for the turn (sources-in-scope chip). */
@@ -110,6 +126,8 @@ export type ExecuteSpaceChatTurnResult =
           quotedCount?: number;
           allowedItemNames?: string[];
           citations?: SpaceAgentCitation[];
+          suppliedSources?: SpaceAgentSuppliedSource[];
+          retrievalStats?: SpaceAgentRetrievalStats;
           tools?: TurnToolsGiven;
       }
     | { ok: false; message: string };
@@ -498,13 +516,20 @@ async function runClaimedTurn(
                 ? 'Everything'
                 : 'Subtree';
     // A turn whose audience cannot be worked out is refused before its reply row is written: it never runs bounded by the asker alone
+    const rankingQuery = stripMentionMarkup(messageText);
     let retrieval: Awaited<ReturnType<typeof resolveSpaceAgentRetrieval>>;
     try {
         retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId, {
             conversationKind: foundChat.Kind,
             participantUserIds: isOneToOneAssistant ? [callerId] : undefined,
             narrowing: effectiveNarrowing,
+            rankingQuery: rankingQuery || undefined,
+            topK: input.topK,
+            maxTokensPerSource: input.maxTokensPerSource,
+            maxContextTokens: input.maxContextTokens,
+            vectorSearch: input.vectorSearch,
             rosterPageSize: input.rosterPageSize,
+            itemsPageSize: input.itemsPageSize,
         });
     } catch (retrievalError) {
         const reason = retrievalError instanceof Error ? retrievalError.message : String(retrievalError);
@@ -605,6 +630,8 @@ async function runClaimedTurn(
                         conversationId,
                         audience,
                         allowedItems: audienceQuoted,
+                        suppliedSources: retrieval.suppliedSources ?? [],
+                        retrievalStats: retrieval.stats,
                         // B20: what the model is told it may run, and the knowledge in force; the values stay the server's
                         spaceData: turnTools.spaceData,
                         knowledgeSourceIds: turnTools.tools.KnowledgeSourceIDs,
@@ -706,6 +733,8 @@ async function runClaimedTurn(
             quotedCount: audienceQuoted.length,
             allowedItemNames: audienceQuoted.map((item) => item.Name),
             citations,
+            suppliedSources: retrieval.suppliedSources,
+            retrievalStats: retrieval.stats,
             tools: toolsGiven,
         };
     };
@@ -740,7 +769,16 @@ async function runClaimedTurn(
         // The reply row is written and the call returns; the agent runs on, and its end is told to the observer
         handoff.runsOn = true;
         void settleTurn().finally(handoff.release);
-        return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name), citations, tools: toolsGiven };
+        return {
+            ok: true,
+            replyDetailIds: [assistantDetail.ID],
+            quotedCount: audienceQuoted.length,
+            allowedItemNames: audienceQuoted.map((item) => item.Name),
+            citations,
+            suppliedSources: retrieval.suppliedSources,
+            retrievalStats: retrieval.stats,
+            tools: toolsGiven,
+        };
     }
     return settleTurn();
 }

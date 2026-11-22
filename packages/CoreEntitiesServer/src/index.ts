@@ -25,7 +25,26 @@ export { backfillSpaceFiles, type BackfillSpaceFilesResult } from './backfill-sp
 export { collaborationFileStore } from './collaboration-file-store.js';
 export { createSpaceTask, removeUnfiledTask } from './create-space-task.js';
 export { filterRoomReplyItems, postSpaceMessage } from './post-space-message.js';
-export { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
+export {
+    applyContextTokenBudget,
+    clampContextTokenBudget,
+    clampRetrievalTopK,
+    clampTokensPerSource,
+    DEFAULT_MAX_CONTEXT_TOKENS,
+    DEFAULT_MAX_TOKENS_PER_SOURCE,
+    DEFAULT_RETRIEVAL_TOP_K,
+    estimateCandidateItemTokens,
+    estimateTokenCount,
+    getHostVectorSearchAdapter,
+    MAX_CONTEXT_TOKENS_CEILING,
+    MAX_RETRIEVAL_TOP_K,
+    MAX_TOKENS_PER_SOURCE_CEILING,
+    resolveSpaceAgentRetrieval,
+    scoreItemsLexically,
+    setHostVectorSearchAdapter,
+    stripMentionMarkup,
+    tokenizeForSearch,
+} from './space-agent-retrieval.js';
 export { BaseSpaceTypeServerDriver } from './base-space-type-server-driver.js';
 export type {
     AgentContextParams,
@@ -55,7 +74,18 @@ export { BaseSpaceSignalProvider } from './space-signal-provider.js';
 export type { SpaceSignalObservation } from './space-signal-provider.js';
 export { EnsureSpaceForRecord } from './ensure-space-for-record.js';
 export type { EnsureSpaceForRecordParams } from './ensure-space-for-record.js';
-export type { SpaceAgentCandidateItem, SpaceAgentRetrievalDecision, SpaceAgentRetrievalOptions, SpaceAgentRetrievalResult } from './space-agent-retrieval.js';
+export type {
+    RetrievalRankingMode,
+    SpaceAgentCandidateItem,
+    SpaceAgentRetrievalDecision,
+    SpaceAgentRetrievalOptions,
+    SpaceAgentRetrievalResult,
+    SpaceAgentRetrievalStats,
+    SpaceAgentSuppliedSource,
+    SpaceAgentVectorHit,
+    SpaceAgentVectorSearchAdapter,
+    SpaceAgentVectorSearchQuery,
+} from './space-agent-retrieval.js';
 export type { PostSpaceMessageInput, PostSpaceMessageResult } from './post-space-message.js';
 export { fileRootTask } from './file-root-task.js';
 // The three gates are exported by name as well: a host's class-registration manifest imports every registered class
