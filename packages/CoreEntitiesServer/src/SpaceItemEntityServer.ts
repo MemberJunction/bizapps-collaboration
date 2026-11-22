@@ -1,4 +1,4 @@
-import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogError, RunView, ServerOperationScopeManager, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { ContentUploadIngestor } from '@memberjunction/content-pipeline';
@@ -9,8 +9,10 @@ import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import {
     mjBizAppsCollaborationItemUseEntity,
     mjBizAppsCollaborationShareNoticeEntity,
+    mjBizAppsCollaborationSpaceAgentSourceReceiptEntity,
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { COLLABORATION_ITEM_DELETE_OPERATION, COLLABORATION_SOURCE_RECEIPT_ENTITY } from './ai-run-lockdown.js';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { refusalOf, resolveSpaceDriver, driverBaseContext, subtypeOf } from './space-driver-call.js';
 import type { ItemChangeKind } from './base-space-type-server-driver.js';
@@ -314,6 +316,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
 
         const loadedUses: mjBizAppsCollaborationItemUseEntity[] = [];
         const loadedNotices: mjBizAppsCollaborationShareNoticeEntity[] = [];
+        const loadedReceipts: mjBizAppsCollaborationSpaceAgentSourceReceiptEntity[] = [];
 
         try {
             const system = await requireSystemUser(this);
@@ -369,6 +372,39 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 }
             }
 
+            const receiptsRes = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>({
+                EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
+                ExtraFilter: `SpaceItemID = '${currentItemId}'`,
+                ResultType: 'entity_object',
+                IgnoreMaxRows: true,
+            }, system);
+            if (!receiptsRes || !receiptsRes.Success) {
+                const msg = `Space item reference cleanup: failed to query Space Agent Source Receipts for item ${currentItemId}: ${receiptsRes?.ErrorMessage ?? 'RunView failed'}`;
+                LogError(msg);
+                return this.failDelete(msg);
+            }
+
+            if (receiptsRes.Results && receiptsRes.Results.length > 0) {
+                for (const receiptEntity of receiptsRes.Results) {
+                    loadedReceipts.push(receiptEntity);
+                    receiptEntity.TransactionGroup = tg;
+                    const queued = await ServerOperationScopeManager.Instance.RunWithAuthority(
+                        {
+                            operationKey: COLLABORATION_ITEM_DELETE_OPERATION,
+                            source: 'ServerEngine',
+                            allowedEntities: [COLLABORATION_SOURCE_RECEIPT_ENTITY],
+                            userId: system.ID,
+                        },
+                        () => receiptEntity.Delete(),
+                    );
+                    if (!queued) {
+                        const msg = `Space item reference cleanup: failed to queue delete for Space Agent Source Receipt ${receiptEntity.ID}`;
+                        LogError(msg);
+                        return this.failDelete(msg);
+                    }
+                }
+            }
+
             this.TransactionGroup = tg;
             const itemQueued = await super.Delete(options);
             if (!itemQueued) {
@@ -414,6 +450,9 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 }
                 for (const n of loadedNotices) {
                     (n as { TransactionGroup?: TransactionGroupBase }).TransactionGroup = undefined;
+                }
+                for (const r of loadedReceipts) {
+                    r.TransactionGroup = null;
                 }
             }
         }

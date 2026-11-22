@@ -24,6 +24,11 @@ import { isSpaceParticipant } from './task-attribution.js';
 export const COLLABORATION_AGENT_TURN_OPERATION = 'Collaboration.ExecuteSpaceChatTurn';
 
 /**
+ * Server-authority operation key wrapping cascading deletion of source receipts when a SpaceItem is deleted.
+ */
+export const COLLABORATION_ITEM_DELETE_OPERATION = 'Collaboration.SpaceItemCascadeDelete';
+
+/**
  * Source receipts entity populated server-side at the commit boundary of a Space Chat Turn.
  */
 export const COLLABORATION_SOURCE_RECEIPT_ENTITY = 'MJ_BizApps_Collaboration: Space Agent Source Receipts';

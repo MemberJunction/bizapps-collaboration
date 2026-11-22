@@ -4,6 +4,7 @@ import { seedAppSettings } from './app-settings.test-support.ts';
 import {
     BaseEntity,
     EntityPermissionType,
+    ServerOperationScopeManager,
     TransactionGroupBase,
     WellKnownUserSource,
     type IMetadataProvider,
@@ -13,6 +14,8 @@ import {
 } from '@memberjunction/core';
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
+import { COLLABORATION_SOURCE_RECEIPT_ENTITY } from '../dist/ai-run-lockdown.js';
+import { SpaceAgentSourceReceiptEntityServer } from '../dist/SpaceAgentSourceReceiptEntityServer.js';
 import { SpaceItemEntityServer, vouchStoredFile, releaseStoredFile } from '../dist/SpaceItemEntityServer.js';
 
 // The one configuration starts from the app's settings row (B16): seeded here, as the shipped metadata seeds it
@@ -258,6 +261,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         onFileCleanup?: () => void;
         usesResult?: Array<{ ID: string }>;
         noticesResult?: Array<{ ID: string }>;
+        receiptsResult?: Array<{ ID: string }>;
         onChildDelete?: (entityName: string, entity: BaseEntity) => void;
         onRunView?: (params: { EntityName: string; ResultType?: string; IgnoreMaxRows?: boolean; ExtraFilter?: string }) => void;
     }
@@ -309,6 +313,34 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                                 return true;
                             },
                         };
+                        return ent;
+                    });
+                    return { Success: true, Results: results };
+                }
+                if (params.EntityName === COLLABORATION_SOURCE_RECEIPT_ENTITY) {
+                    const results = (opts.receiptsResult ?? []).map((r) => {
+                        const ent: SpaceAgentSourceReceiptEntityServer = Object.create(SpaceAgentSourceReceiptEntityServer.prototype);
+                        Object.defineProperties(ent, {
+                            ID: { value: r.ID, writable: true },
+                            ContextCurrentUser: { value: { ID: '00000000-0000-0000-0000-000000000000', Type: 'Owner', UserRoles: [] }, writable: true },
+                            TransactionGroup: { value: null, writable: true },
+                            Delete: {
+                                value: async () => {
+                                    const origSuperDelete = Object.getPrototypeOf(SpaceAgentSourceReceiptEntityServer.prototype).Delete;
+                                    Object.getPrototypeOf(SpaceAgentSourceReceiptEntityServer.prototype).Delete = async () => true;
+                                    try {
+                                        const ok = await SpaceAgentSourceReceiptEntityServer.prototype.Delete.call(ent);
+                                        if (ok) {
+                                            opts.onChildDelete?.(params.EntityName, ent);
+                                        }
+                                        return ok;
+                                    } finally {
+                                        Object.getPrototypeOf(SpaceAgentSourceReceiptEntityServer.prototype).Delete = origSuperDelete;
+                                    }
+                                },
+                                writable: true,
+                            },
+                        });
                         return ent;
                     });
                     return { Success: true, Results: results };
@@ -830,6 +862,35 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         } finally {
             ContentPipelineStartup.Instance.HandleStartup = origStartup;
             ContentUploadIngestor.Remove = origRemove;
+        }
+    });
+
+    it('Delete() cleans up referencing Space Agent Source Receipts in the same TransactionGroup even inside RunInClientCrudBoundary', async () => {
+        const deletedReceipts: string[] = [];
+        const provider = createDeleteMockProvider({
+            itemsRunViewResult: [{ ID: 'other-item-id' }],
+            receiptsResult: [{ ID: 'receipt-1' }, { ID: 'receipt-2' }],
+            onChildDelete: (entityName, entity) => {
+                if (entityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && entity instanceof SpaceAgentSourceReceiptEntityServer) {
+                    assert.ok(entity.TransactionGroup, 'Receipt delete must share the SpaceItem TransactionGroup');
+                    deletedReceipts.push(entity.ID);
+                }
+            },
+        });
+
+        const item = createMockItem(provider);
+        const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+            return true;
+        };
+        try {
+            const ok = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+                SpaceItemEntityServer.prototype.Delete.call(item),
+            );
+            assert.equal(ok, true, 'SpaceItem delete must succeed when receipts exist');
+            assert.deepEqual(deletedReceipts, ['receipt-1', 'receipt-2']);
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
         }
     });
 });

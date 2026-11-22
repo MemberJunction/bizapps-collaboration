@@ -389,32 +389,22 @@ function rosterSeatFilters(spaceNodes: readonly SpaceNode[], spaceId: string, ca
 }
 
 /**
- * Builds SQL `ExtraFilter` predicates strictly scoped to the allowed `(space, band)` pairs so out-of-band items
- * in Shared-only spaces are rejected at the database boundary before any candidate enters ranking.
+ * Builds SQL `ExtraFilter` predicates strictly scoped to the spaces the caller and audience can reach.
+ * Items in those spaces are then partitioned in-memory into `inScopeRows` vs `excludedRows` by `(space, band)`
+ * BEFORE any target metadata enrichment, vector search, lexical scoring, or prompt injection — preserving
+ * refusal `decisions` (`allowed: false` with metadata withheld) for out-of-band items in `General`/`Topic` rooms.
  */
-function buildSpaceBandFilters(searchedSpaceIds: readonly string[], spaceBands: ReadonlyMap<string, Band>): string[] {
-    const teamSpaceIds: string[] = [];
-    const sharedOnlySpaceIds: string[] = [];
-
+function buildSpaceBandFilters(searchedSpaceIds: readonly string[], _spaceBands: ReadonlyMap<string, Band>): string[] {
+    const cleanSpaceIds: string[] = [];
     for (const rawId of searchedSpaceIds) {
         const cleanId = parseUuid(rawId);
-        if (!cleanId) continue;
-        const band = spaceBands.get(cleanId.toLowerCase());
-        if (band === 'Team') {
-            teamSpaceIds.push(cleanId);
-        } else {
-            sharedOnlySpaceIds.push(cleanId);
-        }
+        if (cleanId) cleanSpaceIds.push(cleanId);
     }
 
     const filters: string[] = [];
-    for (let start = 0; start < teamSpaceIds.length; start += SEAT_SPACES_PER_READ) {
-        const inClause = teamSpaceIds.slice(start, start + SEAT_SPACES_PER_READ).map((id) => `'${id}'`).join(',');
+    for (let start = 0; start < cleanSpaceIds.length; start += SEAT_SPACES_PER_READ) {
+        const inClause = cleanSpaceIds.slice(start, start + SEAT_SPACES_PER_READ).map((id) => `'${id}'`).join(',');
         filters.push(`SpaceID IN (${inClause})`);
-    }
-    for (let start = 0; start < sharedOnlySpaceIds.length; start += SEAT_SPACES_PER_READ) {
-        const inClause = sharedOnlySpaceIds.slice(start, start + SEAT_SPACES_PER_READ).map((id) => `'${id}'`).join(',');
-        filters.push(`SpaceID IN (${inClause}) AND Band = 'Shared'`);
     }
     return filters;
 }

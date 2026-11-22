@@ -1079,4 +1079,74 @@ describe('space-agent-retrieval scale & ranked relevance (CT-4)', () => {
         assert.equal(impossibleBudget.items.length, 0, 'First item cannot bypass maxContextTokens ceiling');
         assert.equal(impossibleBudget.totalEstimatedTokens, 0);
     });
+
+    it('emits allowed=false refusal decisions with withheld task metadata for Team items in General rooms (AG15)', async () => {
+        const sharedTaskId = makeUuid('E0000001', 1);
+        const teamTaskId = makeUuid('E0000001', 2);
+        const sharedItemId = makeUuid('D0000001', 1);
+        const teamItemId = makeUuid('D0000001', 2);
+
+        const world: SyntheticWorld = {
+            items: [
+                {
+                    ID: sharedItemId,
+                    SpaceID: ROOT_SPACE_ID,
+                    EntityID: TASKS_ENTITY_ID,
+                    RecordID: `ID|${sharedTaskId}`,
+                    Band: 'Shared',
+                },
+                {
+                    ID: teamItemId,
+                    SpaceID: ROOT_SPACE_ID,
+                    EntityID: TASKS_ENTITY_ID,
+                    RecordID: `ID|${teamTaskId}`,
+                    Band: 'Team',
+                },
+            ],
+            filesById: new Map(),
+            tasksById: new Map([
+                [sharedTaskId.toLowerCase(), {
+                    ID: sharedTaskId,
+                    Name: 'Shared Discovery Action Item',
+                    Description: 'Public shared action item',
+                    Status: 'Open',
+                    Priority: 'High',
+                    DueAt: '2026-12-15',
+                    PercentComplete: 25,
+                }],
+                [teamTaskId.toLowerCase(), {
+                    ID: teamTaskId,
+                    Name: 'Team Internal Strategy Task',
+                    Description: 'Confidential team-only roadmap item',
+                    Status: 'InProgress',
+                    Priority: 'Critical',
+                    DueAt: '2026-12-20',
+                    PercentComplete: 50,
+                }],
+            ]),
+            taskAssignments: [],
+            peopleById: new Map(),
+            chunksByItemId: new Map(),
+        };
+
+        const provider = createScaleProvider(world);
+        const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+
+        const res = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
+            conversationKind: 'General',
+        });
+
+        assert.equal(res.quotedItems.some((i) => i.Name === 'Shared Discovery Action Item'), true);
+        assert.equal(res.quotedItems.some((i) => i.Name === 'Team Internal Strategy Task'), false);
+        assert.equal(res.suppliedSources?.some((s) => s.name === 'Team Internal Strategy Task') ?? false, false);
+
+        const withheldDecision = res.decisions.find((d) => d.item.Name === 'Team Internal Strategy Task');
+        assert.ok(withheldDecision, 'Staff caller must see Team task refusal decision in General room');
+        assert.equal(withheldDecision?.allowed, false);
+        assert.equal(withheldDecision?.item.Status, undefined);
+        assert.equal(withheldDecision?.item.Priority, undefined);
+        assert.equal(withheldDecision?.item.DueAt, undefined);
+        assert.equal(withheldDecision?.item.Assignees, undefined);
+        assert.equal(withheldDecision?.item.ChunkTexts, undefined);
+    });
 });

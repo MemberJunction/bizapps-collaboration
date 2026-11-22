@@ -1571,7 +1571,7 @@ describe('executeSpaceChatTurn', () => {
                     if (filter.includes("Band = 'Shared'")) {
                         return mockResult<T>(allItems.filter((i) => i.Band === 'Shared'));
                     }
-                    if (/ID IN \(/i.test(filter)) {
+                    if (/\bID IN \(/i.test(filter)) {
                         return mockResult<T>(allItems.filter((i) => filter.toLowerCase().includes(i.ID.toLowerCase())));
                     }
                     return mockResult<T>(allItems);
