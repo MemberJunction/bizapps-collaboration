@@ -230,14 +230,16 @@ export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationS
             return false;
         }
 
+        const isOwnerOrSystem = actingUser.Type?.trim() === 'Owner' && !isSpaceParticipant(actingUser);
         const isPrivilegedServerOp =
-            !ServerOperationScopeManager.Instance.IsInDirectClientCrud() &&
-            !isSpaceParticipant(actingUser) &&
-            ServerOperationScopeManager.Instance.IsOperationActive(
-                [COLLABORATION_AGENT_TURN_OPERATION, COLLABORATION_ITEM_DELETE_OPERATION],
-                COLLABORATION_SOURCE_RECEIPT_ENTITY,
-                actingUser,
-            );
+            isOwnerOrSystem ||
+            (!ServerOperationScopeManager.Instance.IsInDirectClientCrud() &&
+                !isSpaceParticipant(actingUser) &&
+                ServerOperationScopeManager.Instance.IsOperationActive(
+                    [COLLABORATION_AGENT_TURN_OPERATION, COLLABORATION_ITEM_DELETE_OPERATION],
+                    COLLABORATION_SOURCE_RECEIPT_ENTITY,
+                    actingUser,
+                ));
 
         const loaded = isPrivilegedServerOp
             ? await runWithPostgresPrivilegedReceiptContext(provider, () =>
@@ -296,7 +298,11 @@ export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationS
         const provider = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
         ensurePostgresReceiptContextHook(provider);
         const actingUser = this.ContextCurrentUser ?? provider?.CurrentUser;
-        if (!ServerOperationScopeManager.Instance.IsInDirectClientCrud() && (!actingUser || !isSpaceParticipant(actingUser))) {
+        const isPrivilegedOwner = actingUser?.Type?.trim() === 'Owner' && !isSpaceParticipant(actingUser);
+        if (
+            isPrivilegedOwner ||
+            (!ServerOperationScopeManager.Instance.IsInDirectClientCrud() && (!actingUser || !isSpaceParticipant(actingUser)))
+        ) {
             return runWithPostgresPrivilegedReceiptContext(provider, () => super.Delete(options));
         }
         return super.Delete(options);

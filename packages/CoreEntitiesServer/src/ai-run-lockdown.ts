@@ -122,7 +122,11 @@ export function evaluateParticipantSourceReceiptWriteAccess(
     action: 'save' | 'delete',
     actingUser: UserInfo | undefined
 ): string | null {
+    const isPrivilegedOwner = actingUser?.Type?.trim() === 'Owner' && !isSpaceParticipant(actingUser);
     if (ServerOperationScopeManager.Instance.IsInDirectClientCrud()) {
+        if (action === 'delete' && isPrivilegedOwner) {
+            return null;
+        }
         return `Direct client ${action} on ${COLLABORATION_SOURCE_RECEIPT_ENTITY} is forbidden.`;
     }
     if (!actingUser || !isSpaceParticipant(actingUser)) {

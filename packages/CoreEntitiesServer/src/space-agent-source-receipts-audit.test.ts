@@ -19,6 +19,7 @@ import {
     type EntityInfo,
     type IMetadataProvider,
     type IRunViewProvider,
+    ProviderBase,
     type RunViewParams,
     type RunViewResult,
     ServerOperationScopeManager,
@@ -28,7 +29,11 @@ import {
     extractAndValidateSourceReceipts,
     type SpaceAgentSourceReceiptEntry,
 } from '@mj-biz-apps/collaboration-core';
-import { COLLABORATION_SOURCE_RECEIPT_ENTITY } from '../dist/ai-run-lockdown.js';
+import {
+    COLLABORATION_SOURCE_RECEIPT_ENTITY,
+    evaluateParticipantSourceReceiptWriteAccess,
+} from '../dist/ai-run-lockdown.js';
+import { PARTICIPANT_ROLE_ID } from '../dist/task-attribution.js';
 import { SpaceAgentSourceReceiptEntityServer } from '../dist/SpaceAgentSourceReceiptEntityServer.js';
 import {
     ensurePostgresReceiptContextHook,
@@ -1742,11 +1747,13 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
         };
         const entityInfo = entityInfoObj as EntityInfo;
 
+        type AuditRowValue = string | number | boolean | Date | object | null | undefined;
+        type AuditRow = Record<string, AuditRowValue>;
         const mockProviderObj: {
             Entities: EntityInfo[];
             EntityByID: (id: string) => EntityInfo | undefined;
             EntityByName: (name: string) => EntityInfo | undefined;
-            Load: (entity: BaseEntity, key: CompositeKey) => Promise<Record<string, unknown> | null>;
+            Load: (entity: BaseEntity, key: CompositeKey) => Promise<AuditRow | null>;
             GetEntityObject: IMetadataProvider['GetEntityObject'];
             RunView: IRunViewProvider['RunView'];
         } = {
@@ -1757,10 +1764,10 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
             EntityByName(name: string) {
                 return name === COLLABORATION_SOURCE_RECEIPT_ENTITY ? entityInfo : undefined;
             },
-            async Load(_entity: BaseEntity, key: CompositeKey): Promise<Record<string, unknown> | null> {
+            async Load(_entity: BaseEntity, key: CompositeKey): Promise<AuditRow | null> {
                 const targetId = String(key.GetValueByFieldName('ID') ?? '').toLowerCase();
                 const found = storedReceipts.find((r) => r.ID.toLowerCase() === targetId);
-                return found ? ({ ...found } as Record<string, unknown>) : null;
+                return found ? ({ ...found } as AuditRow) : null;
             },
             async GetEntityObject<T extends BaseEntity>(
                 entityName: string,
@@ -1957,9 +1964,11 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
         const observedSql: Array<{ sql: string; appUser: string | null; mjUser: string | null; bypass: string | null }> = [];
         let rollbackCount = 0;
 
+        type MockPgCell = string | number | boolean | null;
+        type MockPgRow = Record<string, MockPgCell>;
         const pooledClient = {
             released: 0,
-            async query(sqlText: string): Promise<{ rows: Array<Record<string, unknown>> }> {
+            async query(sqlText: string): Promise<{ rows: Array<MockPgRow> }> {
                 if (sqlText.startsWith('SET LOCAL app.current_user_id')) {
                     activeAppUser = /'([^']+)'/.exec(sqlText)?.[1] ?? null;
                 } else if (sqlText.startsWith('SET LOCAL mj.current_user_id')) {
@@ -1998,13 +2007,13 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
         const providerObj: {
             PlatformKey: string;
             DatabaseConnection: PostgresPoolLike;
-            ExecuteSQL: (sqlText: string, params?: unknown[], options?: unknown, contextUser?: UserInfo) => Promise<Array<Record<string, unknown>>>;
-            InternalRunView: (params: RunViewParams, contextUser?: UserInfo) => Promise<RunViewResult<Record<string, unknown>>>;
+            ExecuteSQL: (sqlText: string, params?: MockPgCell[], options?: object, contextUser?: UserInfo) => Promise<Array<MockPgRow>>;
+            InternalRunView: (params: RunViewParams, contextUser?: UserInfo) => Promise<RunViewResult<MockPgRow>>;
         } = {
             PlatformKey: 'postgresql',
             DatabaseConnection: mockPool,
-            async ExecuteSQL(sqlText: string, _params?: unknown[], _options?: unknown, _contextUser?: UserInfo) {
-                const res = await pooledClient.query(sqlText) as { rows: Array<Record<string, unknown>> };
+            async ExecuteSQL(sqlText: string, _params?: MockPgCell[], _options?: object, _contextUser?: UserInfo) {
+                const res = await pooledClient.query(sqlText) as { rows: Array<MockPgRow> };
                 return res.rows;
             },
             async InternalRunView(params: RunViewParams, contextUser?: UserInfo) {
@@ -2082,7 +2091,7 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
         const releaseDestroyArgs: Array<boolean | Error | undefined> = [];
         let cleanupArmed = false;
         const poisonedClient = {
-            async query(sqlText: string): Promise<{ rows: Array<Record<string, unknown>> }> {
+            async query(sqlText: string): Promise<{ rows: Array<Record<string, string | number | boolean | null>> }> {
                 if (cleanupArmed && (sqlText === 'ROLLBACK' || sqlText.startsWith('RESET '))) {
                     throw new Error('connection broken during cleanup');
                 }
@@ -2110,7 +2119,7 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
         let endCalled = 0;
         let resetArmed = false;
         const singleConnClient = {
-            async query(sqlText: string): Promise<{ rows: Array<Record<string, unknown>> }> {
+            async query(sqlText: string): Promise<{ rows: Array<Record<string, string | number | boolean | null>> }> {
                 if (resetArmed && sqlText.startsWith('RESET ')) {
                     throw new Error('reset failed');
                 }
@@ -2132,6 +2141,67 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
             },
         );
         assert.equal(endCalled, 1, 'Client must be closed with end() when release(true) throws');
+    });
+
+    it('forwards contextUser on 3-arg GetEntityObject options calls and permits Owner cleanup InnerLoad/Delete (remediation r5)', async () => {
+        const systemOwner = makeUser(SYSTEM_USER_ID, 'Owner');
+        const minimalEntityInfo = {
+            ID: 'entity-doc-test-id',
+            Name: 'MJ: Entity Documents',
+            Fields: [],
+            PrimaryKeys: [],
+            RelatedEntities: [],
+            GetUserPermisions: () =>
+                ({
+                    ID: 'perm-doc-1',
+                    Entity: {} as Partial<EntityInfo> as EntityInfo,
+                    User: systemOwner,
+                    CanRead: true,
+                    CanCreate: true,
+                    CanUpdate: true,
+                    CanDelete: true,
+                }) as Partial<ReturnType<EntityInfo['GetUserPermisions']>> as ReturnType<EntityInfo['GetUserPermisions']>,
+        } as Partial<EntityInfo> as EntityInfo;
+
+        const fakeProvider = {
+            PlatformKey: 'mssql',
+            CurrentUser: systemOwner,
+            Entities: [minimalEntityInfo],
+            EntityByName(name: string) {
+                return name === 'MJ: Entity Documents' ? minimalEntityInfo : undefined;
+            },
+        };
+        const created = await ProviderBase.prototype.GetEntityObject.call(
+            fakeProvider,
+            'MJ: Entity Documents',
+            { SkipNewRecord: true } as Partial<CompositeKey> as CompositeKey,
+            systemOwner,
+        );
+        assert.equal(created.ContextCurrentUser?.ID, SYSTEM_USER_ID, '3-arg GetEntityObject({ SkipNewRecord: true }, contextUser) must preserve ContextCurrentUser');
+
+        // Direct client CRUD blocks Save for everyone (even Owner) and Delete for non-Owner / Space Participant,
+        // while permitting non-participant Owner Delete for integration cleanup.
+        const participantOwner: UserInfo = {
+            ...systemOwner,
+            UserRoles: [
+                {
+                    ID: 'ur-sp',
+                    UserID: SYSTEM_USER_ID,
+                    RoleID: PARTICIPANT_ROLE_ID,
+                    Role: 'Space Participant',
+                    User: 'System',
+                    RoleName: 'Space Participant',
+                } as Partial<UserInfo['UserRoles'][number]> as UserInfo['UserRoles'][number],
+            ],
+        } as UserInfo;
+        const regularUser = makeUser(USER_A_ID, 'User');
+
+        await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
+            assert.equal(evaluateParticipantSourceReceiptWriteAccess('delete', systemOwner), null);
+            assert.match(evaluateParticipantSourceReceiptWriteAccess('save', systemOwner) ?? '', /forbidden/i);
+            assert.match(evaluateParticipantSourceReceiptWriteAccess('delete', participantOwner) ?? '', /forbidden/i);
+            assert.match(evaluateParticipantSourceReceiptWriteAccess('delete', regularUser) ?? '', /forbidden/i);
+        });
     });
 });
 

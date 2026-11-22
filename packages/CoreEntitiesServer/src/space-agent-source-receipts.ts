@@ -69,8 +69,21 @@ const FILES_ENTITY = 'MJ: Files';
 const LIVE_CHECK_BATCH_SIZE = 200;
 const PG_ROLE_IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+export type PostgresScalar = string | number | boolean | Date | Uint8Array | object | null | undefined;
+export type PostgresRow = Record<string, PostgresScalar>;
+export interface HookableGetEntityObjectOptions {
+    SkipNewRecord?: boolean;
+    NewRecordValues?: PostgresRow;
+    ParentEntity?: BaseEntity;
+}
+type HookableGetEntityObjectFn = <T extends BaseEntity>(
+    entityName: string,
+    loadKeyOrOptionsOrUser?: CompositeKey | HookableGetEntityObjectOptions | UserInfo,
+    contextUser?: UserInfo,
+) => Promise<T>;
+
 export interface PostgresQueryable {
-    query(sql: string, params?: unknown[]): Promise<unknown>;
+    query(sql: string, params?: PostgresScalar[]): Promise<object>;
 }
 
 export interface PostgresPoolClientLike extends PostgresQueryable {
@@ -111,18 +124,18 @@ export interface PostgresHookableProvider {
     IsCallerInAmbientTransaction?: () => boolean;
     IsInTransaction?: boolean;
     ActiveTransactionClient?: PostgresQueryable | null;
-    ExecuteSQL?: <T = Record<string, unknown>>(
+    ExecuteSQL?: <T = PostgresRow>(
         query: string,
-        parameters?: unknown[],
+        parameters?: PostgresScalar[],
         options?: PostgresExecuteOptionsLike,
         contextUser?: UserInfo,
     ) => Promise<T[]>;
     ExecuteSQLBatch?: (
         queries: string[],
-        parameters?: unknown[][] | PostgresExecuteOptionsLike,
+        parameters?: PostgresScalar[][] | PostgresExecuteOptionsLike,
         options?: PostgresExecuteOptionsLike | UserInfo,
         contextUser?: UserInfo,
-    ) => Promise<Record<string, unknown>[][]>;
+    ) => Promise<PostgresRow[][]>;
     BeginTransaction?: () => Promise<void>;
     GetEntityObject?: IMetadataProvider['GetEntityObject'];
     RunView?: ProviderBase['RunView'];
@@ -416,10 +429,10 @@ function wrapPostgresExecutionTarget(target: PostgresHookableProvider): boolean 
 
     const origExecuteSQL = target.ExecuteSQL;
     if (typeof origExecuteSQL === 'function' && !hookedExecuteFunctions.has(origExecuteSQL)) {
-        const wrappedExecuteSQL = async function <T = Record<string, unknown>>(
+        const wrappedExecuteSQL = async function <T = PostgresRow>(
             this: PostgresHookableProvider,
             query: string,
-            parameters?: unknown[],
+            parameters?: PostgresScalar[],
             options?: PostgresExecuteOptionsLike,
             contextUser?: UserInfo,
         ): Promise<T[]> {
@@ -467,15 +480,15 @@ function wrapPostgresExecutionTarget(target: PostgresHookableProvider): boolean 
         const wrappedExecuteSQLBatch = async function (
             this: PostgresHookableProvider,
             queries: string[],
-            parameters?: unknown[][] | PostgresExecuteOptionsLike,
+            parameters?: PostgresScalar[][] | PostgresExecuteOptionsLike,
             options?: PostgresExecuteOptionsLike | UserInfo,
             contextUser?: UserInfo,
-        ): Promise<Record<string, unknown>[][]> {
+        ): Promise<PostgresRow[][]> {
             if (!queries || queries.length === 0) {
                 return [];
             }
 
-            let actualParams: unknown[][] | undefined;
+            let actualParams: PostgresScalar[][] | undefined;
             let actualOptions: PostgresExecuteOptionsLike | undefined;
             let actualUser: UserInfo | undefined;
 
@@ -505,7 +518,7 @@ function wrapPostgresExecutionTarget(target: PostgresHookableProvider): boolean 
                           timeoutMs: actualOptions.timeoutMs,
                       }
                     : undefined;
-                const single = await this.ExecuteSQL<Record<string, unknown>>(
+                const single = await this.ExecuteSQL<PostgresRow>(
                     queries[0],
                     actualParams?.[0],
                     execOptions,
@@ -648,7 +661,7 @@ export function installPostgresReceiptProviderAutoHook(): void {
 
     const origRunView = proto.RunView;
     if (typeof origRunView === 'function') {
-        proto.RunView = function <T = Record<string, unknown>>(
+        proto.RunView = function <T = PostgresRow>(
             this: PostgresHookableProvider,
             params: RunViewParams,
             contextUser?: UserInfo,
@@ -661,7 +674,7 @@ export function installPostgresReceiptProviderAutoHook(): void {
 
     const origRunViews = proto.RunViews;
     if (typeof origRunViews === 'function') {
-        proto.RunViews = function <T = Record<string, unknown>>(
+        proto.RunViews = function <T = PostgresRow>(
             this: PostgresHookableProvider,
             params: RunViewParams[],
             contextUser?: UserInfo,
@@ -674,7 +687,7 @@ export function installPostgresReceiptProviderAutoHook(): void {
 
     const origGetEntityObject = proto.GetEntityObject;
     if (typeof origGetEntityObject === 'function') {
-        const origGetEntityFn: NonNullable<PostgresHookableProvider['GetEntityObject']> = origGetEntityObject;
+        const origGetEntityFn = origGetEntityObject as HookableGetEntityObjectFn;
         function wrappedGetEntityObject<T extends BaseEntity>(
             this: PostgresHookableProvider,
             entityName: string,
@@ -689,15 +702,22 @@ export function installPostgresReceiptProviderAutoHook(): void {
         function wrappedGetEntityObject<T extends BaseEntity>(
             this: PostgresHookableProvider,
             entityName: string,
-            loadKeyOrUser?: CompositeKey | UserInfo,
+            loadKeyOrOptionsOrUser?: CompositeKey | HookableGetEntityObjectOptions | UserInfo,
             contextUser?: UserInfo,
         ): Promise<T> {
             ensurePostgresReceiptContextHook(this);
-            const bound: typeof origGetEntityFn = origGetEntityFn.bind(this);
-            if (loadKeyOrUser && typeof loadKeyOrUser === 'object' && 'KeyValuePairs' in loadKeyOrUser) {
-                return bound<T>(entityName, loadKeyOrUser, contextUser);
+            const bound = origGetEntityFn.bind(this) as HookableGetEntityObjectFn;
+            const isKeyOrOptions =
+                loadKeyOrOptionsOrUser != null &&
+                typeof loadKeyOrOptionsOrUser === 'object' &&
+                ('KeyValuePairs' in loadKeyOrOptionsOrUser ||
+                    'SkipNewRecord' in loadKeyOrOptionsOrUser ||
+                    'NewRecordValues' in loadKeyOrOptionsOrUser ||
+                    'ParentEntity' in loadKeyOrOptionsOrUser);
+            if (arguments.length >= 3 || contextUser !== undefined || isKeyOrOptions) {
+                return bound<T>(entityName, loadKeyOrOptionsOrUser, contextUser);
             }
-            return bound<T>(entityName, loadKeyOrUser);
+            return bound<T>(entityName, loadKeyOrOptionsOrUser);
         }
         proto.GetEntityObject = wrappedGetEntityObject;
     }
