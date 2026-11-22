@@ -971,5 +971,20 @@
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Task Catalog"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "E7333FCB-1002-459A-AF25-2B0C499A681A"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Agent Source Receipts",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Source Receipts In Reach"
+    }
   }
 ]

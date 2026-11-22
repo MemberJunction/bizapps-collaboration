@@ -118,6 +118,182 @@ export const mjBizAppsCollaborationShareNoticeSchema = z.object({
 export type mjBizAppsCollaborationShareNoticeEntityType = z.infer<typeof mjBizAppsCollaborationShareNoticeSchema>;
 
 /**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Agent Source Receipts
+ */
+export const mjBizAppsCollaborationSpaceAgentSourceReceiptSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SpaceID: z.string().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space that owns the source (for SpaceItem) or the chat anchor space (for KnowledgeSource).`),
+    SpaceChatID: z.string().describe(`
+        * * Field Name: SpaceChatID
+        * * Display Name: Space Chat ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Chats (vwSpaceChats.ID)
+        * * Description: The SpaceChat record in which the agent turn ran.`),
+    ConversationID: z.string().describe(`
+        * * Field Name: ConversationID
+        * * Display Name: Conversation ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+        * * Description: The MJ Conversation in which the agent message was authored.`),
+    ConversationDetailID: z.string().describe(`
+        * * Field Name: ConversationDetailID
+        * * Display Name: Conversation Detail ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
+        * * Description: The assistant ConversationDetail message this receipt belongs to.`),
+    AgentRunID: z.string().nullable().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: The AI Agent Run associated with this answer turn, when available.`),
+    SourceKind: z.union([z.literal('SpaceItem'), z.literal('KnowledgeSource')]).describe(`
+        * * Field Name: SourceKind
+        * * Display Name: Source Kind
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * SpaceItem
+    *   * KnowledgeSource
+        * * Description: Discriminator identifying whether the source is a SpaceItem or a KnowledgeSource.`),
+    SpaceItemID: z.string().nullable().describe(`
+        * * Field Name: SpaceItemID
+        * * Display Name: Space Item ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)
+        * * Description: The in-reach SpaceItem supplied or cited when SourceKind is SpaceItem.`),
+    ContentSourceID: z.string().nullable().describe(`
+        * * Field Name: ContentSourceID
+        * * Display Name: Content Source ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
+        * * Description: The in-reach ContentSource supplied or cited when SourceKind is KnowledgeSource.`),
+    TargetEntityID: z.string().nullable().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The underlying target MJ Entity ID for this source (polymorphic pair with TargetRecordID).`),
+    TargetRecordID: z.string().nullable().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: The canonical target record key (e.g. ID|<uuid>) for opening the in-reach source.`),
+    SourceTitle: z.string().describe(`
+        * * Field Name: SourceTitle
+        * * Display Name: Source Title
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Display title of the validated in-reach source captured at turn execution time.`),
+    Band: z.union([z.literal('Shared'), z.literal('Team')]).describe(`
+        * * Field Name: Band
+        * * Display Name: Band
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Shared
+    *   * Team
+        * * Description: Visibility band of the source (Shared or Team), strictly bounded by the chat audience.`),
+    WasSupplied: z.boolean().describe(`
+        * * Field Name: WasSupplied
+        * * Display Name: Was Supplied
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: True when this source was supplied into the agent turn prompt or tools context.`),
+    WasCited: z.boolean().describe(`
+        * * Field Name: WasCited
+        * * Display Name: Was Cited
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when this in-reach source was specifically cited in the generated agent answer.`),
+    RetrievalRank: z.number().nullable().describe(`
+        * * Field Name: RetrievalRank
+        * * Display Name: Retrieval Rank
+        * * SQL Data Type: int
+        * * Description: 1-based retrieval rank assigned during bounded top-k retrieval.`),
+    RelevanceScore: z.number().nullable().describe(`
+        * * Field Name: RelevanceScore
+        * * Display Name: Relevance Score
+        * * SQL Data Type: decimal(12, 6)
+        * * Description: Relevance score computed by vector search or lexical BM25 fallback.`),
+    RankingMode: z.union([z.literal('vector'), z.literal('lexical'), z.literal('grant'), z.literal('none')]).describe(`
+        * * Field Name: RankingMode
+        * * Display Name: Ranking Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: none
+    * * Value List Type: List
+    * * Possible Values 
+    *   * vector
+    *   * lexical
+    *   * grant
+    *   * none
+        * * Description: How the source was selected for the turn: vector, lexical, grant, or none.`),
+    CitationOrdinal: z.number().nullable().describe(`
+        * * Field Name: CitationOrdinal
+        * * Display Name: Citation Ordinal
+        * * SQL Data Type: int
+        * * Description: 1-based citation order within the generated answer when WasCited is true.`),
+    EstimatedTokens: z.number().describe(`
+        * * Field Name: EstimatedTokens
+        * * Display Name: Estimated Tokens
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Estimated prompt tokens consumed by this source under the bounded context budget.`),
+    WasTruncated: z.boolean().describe(`
+        * * Field Name: WasTruncated
+        * * Display Name: Was Truncated
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when source content was truncated to fit the per-source token ceiling.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Deterministic display sequence of the receipt on the assistant message.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Space: z.string().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+    SpaceChat: z.string().describe(`
+        * * Field Name: SpaceChat
+        * * Display Name: Space Chat
+        * * SQL Data Type: nvarchar(255)`),
+    Conversation: z.string().nullable().describe(`
+        * * Field Name: Conversation
+        * * Display Name: Conversation
+        * * SQL Data Type: nvarchar(255)`),
+    ContentSource: z.string().nullable().describe(`
+        * * Field Name: ContentSource
+        * * Display Name: Content Source
+        * * SQL Data Type: nvarchar(255)`),
+    TargetEntity: z.string().nullable().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType = z.infer<typeof mjBizAppsCollaborationSpaceAgentSourceReceiptSchema>;
+
+/**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Anchors
  */
 export const mjBizAppsCollaborationSpaceAnchorSchema = z.object({
@@ -1463,6 +1639,209 @@ export class mjBizAppsCollaborationShareNoticeEntity extends BaseEntity<mjBizApp
     */
     get RecipientUser(): string {
         return this.Get('RecipientUser');
+    }
+}
+
+
+/**
+ * MJ_BizApps_Collaboration: Space Agent Source Receipts - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceAgentSourceReceipt
+ * * Base View: vwSpaceAgentSourceReceipts
+ * * @description Relational provenance receipt on a space agent answer message, recording each in-reach space item or knowledge source supplied to the turn and whether it was cited in the answer.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Agent Source Receipts')
+export class mjBizAppsCollaborationSpaceAgentSourceReceiptEntity extends BaseEntity<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    get SpaceID(): string {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string) {
+        this.Set('SpaceID', value);
+    }
+
+    get SpaceChatID(): string {
+        return this.Get('SpaceChatID');
+    }
+    set SpaceChatID(value: string) {
+        this.Set('SpaceChatID', value);
+    }
+
+    get ConversationID(): string {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string) {
+        this.Set('ConversationID', value);
+    }
+
+    get ConversationDetailID(): string {
+        return this.Get('ConversationDetailID');
+    }
+    set ConversationDetailID(value: string) {
+        this.Set('ConversationDetailID', value);
+    }
+
+    get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
+    }
+
+    get SourceKind(): 'SpaceItem' | 'KnowledgeSource' {
+        return this.Get('SourceKind');
+    }
+    set SourceKind(value: 'SpaceItem' | 'KnowledgeSource') {
+        this.Set('SourceKind', value);
+    }
+
+    get SpaceItemID(): string | null {
+        return this.Get('SpaceItemID');
+    }
+    set SpaceItemID(value: string | null) {
+        this.Set('SpaceItemID', value);
+    }
+
+    get ContentSourceID(): string | null {
+        return this.Get('ContentSourceID');
+    }
+    set ContentSourceID(value: string | null) {
+        this.Set('ContentSourceID', value);
+    }
+
+    get TargetEntityID(): string | null {
+        return this.Get('TargetEntityID');
+    }
+    set TargetEntityID(value: string | null) {
+        this.Set('TargetEntityID', value);
+    }
+
+    get TargetRecordID(): string | null {
+        return this.Get('TargetRecordID');
+    }
+    set TargetRecordID(value: string | null) {
+        this.Set('TargetRecordID', value);
+    }
+
+    get SourceTitle(): string {
+        return this.Get('SourceTitle');
+    }
+    set SourceTitle(value: string) {
+        this.Set('SourceTitle', value);
+    }
+
+    get Band(): 'Shared' | 'Team' {
+        return this.Get('Band');
+    }
+    set Band(value: 'Shared' | 'Team') {
+        this.Set('Band', value);
+    }
+
+    get WasSupplied(): boolean {
+        return this.Get('WasSupplied');
+    }
+    set WasSupplied(value: boolean) {
+        this.Set('WasSupplied', value);
+    }
+
+    get WasCited(): boolean {
+        return this.Get('WasCited');
+    }
+    set WasCited(value: boolean) {
+        this.Set('WasCited', value);
+    }
+
+    get RetrievalRank(): number | null {
+        return this.Get('RetrievalRank');
+    }
+    set RetrievalRank(value: number | null) {
+        this.Set('RetrievalRank', value);
+    }
+
+    get RelevanceScore(): number | null {
+        return this.Get('RelevanceScore');
+    }
+    set RelevanceScore(value: number | null) {
+        this.Set('RelevanceScore', value);
+    }
+
+    get RankingMode(): 'vector' | 'lexical' | 'grant' | 'none' {
+        return this.Get('RankingMode');
+    }
+    set RankingMode(value: 'vector' | 'lexical' | 'grant' | 'none') {
+        this.Set('RankingMode', value);
+    }
+
+    get CitationOrdinal(): number | null {
+        return this.Get('CitationOrdinal');
+    }
+    set CitationOrdinal(value: number | null) {
+        this.Set('CitationOrdinal', value);
+    }
+
+    get EstimatedTokens(): number {
+        return this.Get('EstimatedTokens');
+    }
+    set EstimatedTokens(value: number) {
+        this.Set('EstimatedTokens', value);
+    }
+
+    get WasTruncated(): boolean {
+        return this.Get('WasTruncated');
+    }
+    set WasTruncated(value: boolean) {
+        this.Set('WasTruncated', value);
+    }
+
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    get Space(): string {
+        return this.Get('Space');
+    }
+
+    get SpaceChat(): string {
+        return this.Get('SpaceChat');
+    }
+
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+
+    get ContentSource(): string | null {
+        return this.Get('ContentSource');
+    }
+
+    get TargetEntity(): string | null {
+        return this.Get('TargetEntity');
     }
 }
 

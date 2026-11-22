@@ -25,7 +25,28 @@ export { backfillSpaceFiles, type BackfillSpaceFilesResult } from './backfill-sp
 export { collaborationFileStore } from './collaboration-file-store.js';
 export { createSpaceTask, removeUnfiledTask } from './create-space-task.js';
 export { filterRoomReplyItems, postSpaceMessage } from './post-space-message.js';
-export { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
+export {
+    applyContextTokenBudget,
+    clampContextTokenBudget,
+    clampRetrievalTopK,
+    clampTokensPerSource,
+    DEFAULT_MAX_CONTEXT_TOKENS,
+    DEFAULT_MAX_TOKENS_PER_SOURCE,
+    DEFAULT_RETRIEVAL_TOP_K,
+    estimateCandidateItemTokens,
+    estimateTokenCount,
+    getHostVectorSearchAdapter,
+    HostSearchEngineVectorAdapter,
+    MAX_CONTEXT_TOKENS_CEILING,
+    MAX_RETRIEVAL_TOP_K,
+    MAX_TOKENS_PER_SOURCE_CEILING,
+    renderCandidateItemPromptLine,
+    resolveSpaceAgentRetrieval,
+    scoreItemsLexically,
+    setHostVectorSearchAdapter,
+    stripMentionMarkup,
+    tokenizeForSearch,
+} from './space-agent-retrieval.js';
 export { BaseSpaceTypeServerDriver } from './base-space-type-server-driver.js';
 export type {
     AgentContextParams,
@@ -55,7 +76,20 @@ export { BaseSpaceSignalProvider } from './space-signal-provider.js';
 export type { SpaceSignalObservation } from './space-signal-provider.js';
 export { EnsureSpaceForRecord } from './ensure-space-for-record.js';
 export type { EnsureSpaceForRecordParams } from './ensure-space-for-record.js';
-export type { SpaceAgentCandidateItem, SpaceAgentRetrievalDecision, SpaceAgentRetrievalOptions, SpaceAgentRetrievalResult } from './space-agent-retrieval.js';
+export type {
+    RetrievalRankingMode,
+    SearchEngineLike,
+    SearchEngineSearchParams,
+    SpaceAgentCandidateItem,
+    SpaceAgentRetrievalDecision,
+    SpaceAgentRetrievalOptions,
+    SpaceAgentRetrievalResult,
+    SpaceAgentRetrievalStats,
+    SpaceAgentSuppliedSource,
+    SpaceAgentVectorHit,
+    SpaceAgentVectorSearchAdapter,
+    SpaceAgentVectorSearchQuery,
+} from './space-agent-retrieval.js';
 export type { PostSpaceMessageInput, PostSpaceMessageResult } from './post-space-message.js';
 export { fileRootTask } from './file-root-task.js';
 // The three gates are exported by name as well: a host's class-registration manifest imports every registered class
@@ -110,9 +144,9 @@ export {
     SCOPED_SEARCH_ACTION_ID,
     COLLABORATION_SPACE_SCOPE_ID,
 } from './turn-tools.js';
-export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant } from './turn-tools.js';
+export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant, TurnToolSourceHit } from './turn-tools.js';
 export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction.js';
-export { CollaborationScopedSearchAction, LoadCollaborationScopedSearchAction, unquoteSpaceSearch, unwrapPhraseQuotes } from './CollaborationScopedSearchAction.js';
+export { CollaborationScopedSearchAction, LoadCollaborationScopedSearchAction, recordScopedSearchHitsOnContext, unquoteSpaceSearch, unwrapPhraseQuotes } from './CollaborationScopedSearchAction.js';
 export type { TurnToolsGiven } from './execute-space-chat-turn.js';
 export { IsPeopleEntity, PEOPLE_ENTITY, ResolvePersonIDForUser, ResolveUserIDForPerson, ResolveUserIDsForPeople } from '@mj-biz-apps/common-entities';
 export {
@@ -145,14 +179,52 @@ export {
 } from './mint-space-link.js';
 export {
     COLLABORATION_AGENT_TURN_OPERATION,
+    COLLABORATION_SOURCE_RECEIPT_ENTITY,
     COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES,
     type CollaborationAIRunEntityName,
+    type CollaborationTurnAuthorityContext,
+    getCollaborationTurnAuthorityContext,
     runWithCollaborationAgentTurnAuthority,
     evaluateParticipantAIRunWriteAccess,
+    evaluateParticipantSourceReceiptWriteAccess,
     syncPromptRunBasePrototype,
     CollaborationAIAgentRunEntityServer,
     CollaborationAIAgentRunStepEntityServer,
     CollaborationAIPromptRunEntityServer,
     LoadCollaborationAIRunLockdown,
 } from './ai-run-lockdown.js';
+export {
+    SpaceAgentSourceReceiptEntityServer,
+    LoadSpaceAgentSourceReceiptEntityServer,
+} from './SpaceAgentSourceReceiptEntityServer.js';
+export {
+    buildSourceReceiptReachContext,
+    deleteSpaceAgentSourceReceiptsForSpaceItem,
+    ensurePostgresReceiptContextHook,
+    ensurePostgresReceiptContextPrototypeHook,
+    installPostgresReceiptProviderAutoHook,
+    isSingleSourceReceiptAuthorizedForUser,
+    loadSpaceAgentSourceReceiptById,
+    persistSpaceAgentSourceReceipts,
+    querySpaceAgentSourceReceipts,
+    resolveSuppliedKnowledgeSources,
+    resolveToolSuppliedSourceCandidates,
+    runWithPostgresPrivilegedReceiptContext,
+    withPostgresReceiptUserContext,
+    type DeleteSpaceAgentSourceReceiptsForSpaceItemParams,
+    type LoadSpaceAgentSourceReceiptByIdParams,
+    type LoadSpaceAgentSourceReceiptByIdResult,
+    type PersistSpaceAgentSourceReceiptsParams,
+    type PersistSpaceAgentSourceReceiptsResult,
+    type PostgresExecuteOptionsLike,
+    type PostgresHookableProvider,
+    type PostgresPoolClientLike,
+    type PostgresPoolLike,
+    type PostgresQueryable,
+    type PostgresReceiptUserContextOptions,
+    type QuerySpaceAgentSourceReceiptsParams,
+    type QuerySpaceAgentSourceReceiptsResult,
+    type ResolveToolSuppliedSourcesParams,
+    type ResolveToolSuppliedSourcesResult,
+} from './space-agent-source-receipts.js';
 

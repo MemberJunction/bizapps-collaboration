@@ -39,7 +39,7 @@ const args = process.argv.slice(2);
 const only = args.filter((a) => !a.startsWith('-'));
 
 const { bootstrapIntegrationClient } = await import('@memberjunction/testing-integration/client');
-const { Metadata } = await import('@memberjunction/core');
+const { Metadata, RunView } = await import('@memberjunction/core');
 const { IntegrationCheckRegistry } = await import('@memberjunction/testing-integration/registry');
 
 await bootstrapIntegrationClient();
@@ -48,6 +48,28 @@ await import('../packages/IntegrationTests/dist/client-index.js');
 const provider = Metadata.Provider;
 const user = provider.CurrentUser;
 if (!user) throw new Error('No CurrentUser — check MJ_API_KEY and MJAPI.');
+
+// Importing client-index.js runs startup registrations that can exceed MJAPI's default HTTP
+// keepAliveTimeout (5s), leaving undici holding a half-closed socket. Warm the connection once
+// before the first check runs so collab-world.CW1 never hits a stale keep-alive reset.
+for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+        const ping = await RunView.FromMetadataProvider(provider).RunView(
+            {
+                EntityName: 'MJ: Users',
+                ExtraFilter: '1=0',
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            user,
+        );
+        if (ping.Success) break;
+    } catch {
+        if (attempt === 3) break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+}
 
 const ctx = { User: user, Provider: provider, Schema: process.env.MJ_CORE_SCHEMA || '__mj', Storage: undefined };
 const registry = IntegrationCheckRegistry.Instance;

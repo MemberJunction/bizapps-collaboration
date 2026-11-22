@@ -33,6 +33,7 @@ import {
     COLLABORATION_SETTINGS_NAME,
 } from '@mj-biz-apps/collaboration-engine-base';
 import type {
+    mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
     mjBizAppsCollaborationSpaceGrantEntity,
     mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
@@ -44,6 +45,7 @@ import type {
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
 } from '@memberjunction/core-entities';
+import { ensurePostgresReceiptContextHook } from './space-agent-source-receipts.js';
 
 export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
     protected constructor() {
@@ -71,6 +73,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
     }
 
     public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        ensurePostgresReceiptContextHook(provider ?? Metadata.Provider);
         if (!this.Loaded) {
             await this.Config(false, contextUser, provider);
         }
@@ -184,6 +187,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         contextUser?: UserInfo,
         provider?: IMetadataProvider
     ): Promise<void> {
+        ensurePostgresReceiptContextHook(provider ?? Metadata.Provider);
         await this.Base.Config(forceRefresh, contextUser, provider);
         await this.Admin.Config(forceRefresh, contextUser, provider);
     }
@@ -244,6 +248,17 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
     /** Whether a user holds the 'Close and Reopen Spaces' authorization. The owner seat is checked apart, by the space write rules. */
     public UserHoldsLifecycleAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
         return this.Base.UserHoldsLifecycleAuthorization(user, provider);
+    }
+
+    /** Loads validated source receipts for a conversation under the caller's RLS reach (delegated to EngineBase). */
+    public async LoadSpaceAgentSourceReceiptsForConversation(
+        conversationId: string,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+        options?: Parameters<CollaborationEngineBase['LoadSpaceAgentSourceReceiptsForConversation']>[3],
+    ): Promise<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[]> {
+        ensurePostgresReceiptContextHook(provider ?? Metadata.Provider);
+        return this.Base.LoadSpaceAgentSourceReceiptsForConversation(conversationId, user, provider, options);
     }
 
     /**

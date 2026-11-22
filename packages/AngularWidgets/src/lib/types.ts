@@ -317,12 +317,40 @@ export interface DataEntryModel {
   isPinned: boolean;
 }
 
+export type SourceReceiptKind = 'SpaceItem' | 'KnowledgeSource';
+export type SourceReceiptRankingMode = 'vector' | 'lexical' | 'grant' | 'none';
+
+/** Persisted provenance receipt for an in-reach source supplied to or cited in a space agent answer (CT-2). */
+export interface SpaceChatAnswerSourceReceipt {
+  id: string;
+  conversationDetailId: string;
+  spaceId: string;
+  sourceKind: SourceReceiptKind;
+  spaceItemId: string | null;
+  contentSourceId: string | null;
+  targetEntityId: string | null;
+  targetRecordId: string | null;
+  sourceTitle: string;
+  band: SpaceBand;
+  wasSupplied: boolean;
+  wasCited: boolean;
+  retrievalRank: number | null;
+  relevanceScore: number | null;
+  rankingMode: SourceReceiptRankingMode;
+  citationOrdinal: number | null;
+  estimatedTokens: number;
+  wasTruncated: boolean;
+  sequence: number;
+}
+
+export type DataRowValue = string | number | boolean | Date | object | null | undefined;
+
 /** What running an entry gave: rows for a view or query; an embedded host for a dashboard or component; or why nothing. */
 export interface DataRunModel {
   grantId: string;
   status: 'running' | 'rows' | 'embedded' | 'unavailable' | 'error';
   columns: string[];
-  rows: Record<string, unknown>[];
+  rows: Record<string, DataRowValue>[];
   rowCount: number;
   message: string;
 }

@@ -4,6 +4,7 @@ import { seedAppSettings } from './app-settings.test-support.ts';
 import {
     BaseEntity,
     EntityPermissionType,
+    ServerOperationScopeManager,
     TransactionGroupBase,
     WellKnownUserSource,
     type IMetadataProvider,
@@ -13,12 +14,18 @@ import {
 } from '@memberjunction/core';
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
+import { COLLABORATION_SOURCE_RECEIPT_ENTITY } from '../dist/ai-run-lockdown.js';
+import { SpaceAgentSourceReceiptEntityServer } from '../dist/SpaceAgentSourceReceiptEntityServer.js';
 import { SpaceItemEntityServer, vouchStoredFile, releaseStoredFile } from '../dist/SpaceItemEntityServer.js';
 
 // The one configuration starts from the app's settings row (B16): seeded here, as the shipped metadata seeds it
 let restoreAppSettingsRow: () => void;
 before(() => { restoreAppSettingsRow = seedAppSettings(); });
 after(() => restoreAppSettingsRow());
+
+function stubObject<T extends object>(value: object): T {
+    return value as T;
+}
 
 describe('SpaceItemEntityServer file ownership and validation', () => {
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
@@ -29,7 +36,8 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         src.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' } as UserInfo);
         // A delete asks the space type's driver first; these tests are about files, so the space's driver is the default one
         origResolveSpaceAndType = ServerDriverRegistry.Instance.ResolveSpaceAndType.bind(ServerDriverRegistry.Instance);
-        ServerDriverRegistry.Instance.ResolveSpaceAndType = (async () => ({ driver: new BaseSpaceTypeServerDriver(), space: {}, spaceType: {} })) as unknown as typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = async () =>
+            stubObject<Awaited<ReturnType<typeof origResolveSpaceAndType>>>({ driver: new BaseSpaceTypeServerDriver(), space: {}, spaceType: {} });
     });
     after(() => {
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
@@ -83,15 +91,15 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 });
             },
             async GetEntityObject(_entityName: string) {
-                return {
+                return stubObject<BaseEntity>({
                     ProviderID: options?.fileProviderId,
                     async Load() { return true; },
                     async InnerLoad() { return true; },
                     async Delete() { return true; },
-                } as unknown as BaseEntity;
+                });
             },
         };
-        return mock as unknown as IMetadataProvider;
+        return stubObject<IMetadataProvider>(mock);
     }
 
     it('refuses saving a new file item that was not vouched through space upload', async () => {
@@ -258,6 +266,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         onFileCleanup?: () => void;
         usesResult?: Array<{ ID: string }>;
         noticesResult?: Array<{ ID: string }>;
+        receiptsResult?: Array<{ ID: string }>;
         onChildDelete?: (entityName: string, entity: BaseEntity) => void;
         onRunView?: (params: { EntityName: string; ResultType?: string; IgnoreMaxRows?: boolean; ExtraFilter?: string }) => void;
     }
@@ -291,7 +300,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                             ID: r.ID,
                             TransactionGroup: undefined as TransactionGroupBase | undefined,
                             async Delete() {
-                                opts.onChildDelete?.(params.EntityName, ent as unknown as BaseEntity);
+                                opts.onChildDelete?.(params.EntityName, stubObject<BaseEntity>(ent));
                                 return true;
                             },
                         };
@@ -305,10 +314,38 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                             ID: r.ID,
                             TransactionGroup: undefined as TransactionGroupBase | undefined,
                             async Delete() {
-                                opts.onChildDelete?.(params.EntityName, ent as unknown as BaseEntity);
+                                opts.onChildDelete?.(params.EntityName, stubObject<BaseEntity>(ent));
                                 return true;
                             },
                         };
+                        return ent;
+                    });
+                    return { Success: true, Results: results };
+                }
+                if (params.EntityName === COLLABORATION_SOURCE_RECEIPT_ENTITY) {
+                    const results = (opts.receiptsResult ?? []).map((r) => {
+                        const ent: SpaceAgentSourceReceiptEntityServer = Object.create(SpaceAgentSourceReceiptEntityServer.prototype);
+                        Object.defineProperties(ent, {
+                            ID: { value: r.ID, writable: true },
+                            ContextCurrentUser: { value: { ID: '00000000-0000-0000-0000-000000000000', Type: 'Owner', UserRoles: [] }, writable: true },
+                            TransactionGroup: { value: null, writable: true },
+                            Delete: {
+                                value: async () => {
+                                    const origSuperDelete = Object.getPrototypeOf(SpaceAgentSourceReceiptEntityServer.prototype).Delete;
+                                    Object.getPrototypeOf(SpaceAgentSourceReceiptEntityServer.prototype).Delete = async () => true;
+                                    try {
+                                        const ok = await SpaceAgentSourceReceiptEntityServer.prototype.Delete.call(ent);
+                                        if (ok) {
+                                            opts.onChildDelete?.(params.EntityName, ent);
+                                        }
+                                        return ok;
+                                    } finally {
+                                        Object.getPrototypeOf(SpaceAgentSourceReceiptEntityServer.prototype).Delete = origSuperDelete;
+                                    }
+                                },
+                                writable: true,
+                            },
+                        });
                         return ent;
                     });
                     return { Success: true, Results: results };
@@ -329,14 +366,14 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                     TransactionGroup: undefined as TransactionGroupBase | undefined,
                     async Load() { return true; },
                     async Delete() {
-                        opts.onChildDelete?.(entityName, entity as unknown as BaseEntity);
+                        opts.onChildDelete?.(entityName, stubObject<BaseEntity>(entity));
                         return true;
                     },
                 };
-                return entity as unknown as BaseEntity;
+                return stubObject<BaseEntity>(entity);
             },
         };
-        return mock as unknown as IMetadataProvider;
+        return stubObject<IMetadataProvider>(mock);
     }
 
     function createMockItem(provider: IMetadataProvider, recordId: string = `ID|${FILE_ID}`): SpaceItemEntityServer {
@@ -378,7 +415,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             ID: { value: 'item-1', writable: true },
             SpaceID: { value: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2', writable: true },
             IsSaved: { value: true, writable: true },
-            ProviderToUse: { value: providerMock as unknown as IMetadataProvider, writable: true },
+            ProviderToUse: { value: stubObject<IMetadataProvider>(providerMock), writable: true },
             ContextCurrentUser: { value: user, writable: true },
             CheckPermissions: {
                 value: (_type: EntityPermissionType, throwError: boolean) => {
@@ -579,10 +616,10 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         });
         provider.CreateTransactionGroup = async () => {
             createdGroupsCount++;
-            return {
+            return stubObject<TransactionGroupBase>({
                 AddTransaction() {},
                 async Submit() { return !shouldFail; },
-            } as unknown as TransactionGroupBase;
+            });
         };
 
         const item = createMockItem(provider);
@@ -619,7 +656,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
         type NotificationCallback = (n: { success: boolean }) => void;
         const subscribers: NotificationCallback[] = [];
-        const callerTg = {
+        const callerTg = stubObject<TransactionGroupBase>({
             AddTransaction() {},
             async Submit() { return true; },
             TransactionNotifications$: {
@@ -628,7 +665,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                     return { unsubscribe() {} };
                 },
             },
-        } as unknown as TransactionGroupBase;
+        });
 
         item.TransactionGroup = callerTg;
 
@@ -661,7 +698,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
         type NotificationCallback = (n: { success: boolean }) => void;
         const subscribers: NotificationCallback[] = [];
-        const callerTg = {
+        const callerTg = stubObject<TransactionGroupBase>({
             AddTransaction() {},
             async Submit() { return false; },
             TransactionNotifications$: {
@@ -670,7 +707,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                     return { unsubscribe() {} };
                 },
             },
-        } as unknown as TransactionGroupBase;
+        });
 
         item.TransactionGroup = callerTg;
 
@@ -715,14 +752,14 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 return origEntityByName(name);
             }) as IMetadataProvider['EntityByName'];
 
-            const rvProvider = provider as unknown as { RunView: (params: { EntityName: string; ExtraFilter?: string }) => Promise<unknown> };
-            const origRunView = rvProvider.RunView.bind(provider);
-            rvProvider.RunView = async (params: { EntityName: string; ExtraFilter?: string }) => {
+            type MockRunViewFn = (params: { EntityName: string; ExtraFilter?: string }) => Promise<object>;
+            const origRunView = (Reflect.get(provider, 'RunView') as MockRunViewFn).bind(provider);
+            Reflect.set(provider, 'RunView', async (params: { EntityName: string; ExtraFilter?: string }) => {
                 if (params.EntityName === 'MJ: Content Items') {
                     return { Success: true, Results: [{ ID: 'CI-TOMBSTONE-1' }] };
                 }
                 return origRunView(params);
-            };
+            });
 
             const origGetEntityObject = provider.GetEntityObject.bind(provider);
             provider.GetEntityObject = (async (entityName: string, contextUser?: UserInfo) => {
@@ -735,7 +772,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                             return true;
                         },
                     };
-                    return ciEntity as unknown as BaseEntity;
+                    return stubObject<BaseEntity>(ciEntity);
                 }
                 return origGetEntityObject(entityName, contextUser);
             }) as IMetadataProvider['GetEntityObject'];
@@ -780,25 +817,25 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 if (name === 'MJ: Content Items') return { ID: 'CONTENT-ITEMS-ID', Name: 'MJ: Content Items' } as never;
                 return origEntityByName(name);
             }) as IMetadataProvider['EntityByName'];
-            const rvProvider = provider as unknown as { RunView: (params: { EntityName: string }) => Promise<unknown> };
-            const origRunView = rvProvider.RunView.bind(provider);
-            rvProvider.RunView = async (params: { EntityName: string }) => {
+            type MockRunViewFn = (params: { EntityName: string }) => Promise<object>;
+            const origRunView = (Reflect.get(provider, 'RunView') as MockRunViewFn).bind(provider);
+            Reflect.set(provider, 'RunView', async (params: { EntityName: string }) => {
                 if (params.EntityName === 'MJ: Content Items') {
                     return { Success: true, Results: lateItemAttached ? [{ ID: 'CI-LATE' }] : [] };
                 }
                 return origRunView(params);
-            };
+            });
             const origGetEntityObject = provider.GetEntityObject.bind(provider);
             provider.GetEntityObject = (async (entityName: string, contextUser?: UserInfo) => {
                 if (entityName === 'MJ: Content Items') {
-                    return {
+                    return stubObject<BaseEntity>({
                         FileID: FILE_ID as string | null,
                         async InnerLoad() { return true; },
                         async Save() { detached.push('CI-LATE'); lateItemAttached = false; return true; },
-                    } as unknown as BaseEntity;
+                    });
                 }
                 if (entityName === 'MJ: Files') {
-                    return {
+                    return stubObject<BaseEntity>({
                         IsSaved: true,
                         ProviderKey: null,
                         async Load() { return true; },
@@ -810,7 +847,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                             }
                             return !lateItemAttached;
                         },
-                    } as unknown as BaseEntity;
+                    });
                 }
                 return origGetEntityObject(entityName, contextUser);
             }) as IMetadataProvider['GetEntityObject'];
@@ -830,6 +867,139 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         } finally {
             ContentPipelineStartup.Instance.HandleStartup = origStartup;
             ContentUploadIngestor.Remove = origRemove;
+        }
+    });
+
+    it('Delete() cleans up referencing Space Agent Source Receipts in the same TransactionGroup even inside RunInClientCrudBoundary', async () => {
+        const deletedReceipts: string[] = [];
+        const provider = createDeleteMockProvider({
+            itemsRunViewResult: [{ ID: 'other-item-id' }],
+            receiptsResult: [{ ID: 'receipt-1' }, { ID: 'receipt-2' }],
+            onChildDelete: (entityName, entity) => {
+                if (entityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && entity instanceof SpaceAgentSourceReceiptEntityServer) {
+                    assert.ok(entity.TransactionGroup, 'Receipt delete must share the SpaceItem TransactionGroup');
+                    deletedReceipts.push(entity.ID);
+                }
+            },
+        });
+
+        const item = createMockItem(provider);
+        const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+            return true;
+        };
+        try {
+            const ok = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+                SpaceItemEntityServer.prototype.Delete.call(item),
+            );
+            assert.equal(ok, true, 'SpaceItem delete must succeed when receipts exist');
+            assert.deepEqual(deletedReceipts, ['receipt-1', 'receipt-2']);
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+        }
+    });
+
+    it('Save() invalidates Shared Space Agent Source Receipts when Band demotes Shared -> Team (CR-1)', async () => {
+        const itemId = 'aaaaaaaa-0000-4000-8000-000000000011';
+        const receiptFilters: string[] = [];
+        const deletedReceipts: string[] = [];
+        const provider = createDeleteMockProvider({
+            receiptsResult: [{ ID: 'stale-shared-receipt' }],
+            onRunView: (params) => {
+                if (params.EntityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && params.ExtraFilter) {
+                    receiptFilters.push(params.ExtraFilter);
+                    assert.equal(params.IgnoreMaxRows, true);
+                }
+            },
+            onChildDelete: (entityName, entity) => {
+                if (entityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && entity instanceof SpaceAgentSourceReceiptEntityServer) {
+                    deletedReceipts.push(entity.ID);
+                }
+            },
+        });
+
+        const item = createMockItem(provider);
+        Object.defineProperties(item, {
+            ID: { value: itemId, writable: true },
+            Band: { value: 'Team', writable: true },
+            EntityID: { value: OTHER_ENTITY_ID, writable: true },
+            Fields: {
+                value: [
+                    { Name: 'SpaceID', Dirty: false, Value: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2', OldValue: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2' },
+                    { Name: 'Band', Dirty: true, Value: 'Team', OldValue: 'Shared' },
+                    { Name: 'EntityID', Dirty: false, Value: OTHER_ENTITY_ID, OldValue: OTHER_ENTITY_ID },
+                    { Name: 'RecordID', Dirty: false, Value: `ID|${FILE_ID}`, OldValue: `ID|${FILE_ID}` },
+                ],
+                writable: true,
+            },
+        });
+
+        const originalSave = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save = async () => true;
+        try {
+            const ok = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+                SpaceItemEntityServer.prototype.Save.call(item),
+            );
+            assert.equal(ok, true);
+            assert.deepEqual(deletedReceipts, ['stale-shared-receipt']);
+            assert.equal(receiptFilters.length, 1);
+            assert.ok(receiptFilters[0].includes(`SpaceItemID = '${itemId}'`));
+            assert.ok(receiptFilters[0].includes("Band = 'Shared'"));
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save = originalSave;
+        }
+    });
+
+    it('Save() invalidates all Space Agent Source Receipts when SpaceItem moves to another space (CR-1)', async () => {
+        const itemId = 'aaaaaaaa-0000-4000-8000-000000000012';
+        const oldSpaceId = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2';
+        const newSpaceId = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE3';
+        const receiptFilters: string[] = [];
+        const deletedReceipts: string[] = [];
+        const provider = createDeleteMockProvider({
+            receiptsResult: [{ ID: 'moved-receipt-shared' }, { ID: 'moved-receipt-team' }],
+            onRunView: (params) => {
+                if (params.EntityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && params.ExtraFilter) {
+                    receiptFilters.push(params.ExtraFilter);
+                    assert.equal(params.IgnoreMaxRows, true);
+                }
+            },
+            onChildDelete: (entityName, entity) => {
+                if (entityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && entity instanceof SpaceAgentSourceReceiptEntityServer) {
+                    deletedReceipts.push(entity.ID);
+                }
+            },
+        });
+
+        const item = createMockItem(provider);
+        Object.defineProperties(item, {
+            ID: { value: itemId, writable: true },
+            SpaceID: { value: newSpaceId, writable: true },
+            Band: { value: 'Shared', writable: true },
+            EntityID: { value: OTHER_ENTITY_ID, writable: true },
+            Fields: {
+                value: [
+                    { Name: 'SpaceID', Dirty: true, Value: newSpaceId, OldValue: oldSpaceId },
+                    { Name: 'Band', Dirty: false, Value: 'Shared', OldValue: 'Shared' },
+                    { Name: 'EntityID', Dirty: false, Value: OTHER_ENTITY_ID, OldValue: OTHER_ENTITY_ID },
+                    { Name: 'RecordID', Dirty: false, Value: `ID|${FILE_ID}`, OldValue: `ID|${FILE_ID}` },
+                ],
+                writable: true,
+            },
+        });
+
+        const originalSave = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save = async () => true;
+        try {
+            const ok = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+                SpaceItemEntityServer.prototype.Save.call(item),
+            );
+            assert.equal(ok, true);
+            assert.deepEqual(deletedReceipts, ['moved-receipt-shared', 'moved-receipt-team']);
+            assert.equal(receiptFilters.length, 1);
+            assert.equal(receiptFilters[0], `SpaceItemID = '${itemId}'`);
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save = originalSave;
         }
     });
 });

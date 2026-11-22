@@ -98,5 +98,30 @@
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Member Pins"
     }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ_BizApps_Collaboration: Space Agent Source Receipts: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Agent Source Receipts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "TargetRecordID",
+            "EntityIDFieldName": "TargetEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Agent Source Receipts&Name=TargetRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Agent Source Receipts"
+    }
   }
 ]

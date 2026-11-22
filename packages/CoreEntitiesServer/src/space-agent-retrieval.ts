@@ -18,8 +18,61 @@ import {
 import { IsPeopleEntity } from '@mj-biz-apps/common-entities';
 import type { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import { requireSystemUser, toNode, type SpaceRow } from './load-graph.js';
-import { readEveryRow } from './read-every-row.js';
+import { EVERY_ROW_PAGE_SIZE, readEveryRow } from './read-every-row.js';
+import {
+    applyContextTokenBudget,
+    clampContextTokenBudget,
+    clampRetrievalTopK,
+    clampTokensPerSource,
+    DEFAULT_MAX_CONTEXT_TOKENS,
+    DEFAULT_MAX_TOKENS_PER_SOURCE,
+    DEFAULT_RETRIEVAL_TOP_K,
+    HostSearchEngineVectorAdapter,
+    MAX_RETRIEVAL_TOP_K,
+    prioritizeChunksForQuery,
+    renderCandidateItemPromptLine,
+    resolveActiveVectorSearchAdapter,
+    scoreItemsLexically,
+    tokenizeForSearch,
+    type RankableSpaceItem,
+    type RankedCandidateOutcome,
+    type RetrievalRankingMode,
+    type SpaceAgentRetrievalStats,
+    type SpaceAgentSuppliedSource,
+    type SpaceAgentVectorSearchAdapter,
+} from './space-agent-retrieval-ranking.js';
 import { parseUuid } from './uuid.js';
+
+export {
+    applyContextTokenBudget,
+    clampContextTokenBudget,
+    clampRetrievalTopK,
+    clampTokensPerSource,
+    DEFAULT_MAX_CONTEXT_TOKENS,
+    DEFAULT_MAX_TOKENS_PER_SOURCE,
+    DEFAULT_RETRIEVAL_TOP_K,
+    estimateCandidateItemTokens,
+    estimateTokenCount,
+    getHostVectorSearchAdapter,
+    HostSearchEngineVectorAdapter,
+    MAX_CONTEXT_TOKENS_CEILING,
+    MAX_RETRIEVAL_TOP_K,
+    MAX_TOKENS_PER_SOURCE_CEILING,
+    prioritizeChunksForQuery,
+    renderCandidateItemPromptLine,
+    scoreItemsLexically,
+    setHostVectorSearchAdapter,
+    stripMentionMarkup,
+    tokenizeForSearch,
+    type RetrievalRankingMode,
+    type SearchEngineLike,
+    type SearchEngineSearchParams,
+    type SpaceAgentRetrievalStats,
+    type SpaceAgentSuppliedSource,
+    type SpaceAgentVectorHit,
+    type SpaceAgentVectorSearchAdapter,
+    type SpaceAgentVectorSearchQuery,
+} from './space-agent-retrieval-ranking.js';
 
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS_ENTITY = 'MJ_BizApps_Collaboration: Space Members';
@@ -30,6 +83,15 @@ const USERS_ENTITY = 'MJ: Users';
 const PEOPLE_ENTITY = 'MJ_BizApps_Common: People';
 const TASKS_ENTITY = 'MJ_BizApps_Tasks: Tasks';
 const TASK_ASSIGNMENTS_ENTITY = 'MJ_BizApps_Tasks: Task Assignments';
+
+/** Maximum number of explicit IDs included in a single SQL `IN (...)` batch. */
+const ID_LOOKUP_BATCH_SIZE = 500;
+/** Maximum concurrent views sent in a single `RunViews` round trip. */
+const RUN_VIEWS_BATCH_CONCURRENCY = 10;
+/** Small-space threshold below which full chunk/assignee enrichment and full refusal audit decisions are loaded eagerly. */
+const SMALL_SPACE_FULL_ENRICHMENT_LIMIT = 1000;
+const SMALL_SPACE_AUDIT_LIMIT = 200;
+const MAX_LARGE_SPACE_REFUSAL_DECISIONS = 50;
 
 export interface SpaceAgentCandidateItem {
     ID: string;
@@ -58,8 +120,20 @@ export interface SpaceAgentRetrievalDecision {
 export type RetrievalScopeNarrowing = ScopeNarrowing | 'Subtree';
 
 export interface SpaceAgentRetrievalOptions {
+    /** Deprecated legacy cap; ignored as a refusal ceiling because items are now paged and top-k ranked. */
     maxRows?: number;
+    /** Explicit filter + relevance ranking query (only matching in-scope items are returned). */
     query?: string;
+    /** Conversational relevance query (ranks all in-scope items without discarding unmatched items when filling top-k). */
+    rankingQuery?: string;
+    /** Maximum number of top-ranked items to supply (clamped to `[1, MAX_RETRIEVAL_TOP_K]`). */
+    topK?: number;
+    /** Maximum prompt tokens allowed per supplied source (clamped to server ceiling). */
+    maxTokensPerSource?: number;
+    /** Maximum aggregate prompt tokens allowed across all supplied sources (clamped to server ceiling). */
+    maxContextTokens?: number;
+    /** Optional explicit vector search adapter (overrides host auto-detection). */
+    vectorSearch?: SpaceAgentVectorSearchAdapter;
     /**
      * Explicit user IDs in the conversation's audience (B2.3). When provided (or when `conversationKind`
      * is provided), retrieval is bounded to the intersection of what every audience member may reach and see.
@@ -79,6 +153,12 @@ export interface SpaceAgentRetrievalOptions {
      * the result does not depend on it; a test sets it small to walk several pages.
      */
     rosterPageSize?: number;
+    /** Optional page size for keyset-paged `Space Items` reads (`EVERY_ROW_PAGE_SIZE` when absent). */
+    itemsPageSize?: number;
+    /** Authoritative SpaceChat ID when retrieval runs inside a chat turn. */
+    spaceChatId?: string;
+    /** Optional hydrated audience reader records for SearchEngine audience intersection. */
+    audienceUsers?: readonly UserInfo[];
 }
 
 export interface SpaceAgentRetrievalResult {
@@ -87,9 +167,12 @@ export interface SpaceAgentRetrievalResult {
     callerCanSeeTeam: boolean;
     audienceUserIds: string[];
     searchedSpaceIds: string[];
+    allowedBandsBySpace?: Readonly<Record<string, Band>>;
     candidateItems: SpaceAgentCandidateItem[];
     quotedItems: SpaceAgentCandidateItem[];
     decisions: SpaceAgentRetrievalDecision[];
+    suppliedSources?: SpaceAgentSuppliedSource[];
+    stats?: SpaceAgentRetrievalStats;
 }
 
 interface MemberRow {
@@ -139,6 +222,18 @@ interface TargetLookupRow {
     Priority?: mjBizAppsTasksTaskEntity['Priority'] | null;
     DueAt?: Date | string | null;
     PercentComplete?: number | null;
+}
+
+interface PreFilteredSpaceItem {
+    raw: SpaceItemRow;
+    originalIndex: number;
+    entityId: string;
+    entityName: string | undefined;
+    cleanTargetRecordId: string | null;
+    targetKey: string;
+    itemSpaceId: string;
+    allowed: boolean;
+    reason: string;
 }
 
 function cleanRecordId(raw: string): string {
@@ -228,7 +323,7 @@ function getReachableSubtreeSpaceIds(
     return candidateIds;
 }
 
-/** The most space ids one seat read names; a larger tree is read in several. */
+/** The most space ids one seat or item read names; a larger tree is read in several. */
 const SEAT_SPACES_PER_READ = 200;
 
 /** What a refused retrieval tells its caller. The cause goes to the log. */
@@ -297,6 +392,27 @@ function rosterSeatFilters(spaceNodes: readonly SpaceNode[], spaceId: string, ca
 }
 
 /**
+ * Builds SQL `ExtraFilter` predicates strictly scoped to the spaces the caller and audience can reach.
+ * Items in those spaces are then partitioned in-memory into `inScopeRows` vs `excludedRows` by `(space, band)`
+ * BEFORE any target metadata enrichment, vector search, lexical scoring, or prompt injection — preserving
+ * refusal `decisions` (`allowed: false` with metadata withheld) for out-of-band items in `General`/`Topic` rooms.
+ */
+function buildSpaceBandFilters(searchedSpaceIds: readonly string[], _spaceBands: ReadonlyMap<string, Band>): string[] {
+    const cleanSpaceIds: string[] = [];
+    for (const rawId of searchedSpaceIds) {
+        const cleanId = parseUuid(rawId);
+        if (cleanId) cleanSpaceIds.push(cleanId);
+    }
+
+    const filters: string[] = [];
+    for (let start = 0; start < cleanSpaceIds.length; start += SEAT_SPACES_PER_READ) {
+        const inClause = cleanSpaceIds.slice(start, start + SEAT_SPACES_PER_READ).map((id) => `'${id}'`).join(',');
+        filters.push(`SpaceID IN (${inClause})`);
+    }
+    return filters;
+}
+
+/**
  * Every seat the filters match, as the system user, each read to its end (`readEveryRow`). A failed read, and a seat whose
  * role was not among the roles read, are refused: either would drop a person from the audience and so widen what the
  * agent may use.
@@ -316,7 +432,7 @@ async function loadSeats(
             system,
             pageSize,
         )));
-    } catch (error: unknown) {
+    } catch (error) {
         LogError(`resolveSpaceAgentRetrieval failed to load the seats: ${error instanceof Error ? error.message : String(error)}`);
         throw new Error(AUDIENCE_UNREADABLE);
     }
@@ -344,23 +460,179 @@ async function loadSeats(
 }
 
 /**
- * Resolves materials that the Collaboration Space Agent is permitted to quote
+ * Loads target record metadata (`Name`, `Description`, `ContentType`, task fields) in bounded batches of `ID_LOOKUP_BATCH_SIZE`.
+ */
+async function loadTargetMetadataMap(
+    provider: IMetadataProvider,
+    rvUser: RunView,
+    user: UserInfo,
+    rows: readonly PreFilteredSpaceItem[],
+): Promise<Map<string, TargetMetadata>> {
+    const targetNames = new Map<string, TargetMetadata>();
+    if (rows.length === 0) return targetNames;
+
+    const recordIdsByEntity = new Map<string, Set<string>>();
+    const entityNameById = new Map<string, string>();
+    for (const row of rows) {
+        if (!row.cleanTargetRecordId || !row.entityName) continue;
+        entityNameById.set(row.entityId, row.entityName);
+        let set = recordIdsByEntity.get(row.entityId);
+        if (!set) {
+            set = new Set<string>();
+            recordIdsByEntity.set(row.entityId, set);
+        }
+        set.add(row.cleanTargetRecordId);
+    }
+
+    const viewParams: RunViewParams[] = [];
+    const viewEntityIds: string[] = [];
+
+    for (const [entityId, recIdSet] of recordIdsByEntity.entries()) {
+        const entityName = entityNameById.get(entityId);
+        if (!entityName) continue;
+        const fields =
+            entityName === FILES_ENTITY
+                ? ['ID', 'Name', 'Description', 'ContentType']
+                : entityName === TASKS_ENTITY
+                    ? ['ID', 'Name', 'Description', 'Status', 'Priority', 'DueAt', 'PercentComplete']
+                    : ['ID', 'Name', 'Description'];
+
+        const recIds = Array.from(recIdSet);
+        for (let start = 0; start < recIds.length; start += ID_LOOKUP_BATCH_SIZE) {
+            const batch = recIds.slice(start, start + ID_LOOKUP_BATCH_SIZE);
+            const targetInClause = batch.map((id) => `'${id}'`).join(',');
+            viewParams.push({
+                EntityName: entityName,
+                ExtraFilter: `ID IN (${targetInClause})`,
+                Fields: fields,
+                // row-cap-ok: bounded batch lookup by <= 500 explicit IDs
+                MaxRows: ID_LOOKUP_BATCH_SIZE,
+                ResultType: 'simple',
+            });
+            viewEntityIds.push(entityId);
+        }
+    }
+
+    for (let start = 0; start < viewParams.length; start += RUN_VIEWS_BATCH_CONCURRENCY) {
+        const batchParams = viewParams.slice(start, start + RUN_VIEWS_BATCH_CONCURRENCY);
+        const batchEntityIds = viewEntityIds.slice(start, start + RUN_VIEWS_BATCH_CONCURRENCY);
+        try {
+            const batchResults = await rvUser.RunViews(batchParams, user);
+            for (let i = 0; i < batchResults.length; i++) {
+                const res = batchResults[i];
+                const entityId = batchEntityIds[i];
+                if (res?.Success && res.Results) {
+                    for (const t of res.Results as TargetLookupRow[]) {
+                        const id = (parseUuid(t.ID) ?? t.ID).toLowerCase();
+                        const rawName = t.Name ?? 'Unnamed item';
+                        const cleanName = typeof rawName === 'string' ? rawName.replace(/\s+/g, ' ').trim() || 'Unnamed item' : 'Unnamed item';
+                        const rawDesc = t.Description ?? null;
+                        const cleanDesc = typeof rawDesc === 'string' ? rawDesc.replace(/\s+/g, ' ').trim() || null : null;
+                        targetNames.set(`${entityId}:${id}`, {
+                            name: cleanName,
+                            description: cleanDesc,
+                            contentType: t.ContentType ?? null,
+                            status: t.Status ?? null,
+                            priority: t.Priority ?? null,
+                            dueAt: formatIsoDate(t.DueAt),
+                            percentComplete: typeof t.PercentComplete === 'number' ? t.PercentComplete : null,
+                        });
+                    }
+                } else if (res && !res.Success) {
+                    LogError(`Failed to lookup target names for entity ${batchParams[i].EntityName}: ${res.ErrorMessage}`);
+                }
+            }
+        } catch (err) {
+            LogError(`resolveSpaceAgentRetrieval batch target lookup failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    return targetNames;
+}
+
+function buildCandidateItem(
+    entry: PreFilteredSpaceItem,
+    target: TargetMetadata | undefined,
+    chunkTexts: string[] | undefined,
+    assignees: string[] | undefined,
+    includeEnrichment: boolean,
+): SpaceAgentCandidateItem {
+    const item: SpaceAgentCandidateItem = {
+        ID: entry.raw.ID,
+        SpaceID: entry.raw.SpaceID,
+        EntityID: entry.raw.EntityID,
+        RecordID: entry.raw.RecordID,
+        ...(entry.entityName ? { EntityName: entry.entityName } : {}),
+        Name: target?.name ?? `Item ${entry.raw.ID}`,
+        Description: target?.description ?? null,
+        Band: entry.raw.Band,
+        StoredContentType: target?.contentType ?? null,
+    };
+    if (includeEnrichment && entry.entityName === TASKS_ENTITY) {
+        item.Status = target?.status ?? null;
+        item.Priority = target?.priority ?? null;
+        item.DueAt = target?.dueAt ?? null;
+        item.PercentComplete = target?.percentComplete ?? null;
+        item.Assignees = assignees ?? [];
+    }
+    if (includeEnrichment && chunkTexts && chunkTexts.length > 0) {
+        item.ChunkTexts = chunkTexts;
+    }
+    return item;
+}
+
+function matchesExplicitQuery(item: SpaceAgentCandidateItem, queryLower: string): boolean {
+    if (item.Name.toLowerCase().includes(queryLower)) return true;
+    if (item.Description && item.Description.toLowerCase().includes(queryLower)) return true;
+    if (item.ChunkTexts && item.ChunkTexts.some((t) => t.toLowerCase().includes(queryLower))) return true;
+    if (item.Status && item.Status.toLowerCase().includes(queryLower)) return true;
+    if (item.Assignees && item.Assignees.some((a) => a.toLowerCase().includes(queryLower))) return true;
+    return false;
+}
+
+function emptyResult(spaceId: string, askingUserId: string, audienceUserIds: string[] = [], searchedSpaceIds: string[] = []): SpaceAgentRetrievalResult {
+    return {
+        spaceId,
+        askingUserId,
+        callerCanSeeTeam: false,
+        audienceUserIds,
+        searchedSpaceIds,
+        candidateItems: [],
+        quotedItems: [],
+        decisions: [],
+        suppliedSources: [],
+        stats: {
+            topKRequested: DEFAULT_RETRIEVAL_TOP_K,
+            topKApplied: DEFAULT_RETRIEVAL_TOP_K,
+            maxTokensPerSource: DEFAULT_MAX_TOKENS_PER_SOURCE,
+            maxContextTokens: DEFAULT_MAX_CONTEXT_TOKENS,
+            totalInScopeCount: 0,
+            totalExcludedCount: 0,
+            suppliedCount: 0,
+            estimatedContextTokens: 0,
+            rankingMode: 'none',
+            vectorSearchUsed: false,
+            durationMs: 0,
+        },
+    };
+}
+
+/**
+ * Resolves bounded, relevance-ranked materials that the Collaboration Space Agent is permitted to quote
  * for a specific user (and optional room audience) asking from a specific space.
  *
  * Rules enforced:
  * 1. User must reach the space where the question is asked.
  * 2. Determines candidate subtree spaces (filtering out parent/sibling spaces and excluded scopes in SQL),
  *    intersected across all participants in the room's audience when `audienceUserIds` or `conversationKind` is given (B2.3).
- * 3. Runs candidate query as the asking user (enforcing RLS fnCollaborationAccess & entity permissions).
- * 4. Batches target name and description lookups.
- * 5. Evaluates agentMayQuote and agentMayQuoteCandidate for every candidate:
- *    - Must be within the asked space's subtree (no parent or sibling leak) and reachable by every audience member.
- *    - Items in Team band are dropped if any audience member cannot see the Team band or if the conversation is Shared-audience.
- *    - Spaces marked ExcludedEntirely are never quoted.
- *    - Spaces marked ExcludedFromParentScope are never quoted from ancestors.
+ * 3. Pre-filters `Space Items` strictly by `(SpaceID, Band)` reach via keyset-paged `readEveryRow` (no 2,000-item refusal)
+ *    and evaluates `agentMayQuote` / `agentMayQuoteCandidate` BEFORE any vector query or relevance scoring.
+ * 4. Ranks only in-scope items using vector similarity when a host vector index/service is configured, falling back
+ *    automatically to deterministic BM25 lexical ranking over title, summary, chunk text, and task fields.
+ * 5. Enforces server-bounded `topK`, per-source token cap, and aggregate context token ceiling (`O(k)` prompt budget)
+ *    and emits structured `suppliedSources` and `stats` metadata.
  *
- * It throws ("Refusing retrieval: ...") when the spaces, roles or seats cannot be read, or a page that has a ceiling comes
- * back full. It never answers from part of the audience: fewer people in the intersection means more for the agent to use.
+ * Throws (`"Refusing retrieval: ..."`) when the spaces, roles or seats cannot be read.
  */
 export async function resolveSpaceAgentRetrieval(
     provider: IMetadataProvider,
@@ -368,20 +640,12 @@ export async function resolveSpaceAgentRetrieval(
     spaceId: string,
     options?: SpaceAgentRetrievalOptions,
 ): Promise<SpaceAgentRetrievalResult> {
+    const startMs = Date.now();
     const cleanSpaceId = parseUuid(spaceId);
     const cleanUserId = parseUuid(user?.ID);
 
     if (!cleanSpaceId || !cleanUserId) {
-        return {
-            spaceId: spaceId ?? '',
-            askingUserId: user?.ID ?? '',
-            callerCanSeeTeam: false,
-            audienceUserIds: [],
-            searchedSpaceIds: [],
-            candidateItems: [],
-            quotedItems: [],
-            decisions: [],
-        };
+        return emptyResult(spaceId ?? '', user?.ID ?? '');
     }
 
     const rawAudienceIds = options?.audienceUserIds ?? options?.participantUserIds;
@@ -406,8 +670,7 @@ export async function resolveSpaceAgentRetrieval(
     const rvSystem = RunView.FromMetadataProvider(provider);
     const { spaceNodes, roleMap } = await loadSpacesAndRoles(rvSystem, system);
 
-    // The seats that decide the audience and what each of its people reaches. A room's audience comes from the seats that can
-    // reach the asked space and the ones below it, never from every seat in the database.
+    // The seats that decide the audience and what each of its people reaches.
     const seatFilters = loadRoomRoster
         ? rosterSeatFilters(spaceNodes, cleanSpaceId, cleanUserId)
         : explicitAudienceIds.map((uid) => `UserID = '${uid}' AND Status = 'Active'`);
@@ -416,17 +679,7 @@ export async function resolveSpaceAgentRetrieval(
     // Determine caller's reaching role in the asked space
     const reach = membershipReaches(spaceNodes, memberSnapshots, cleanUserId, cleanSpaceId);
     if (!reach) {
-        // Caller cannot even reach this space
-        return {
-            spaceId: cleanSpaceId,
-            askingUserId: cleanUserId,
-            callerCanSeeTeam: false,
-            audienceUserIds: [],
-            searchedSpaceIds: [],
-            candidateItems: [],
-            quotedItems: [],
-            decisions: [],
-        };
+        return emptyResult(cleanSpaceId, cleanUserId);
     }
 
     const callerCanSeeTeam = reach.role.canSeeTeamBand;
@@ -499,7 +752,6 @@ export async function resolveSpaceAgentRetrieval(
         }
     }
 
-    // Filter to reachable candidate spaces in SQL rather than fetching all items and filtering in memory
     const candidateSpacePool =
         effectiveNarrowing === 'Everything'
             ? spaceNodes.map((s) => s.id)
@@ -511,153 +763,76 @@ export async function resolveSpaceAgentRetrieval(
     );
     if (searchedSpaceIds.length === 0) {
         return {
-            spaceId: cleanSpaceId,
-            askingUserId: cleanUserId,
+            ...emptyResult(cleanSpaceId, cleanUserId, principalIds, []),
             callerCanSeeTeam,
-            audienceUserIds: principalIds,
-            searchedSpaceIds: [],
-            candidateItems: [],
-            quotedItems: [],
-            decisions: [],
         };
     }
 
-    const inClause = searchedSpaceIds.map((id) => `'${id}'`).join(',');
+    const effectiveTopK = clampRetrievalTopK(options?.topK);
+    const effectiveMaxTokensPerSource = clampTokensPerSource(options?.maxTokensPerSource);
+    const effectiveMaxContextTokens = clampContextTokenBudget(options?.maxContextTokens);
+    const topKRequested = typeof options?.topK === 'number' && Number.isFinite(options.topK)
+        ? Math.floor(options.topK)
+        : effectiveTopK;
+
     const rvUser = RunView.FromMetadataProvider(provider);
-    const itemsRes = await rvUser.RunView<SpaceItemRow>({
-        EntityName: ITEMS_ENTITY,
-        ExtraFilter: `SpaceID IN (${inClause})`,
-        Fields: ['ID', 'SpaceID', 'EntityID', 'RecordID', 'Band'],
-        MaxRows: options?.maxRows ?? 2000,
-        ResultType: 'simple',
-    }, user);
+    const itemFilters = buildSpaceBandFilters(searchedSpaceIds, scope.spaceBands);
+    const itemPageSize = options?.itemsPageSize ?? EVERY_ROW_PAGE_SIZE;
 
-    if (!itemsRes.Success) {
-        LogError(`resolveSpaceAgentRetrieval items query failed: ${itemsRes.ErrorMessage}`);
+    let rawItems: SpaceItemRow[];
+    try {
+        const itemPages = await Promise.all(
+            itemFilters.map((filter) =>
+                readEveryRow<SpaceItemRow>(
+                    rvUser,
+                    {
+                        EntityName: ITEMS_ENTITY,
+                        ExtraFilter: filter,
+                        Fields: ['ID', 'SpaceID', 'EntityID', 'RecordID', 'Band'],
+                    },
+                    user,
+                    itemPageSize,
+                ),
+            ),
+        );
+        rawItems = itemPages.flat();
+    } catch (itemsErr) {
+        LogError(`resolveSpaceAgentRetrieval items query failed: ${itemsErr instanceof Error ? itemsErr.message : String(itemsErr)}`);
         return {
-            spaceId: cleanSpaceId,
-            askingUserId: cleanUserId,
+            ...emptyResult(cleanSpaceId, cleanUserId, principalIds, searchedSpaceIds),
             callerCanSeeTeam,
-            audienceUserIds: principalIds,
-            searchedSpaceIds,
-            candidateItems: [],
-            quotedItems: [],
-            decisions: [],
         };
     }
 
-    if ((itemsRes.Results?.length ?? 0) >= (options?.maxRows ?? 2000)) {
-        throw new Error('Refusing retrieval: items page came back full, so the check would be incomplete.');
-    }
-
-    const rawItems = itemsRes.Results ?? [];
-
-    // Group record IDs by entity ID to resolve Name & Description from the target records
-    const recordIdsByEntity = new Map<string, string[]>();
-    for (const item of rawItems) {
-        const entityId = (parseUuid(item.EntityID) ?? item.EntityID).toLowerCase();
-        const recId = cleanRecordId(item.RecordID);
-        const validUuid = parseUuid(recId);
-        if (validUuid) {
-            const list = recordIdsByEntity.get(entityId) ?? [];
-            list.push(validUuid);
-            recordIdsByEntity.set(entityId, list);
-        }
-    }
-
-    const targetNames = new Map<string, TargetMetadata>();
-    const entityNameByEntityId = new UUIDMap<string>();
-    const entityEntries = Array.from(recordIdsByEntity.entries());
-    const viewParams: RunViewParams[] = [];
-    const validEntityIds: string[] = [];
-
-    for (const [entityId, recIds] of entityEntries) {
-        const entityInfo = provider.EntityByID(entityId);
-        if (!entityInfo) continue;
-        entityNameByEntityId.Set(entityId, entityInfo.Name);
-        const targetInClause = recIds.map((id) => `'${id}'`).join(',');
-        const fields =
-            entityInfo.Name === FILES_ENTITY
-                ? ['ID', 'Name', 'Description', 'ContentType']
-                : entityInfo.Name === TASKS_ENTITY
-                    ? ['ID', 'Name', 'Description', 'Status', 'Priority', 'DueAt', 'PercentComplete']
-                    : ['ID', 'Name', 'Description'];
-        viewParams.push({
-            EntityName: entityInfo.Name,
-            ExtraFilter: `ID IN (${targetInClause})`,
-            Fields: fields,
-            MaxRows: 2000,
-            ResultType: 'simple',
-        });
-        validEntityIds.push(entityId);
-    }
-
-    if (viewParams.length > 0) {
-        try {
-            const batchResults = await rvUser.RunViews(viewParams, user);
-            for (let i = 0; i < batchResults.length; i++) {
-                const res = batchResults[i];
-                const entityId = validEntityIds[i];
-                if (res.Success && res.Results) {
-                    for (const t of res.Results as TargetLookupRow[]) {
-                        const id = (parseUuid(t.ID) ?? t.ID).toLowerCase();
-                        const rawName = t.Name ?? 'Unnamed item';
-                        const cleanName = typeof rawName === 'string' ? rawName.replace(/\s+/g, ' ').trim() || 'Unnamed item' : 'Unnamed item';
-                        const rawDesc = t.Description ?? null;
-                        const cleanDesc = typeof rawDesc === 'string' ? rawDesc.replace(/\s+/g, ' ').trim() || null : null;
-                        targetNames.set(`${entityId}:${id}`, {
-                            name: cleanName,
-                            description: cleanDesc,
-                            contentType: t.ContentType ?? null,
-                            status: t.Status ?? null,
-                            priority: t.Priority ?? null,
-                            dueAt: formatIsoDate(t.DueAt),
-                            percentComplete: typeof t.PercentComplete === 'number' ? t.PercentComplete : null,
-                        });
-                    }
-                } else if (!res.Success) {
-                    LogError(`Failed to lookup target names for entity ${viewParams[i].EntityName}: ${res.ErrorMessage}`);
-                }
-            }
-        } catch (err: unknown) {
-            LogError(`resolveSpaceAgentRetrieval batch target lookup failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    }
-
-    const preliminaryCandidates: Array<{
-        item: SpaceAgentCandidateItem;
-        allowed: boolean;
-        reason: string;
-        entityName: string | undefined;
-        cleanTargetRecordId: string | null;
-        target: TargetMetadata | undefined;
-    }> = [];
+    // Strict (space, band) reach pre-filtering BEFORE any target resolution, vector query, or scoring
     const spaceIndex = new Map<string, SpaceNode>();
     for (const s of spaceNodes) {
         spaceIndex.set(s.id.toLowerCase(), s);
     }
+    const entityNameByEntityId = new UUIDMap<string>();
+    const inScopeRows: PreFilteredSpaceItem[] = [];
+    const excludedRows: PreFilteredSpaceItem[] = [];
+    const seenItemIds = new Set<string>();
 
-    for (const raw of rawItems) {
+    for (let idx = 0; idx < rawItems.length; idx++) {
+        const raw = rawItems[idx];
+        const normItemId = (parseUuid(raw.ID) ?? raw.ID).toLowerCase();
+        if (seenItemIds.has(normItemId)) continue;
+        seenItemIds.add(normItemId);
+
         const entityId = (parseUuid(raw.EntityID) ?? raw.EntityID).toLowerCase();
+        let entityName = entityNameByEntityId.Get(entityId);
+        if (entityName === undefined) {
+            const entityInfo = provider.EntityByID(entityId);
+            if (entityInfo) {
+                entityName = entityInfo.Name;
+                entityNameByEntityId.Set(entityId, entityName);
+            }
+        }
         const cleanedRec = cleanRecordId(raw.RecordID);
         const recId = cleanedRec.toLowerCase();
         const cleanTargetRecordId = parseUuid(cleanedRec);
-        const entityName = entityNameByEntityId.Get(entityId);
-        const target = targetNames.get(`${entityId}:${recId}`);
-        const name = target?.name ?? `Item ${raw.ID}`;
-        const description = target?.description ?? null;
-        const item: SpaceAgentCandidateItem = {
-            ID: raw.ID,
-            SpaceID: raw.SpaceID,
-            EntityID: raw.EntityID,
-            RecordID: raw.RecordID,
-            ...(entityName ? { EntityName: entityName } : {}),
-            Name: name,
-            Description: description,
-            Band: raw.Band,
-            StoredContentType: target?.contentType ?? null,
-        };
-        const itemSpaceId = parseUuid(item.SpaceID) ?? item.SpaceID;
+        const itemSpaceId = parseUuid(raw.SpaceID) ?? raw.SpaceID;
         const itemReach = membershipReaches(spaceNodes, memberSnapshots, cleanUserId, itemSpaceId);
         const itemCallerCanSeeTeam = itemReach ? itemReach.role.canSeeTeamBand : false;
         const inAnchorSubtree = isAncestorOrSelf(spaceIndex, cleanSpaceId, itemSpaceId);
@@ -666,7 +841,7 @@ export async function resolveSpaceAgentRetrieval(
                 ? agentMayQuote({
                       callerCanRead: !!itemReach,
                       callerCanSeeTeam: itemCallerCanSeeTeam,
-                      itemBand: item.Band,
+                      itemBand: raw.Band,
                       itemSpaceId,
                       askedFromSpaceId: cleanSpaceId,
                       spaces: spaceNodes,
@@ -676,17 +851,16 @@ export async function resolveSpaceAgentRetrieval(
                   agentMayQuote({
                       callerCanRead: !!itemReach,
                       callerCanSeeTeam: itemCallerCanSeeTeam,
-                      itemBand: item.Band,
+                      itemBand: raw.Band,
                       itemSpaceId,
                       askedFromSpaceId: itemSpaceId,
                       spaces: spaceNodes,
                   });
         const audienceDecision = agentMayQuoteCandidate(
             {
-                id: item.ID,
+                id: raw.ID,
                 spaceId: itemSpaceId,
-                band: item.Band,
-                title: item.Name,
+                band: raw.Band,
             },
             scope,
         );
@@ -694,57 +868,323 @@ export async function resolveSpaceAgentRetrieval(
         const reason = allowed
             ? 'Allowed: item is within effective retrieval scope and readable by caller.'
             : audienceDecision.reason ?? 'Refused: agentMayQuote excluded item based on space subtree, team band, or retrieval policy.';
-        preliminaryCandidates.push({ item, allowed, reason, entityName, cleanTargetRecordId, target });
+
+        const preFiltered: PreFilteredSpaceItem = {
+            raw,
+            originalIndex: idx,
+            entityId,
+            entityName,
+            cleanTargetRecordId,
+            targetKey: `${entityId}:${recId}`,
+            itemSpaceId,
+            allowed,
+            reason,
+        };
+        if (allowed) {
+            inScopeRows.push(preFiltered);
+        } else {
+            excludedRows.push(preFiltered);
+        }
     }
 
-    const allowedItemIds = preliminaryCandidates.filter((c) => c.allowed).map((c) => c.item.ID);
-    const allowedTaskIds = preliminaryCandidates
-        .filter((c) => c.allowed && c.entityName === TASKS_ENTITY && c.cleanTargetRecordId != null)
-        .map((c) => c.cleanTargetRecordId!);
-    const [chunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
-        loadChunksBySpaceItemId(provider, rvUser, user, allowedItemIds),
-        loadTaskAssigneesByTaskId(provider, rvUser, user, allowedTaskIds),
-    ]);
+    const explicitFilterQuery = (options?.query ?? '').trim();
+    const rankingQueryText = explicitFilterQuery || (options?.rankingQuery ?? '').trim();
+    const allowedSpaceItemIds = new Set(inScopeRows.map((r) => (parseUuid(r.raw.ID) ?? r.raw.ID).toLowerCase()));
+    const allowedSpaces: Array<{ spaceId: string; maxBand: Band }> = searchedSpaceIds.map((sid) => ({
+        spaceId: sid,
+        maxBand: scope.spaceBands.get(sid.toLowerCase()) ?? 'Shared',
+    }));
 
-    const candidateItems: SpaceAgentCandidateItem[] = [];
-    const quotedItems: SpaceAgentCandidateItem[] = [];
-    const decisions: SpaceAgentRetrievalDecision[] = [];
+    const inScopeRowById = new Map<string, PreFilteredSpaceItem>();
+    for (const row of inScopeRows) {
+        inScopeRowById.set((parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase(), row);
+    }
 
-    for (const entry of preliminaryCandidates) {
-        const chunkTexts = entry.allowed ? chunksBySpaceItemId.get((parseUuid(entry.item.ID) ?? entry.item.ID).toLowerCase()) : undefined;
-        let item: SpaceAgentCandidateItem = entry.item;
-        if (entry.allowed && entry.entityName === TASKS_ENTITY) {
-            item = {
-                ...item,
-                Status: entry.target?.status ?? null,
-                Priority: entry.target?.priority ?? null,
-                DueAt: entry.target?.dueAt ?? null,
-                PercentComplete: entry.target?.percentComplete ?? null,
-                Assignees: (entry.cleanTargetRecordId ? assigneesByTaskId.Get(entry.cleanTargetRecordId) : undefined) ?? [],
-            };
-        }
-        if (chunkTexts && chunkTexts.length > 0) {
-            item = { ...item, ChunkTexts: chunkTexts };
-        }
+    let rankingMode: RetrievalRankingMode = 'none';
+    let vectorSearchUsed = false;
+    let rankedCandidates: RankedCandidateOutcome<SpaceAgentCandidateItem>[] = [];
 
-        if (options?.query) {
-            const q = options.query.toLowerCase();
-            const matchesName = item.Name.toLowerCase().includes(q);
-            const matchesDescription = !!(item.Description && item.Description.toLowerCase().includes(q));
-            const matchesChunks = !!(chunkTexts && chunkTexts.some((t) => t.toLowerCase().includes(q)));
-            const matchesStatus = !!(item.Status && item.Status.toLowerCase().includes(q));
-            const matchesAssignees = !!(item.Assignees && item.Assignees.some((a) => a.toLowerCase().includes(q)));
-            if (!matchesName && !matchesDescription && !matchesChunks && !matchesStatus && !matchesAssignees) {
-                continue;
+    const allowedBandsBySpace: Record<string, Band> = {};
+    for (const entry of allowedSpaces) {
+        allowedBandsBySpace[entry.spaceId.toLowerCase()] = entry.maxBand;
+    }
+
+    // Path A: Try vector similarity search when a vector index/service is configured and query text is non-empty
+    if (inScopeRows.length > 0 && rankingQueryText.length > 0) {
+        const vectorAdapter = await resolveActiveVectorSearchAdapter(provider, user, options?.vectorSearch);
+        if (vectorAdapter) {
+            try {
+                const vectorFetchTopK = explicitFilterQuery
+                    ? Math.min(MAX_RETRIEVAL_TOP_K, Math.max(effectiveTopK * 3, effectiveTopK))
+                    : effectiveTopK;
+                const rawHits = await vectorAdapter.search({
+                    queryText: rankingQueryText,
+                    ...(options?.spaceChatId ? { spaceChatId: options.spaceChatId } : {}),
+                    anchorSpaceId: cleanSpaceId,
+                    chatAudience: roomBand ?? (callerCanSeeTeam ? 'Team' : 'Shared'),
+                    allowedSpaces,
+                    allowedBandsBySpaceId: allowedBandsBySpace,
+                    allowedSpaceItemIds,
+                    audienceUserIds: principalIds,
+                    ...(options?.audienceUsers ? { audienceUsers: options.audienceUsers } : {}),
+                    topK: vectorFetchTopK,
+                    user,
+                    provider,
+                });
+                const bestScoreById = new Map<string, number>();
+                for (const hit of rawHits) {
+                    const normId = (parseUuid(hit.spaceItemId) ?? hit.spaceItemId).toLowerCase();
+                    if (!allowedSpaceItemIds.has(normId)) continue;
+                    const prev = bestScoreById.get(normId);
+                    if (prev === undefined || hit.score > prev) {
+                        bestScoreById.set(normId, hit.score);
+                    }
+                }
+                if (bestScoreById.size > 0) {
+                    const hitRows: Array<{ row: PreFilteredSpaceItem; score: number }> = [];
+                    for (const [id, score] of bestScoreById.entries()) {
+                        const row = inScopeRowById.get(id);
+                        if (row) hitRows.push({ row, score });
+                    }
+                    hitRows.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.row.originalIndex - b.row.originalIndex));
+                    const topHitRows = hitRows.slice(0, vectorFetchTopK);
+                    const matchedRows = topHitRows.map((h) => h.row);
+                    const matchedItemIds = matchedRows.map((r) => r.raw.ID);
+                    const matchedTaskIds = matchedRows
+                        .filter((r) => r.entityName === TASKS_ENTITY && r.cleanTargetRecordId != null)
+                        .map((r) => r.cleanTargetRecordId!);
+
+                    const [targetNames, chunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
+                        loadTargetMetadataMap(provider, rvUser, user, matchedRows),
+                        loadChunksBySpaceItemId(provider, rvUser, user, matchedItemIds),
+                        loadTaskAssigneesByTaskId(provider, rvUser, user, matchedTaskIds),
+                    ]);
+
+                    const vectorCandidates: RankedCandidateOutcome<SpaceAgentCandidateItem>[] = topHitRows.map(({ row, score }) => {
+                        const normId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
+                        const chunkTexts = chunksBySpaceItemId.get(normId);
+                        const assignees = row.cleanTargetRecordId ? assigneesByTaskId.Get(row.cleanTargetRecordId) : undefined;
+                        return {
+                            item: buildCandidateItem(row, targetNames.get(row.targetKey), chunkTexts, assignees, true),
+                            score,
+                            rankingMode: 'vector',
+                            originalIndex: row.originalIndex,
+                        };
+                    });
+
+                    const queryLower = explicitFilterQuery.toLowerCase();
+                    const filteredVectorCandidates = explicitFilterQuery
+                        ? vectorCandidates.filter((c) => matchesExplicitQuery(c.item, queryLower))
+                        : vectorCandidates;
+
+                    if (filteredVectorCandidates.length > 0) {
+                        rankedCandidates = filteredVectorCandidates.slice(0, effectiveTopK);
+                        rankingMode = 'vector';
+                        vectorSearchUsed = true;
+                    }
+                }
+            } catch (vectorErr) {
+                LogError(`resolveSpaceAgentRetrieval vector search failed; falling back to lexical ranking: ${vectorErr instanceof Error ? vectorErr.message : String(vectorErr)}`);
             }
         }
+    }
 
-        candidateItems.push(item);
-        decisions.push({ item, allowed: entry.allowed, reason: entry.reason });
-        if (entry.allowed) {
-            quotedItems.push(item);
+    // Path B: Deterministic BM25 lexical fallback (or unqueried bounded top-k)
+    if (!vectorSearchUsed && inScopeRows.length > 0) {
+        const targetNames = await loadTargetMetadataMap(provider, rvUser, user, inScopeRows);
+
+        if (inScopeRows.length <= SMALL_SPACE_FULL_ENRICHMENT_LIMIT) {
+            const allowedItemIds = inScopeRows.map((r) => r.raw.ID);
+            const allowedTaskIds = inScopeRows
+                .filter((r) => r.entityName === TASKS_ENTITY && r.cleanTargetRecordId != null)
+                .map((r) => r.cleanTargetRecordId!);
+
+            const [chunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
+                loadChunksBySpaceItemId(provider, rvUser, user, allowedItemIds),
+                loadTaskAssigneesByTaskId(provider, rvUser, user, allowedTaskIds),
+            ]);
+
+            const enrichedItems: RankableSpaceItem<SpaceAgentCandidateItem>[] = inScopeRows.map((row) => {
+                const normId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
+                const chunkTexts = chunksBySpaceItemId.get(normId);
+                const assignees = row.cleanTargetRecordId ? assigneesByTaskId.Get(row.cleanTargetRecordId) : undefined;
+                return {
+                    item: buildCandidateItem(row, targetNames.get(row.targetKey), chunkTexts, assignees, true),
+                    originalIndex: row.originalIndex,
+                };
+            });
+
+            if (rankingQueryText.length > 0) {
+                const lexicalScores = scoreItemsLexically(enrichedItems, rankingQueryText);
+                const queryLower = explicitFilterQuery.toLowerCase();
+                const filtered = explicitFilterQuery
+                    ? enrichedItems.filter((e) => matchesExplicitQuery(e.item, queryLower))
+                    : enrichedItems;
+
+                rankedCandidates = filtered
+                    .map((e) => {
+                        const id = (parseUuid(e.item.ID) ?? e.item.ID).toLowerCase();
+                        return {
+                            item: e.item,
+                            score: lexicalScores.get(id) ?? 0,
+                            rankingMode: 'lexical' as const,
+                            originalIndex: e.originalIndex,
+                        };
+                    })
+                    .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.originalIndex - b.originalIndex));
+                rankingMode = 'lexical';
+            } else {
+                rankedCandidates = enrichedItems.map((e) => ({
+                    item: e.item,
+                    score: 0,
+                    rankingMode: 'none' as const,
+                    originalIndex: e.originalIndex,
+                }));
+                rankingMode = 'none';
+            }
+        } else {
+            // Large library (1,000 .. 50,000+ items):
+            // Discover candidates across the ENTIRE eligible (space, band) corpus including title/description,
+            // chunk text, and task assignees before top-k selection so chunk-only and assignee-only hits
+            // anywhere in a 50,000+ item library are never discarded prior to scoring.
+            const shortlistCap = Math.max(effectiveTopK * 4, 150);
+            let shortlist: Array<{ row: PreFilteredSpaceItem; score: number }> = [];
+            let matchingChunksByItemId = new Map<string, string[]>();
+
+            if (rankingQueryText.length > 0) {
+                const allItemIds = inScopeRows.map((r) => r.raw.ID);
+                const allTaskIds = inScopeRows
+                    .filter((r) => r.entityName === TASKS_ENTITY && r.cleanTargetRecordId != null)
+                    .map((r) => r.cleanTargetRecordId!);
+                const queryTerms = Array.from(new Set(tokenizeForSearch(rankingQueryText)));
+
+                const [discoveredChunksByItemId, assigneesByTaskId] = await Promise.all([
+                    discoverMatchingChunkTextsBySpaceItemId(provider, rvUser, user, allItemIds, queryTerms, explicitFilterQuery),
+                    loadTaskAssigneesByTaskId(provider, rvUser, user, allTaskIds),
+                ]);
+                matchingChunksByItemId = discoveredChunksByItemId;
+
+                const queryLower = explicitFilterQuery.toLowerCase();
+                const discoveredItems: RankableSpaceItem<SpaceAgentCandidateItem>[] = inScopeRows.map((row) => {
+                    const normId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
+                    const chunkTexts = matchingChunksByItemId.get(normId);
+                    const assignees = row.cleanTargetRecordId ? assigneesByTaskId.Get(row.cleanTargetRecordId) : undefined;
+                    return {
+                        item: buildCandidateItem(row, targetNames.get(row.targetKey), chunkTexts, assignees, true),
+                        originalIndex: row.originalIndex,
+                    };
+                });
+
+                const lexicalScores = scoreItemsLexically(discoveredItems, rankingQueryText);
+                const scoredRows: Array<{ row: PreFilteredSpaceItem; score: number }> = [];
+                for (let i = 0; i < inScopeRows.length; i++) {
+                    const item = discoveredItems[i].item;
+                    const id = (parseUuid(item.ID) ?? item.ID).toLowerCase();
+                    const score = lexicalScores.get(id) ?? 0;
+                    if (explicitFilterQuery && !matchesExplicitQuery(item, queryLower)) {
+                        continue;
+                    }
+                    scoredRows.push({ row: inScopeRows[i], score });
+                }
+                scoredRows.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.row.originalIndex - b.row.originalIndex));
+                shortlist = scoredRows.slice(0, shortlistCap);
+                rankingMode = 'lexical';
+            } else {
+                shortlist = inScopeRows.slice(0, effectiveTopK).map((row) => ({ row, score: 0 }));
+                rankingMode = 'none';
+            }
+
+            if (shortlist.length > 0) {
+                const shortlistItemIds = shortlist.map((s) => s.row.raw.ID);
+                const shortlistTaskIds = shortlist
+                    .filter((s) => s.row.entityName === TASKS_ENTITY && s.row.cleanTargetRecordId != null)
+                    .map((s) => s.row.cleanTargetRecordId!);
+
+                const [chunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
+                    loadChunksBySpaceItemId(provider, rvUser, user, shortlistItemIds),
+                    loadTaskAssigneesByTaskId(provider, rvUser, user, shortlistTaskIds),
+                ]);
+
+                const enrichedShortlist: RankableSpaceItem<SpaceAgentCandidateItem>[] = shortlist.map(({ row }) => {
+                    const normId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
+                    const chunkTexts = mergeChunkTexts(matchingChunksByItemId.get(normId), chunksBySpaceItemId.get(normId));
+                    const assignees = row.cleanTargetRecordId ? assigneesByTaskId.Get(row.cleanTargetRecordId) : undefined;
+                    return {
+                        item: buildCandidateItem(row, targetNames.get(row.targetKey), chunkTexts, assignees, true),
+                        originalIndex: row.originalIndex,
+                    };
+                });
+
+                if (rankingQueryText.length > 0) {
+                    const finalScores = scoreItemsLexically(enrichedShortlist, rankingQueryText);
+                    rankedCandidates = enrichedShortlist
+                        .map((e) => {
+                            const id = (parseUuid(e.item.ID) ?? e.item.ID).toLowerCase();
+                            return {
+                                item: e.item,
+                                score: finalScores.get(id) ?? 0,
+                                rankingMode: 'lexical' as const,
+                                originalIndex: e.originalIndex,
+                            };
+                        })
+                        .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.originalIndex - b.originalIndex));
+                } else {
+                    rankedCandidates = enrichedShortlist.map((e) => ({
+                        item: e.item,
+                        score: 0,
+                        rankingMode: 'none' as const,
+                        originalIndex: e.originalIndex,
+                    }));
+                }
+            }
         }
     }
+
+    const budgeted = applyContextTokenBudget(rankedCandidates, {
+        topK: effectiveTopK,
+        maxTokensPerSource: effectiveMaxTokensPerSource,
+        maxContextTokens: effectiveMaxContextTokens,
+        ...(rankingQueryText ? { queryText: rankingQueryText } : {}),
+    });
+
+    const quotedItems = budgeted.items;
+    const candidateItems: SpaceAgentCandidateItem[] = [...quotedItems];
+    const decisions: SpaceAgentRetrievalDecision[] = quotedItems.map((item) => ({
+        item,
+        allowed: true,
+        reason: 'Allowed: item is within effective retrieval scope and readable by caller.',
+    }));
+
+    // Include refused decisions for auditability on small spaces (without chunks/task details)
+    const totalRawCount = inScopeRows.length + excludedRows.length;
+    if (excludedRows.length > 0 && !explicitFilterQuery) {
+        const excludedSample = totalRawCount <= SMALL_SPACE_AUDIT_LIMIT
+            ? excludedRows
+            : excludedRows.slice(0, MAX_LARGE_SPACE_REFUSAL_DECISIONS);
+        const excludedTargets = totalRawCount <= SMALL_SPACE_AUDIT_LIMIT
+            ? await loadTargetMetadataMap(provider, rvUser, user, excludedSample)
+            : new Map<string, TargetMetadata>();
+
+        for (const row of excludedSample) {
+            const refusedItem = buildCandidateItem(row, excludedTargets.get(row.targetKey), undefined, undefined, false);
+            candidateItems.push(refusedItem);
+            decisions.push({ item: refusedItem, allowed: false, reason: row.reason });
+        }
+    }
+
+    const stats: SpaceAgentRetrievalStats = {
+        topKRequested,
+        topKApplied: effectiveTopK,
+        maxTokensPerSource: effectiveMaxTokensPerSource,
+        maxContextTokens: effectiveMaxContextTokens,
+        totalInScopeCount: inScopeRows.length,
+        totalExcludedCount: excludedRows.length,
+        suppliedCount: quotedItems.length,
+        estimatedContextTokens: budgeted.totalEstimatedTokens,
+        rankingMode,
+        vectorSearchUsed,
+        durationMs: Date.now() - startMs,
+    };
 
     return {
         spaceId: cleanSpaceId,
@@ -752,9 +1192,12 @@ export async function resolveSpaceAgentRetrieval(
         callerCanSeeTeam,
         audienceUserIds: principalIds,
         searchedSpaceIds,
+        allowedBandsBySpace,
         candidateItems,
         quotedItems,
         decisions,
+        suppliedSources: budgeted.suppliedSources,
+        stats,
     };
 }
 
@@ -817,24 +1260,29 @@ async function resolveAssigneeNames(
     const tags: Array<'person' | 'user' | 'personByUser' | 'memberByUser'> = [];
     const hasEntity = (name: string): boolean => !!provider.EntityByName(name);
 
-    if (personIds.length > 0 && hasEntity(PEOPLE_ENTITY)) {
+    for (let start = 0; start < personIds.length; start += ID_LOOKUP_BATCH_SIZE) {
+        if (!hasEntity(PEOPLE_ENTITY)) break;
+        const batch = personIds.slice(start, start + ID_LOOKUP_BATCH_SIZE);
         views.push({
             EntityName: PEOPLE_ENTITY,
-            ExtraFilter: `ID IN (${personIds.map((id) => `'${id}'`).join(', ')})`,
+            ExtraFilter: `ID IN (${batch.map((id) => `'${id}'`).join(', ')})`,
             Fields: ['ID', 'DisplayName', 'FirstName', 'LastName', 'PreferredName'],
-            MaxRows: 2000,
+            // row-cap-ok: bounded batch lookup by <= 500 explicit IDs
+            MaxRows: ID_LOOKUP_BATCH_SIZE,
             ResultType: 'simple',
         });
         tags.push('person');
     }
-    if (userIds.length > 0) {
-        const userIn = userIds.map((id) => `'${id}'`).join(', ');
+    for (let start = 0; start < userIds.length; start += ID_LOOKUP_BATCH_SIZE) {
+        const batch = userIds.slice(start, start + ID_LOOKUP_BATCH_SIZE);
+        const userIn = batch.map((id) => `'${id}'`).join(', ');
         if (hasEntity(USERS_ENTITY)) {
             views.push({
                 EntityName: USERS_ENTITY,
                 ExtraFilter: `ID IN (${userIn})`,
                 Fields: ['ID', 'FirstLast', 'Name'],
-                MaxRows: 2000,
+                // row-cap-ok: bounded batch lookup by <= 500 explicit IDs
+                MaxRows: ID_LOOKUP_BATCH_SIZE,
                 ResultType: 'simple',
             });
             tags.push('user');
@@ -844,7 +1292,8 @@ async function resolveAssigneeNames(
                 EntityName: PEOPLE_ENTITY,
                 ExtraFilter: `LinkedUserID IN (${userIn})`,
                 Fields: ['ID', 'LinkedUserID', 'DisplayName', 'FirstName', 'LastName', 'PreferredName'],
-                MaxRows: 2000,
+                // row-cap-ok: bounded batch lookup by <= 500 explicit IDs
+                MaxRows: ID_LOOKUP_BATCH_SIZE,
                 ResultType: 'simple',
             });
             tags.push('personByUser');
@@ -854,6 +1303,7 @@ async function resolveAssigneeNames(
                 EntityName: MEMBERS_ENTITY,
                 ExtraFilter: `UserID IN (${userIn}) AND Status = 'Active'`,
                 Fields: ['UserID', 'User'],
+                // row-cap-ok: bounded batch lookup by <= 500 explicit user IDs
                 MaxRows: 2000,
                 ResultType: 'simple',
             });
@@ -923,21 +1373,45 @@ async function loadTaskAssigneesByTaskId(
     if (uniqueTaskIds.length === 0) return result;
 
     try {
-        const assignRes = await rvUser.RunView<TaskAssignmentRow>(
-            {
+        const rows: TaskAssignmentRow[] = [];
+        const batchParams: RunViewParams[] = [];
+        for (let start = 0; start < uniqueTaskIds.length; start += ID_LOOKUP_BATCH_SIZE) {
+            const batch = uniqueTaskIds.slice(start, start + ID_LOOKUP_BATCH_SIZE);
+            batchParams.push({
                 EntityName: TASK_ASSIGNMENTS_ENTITY,
-                ExtraFilter: `TaskID IN (${uniqueTaskIds.map((id) => `'${id}'`).join(', ')})`,
-                Fields: ['TaskID', 'AssigneeEntityID', 'AssigneeRecordID', 'Status', 'AssignedAt'],
+                ExtraFilter: `TaskID IN (${batch.map((id) => `'${id}'`).join(', ')})`,
+                Fields: ['ID', 'TaskID', 'AssigneeEntityID', 'AssigneeRecordID', 'Status', 'AssignedAt'],
+                // row-cap-ok: falls back to keyset readEveryRow if batch page fills
                 MaxRows: 2000,
                 ResultType: 'simple',
-            },
-            user,
-        );
-        if (!assignRes.Success) {
-            LogError(`resolveSpaceAgentRetrieval task assignments lookup failed: ${assignRes.ErrorMessage}`);
-            return result;
+            });
         }
-        const rows = assignRes.Results ?? [];
+        for (let start = 0; start < batchParams.length; start += RUN_VIEWS_BATCH_CONCURRENCY) {
+            const slice = batchParams.slice(start, start + RUN_VIEWS_BATCH_CONCURRENCY);
+            const results = await rvUser.RunViews(slice, user);
+            for (let i = 0; i < results.length; i++) {
+                const assignRes = results[i];
+                if (!assignRes?.Success) {
+                    LogError(`resolveSpaceAgentRetrieval task assignments lookup failed: ${assignRes?.ErrorMessage}`);
+                    return result;
+                }
+                const pageRows = (assignRes.Results as TaskAssignmentRow[]) ?? [];
+                if (pageRows.length >= 2000) {
+                    const allBatchRows = await readEveryRow<TaskAssignmentRow & { ID?: string | null }>(
+                        rvUser,
+                        {
+                            EntityName: TASK_ASSIGNMENTS_ENTITY,
+                            ExtraFilter: String(slice[i].ExtraFilter ?? ''),
+                            Fields: ['ID', 'TaskID', 'AssigneeEntityID', 'AssigneeRecordID', 'Status', 'AssignedAt'],
+                        },
+                        user,
+                    );
+                    rows.push(...allBatchRows);
+                } else {
+                    rows.push(...pageRows);
+                }
+            }
+        }
         if (rows.length === 0) return result;
 
         const parsed: Array<{ taskId: string; kind: 'person' | 'user'; recordId: string; completed: boolean; assignedAtMs: number }> = [];
@@ -980,10 +1454,242 @@ async function loadTaskAssigneesByTaskId(
                 result.Set(entry.taskId, list);
             }
         }
-    } catch (error: unknown) {
+    } catch (error) {
         LogError(`resolveSpaceAgentRetrieval task assignee lookup failed: ${error instanceof Error ? error.message : String(error)}`);
     }
     return result;
+}
+
+function textMatchesQueryTokens(text: string, queryTerms: readonly string[], explicitFilterLower: string): boolean {
+    const lower = text.toLowerCase();
+    if (explicitFilterLower && lower.includes(explicitFilterLower)) {
+        return true;
+    }
+    if (queryTerms.length === 0) {
+        return false;
+    }
+    const tokens = tokenizeForSearch(lower);
+    if (tokens.length === 0) return false;
+    const tokenSet = new Set(tokens);
+    return queryTerms.some((term) => tokenSet.has(term) || lower.includes(term));
+}
+
+async function resolveSpaceItemContentItemMap(
+    rvUser: RunView,
+    user: UserInfo,
+    validIds: readonly string[],
+): Promise<{ spaceItemIdByCiId: Map<string, string>; ciIds: string[] }> {
+    const spaceItemIdByCiId = new Map<string, string>();
+    const ciIds: string[] = [];
+    if (validIds.length === 0) return { spaceItemIdByCiId, ciIds };
+
+    const erdViewParams: RunViewParams[] = [];
+    for (let start = 0; start < validIds.length; start += ID_LOOKUP_BATCH_SIZE) {
+        const batch = validIds.slice(start, start + ID_LOOKUP_BATCH_SIZE);
+        const recordIdClauses = batch.flatMap((id) => [`'ID|${id}'`, `'${id}'`]).join(', ');
+        erdViewParams.push({
+            EntityName: 'MJ: Entity Record Documents',
+            ExtraFilter: `Entity = '${ITEMS_ENTITY}' AND RecordID IN (${recordIdClauses})`,
+            Fields: ['ID', 'RecordID'],
+            // row-cap-ok: bounded batch lookup by <= 500 explicit SpaceItem IDs
+            MaxRows: 2000,
+            ResultType: 'simple',
+            BypassCache: true,
+        });
+    }
+
+    const erdRows: Array<{ ID: string; RecordID: string }> = [];
+    for (let start = 0; start < erdViewParams.length; start += RUN_VIEWS_BATCH_CONCURRENCY) {
+        const batchResults = await rvUser.RunViews(erdViewParams.slice(start, start + RUN_VIEWS_BATCH_CONCURRENCY), user);
+        for (const erdRes of batchResults) {
+            if (erdRes?.Success && erdRes.Results) {
+                erdRows.push(...(erdRes.Results as Array<{ ID: string; RecordID: string }>));
+            }
+        }
+    }
+    if (erdRows.length === 0) return { spaceItemIdByCiId, ciIds };
+
+    const spaceItemIdByErdId = new Map<string, string>();
+    const erdIds: string[] = [];
+    for (const erd of erdRows) {
+        const erdId = parseUuid(erd.ID);
+        const itemId = parseUuid(cleanRecordId(erd.RecordID));
+        if (erdId && itemId) {
+            spaceItemIdByErdId.set(erdId.toLowerCase(), itemId.toLowerCase());
+            erdIds.push(erdId);
+        }
+    }
+    if (erdIds.length === 0) return { spaceItemIdByCiId, ciIds };
+
+    const ciViewParams: RunViewParams[] = [];
+    for (let start = 0; start < erdIds.length; start += ID_LOOKUP_BATCH_SIZE) {
+        const erdInList = erdIds.slice(start, start + ID_LOOKUP_BATCH_SIZE).map((id) => `'${id}'`).join(', ');
+        ciViewParams.push({
+            EntityName: 'MJ: Content Items',
+            ExtraFilter: `DeleteStatus IS NULL AND (EntityRecordDocumentID IN (${erdInList}) OR RootParentID IN (SELECT ID FROM [__mj].[vwContentItems] WHERE DeleteStatus IS NULL AND EntityRecordDocumentID IN (${erdInList})))`,
+            Fields: ['ID', 'EntityRecordDocumentID', 'RootParentID'],
+            // row-cap-ok: falls back to keyset readEveryRow if batch page fills
+            MaxRows: 2000,
+            ResultType: 'simple',
+            BypassCache: true,
+        });
+    }
+
+    const ciRows: Array<{ ID: string; EntityRecordDocumentID: string | null; RootParentID: string | null }> = [];
+    for (let start = 0; start < ciViewParams.length; start += RUN_VIEWS_BATCH_CONCURRENCY) {
+        const slice = ciViewParams.slice(start, start + RUN_VIEWS_BATCH_CONCURRENCY);
+        const batchResults = await rvUser.RunViews(slice, user);
+        for (let i = 0; i < batchResults.length; i++) {
+            const ciRes = batchResults[i];
+            if (!ciRes?.Success || !ciRes.Results) continue;
+            const pageRows = ciRes.Results as Array<{ ID: string; EntityRecordDocumentID: string | null; RootParentID: string | null }>;
+            if (pageRows.length >= 2000) {
+                const allCiRows = await readEveryRow<{ ID: string; EntityRecordDocumentID: string | null; RootParentID: string | null }>(
+                    rvUser,
+                    {
+                        EntityName: 'MJ: Content Items',
+                        ExtraFilter: String(slice[i].ExtraFilter ?? ''),
+                        Fields: ['ID', 'EntityRecordDocumentID', 'RootParentID'],
+                    },
+                    user,
+                );
+                ciRows.push(...allCiRows);
+            } else {
+                ciRows.push(...pageRows);
+            }
+        }
+    }
+    if (ciRows.length === 0) return { spaceItemIdByCiId, ciIds };
+
+    const erdIdByRootCiId = new Map<string, string>();
+    for (const ci of ciRows) {
+        const ciId = parseUuid(ci.ID);
+        const erdId = ci.EntityRecordDocumentID ? parseUuid(ci.EntityRecordDocumentID) : null;
+        if (ciId && erdId) {
+            erdIdByRootCiId.set(ciId.toLowerCase(), erdId.toLowerCase());
+        }
+    }
+
+    for (const ci of ciRows) {
+        const ciId = parseUuid(ci.ID);
+        if (!ciId) continue;
+        const directErdId = ci.EntityRecordDocumentID ? parseUuid(ci.EntityRecordDocumentID)?.toLowerCase() : null;
+        const rootCiId = ci.RootParentID ? parseUuid(ci.RootParentID)?.toLowerCase() : null;
+        const resolvedErdId = directErdId ?? (rootCiId ? erdIdByRootCiId.get(rootCiId) ?? null : null);
+        const spaceItemId = resolvedErdId ? spaceItemIdByErdId.get(resolvedErdId) : undefined;
+        if (spaceItemId) {
+            spaceItemIdByCiId.set(ciId.toLowerCase(), spaceItemId);
+            ciIds.push(ciId);
+        }
+    }
+
+    return { spaceItemIdByCiId, ciIds };
+}
+
+/**
+ * Discovers in-scope items whose `MJ: Content Item Chunks` match query tokens anywhere across
+ * a large (1,000 .. 50,000+ item) corpus, returning only the matching chunk texts per `SpaceItem.ID`.
+ */
+async function discoverMatchingChunkTextsBySpaceItemId(
+    provider: IMetadataProvider,
+    rvUser: RunView,
+    user: UserInfo,
+    allowedItemIds: readonly string[],
+    queryTerms: readonly string[],
+    explicitFilterQuery: string,
+): Promise<Map<string, string[]>> {
+    const result = new Map<string, string[]>();
+    if (
+        allowedItemIds.length === 0 ||
+        (queryTerms.length === 0 && !explicitFilterQuery) ||
+        typeof provider.EntityByName !== 'function' ||
+        !provider.EntityByName('MJ: Content Item Chunks')
+    ) {
+        return result;
+    }
+
+    const validIds = allowedItemIds.map((id) => parseUuid(id)).filter((id): id is string => !!id);
+    if (validIds.length === 0) return result;
+
+    try {
+        const { spaceItemIdByCiId, ciIds } = await resolveSpaceItemContentItemMap(rvUser, user, validIds);
+        if (ciIds.length === 0) return result;
+
+        // Build safe LIKE predicate from strictly alphanumeric query tokens so SQL returns only matching chunks
+        const safeLikeTokens = queryTerms
+            .map((t) => t.replace(/[^a-z0-9]/gi, ''))
+            .filter((t) => t.length >= 2)
+            .slice(0, 12);
+        const tokenLikeClause = safeLikeTokens.length > 0
+            ? ` AND (${safeLikeTokens.map((t) => `Text LIKE N'%${t}%'`).join(' OR ')})`
+            : '';
+
+        const explicitLower = explicitFilterQuery.toLowerCase();
+        const chunkViewParams: RunViewParams[] = [];
+        for (let start = 0; start < ciIds.length; start += ID_LOOKUP_BATCH_SIZE) {
+            const ciInList = ciIds.slice(start, start + ID_LOOKUP_BATCH_SIZE).map((id) => `'${id}'`).join(', ');
+            chunkViewParams.push({
+                EntityName: 'MJ: Content Item Chunks',
+                ExtraFilter: `DeleteStatus IS NULL AND ContentItemID IN (${ciInList})${tokenLikeClause}`,
+                Fields: ['ID', 'ContentItemID', 'Text', 'Sequence'],
+                OrderBy: 'Sequence ASC',
+                // row-cap-ok: falls back to keyset readEveryRow if batch page fills
+                MaxRows: 2000,
+                ResultType: 'simple',
+                BypassCache: true,
+            });
+        }
+
+        for (let start = 0; start < chunkViewParams.length; start += RUN_VIEWS_BATCH_CONCURRENCY) {
+            const slice = chunkViewParams.slice(start, start + RUN_VIEWS_BATCH_CONCURRENCY);
+            const batchResults = await rvUser.RunViews(slice, user);
+            for (let i = 0; i < batchResults.length; i++) {
+                const chunksRes = batchResults[i];
+                if (!chunksRes?.Success || !chunksRes.Results) continue;
+                let chunkRows = chunksRes.Results as Array<{ ID: string; ContentItemID: string; Text: string | null; Sequence: number }>;
+                if (chunkRows.length >= 2000) {
+                    chunkRows = await readEveryRow<{ ID: string; ContentItemID: string; Text: string | null; Sequence: number }>(
+                        rvUser,
+                        {
+                            EntityName: 'MJ: Content Item Chunks',
+                            ExtraFilter: String(slice[i].ExtraFilter ?? ''),
+                            Fields: ['ID', 'ContentItemID', 'Text', 'Sequence'],
+                        },
+                        user,
+                    );
+                }
+                for (const chunk of chunkRows) {
+                    const ciId = parseUuid(chunk.ContentItemID)?.toLowerCase();
+                    const spaceItemId = ciId ? spaceItemIdByCiId.get(ciId) : undefined;
+                    const normalizedText = typeof chunk.Text === 'string' ? chunk.Text.replace(/\s+/g, ' ').trim() : '';
+                    if (!spaceItemId || !normalizedText) continue;
+                    if (!textMatchesQueryTokens(normalizedText, queryTerms, explicitLower)) continue;
+                    const list = result.get(spaceItemId) ?? [];
+                    list.push(normalizedText);
+                    result.set(spaceItemId, list);
+                }
+            }
+        }
+    } catch (err) {
+        LogError(`resolveSpaceAgentRetrieval large-corpus chunk discovery failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    return result;
+}
+
+function mergeChunkTexts(
+    discovered: readonly string[] | undefined,
+    loaded: readonly string[] | undefined,
+): string[] | undefined {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const chunk of [...(discovered ?? []), ...(loaded ?? [])]) {
+        const trimmed = chunk.trim();
+        if (!trimmed || seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        out.push(trimmed);
+    }
+    return out.length > 0 ? out : undefined;
 }
 
 async function loadChunksBySpaceItemId(
@@ -1007,103 +1713,52 @@ async function loadChunksBySpaceItemId(
     }
 
     try {
-        const recordIdClauses = validIds.flatMap((id) => [`'ID|${id}'`, `'${id}'`]).join(', ');
-        const erdRes = await rvUser.RunView<{ ID: string; RecordID: string }>(
-            {
-                EntityName: 'MJ: Entity Record Documents',
-                ExtraFilter: `Entity = '${ITEMS_ENTITY}' AND RecordID IN (${recordIdClauses})`,
-                Fields: ['ID', 'RecordID'],
-                MaxRows: 2000,
-                ResultType: 'simple',
-                BypassCache: true,
-            },
-            user,
-        );
-        if (!erdRes.Success || !erdRes.Results || erdRes.Results.length === 0) {
+        const { spaceItemIdByCiId, ciIds } = await resolveSpaceItemContentItemMap(rvUser, user, validIds);
+        if (ciIds.length === 0) {
             return result;
         }
 
-        const spaceItemIdByErdId = new Map<string, string>();
-        const erdIdClauses: string[] = [];
-        for (const erd of erdRes.Results) {
-            const erdId = parseUuid(erd.ID);
-            const itemId = parseUuid(cleanRecordId(erd.RecordID));
-            if (erdId && itemId) {
-                spaceItemIdByErdId.set(erdId.toLowerCase(), itemId.toLowerCase());
-                erdIdClauses.push(`'${erdId}'`);
+        for (let start = 0; start < ciIds.length; start += ID_LOOKUP_BATCH_SIZE) {
+            const ciInList = ciIds.slice(start, start + ID_LOOKUP_BATCH_SIZE).map((id) => `'${id}'`).join(', ');
+            const extraFilter = `DeleteStatus IS NULL AND ContentItemID IN (${ciInList})`;
+            const chunksRes = await rvUser.RunView<{ ID: string; ContentItemID: string; Text: string | null; Sequence: number }>(
+                {
+                    EntityName: 'MJ: Content Item Chunks',
+                    ExtraFilter: extraFilter,
+                    Fields: ['ID', 'ContentItemID', 'Text', 'Sequence'],
+                    OrderBy: 'Sequence ASC',
+                    // row-cap-ok: falls back to keyset readEveryRow when batch page fills (>= 2000)
+                    MaxRows: 2000,
+                    ResultType: 'simple',
+                    BypassCache: true,
+                },
+                user,
+            );
+            if (!chunksRes.Success || !chunksRes.Results) {
+                continue;
             }
-        }
-        if (erdIdClauses.length === 0) {
-            return result;
-        }
-
-        const erdInList = erdIdClauses.join(', ');
-        const ciRes = await rvUser.RunView<{ ID: string; EntityRecordDocumentID: string | null; RootParentID: string | null }>(
-            {
-                EntityName: 'MJ: Content Items',
-                ExtraFilter: `DeleteStatus IS NULL AND (EntityRecordDocumentID IN (${erdInList}) OR RootParentID IN (SELECT ID FROM [__mj].[vwContentItems] WHERE DeleteStatus IS NULL AND EntityRecordDocumentID IN (${erdInList})))`,
-                Fields: ['ID', 'EntityRecordDocumentID', 'RootParentID'],
-                MaxRows: 2000,
-                ResultType: 'simple',
-                BypassCache: true,
-            },
-            user,
-        );
-        if (!ciRes.Success || !ciRes.Results || ciRes.Results.length === 0) {
-            return result;
-        }
-
-        const erdIdByRootCiId = new Map<string, string>();
-        for (const ci of ciRes.Results) {
-            const ciId = parseUuid(ci.ID);
-            const erdId = ci.EntityRecordDocumentID ? parseUuid(ci.EntityRecordDocumentID) : null;
-            if (ciId && erdId) {
-                erdIdByRootCiId.set(ciId.toLowerCase(), erdId.toLowerCase());
+            let chunkRows = chunksRes.Results;
+            if (chunkRows.length >= 2000) {
+                chunkRows = await readEveryRow<{ ID: string; ContentItemID: string; Text: string | null; Sequence: number }>(
+                    rvUser,
+                    {
+                        EntityName: 'MJ: Content Item Chunks',
+                        ExtraFilter: extraFilter,
+                        Fields: ['ID', 'ContentItemID', 'Text', 'Sequence'],
+                    },
+                    user,
+                );
+                chunkRows.sort((a, b) => (a.Sequence !== b.Sequence ? a.Sequence - b.Sequence : String(a.ID ?? '').localeCompare(String(b.ID ?? ''))));
             }
-        }
-
-        const spaceItemIdByCiId = new Map<string, string>();
-        const ciIdClauses: string[] = [];
-        for (const ci of ciRes.Results) {
-            const ciId = parseUuid(ci.ID);
-            if (!ciId) continue;
-            const directErdId = ci.EntityRecordDocumentID ? parseUuid(ci.EntityRecordDocumentID)?.toLowerCase() : null;
-            const rootCiId = ci.RootParentID ? parseUuid(ci.RootParentID)?.toLowerCase() : null;
-            const resolvedErdId = directErdId ?? (rootCiId ? erdIdByRootCiId.get(rootCiId) ?? null : null);
-            const spaceItemId = resolvedErdId ? spaceItemIdByErdId.get(resolvedErdId) : undefined;
-            if (spaceItemId) {
-                spaceItemIdByCiId.set(ciId.toLowerCase(), spaceItemId);
-                ciIdClauses.push(`'${ciId}'`);
+            for (const chunk of chunkRows) {
+                const ciId = parseUuid(chunk.ContentItemID)?.toLowerCase();
+                const spaceItemId = ciId ? spaceItemIdByCiId.get(ciId) : undefined;
+                const normalizedText = typeof chunk.Text === 'string' ? chunk.Text.replace(/\s+/g, ' ').trim() : '';
+                if (!spaceItemId || !normalizedText) continue;
+                const list = result.get(spaceItemId) ?? [];
+                list.push(normalizedText);
+                result.set(spaceItemId, list);
             }
-        }
-        if (ciIdClauses.length === 0) {
-            return result;
-        }
-
-        const chunksRes = await rvUser.RunView<{ ID: string; ContentItemID: string; Text: string | null; Sequence: number }>(
-            {
-                EntityName: 'MJ: Content Item Chunks',
-                ExtraFilter: `DeleteStatus IS NULL AND ContentItemID IN (${ciIdClauses.join(', ')})`,
-                Fields: ['ID', 'ContentItemID', 'Text', 'Sequence'],
-                OrderBy: 'Sequence ASC',
-                MaxRows: 2000,
-                ResultType: 'simple',
-                BypassCache: true,
-            },
-            user,
-        );
-        if (!chunksRes.Success || !chunksRes.Results) {
-            return result;
-        }
-
-        for (const chunk of chunksRes.Results) {
-            const ciId = parseUuid(chunk.ContentItemID)?.toLowerCase();
-            const spaceItemId = ciId ? spaceItemIdByCiId.get(ciId) : undefined;
-            const normalizedText = typeof chunk.Text === 'string' ? chunk.Text.replace(/\s+/g, ' ').trim() : '';
-            if (!spaceItemId || !normalizedText) continue;
-            const list = result.get(spaceItemId) ?? [];
-            list.push(normalizedText);
-            result.set(spaceItemId, list);
         }
     } catch (err) {
         LogError(`resolveSpaceAgentRetrieval chunk lookup failed: ${err instanceof Error ? err.message : String(err)}`);

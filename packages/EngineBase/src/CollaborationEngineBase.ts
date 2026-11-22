@@ -21,6 +21,7 @@ import {
     type BaseEntity,
     BaseEngine,
     type BaseEnginePropertyConfig,
+    CompositeKey,
     type IMetadataProvider,
     LogError,
     Metadata,
@@ -33,21 +34,36 @@ import { UUIDsEqual } from '@memberjunction/global';
 import {
     type AgentRetrieval,
     type CollaborationSettings,
+    DEFAULT_COLLABORATION_SETTINGS,
     defaultStatus,
+    type EffectiveSpaceConfiguration,
+    isReceiptAuthorizedByLiveSources,
+    isSourceReceiptBand,
+    type LiveKnowledgeSourceGrantInput,
+    type LiveReceiptSourceSnapshot,
+    type LiveSpaceChainNodeInput,
+    type LiveSpaceTypeConfigInput,
     type MemberSnapshot,
     membershipReaches,
     MissingAppSettingsError,
+    normalizeReceiptUuid,
     type ResolvedCollaborationSettings,
+    resolveEffectiveKnowledgeSourceBandsBySpace,
+    type SourceReceiptBand,
     type SpaceNode,
     type SpaceStatusReach,
+    stripRecordKeyPrefix,
     ValidateCollaborationSettings,
 } from '@mj-biz-apps/collaboration-core';
-import type {
-    mjBizAppsCollaborationSpaceRoleTypeEntity,
-    mjBizAppsCollaborationSpaceTypeEntity,
-    mjBizAppsCollaborationSpaceTypeStatusEntity,
+import {
+    CollaborationClient,
+    hasExecuteGQL,
+    type mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
+    type mjBizAppsCollaborationSpaceRoleTypeEntity,
+    type mjBizAppsCollaborationSpaceTypeEntity,
+    type mjBizAppsCollaborationSpaceTypeStatusEntity,
+    SpaceSubtypeDirectory,
 } from '@mj-biz-apps/collaboration-entities';
-import { SpaceSubtypeDirectory } from '@mj-biz-apps/collaboration-entities';
 import type { MJApplicationSettingEntity } from '@memberjunction/core-entities';
 
 const normalizeKey = (key: string | null | undefined): string => (key ?? '').trim().toLowerCase();
@@ -310,9 +326,9 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             return this.refuseSettings(new MissingAppSettingsError());
         }
 
-        let parsed: unknown;
+        let parsed: object | string | number | boolean | null = null;
         try {
-            parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            parsed = typeof raw === 'string' ? (JSON.parse(raw) as object) : raw;
         } catch (e) {
             const message = `Failed to parse CollaborationSettings JSON: ${e instanceof Error ? e.message : String(e)}`;
             LogError(message);
@@ -634,6 +650,299 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             LogError(`Error resolving the seat of user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
             return null;
         }
+    }
+
+    /**
+     * Loads all source receipts persisted for a space chat conversation using deterministic keyset
+     * pagination (`AfterKey` ordered by `ID ASC`), then sorts by `ConversationDetailID`, `Sequence`, and `ID`.
+     * Validates all UUID inputs before any `RunView` call and enforces read security via the caller's
+     * `UserInfo` and the entity's row-level security filter.
+     */
+    public async LoadSpaceAgentSourceReceiptsForConversation(
+        conversationId: string,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+        options?: {
+            detailIds?: readonly string[];
+            pageSize?: number;
+            activeKnowledgeSourceBandsBySpace?: Readonly<Record<string, Readonly<Record<string, SourceReceiptBand>>>>;
+            resolveSpaceConfiguration?: (spaceId: string) => Promise<EffectiveSpaceConfiguration | null>;
+        },
+    ): Promise<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[]> {
+        const cleanConversationId = normalizeReceiptUuid(conversationId);
+        if (!cleanConversationId || !user) {
+            return [];
+        }
+
+        let detailFilterClause = '';
+        if (options?.detailIds !== undefined) {
+            if (options.detailIds.length === 0) {
+                return [];
+            }
+            const cleanDetailIds: string[] = [];
+            for (const rawId of options.detailIds) {
+                const cleanId = normalizeReceiptUuid(rawId);
+                if (!cleanId) {
+                    LogError(`LoadSpaceAgentSourceReceiptsForConversation rejected invalid ConversationDetailID: ${String(rawId)}`);
+                    return [];
+                }
+                cleanDetailIds.push(cleanId);
+            }
+            detailFilterClause = ` AND ConversationDetailID IN (${cleanDetailIds.map((id) => `'${id}'`).join(', ')})`;
+        }
+
+        const pageSize =
+            typeof options?.pageSize === 'number' && Number.isInteger(options.pageSize) && options.pageSize > 0
+                ? options.pageSize
+                : 500;
+
+        const rv = RunView.FromMetadataProvider(provider ?? Metadata.Provider);
+        const allRows: mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[] = [];
+        const seenIds = new Set<string>();
+        let afterKey: CompositeKey | undefined;
+
+        for (;;) {
+            const result = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Agent Source Receipts',
+                ExtraFilter: `ConversationID = '${cleanConversationId}'${detailFilterClause}`,
+                OrderBy: 'ID ASC',
+                ResultType: 'simple',
+                MaxRows: pageSize,
+                ...(afterKey ? { AfterKey: afterKey } : {}),
+            }, user);
+            if (!result.Success || !result.Results) {
+                LogError(`LoadSpaceAgentSourceReceiptsForConversation failed for ${cleanConversationId}: ${result.ErrorMessage ?? 'unknown error'}`);
+                return [];
+            }
+
+            const pageRows = result.Results;
+            for (const row of pageRows) {
+                const rowId = normalizeReceiptUuid(row.ID);
+                if (rowId) {
+                    if (seenIds.has(rowId)) {
+                        LogError(`LoadSpaceAgentSourceReceiptsForConversation aborted: repeated receipt ID ${rowId} indicates pagination cursor failure.`);
+                        return [];
+                    }
+                    seenIds.add(rowId);
+                }
+                allRows.push(row);
+            }
+
+            if (pageRows.length < pageSize) {
+                break;
+            }
+            const lastRow = pageRows[pageRows.length - 1];
+            const lastId = normalizeReceiptUuid(lastRow?.ID);
+            if (!lastId) {
+                LogError(`LoadSpaceAgentSourceReceiptsForConversation aborted: full page missing valid cursor ID.`);
+                break;
+            }
+            afterKey = CompositeKey.FromID(lastId);
+        }
+
+        allRows.sort((a, b) => {
+            const detailCmp = (a.ConversationDetailID ?? '').localeCompare(b.ConversationDetailID ?? '');
+            if (detailCmp !== 0) return detailCmp;
+            const seqA = typeof a.Sequence === 'number' ? a.Sequence : 0;
+            const seqB = typeof b.Sequence === 'number' ? b.Sequence : 0;
+            if (seqA !== seqB) return seqA - seqB;
+            return (a.ID ?? '').localeCompare(b.ID ?? '');
+        });
+
+        if (allRows.length === 0) {
+            return [];
+        }
+
+        const liveSnapshot: LiveReceiptSourceSnapshot = {};
+        const spaceItemIds = [
+            ...new Set(
+                allRows
+                    .filter((r) => r.SourceKind === 'SpaceItem')
+                    .map((r) => normalizeReceiptUuid(r.SpaceItemID))
+                    .filter((id): id is string => !!id),
+            ),
+        ];
+
+        if (spaceItemIds.length > 0) {
+            const spaceItemsById = new Map<string, { spaceId: string; band: SourceReceiptBand }>();
+            const batchSize = 200;
+            for (let offset = 0; offset < spaceItemIds.length; offset += batchSize) {
+                const batch = spaceItemIds.slice(offset, offset + batchSize);
+                const itemsRes = await rv.RunView<{ ID: string; SpaceID: string; Band: string }>({
+                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                    ExtraFilter: `ID IN (${batch.map((id) => `'${id}'`).join(', ')})`,
+                    Fields: ['ID', 'SpaceID', 'Band'],
+                    ResultType: 'simple',
+                    // row-cap-ok: bounded by deduplicated receipt SpaceItemID batch (<= 200)
+                    MaxRows: batchSize,
+                }, user);
+                if (!itemsRes.Success || !itemsRes.Results) {
+                    LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to verify live Space Items: ${itemsRes.ErrorMessage ?? 'unknown error'}`);
+                    return [];
+                }
+                for (const item of itemsRes.Results) {
+                    const id = normalizeReceiptUuid(item.ID);
+                    const itemSpaceId = normalizeReceiptUuid(item.SpaceID);
+                    if (id && itemSpaceId && isSourceReceiptBand(item.Band)) {
+                        spaceItemsById.set(id, { spaceId: itemSpaceId, band: item.Band });
+                    }
+                }
+            }
+            liveSnapshot.spaceItemsById = spaceItemsById;
+        }
+
+        const knowledgeSpaceIds = [
+            ...new Set(
+                allRows
+                    .filter((r) => r.SourceKind === 'KnowledgeSource')
+                    .map((r) => normalizeReceiptUuid(r.SpaceID))
+                    .filter((id): id is string => !!id),
+            ),
+        ];
+
+        if (knowledgeSpaceIds.length > 0) {
+            if (options?.activeKnowledgeSourceBandsBySpace) {
+                const bySpace = new Map<string, Map<string, SourceReceiptBand>>();
+                for (const [rawSpaceId, rawGrants] of Object.entries(options.activeKnowledgeSourceBandsBySpace)) {
+                    const cleanSpaceId = normalizeReceiptUuid(rawSpaceId);
+                    if (!cleanSpaceId) continue;
+                    const inner = new Map<string, SourceReceiptBand>();
+                    for (const [rawSourceId, grantBand] of Object.entries(rawGrants)) {
+                        const cleanSourceId = normalizeReceiptUuid(rawSourceId);
+                        if (cleanSourceId && isSourceReceiptBand(grantBand)) {
+                            inner.set(cleanSourceId, grantBand);
+                        }
+                    }
+                    bySpace.set(cleanSpaceId, inner);
+                }
+                liveSnapshot.knowledgeSourceBandsBySpace = bySpace;
+            } else {
+                const grantsRes = await rv.RunView<LiveKnowledgeSourceGrantInput>({
+                    EntityName: 'MJ_BizApps_Collaboration: Space Grants',
+                    ExtraFilter: `Kind = 'KnowledgeSource'`,
+                    Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetEntityID', 'TargetRecordID', 'Sequence'],
+                    ResultType: 'simple',
+                    // row-cap-ok: bounded by KnowledgeSource grant configuration catalog
+                    MaxRows: 2000,
+                }, user);
+
+                if (grantsRes.Success && grantsRes.Results) {
+                    const spacesRes = await rv.RunView<LiveSpaceChainNodeInput>({
+                        EntityName: 'MJ_BizApps_Collaboration: Spaces',
+                        Fields: ['ID', 'ParentID', 'SpaceTypeID', 'Configuration'],
+                        ResultType: 'simple',
+                        // row-cap-ok: bounded by space hierarchy for grant inheritance resolution
+                        MaxRows: 2000,
+                    }, user);
+                    if (!spacesRes.Success || !spacesRes.Results) {
+                        LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to read Spaces for grant resolution: ${spacesRes.ErrorMessage ?? 'unknown error'}`);
+                        return [];
+                    }
+
+                    const cachedTypes: LiveSpaceTypeConfigInput[] = this.SpaceTypes.map((st) => ({
+                        ID: st.ID,
+                        Configuration: st.Configuration,
+                    }));
+                    const neededTypeIds = new Set(
+                        spacesRes.Results
+                            .map((s) => normalizeReceiptUuid(s.SpaceTypeID))
+                            .filter((id): id is string => !!id),
+                    );
+                    const cachedTypeIds = new Set(
+                        cachedTypes
+                            .map((t) => normalizeReceiptUuid(t.ID))
+                            .filter((id): id is string => !!id),
+                    );
+                    const hasMissingType = [...neededTypeIds].some((id) => !cachedTypeIds.has(id));
+                    let spaceTypes: LiveSpaceTypeConfigInput[] = cachedTypes;
+                    if (spaceTypes.length === 0 || hasMissingType) {
+                        const typesRes = await rv.RunView<LiveSpaceTypeConfigInput>({
+                            EntityName: 'MJ_BizApps_Collaboration: Space Types',
+                            Fields: ['ID', 'Configuration'],
+                            ResultType: 'simple',
+                            // row-cap-ok: bounded space type catalog
+                            MaxRows: 500,
+                        }, user);
+                        if (typesRes.Success && typesRes.Results) {
+                            spaceTypes = [
+                                ...typesRes.Results,
+                                ...cachedTypes.filter(
+                                    (c) => !typesRes.Results!.some((r) => normalizeReceiptUuid(r.ID) === normalizeReceiptUuid(c.ID)),
+                                ),
+                            ];
+                        }
+                    }
+
+                    let appSettings: CollaborationSettings = DEFAULT_COLLABORATION_SETTINGS;
+                    try {
+                        appSettings = this.CollaborationSettings;
+                    } catch {
+                        // Space Participants cannot read MJ: Application Settings; default settings suffice since App.ListMode is always Extend
+                    }
+
+                    liveSnapshot.knowledgeSourceBandsBySpace = resolveEffectiveKnowledgeSourceBandsBySpace({
+                        spaceIds: knowledgeSpaceIds,
+                        spaces: spacesRes.Results,
+                        grants: grantsRes.Results,
+                        spaceTypes,
+                        appSettings,
+                    });
+                } else {
+                    const errMsg = grantsRes.ErrorMessage ?? 'unknown error';
+                    const isPermissionDenied = /permission|denied|does not have read|unauthorized/i.test(errMsg);
+                    const md = provider ?? Metadata.Provider;
+                    const canResolveViaServer = Boolean(options?.resolveSpaceConfiguration) || hasExecuteGQL(md);
+                    if (!isPermissionDenied && !canResolveViaServer) {
+                        LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to verify Space Grants: ${errMsg}`);
+                        return [];
+                    }
+
+                    const bySpace = new Map<string, Map<string, SourceReceiptBand>>();
+                    const client = hasExecuteGQL(md) ? new CollaborationClient(md) : null;
+                    for (const sid of knowledgeSpaceIds) {
+                        let resolvedCfg: EffectiveSpaceConfiguration | null = null;
+                        try {
+                            if (options?.resolveSpaceConfiguration) {
+                                resolvedCfg = await options.resolveSpaceConfiguration(sid);
+                            } else if (client) {
+                                const payload = await client.GetSpaceConfiguration(sid);
+                                if (payload.Success && payload.ConfigurationJSON) {
+                                    resolvedCfg = JSON.parse(payload.ConfigurationJSON) as EffectiveSpaceConfiguration;
+                                }
+                            }
+                        } catch (cfgErr) {
+                            LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to resolve configuration for space ${sid}: ${cfgErr instanceof Error ? cfgErr.message : String(cfgErr)}`);
+                        }
+                        if (resolvedCfg?.Grants?.KnowledgeSource) {
+                            const inner = new Map<string, SourceReceiptBand>();
+                            for (const grant of resolvedCfg.Grants.KnowledgeSource) {
+                                const cid = normalizeReceiptUuid(stripRecordKeyPrefix(grant.TargetRecordID));
+                                if (cid && isSourceReceiptBand(grant.Band)) {
+                                    inner.set(cid, grant.Band);
+                                }
+                            }
+                            bySpace.set(sid, inner);
+                        }
+                    }
+                    // Fail closed: always assign the resolved map (even empty) so unverified KnowledgeSource receipts are never admitted
+                    liveSnapshot.knowledgeSourceBandsBySpace = bySpace;
+                }
+            }
+        }
+
+        return allRows.filter((row) => {
+            if (!isSourceReceiptBand(row.Band)) return false;
+            return isReceiptAuthorizedByLiveSources(
+                {
+                    spaceId: row.SpaceID,
+                    sourceKind: row.SourceKind,
+                    spaceItemId: row.SpaceItemID,
+                    contentSourceId: row.ContentSourceID,
+                    band: row.Band,
+                },
+                liveSnapshot,
+            );
+        });
     }
 }
 

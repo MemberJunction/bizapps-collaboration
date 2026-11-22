@@ -8,7 +8,8 @@ import { EXPLICIT_ASK_MARKER, executeSpaceChatTurn, type ExecuteSpaceChatTurnInp
 import { COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES, evaluateParticipantAIRunWriteAccess } from '../dist/ai-run-lockdown.js';
 import { PARTICIPANT_ROLE_ID } from '../dist/task-attribution.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
-import { COLLABORATION_SPACE_SCOPE_ID } from '../dist/turn-tools.js';
+import { COLLABORATION_SPACE_SCOPE_ID, type SpaceTurnContext } from '../dist/turn-tools.js';
+import { recordScopedSearchHitsOnContext } from '../dist/CollaborationScopedSearchAction.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
@@ -18,7 +19,7 @@ import { seedAppSettings } from './app-settings.test-support.ts';
 function mockResult<T>(results: readonly object[]): RunViewResult<T> {
     return {
         Success: true,
-        Results: results as unknown as T[],
+        Results: (results as object) as T[],
         RowCount: results.length,
         TotalRowCount: results.length,
         ExecutionTime: 0,
@@ -28,7 +29,7 @@ function mockResult<T>(results: readonly object[]): RunViewResult<T> {
 
 /** A stand-in for an entity or engine object the code under test only reads a few members of. */
 function stubOf<T>(value: object): T {
-    return value as unknown as T;
+    return value as T;
 }
 
 describe('executeSpaceChatTurn', () => {
@@ -44,6 +45,14 @@ describe('executeSpaceChatTurn', () => {
     const TYPE_ID = '88888888-8888-4888-8888-888888888888';
     const ALLOWED_AGENT_ID = '9e6d761a-197a-40af-995b-3d3dd9bd7b9e';
     const DISALLOWED_AGENT_ID = '99999999-9999-4999-8999-999999999999';
+    const RUN_MOCKED_1 = '99000000-0000-4000-8000-000000000001';
+    const RUN_MOCKED_2 = '99000000-0000-4000-8000-000000000002';
+    const RUN_BG_1 = '99000000-0000-4000-8000-000000000003';
+    const SPACE_CHAT_1 = '99000000-0000-4000-8000-000000000010';
+    let replyUuidSeq = 0;
+    let runUuidSeq = 0;
+    const nextReplyUuid = (): string => `99000000-0001-4000-8000-${String(++replyUuidSeq).padStart(12, '0')}`;
+    const nextRunUuid = (): string => `99000000-0002-4000-8000-${String(++runUuidSeq).padStart(12, '0')}`;
 
     const callerUser = { ID: CALLER_ID, Name: 'Caller' } as UserInfo;
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
@@ -55,7 +64,7 @@ describe('executeSpaceChatTurn', () => {
     let origResolveSpaceAndType: typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
     before(() => {
         origResolveSpaceAndType = ServerDriverRegistry.Instance.ResolveSpaceAndType.bind(ServerDriverRegistry.Instance);
-        ServerDriverRegistry.Instance.ResolveSpaceAndType = (() => resolveDriver()) as unknown as typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = stubOf<typeof ServerDriverRegistry.Instance.ResolveSpaceAndType>(() => resolveDriver());
         restoreAppSettings = seedAppSettings();
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
@@ -64,14 +73,14 @@ describe('executeSpaceChatTurn', () => {
         origRunAgent = AgentRunner.prototype.RunAgent;
         AgentRunner.prototype.RunAgent = async (params) => {
             const run = {
-                ID: 'run-mocked-1',
+                ID: RUN_MOCKED_1,
                 Message: 'Mocked agent response',
                 Result: 'Mocked agent response',
                 Status: 'Completed',
                 ExternalReferenceID: params.conversationDetailId,
             };
             if (typeof params.onAgentRunCreated === 'function') {
-                await params.onAgentRunCreated('run-mocked-1');
+                await params.onAgentRunCreated(RUN_MOCKED_1);
             }
             return {
                 success: true,
@@ -206,7 +215,7 @@ describe('executeSpaceChatTurn', () => {
                         LatestResult: { CompleteMessage: '' },
                         serverAuthoredReplyMarked: false,
                         NewRecord() {
-                            this.ID = 'reply-detail-' + Math.random().toString(36).slice(2);
+                            this.ID = nextReplyUuid();
                             this.serverAuthoredReplyMarked = false;
                         },
                         MarkServerAuthoredReply() {
@@ -238,7 +247,7 @@ describe('executeSpaceChatTurn', () => {
                         Success: true,
                         Result: null as string | null,
                         NewRecord() {
-                            this.ID = 'run-' + Math.random().toString(36).slice(2);
+                            this.ID = nextRunUuid();
                         },
                         async Load(id: string) {
                             this.ID = id;
@@ -317,7 +326,7 @@ describe('executeSpaceChatTurn', () => {
                     }
                     return mockResult<T>([
                         {
-                            ID: 'mem-1',
+                            ID: '99000000-0003-4000-8000-000000000001',
                             SpaceID: SPACE_ID,
                             UserID: CALLER_ID,
                             Status: 'Active',
@@ -382,7 +391,7 @@ describe('executeSpaceChatTurn', () => {
                     }
                     return mockResult<T>([
                         {
-                            ID: 'chat-1',
+                            ID: SPACE_CHAT_1,
                             ConversationID: CONVERSATION_ID,
                             Kind: 'General',
                             Status: 'Active',
@@ -837,10 +846,10 @@ describe('executeSpaceChatTurn', () => {
             ],
         });
 
-        let capturedMessages: Array<{ role: string; content: unknown }> | undefined;
+        let capturedMessages: Array<{ role: string; content: string | object | null | undefined }> | undefined;
         const heldRunAgent = AgentRunner.prototype.RunAgent;
         AgentRunner.prototype.RunAgent = async (params) => {
-            capturedMessages = (params.conversationMessages ?? []) as Array<{ role: string; content: unknown }>;
+            capturedMessages = (params.conversationMessages ?? []) as Array<{ role: string; content: string | object | null | undefined }>;
             return heldRunAgent.call(AgentRunner.prototype, params) as never;
         };
 
@@ -942,10 +951,10 @@ describe('executeSpaceChatTurn', () => {
         const provider = createMockProvider({
             messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`,
         });
-        let capturedRunParams: Record<string, unknown> | undefined;
+        let capturedRunParams: { Audience?: { Mode: string; UserIDs: string[] } } | undefined;
         const heldRunAgent = AgentRunner.prototype.RunAgent;
         AgentRunner.prototype.RunAgent = async (params) => {
-            capturedRunParams = params as unknown as Record<string, unknown>;
+            capturedRunParams = stubOf<{ Audience?: { Mode: string; UserIDs: string[] } }>(params);
             return heldRunAgent.call(AgentRunner.prototype, params) as never;
         };
         let result: Awaited<ReturnType<typeof executeSpaceChatTurn>>;
@@ -994,11 +1003,11 @@ describe('executeSpaceChatTurn', () => {
     });
 
     /** Runs a turn with the agent runner watched: what the run was given, or undefined when no run was started. */
-    async function runWatchedTurn(provider: MockMetadataProvider, input: ExecuteSpaceChatTurnInput): Promise<{ result: Awaited<ReturnType<typeof executeSpaceChatTurn>>; runParams: Record<string, unknown> | undefined }> {
-        let runParams: Record<string, unknown> | undefined;
+    async function runWatchedTurn(provider: MockMetadataProvider, input: ExecuteSpaceChatTurnInput): Promise<{ result: Awaited<ReturnType<typeof executeSpaceChatTurn>>; runParams: { Audience?: { Mode: string; UserIDs: string[] } } | undefined }> {
+        let runParams: { Audience?: { Mode: string; UserIDs: string[] } } | undefined;
         const heldRunAgent = AgentRunner.prototype.RunAgent;
         AgentRunner.prototype.RunAgent = async (params) => {
-            runParams = params as unknown as Record<string, unknown>;
+            runParams = stubOf<{ Audience?: { Mode: string; UserIDs: string[] } }>(params);
             return heldRunAgent.call(AgentRunner.prototype, params) as never;
         };
         try {
@@ -1133,8 +1142,8 @@ describe('executeSpaceChatTurn', () => {
         AgentRunner.prototype.RunAgent = async (params) => {
             runs++;
             await new Promise((resolve) => setTimeout(resolve, 25));
-            if (typeof params.onAgentRunCreated === 'function') await params.onAgentRunCreated('run-mocked-2');
-            return { success: true, agentRun: stubOf<MJAIAgentRunEntityExtended>({ ID: 'run-mocked-2', Message: 'Mocked agent response' }), result: 'Mocked agent response' };
+            if (typeof params.onAgentRunCreated === 'function') await params.onAgentRunCreated(RUN_MOCKED_2);
+            return { success: true, agentRun: stubOf<MJAIAgentRunEntityExtended>({ ID: RUN_MOCKED_2, Message: 'Mocked agent response' }), result: 'Mocked agent response' };
         };
         try {
             const provider = createMockProvider({ messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space` });
@@ -1159,11 +1168,11 @@ describe('executeSpaceChatTurn', () => {
         const MENTION = `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`;
         /** A run that waits at the gate, so a test can look at the turn while the agent is still working. */
         const gatedRun = (gate: Promise<void>, seen: { progress: string[]; streamed: string[] }) => async (params: Parameters<AgentRunner['RunAgent']>[0]) => {
-            if (typeof params.onAgentRunCreated === 'function') await params.onAgentRunCreated('run-bg-1');
+            if (typeof params.onAgentRunCreated === 'function') await params.onAgentRunCreated(RUN_BG_1);
             params.onProgress?.({ step: 'prompt_execution', message: 'Thinking it over' });
             params.onStreaming?.({ content: 'Partial words', isComplete: false });
             await gate;
-            return { success: true, agentRun: stubOf<MJAIAgentRunEntityExtended>({ ID: 'run-bg-1', Message: 'The final answer' }), result: 'The final answer' };
+            return { success: true, agentRun: stubOf<MJAIAgentRunEntityExtended>({ ID: RUN_BG_1, Message: 'The final answer' }), result: 'The final answer' };
         };
 
         it('answers with the In-Progress reply before the agent is done, hands progress and text to the observer, and tells it the end', async () => {
@@ -1200,7 +1209,7 @@ describe('executeSpaceChatTurn', () => {
                 const finalReply = provider.savedDetails[provider.savedDetails.length - 1];
                 assert.equal(finalReply.Status, 'Complete');
                 assert.equal(finalReply.Message, 'The final answer');
-                assert.deepEqual(outcomes, [{ replyDetailId: result.ok ? result.replyDetailIds[0] : '', success: true, runId: 'run-bg-1' }]);
+                assert.deepEqual(outcomes, [{ replyDetailId: result.ok ? result.replyDetailIds[0] : '', success: true, runId: RUN_BG_1 }]);
             } finally {
                 AgentRunner.prototype.RunAgent = held;
             }
@@ -1261,7 +1270,7 @@ describe('executeSpaceChatTurn', () => {
         assert.equal(outcomes[0].replyDetailId, started.ok ? started.replyDetailIds[0] : '');
         assert.match(outcomes[0].errorMessage ?? '', /could not be reached/);
         // The run had finished before the throw, so the failure carries it: the chat reads a completion's run
-        assert.equal(outcomes[0].runId, 'run-mocked-1', 'the failure names the run that finished');
+        assert.equal(outcomes[0].runId, RUN_MOCKED_1, 'the failure names the run that finished');
         assert.equal(outcomes[0].hasResult, true, 'and carries its result');
         assert.equal(background.savedDetails[background.savedDetails.length - 1].Status, 'Error', 'the row is marked Error, not left In-Progress');
         // The claim is released: a later call for the same message is judged again
@@ -1450,6 +1459,222 @@ describe('executeSpaceChatTurn', () => {
                 evaluateParticipantAIRunWriteAccess(entityName, 'save', participantCaller),
                 `Caller must be locked down again once executeSpaceChatTurn returns (${entityName})`
             );
+        }
+    });
+
+    it('records tool-retrieved in-reach sources alongside cited receipts while rejecting out-of-reach tool hits and excluding un-retrieved static KnowledgeSource grants (CR-6)', async () => {
+        const ITEM_TOP1 = 'aa100000-0000-4000-8000-000000000001';
+        const ITEM_TOOL_HIT = 'aa100000-0000-4000-8000-000000000002';
+        const ITEM_OUT_OF_REACH_TEAM = 'aa100000-0000-4000-8000-000000000003';
+        const FILE_ENTITY_ID = 'bb100000-0000-4000-8000-000000000001';
+        const FILE_1 = 'cc100000-0000-4000-8000-000000000001';
+        const FILE_2 = 'cc100000-0000-4000-8000-000000000002';
+        const FILE_3 = 'cc100000-0000-4000-8000-000000000003';
+        const STATIC_KNOWLEDGE_ID = 'dd100000-0000-4000-8000-000000000001';
+
+        const baseProvider = createMockProvider({
+            messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize top calibration item`,
+        });
+        const baseRunView = stubOf<IRunViewProvider>(baseProvider);
+        const persistedReceiptRows: Array<Record<string, string | number | boolean | null>> = [];
+
+        const cr6ProviderObj: Partial<IMetadataProvider & IRunViewProvider> = {
+            ...baseProvider,
+            EntityByID(id: string): EntityInfo | undefined {
+                if (id.toLowerCase() === FILE_ENTITY_ID) {
+                    return { ID: FILE_ENTITY_ID, Name: 'MJ: Files' } as Partial<EntityInfo> as EntityInfo;
+                }
+                return baseProvider.EntityByID(id);
+            },
+            EntityByName(name: string): EntityInfo | undefined {
+                if (name === 'MJ: Files' || name === 'MJ: Content Sources') {
+                    return { Name: name } as Partial<EntityInfo> as EntityInfo;
+                }
+                return baseProvider.EntityByName(name);
+            },
+            GetEntityObject: (async <T extends import('@memberjunction/core').BaseEntity>(
+                entityName: string,
+                loadKeyOrUser?: UserInfo,
+                contextUserArg?: UserInfo,
+            ): Promise<T> => {
+                if (entityName === 'MJ_BizApps_Collaboration: Space Agent Source Receipts') {
+                    const row: Record<string, string | number | boolean | null | (() => boolean) | (() => Promise<boolean>)> = {
+                        ID: nextReplyUuid(),
+                        NewRecord() {
+                            return true;
+                        },
+                        async Load() {
+                            return true;
+                        },
+                        async Save() {
+                            const snapshot: Record<string, string | number | boolean | null> = {};
+                            for (const [k, v] of Object.entries(row)) {
+                                if (typeof v !== 'function') snapshot[k] = v;
+                            }
+                            persistedReceiptRows.push(snapshot);
+                            return true;
+                        },
+                    };
+                    return stubOf<T>(row);
+                }
+                if (contextUserArg !== undefined) {
+                    return baseProvider.GetEntityObject<T>(
+                        entityName,
+                        stubOf<import('@memberjunction/core').CompositeKey>(loadKeyOrUser as object),
+                        contextUserArg,
+                    );
+                }
+                return baseProvider.GetEntityObject<T>(entityName, loadKeyOrUser);
+            }) as IMetadataProvider['GetEntityObject'],
+            async RunView<T>(params: RunViewParams, userArg?: UserInfo): Promise<RunViewResult<T>> {
+                const entity = params.EntityName ?? '';
+                const filter = String(params.ExtraFilter ?? '');
+                if (entity === 'MJ_BizApps_Collaboration: Space Grants') {
+                    return mockResult<T>([
+                        {
+                            ID: '10100000-0000-4000-8000-000000000001',
+                            Kind: 'Agent',
+                            Mode: 'Extend',
+                            Band: 'Shared',
+                            TargetEntityID: 'E-AGENTS',
+                            Sequence: 0,
+                            TargetRecordID: ALLOWED_AGENT_ID,
+                            SpaceTypeID: null,
+                            SpaceID: SPACE_ID,
+                            IsDefault: true,
+                        },
+                        {
+                            ID: '10100000-0000-4000-8000-000000000002',
+                            Kind: 'KnowledgeSource',
+                            Mode: 'Extend',
+                            Band: 'Shared',
+                            TargetEntityID: 'E-SOURCES',
+                            Sequence: 1,
+                            TargetRecordID: STATIC_KNOWLEDGE_ID,
+                            SpaceTypeID: null,
+                            SpaceID: SPACE_ID,
+                            IsDefault: false,
+                        },
+                    ]);
+                }
+                if (entity === 'MJ: Content Sources') {
+                    return mockResult<T>([
+                        { ID: STATIC_KNOWLEDGE_ID, Name: 'Unretrieved Knowledge Grant' },
+                    ]);
+                }
+                if (entity === 'MJ_BizApps_Collaboration: Space Items') {
+                    const allItems = [
+                        { ID: ITEM_TOP1, SpaceID: SPACE_ID, EntityID: FILE_ENTITY_ID, RecordID: FILE_1, Band: 'Shared' },
+                        { ID: ITEM_TOOL_HIT, SpaceID: SPACE_ID, EntityID: FILE_ENTITY_ID, RecordID: FILE_2, Band: 'Shared' },
+                        { ID: ITEM_OUT_OF_REACH_TEAM, SpaceID: SPACE_ID, EntityID: FILE_ENTITY_ID, RecordID: FILE_3, Band: 'Team' },
+                    ];
+                    if (filter.includes("Band = 'Shared'")) {
+                        return mockResult<T>(allItems.filter((i) => i.Band === 'Shared'));
+                    }
+                    if (/\bID IN \(/i.test(filter)) {
+                        return mockResult<T>(allItems.filter((i) => filter.toLowerCase().includes(i.ID.toLowerCase())));
+                    }
+                    return mockResult<T>(allItems);
+                }
+                if (entity === 'MJ: Files') {
+                    return mockResult<T>([
+                        { ID: FILE_1, Name: 'calibration-summary-alpha.pdf', Description: 'calibration alpha primary', ContentType: 'application/pdf' },
+                        { ID: FILE_2, Name: 'secondary-addendum.pdf', Description: 'routine appendix discovered via scoped search tool', ContentType: 'application/pdf' },
+                        { ID: FILE_3, Name: 'team-secret-board-notes.pdf', Description: 'confidential team memo', ContentType: 'application/pdf' },
+                    ]);
+                }
+                return baseRunView.RunView<T>(params, userArg);
+            },
+            async RunViews<T>(paramsList: RunViewParams[], userArg?: UserInfo): Promise<RunViewResult<T>[]> {
+                return Promise.all(paramsList.map((p) => cr6ProviderObj.RunView!<T>(p, userArg)));
+            },
+        };
+
+        const prevRunAgent = AgentRunner.prototype.RunAgent;
+        const runId = nextRunUuid();
+        AgentRunner.prototype.RunAgent = async <C, R>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> => {
+            // Simulate an in-turn Scoped Search tool call discovering ITEM_TOOL_HIT (outside topK=1)
+            // plus an out-of-reach Team item ITEM_OUT_OF_REACH_TEAM (in a General/Shared chat).
+            const ctx = params.context as SpaceTurnContext | undefined;
+            if (ctx) {
+                recordScopedSearchHitsOnContext(
+                    {
+                        Context: ctx,
+                        RunScope: {
+                            PrimaryScopeRecordID: SPACE_ID,
+                            SearchScopeIDs: [COLLABORATION_SPACE_SCOPE_ID],
+                        },
+                    },
+                    {
+                        Success: true,
+                        ResultCode: 'SUCCESS',
+                        Params: [
+                            {
+                                Name: 'Results',
+                                Type: 'Output',
+                                Value: [
+                                    { EntityName: 'MJ_BizApps_Collaboration: Space Items', RecordID: ITEM_TOOL_HIT, Score: 0.94 },
+                                    { EntityName: 'MJ_BizApps_Collaboration: Space Items', RecordID: ITEM_OUT_OF_REACH_TEAM, Score: 0.99 },
+                                ],
+                            },
+                        ],
+                    },
+                );
+            }
+            if (typeof params.onAgentRunCreated === 'function') {
+                await params.onAgentRunCreated(runId);
+            }
+            const replyText =
+                `Verified addendum [source:${ITEM_TOOL_HIT}] and blocked ref [source:${ITEM_OUT_OF_REACH_TEAM}].`;
+            const runObj = {
+                ID: runId,
+                Message: replyText,
+                Result: replyText,
+                Status: 'Completed',
+                ExternalReferenceID: params.conversationDetailId,
+            };
+            return {
+                success: true,
+                agentRun: stubOf<MJAIAgentRunEntityExtended>(runObj),
+            };
+        };
+
+        try {
+            const turnResult = await executeSpaceChatTurn(
+                cr6ProviderObj as IMetadataProvider,
+                callerUser,
+                {
+                    ...defaultInput,
+                    topK: 1,
+                },
+            );
+            assert.equal(turnResult.ok, true, turnResult.ok ? '' : turnResult.message);
+            if (!turnResult.ok) return;
+
+            const receipts = turnResult.sourceReceipts ?? [];
+            const ids = receipts.map((r) => r.spaceItemId?.toLowerCase());
+            assert.ok(ids.includes(ITEM_TOP1), 'Initial top-1 supplied item should have a receipt');
+            assert.ok(ids.includes(ITEM_TOOL_HIT), 'Tool-retrieved in-reach item outside initial top-1 must be recorded as Supplied + Cited');
+            assert.ok(!ids.includes(ITEM_OUT_OF_REACH_TEAM), 'Out-of-reach Team tool hit must be rejected even if cited');
+            assert.equal(
+                receipts.some((r) => r.sourceKind === 'KnowledgeSource'),
+                false,
+                'Un-retrieved static KnowledgeSource grant must NOT be marked Supplied (CR-6)',
+            );
+
+            const toolReceipt = receipts.find((r) => r.spaceItemId?.toLowerCase() === ITEM_TOOL_HIT);
+            assert.equal(toolReceipt?.wasSupplied, true);
+            assert.equal(toolReceipt?.wasCited, true);
+            assert.equal(toolReceipt?.citationOrdinal, 1);
+
+            const persistedTool = persistedReceiptRows.find(
+                (r) => String(r['SpaceItemID'] ?? '').toLowerCase() === ITEM_TOOL_HIT,
+            );
+            assert.ok(persistedTool, 'Tool-hit receipt must be persisted to DB');
+            assert.equal(persistedTool?.['WasSupplied'], true);
+            assert.equal(persistedTool?.['WasCited'], true);
+        } finally {
+            AgentRunner.prototype.RunAgent = prevRunAgent;
         }
     });
 });

@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import {
     BaseEntity,
     BaseEntityResult,
@@ -7,6 +8,7 @@ import {
     ServerOperationScopeManager,
     type UserInfo,
 } from '@memberjunction/core';
+import type { SourceReceiptReachContext } from '@mj-biz-apps/collaboration-core';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import {
     MJAIAgentRunEntityExtended,
@@ -22,6 +24,16 @@ import { isSpaceParticipant } from './task-attribution.js';
 export const COLLABORATION_AGENT_TURN_OPERATION = 'Collaboration.ExecuteSpaceChatTurn';
 
 /**
+ * Server-authority operation key wrapping cascading deletion of source receipts when a SpaceItem is deleted.
+ */
+export const COLLABORATION_ITEM_DELETE_OPERATION = 'Collaboration.SpaceItemCascadeDelete';
+
+/**
+ * Source receipts entity populated server-side at the commit boundary of a Space Chat Turn.
+ */
+export const COLLABORATION_SOURCE_RECEIPT_ENTITY = 'MJ_BizApps_Collaboration: Space Agent Source Receipts';
+
+/**
  * AI execution-history entities guarded against direct or off-turn Space Participant writes.
  */
 export const COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES = [
@@ -32,18 +44,44 @@ export const COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES = [
 
 export type CollaborationAIRunEntityName = typeof COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES[number];
 
+export interface CollaborationTurnAuthorityContext {
+    userId: string;
+    spaceChatId?: string;
+    reachContext?: SourceReceiptReachContext;
+}
+
+const turnAuthorityStorage = new AsyncLocalStorage<CollaborationTurnAuthorityContext>();
+
+/**
+ * Returns the active turn's authority context (userId, optional spaceChatId and reachContext) when executing inside {@link runWithCollaborationAgentTurnAuthority}.
+ */
+export function getCollaborationTurnAuthorityContext(): CollaborationTurnAuthorityContext | undefined {
+    return turnAuthorityStorage.getStore();
+}
+
 /**
  * Executes {@link fn} inside the server-orchestrated Space Chat Turn authority scope for {@link userId}.
  */
-export function runWithCollaborationAgentTurnAuthority<T>(userId: string, fn: () => T): T {
-    return ServerOperationScopeManager.Instance.RunWithAuthority(
-        {
-            operationKey: COLLABORATION_AGENT_TURN_OPERATION,
-            source: 'ServerEngine',
-            allowedEntities: [...COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES],
-            userId,
-        },
-        fn
+export function runWithCollaborationAgentTurnAuthority<T>(
+    userId: string,
+    fn: () => T,
+    options?: { spaceChatId?: string; reachContext?: SourceReceiptReachContext },
+): T {
+    const ctx: CollaborationTurnAuthorityContext = {
+        userId,
+        ...(options?.spaceChatId ? { spaceChatId: options.spaceChatId } : {}),
+        ...(options?.reachContext ? { reachContext: options.reachContext } : {}),
+    };
+    return turnAuthorityStorage.run(ctx, () =>
+        ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: COLLABORATION_AGENT_TURN_OPERATION,
+                source: 'ServerEngine',
+                allowedEntities: [...COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES, COLLABORATION_SOURCE_RECEIPT_ENTITY],
+                userId,
+            },
+            fn
+        ),
     );
 }
 
@@ -72,6 +110,38 @@ export function evaluateParticipantAIRunWriteAccess(
     );
     if (!inAuthorizedTurn) {
         return `Space Participant cannot create or mutate ${entityName} outside an active space chat turn.`;
+    }
+    return null;
+}
+
+/**
+ * Evaluates whether a save or delete on `MJ_BizApps_Collaboration: Space Agent Source Receipts`
+ * is authorized under direct CRUD and Space Chat Turn lockdown rules.
+ */
+export function evaluateParticipantSourceReceiptWriteAccess(
+    action: 'save' | 'delete',
+    actingUser: UserInfo | undefined
+): string | null {
+    const isPrivilegedOwner = actingUser?.Type?.trim() === 'Owner' && !isSpaceParticipant(actingUser);
+    if (ServerOperationScopeManager.Instance.IsInDirectClientCrud()) {
+        if (action === 'delete' && isPrivilegedOwner) {
+            return null;
+        }
+        return `Direct client ${action} on ${COLLABORATION_SOURCE_RECEIPT_ENTITY} is forbidden.`;
+    }
+    if (!actingUser || !isSpaceParticipant(actingUser)) {
+        return null;
+    }
+    if (action === 'delete') {
+        return `Space Participant cannot delete ${COLLABORATION_SOURCE_RECEIPT_ENTITY} records.`;
+    }
+    const inAuthorizedTurn = ServerOperationScopeManager.Instance.IsOperationActive(
+        [COLLABORATION_AGENT_TURN_OPERATION],
+        COLLABORATION_SOURCE_RECEIPT_ENTITY,
+        actingUser
+    );
+    if (!inAuthorizedTurn) {
+        return `Space Participant cannot create or mutate ${COLLABORATION_SOURCE_RECEIPT_ENTITY} outside an authorized space chat turn.`;
     }
     return null;
 }

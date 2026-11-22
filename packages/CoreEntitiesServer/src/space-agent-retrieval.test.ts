@@ -155,13 +155,20 @@ const targetRecords: Record<string, { Name: string; Description: string }> = {
     '11111111-5555-4000-8000-000000000005': { Name: 'archive.zip', Description: 'Closed archive' },
 };
 
+type RetrievalMockCell = string | number | boolean | Date | object | null | undefined;
+type RetrievalMockRow = Record<string, RetrievalMockCell>;
+
+function asTypedStub<T>(obj: object): T {
+    return obj as T;
+}
+
 function createMockProvider(): IMetadataProvider {
-    const mockProvider = {
+    const mockProvider: IMetadataProvider = asTypedStub<IMetadataProvider>({
         async GetEntityObject() {
-            return {
-                RunViewProviderToUse: mockProvider as unknown as IRunViewProvider,
-                ProviderToUse: mockProvider as unknown as IMetadataProvider,
-            } as unknown as BaseEntity;
+            return asTypedStub<BaseEntity>({
+                RunViewProviderToUse: asTypedStub<IRunViewProvider>(mockProvider),
+                ProviderToUse: mockProvider,
+            });
         },
         EntityByID(id: string): EntityInfo | undefined {
             if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) {
@@ -182,14 +189,14 @@ function createMockProvider(): IMetadataProvider {
                 return { Success: true, Results: results, ErrorMessage: '', RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 0 };
             });
         },
-    };
-    return mockProvider as unknown as IMetadataProvider;
+    });
+    return mockProvider;
 }
 
-let mockSpacesOverride: Record<string, unknown>[] | null = null;
-let mockItemsOverride: Record<string, unknown>[] | null = null;
+let mockSpacesOverride: RetrievalMockRow[] | null = null;
+let mockItemsOverride: RetrievalMockRow[] | null = null;
 
-function runSingleView(params: RunViewParams): Record<string, unknown>[] {
+function runSingleView(params: RunViewParams): RetrievalMockRow[] {
     const { EntityName, ExtraFilter } = params;
     const filter = typeof ExtraFilter === 'string' ? ExtraFilter : (ExtraFilter ? String(ExtraFilter) : '');
     if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
@@ -208,16 +215,25 @@ function runSingleView(params: RunViewParams): Record<string, unknown>[] {
         });
     }
     if (EntityName === 'MJ_BizApps_Collaboration: Space Items') {
-        if (mockItemsOverride) return mockItemsOverride;
-        return itemsData.filter((item) => {
+        const after = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
+        const source = mockItemsOverride ?? itemsData.filter((item) => {
             if (filter.includes('SpaceID IN')) {
                 return filter.toLowerCase().includes(item.SpaceID.toLowerCase());
             }
             return true;
         });
+        const filtered = source
+            .filter((item) => {
+                const sid = String((item as { SpaceID?: string }).SpaceID ?? '').toLowerCase();
+                if (filter.includes('SpaceID IN') && !filter.toLowerCase().includes(sid)) return false;
+                return true;
+            })
+            .sort((a, b) => String((a as { ID: string }).ID).localeCompare(String((b as { ID: string }).ID)))
+            .filter((item) => String((item as { ID: string }).ID).toLowerCase() > after);
+        return params.MaxRows ? filtered.slice(0, params.MaxRows) : filtered;
     }
     if (EntityName === 'MJ_BizApps_Collaboration: Space Files') {
-        const matching: Record<string, unknown>[] = [];
+        const matching: RetrievalMockRow[] = [];
         for (const [id, rec] of Object.entries(targetRecords)) {
             if (filter.toLowerCase().includes(id.toLowerCase())) {
                 matching.push({ ID: id, Name: rec.Name, Description: rec.Description });
@@ -347,15 +363,18 @@ describe('resolveSpaceAgentRetrieval', () => {
         }
     });
 
-    it('refuses retrieval if items page comes back full (2000 rows)', async () => {
+    it('pages beyond 2000 items without throwing a 2000-item refusal and bounds output to topK', async () => {
         const user = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
-        const fakeItems = Array.from({ length: 2000 }, () => itemsData[0]);
+        const fakeItems = Array.from({ length: 2500 }, (_, index) => ({
+            ...itemsData[0],
+            ID: `EEEEEEEE-5555-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        }));
         mockItemsOverride = fakeItems;
         try {
-            await assert.rejects(
-                () => resolveSpaceAgentRetrieval(provider, user, CHILD_SPACE_ID),
-                /items page came back full/
-            );
+            const res = await resolveSpaceAgentRetrieval(provider, user, CHILD_SPACE_ID, { topK: 15 });
+            assert.equal(res.quotedItems.length, 15);
+            assert.equal(res.stats?.totalInScopeCount, 2500);
+            assert.equal(res.suppliedSources?.length, 15);
         } finally {
             mockItemsOverride = null;
         }
@@ -659,7 +678,7 @@ describe('resolveSpaceAgentRetrieval', () => {
         const bea = { ID: BEA_ID, Name: 'Bea' } as UserInfo;
         const system = { ID: SYSTEM_USER_ID, Name: 'System' } as UserInfo;
 
-        const uploadAndRetrievalProvider = {
+        const uploadAndRetrievalProvider: IMetadataProvider = asTypedStub<IMetadataProvider>({
             EntityByName(name: string) {
                 if (name === 'MJ: Files') return { ID: REAL_FILES_ENTITY_ID };
                 return undefined;
@@ -667,25 +686,25 @@ describe('resolveSpaceAgentRetrieval', () => {
             EntityByID(id: string): EntityInfo | undefined {
                 const lower = id.toLowerCase();
                 if (lower === REAL_FILES_ENTITY_ID.toLowerCase()) {
-                    return {
+                    return asTypedStub<EntityInfo>({
                         Name: 'MJ: Files',
                         Fields: [{ Name: 'ID' }, { Name: 'Name' }, { Name: 'Description' }, { Name: 'ContentType' }],
-                    } as unknown as EntityInfo;
+                    });
                 }
                 if (lower === TASKS_ENTITY_ID.toLowerCase()) {
-                    return {
+                    return asTypedStub<EntityInfo>({
                         Name: 'MJ_BizApps_Tasks: Tasks',
                         Fields: [{ Name: 'ID' }, { Name: 'Name' }, { Name: 'Description' }],
-                    } as unknown as EntityInfo;
+                    });
                 }
                 return undefined;
             },
             async GetEntityObject(entityName: string) {
                 if (entityName === 'MJ: Artifacts' || entityName === 'MJ: Artifact Versions') {
-                    const values: Record<string, unknown> = {};
-                    return {
+                    const values: RetrievalMockRow = {};
+                    return asTypedStub<BaseEntity>({
                         NewRecord() { return undefined; },
-                        Set(k: string, v: unknown) { values[k] = v; },
+                        Set(k: string, v: RetrievalMockCell) { values[k] = v; },
                         Get(k: string) { return values[k]; },
                         async Save() {
                             seq += 1;
@@ -703,7 +722,7 @@ describe('resolveSpaceAgentRetrieval', () => {
                         async InnerLoad() { return true; },
                         async Delete() { return true; },
                         LatestResult: { CompleteMessage: '' },
-                    } as unknown as BaseEntity;
+                    });
                 }
                 if (entityName === 'MJ_BizApps_Collaboration: Space Items') {
                     const itemObj = {
@@ -729,12 +748,12 @@ describe('resolveSpaceAgentRetrieval', () => {
                         },
                         LatestResult: { CompleteMessage: '' },
                     };
-                    return itemObj as unknown as BaseEntity;
+                    return asTypedStub<BaseEntity>(itemObj);
                 }
-                return {
-                    RunViewProviderToUse: uploadAndRetrievalProvider as unknown as IRunViewProvider,
-                    ProviderToUse: uploadAndRetrievalProvider as unknown as IMetadataProvider,
-                } as unknown as BaseEntity;
+                return asTypedStub<BaseEntity>({
+                    RunViewProviderToUse: asTypedStub<IRunViewProvider>(uploadAndRetrievalProvider),
+                    ProviderToUse: uploadAndRetrievalProvider,
+                });
             },
             async RunView(params: RunViewParams, contextUser?: UserInfo) {
                 const results = runMultiSourceView(params, contextUser);
@@ -746,7 +765,7 @@ describe('resolveSpaceAgentRetrieval', () => {
                     return { Success: true, Results: results, ErrorMessage: '', RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 0 };
                 });
             },
-        } as unknown as IMetadataProvider;
+        }) as IMetadataProvider;
 
         const tasksById: Record<string, { ID: string; Name: string; Description: string }> = {
             '77777777-0000-4000-8000-000000000001': {
@@ -761,7 +780,7 @@ describe('resolveSpaceAgentRetrieval', () => {
             },
         };
 
-        function runMultiSourceView(params: RunViewParams, contextUser?: UserInfo): Record<string, unknown>[] {
+        function runMultiSourceView(params: RunViewParams, contextUser?: UserInfo): RetrievalMockRow[] {
             const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
             if (params.EntityName === 'MJ: Artifact Types') {
                 return [{ ID: `TYPE:${/Name = '([^']*)'/.exec(filter)?.[1] ?? ''}` }];
@@ -937,7 +956,7 @@ describe('resolveSpaceAgentRetrieval', () => {
         const SHARED_ITEM_ID = itemsData[0].ID; // site-photo.png (Shared in CHILD_SPACE_ID)
         const TEAM_ITEM_ID = itemsData[1].ID;   // discovery-brief.pdf (Team in CHILD_SPACE_ID)
 
-        const chunkProvider = {
+        const chunkProvider: IMetadataProvider = asTypedStub<IMetadataProvider>({
             ...provider,
             EntityByID: provider.EntityByID.bind(provider),
             EntityByName(name: string): EntityInfo | undefined {
@@ -947,10 +966,10 @@ describe('resolveSpaceAgentRetrieval', () => {
                 return undefined;
             },
             async GetEntityObject() {
-                return {
-                    RunViewProviderToUse: chunkProvider as unknown as IRunViewProvider,
-                    ProviderToUse: chunkProvider as unknown as IMetadataProvider,
-                } as unknown as BaseEntity;
+                return asTypedStub<BaseEntity>({
+                    RunViewProviderToUse: asTypedStub<IRunViewProvider>(chunkProvider),
+                    ProviderToUse: chunkProvider,
+                });
             },
             async RunView(params: RunViewParams) {
                 const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : String(params.ExtraFilter ?? '');
@@ -975,12 +994,12 @@ describe('resolveSpaceAgentRetrieval', () => {
                     ].filter((ch) => filter.toLowerCase().includes(ch.ContentItemID.toLowerCase()));
                     return { Success: true, Results: chunks, ErrorMessage: '', RowCount: chunks.length, TotalRowCount: chunks.length, ExecutionTime: 0 };
                 }
-                return (provider as unknown as { RunView: (p: RunViewParams) => Promise<unknown> }).RunView(params);
+                return asTypedStub<IRunViewProvider>(provider).RunView(params);
             },
             async RunViews(params: RunViewParams[]) {
-                return Promise.all(params.map((p) => (chunkProvider as unknown as { RunView: (p: RunViewParams) => Promise<unknown> }).RunView(p)));
+                return Promise.all(params.map((p) => asTypedStub<IRunViewProvider>(chunkProvider).RunView(p)));
             },
-        } as unknown as IMetadataProvider;
+        }) as IMetadataProvider;
 
         const beaRes = await resolveSpaceAgentRetrieval(chunkProvider, bea, CHILD_SPACE_ID);
         const beaShared = beaRes.quotedItems.find((i) => i.ID === SHARED_ITEM_ID);
@@ -1871,7 +1890,7 @@ describe('resolveSpaceAgentRetrieval: the audience is read whole, from the seats
     const worldFiles: Record<string, string> = { [SEALED_ITEM_RECORD]: 'sealed-minutes.pdf', [ROOM_ITEM_RECORD]: 'room-agenda.pdf' };
 
     function ok(rows: readonly object[]): RunViewResult {
-        return { Success: true, Results: rows as Record<string, unknown>[], ErrorMessage: '', RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0 };
+        return { Success: true, Results: rows as RetrievalMockRow[], ErrorMessage: '', RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0 };
     }
     function failed(message: string): RunViewResult {
         return { Success: false, Results: [], ErrorMessage: message, RowCount: 0, TotalRowCount: 0, ExecutionTime: 0 };
@@ -1910,9 +1929,9 @@ describe('resolveSpaceAgentRetrieval: the audience is read whole, from the seats
     }
 
     function worldProvider(world: World): IMetadataProvider {
-        const mock = {
+        const mock: IMetadataProvider = asTypedStub<IMetadataProvider>({
             async GetEntityObject() {
-                return { RunViewProviderToUse: mock as unknown as IRunViewProvider, ProviderToUse: mock as unknown as IMetadataProvider } as unknown as BaseEntity;
+                return asTypedStub<BaseEntity>({ RunViewProviderToUse: asTypedStub<IRunViewProvider>(mock), ProviderToUse: mock });
             },
             EntityByID(id: string): EntityInfo | undefined {
                 return id.toLowerCase() === FILES_ENTITY_ID.toLowerCase() ? ({ Name: 'MJ_BizApps_Collaboration: Space Files' } as Partial<EntityInfo> as EntityInfo) : undefined;
@@ -1926,8 +1945,8 @@ describe('resolveSpaceAgentRetrieval: the audience is read whole, from the seats
             async RunViews(params: RunViewParams[]) {
                 return params.map((p) => runWorldView(world, p));
             },
-        };
-        return mock as unknown as IMetadataProvider;
+        });
+        return mock;
     }
 
     const seatReads = (world: World): RunViewParams[] => world.reads.filter((read) => read.EntityName === 'MJ_BizApps_Collaboration: Space Members');

@@ -1,4 +1,4 @@
-import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogError, RunView, ServerOperationScopeManager, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { ContentUploadIngestor } from '@memberjunction/content-pipeline';
@@ -9,8 +9,11 @@ import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import {
     mjBizAppsCollaborationItemUseEntity,
     mjBizAppsCollaborationShareNoticeEntity,
+    mjBizAppsCollaborationSpaceAgentSourceReceiptEntity,
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { COLLABORATION_SOURCE_RECEIPT_ENTITY } from './ai-run-lockdown.js';
+import { deleteSpaceAgentSourceReceiptsForSpaceItem } from './space-agent-source-receipts.js';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { refusalOf, resolveSpaceDriver, driverBaseContext, subtypeOf } from './space-driver-call.js';
 import type { ItemChangeKind } from './base-space-type-server-driver.js';
@@ -45,10 +48,12 @@ export function decideItemKind(change: { isNew: boolean; spaceChanged: boolean; 
     return 'Update';
 }
 
+type SpaceItemFieldValue = string | number | boolean | Date | object | null | undefined;
+
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity {
     /** What this save changes, read once. */
-    private readChange(): { kind: ItemChangeKind; oldValues: Record<string, unknown>; changed: boolean } {
+    private readChange(): { kind: ItemChangeKind; oldValues: Record<string, SpaceItemFieldValue>; changed: boolean } {
         const isNew = !this.IsSaved;
         return {
             kind: decideItemKind({
@@ -63,11 +68,11 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     }
 
     /** What `Save` read, handed to validation so a save has one reading. Validation called on its own reads for itself. */
-    private readingForSave: { kind: ItemChangeKind; oldValues: Record<string, unknown>; changed: boolean } | null = null;
+    private readingForSave: { kind: ItemChangeKind; oldValues: Record<string, SpaceItemFieldValue>; changed: boolean } | null = null;
 
     /** What each changed field held before this save, by field name. System columns are left out. */
-    private dirtyOldValues(): Record<string, unknown> {
-        const old: Record<string, unknown> = {};
+    private dirtyOldValues(): Record<string, SpaceItemFieldValue> {
+        const old: Record<string, SpaceItemFieldValue> = {};
         for (const field of this.Fields) {
             if (field.Dirty && !field.Name.startsWith('__mj_')) old[field.Name] = field.OldValue;
         }
@@ -190,6 +195,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const wasFileItem = !wasNew && !!filesEntity && oldEntityId.toLowerCase() === filesEntity.ID.toLowerCase();
         const oldRawRecId = wasFileItem ? String(own.oldValues.RecordID ?? this.RecordID ?? '') : '';
         const oldFileId = oldRawRecId ? parseUuid(oldRawRecId.toLowerCase().startsWith('id|') ? oldRawRecId.slice(3) : oldRawRecId) : null;
+        const previousSpaceId = parseUuid(String(this.Fields.find((field) => field.Name === 'SpaceID')?.OldValue ?? own.oldValues.SpaceID ?? this.SpaceID ?? ''));
         this.readingForSave = own;
         let ok = false;
         try {
@@ -207,6 +213,12 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             if (!nowFileId || nowFileId.toLowerCase() !== oldFileId.toLowerCase()) {
                 await cleanupStoredFileIfUnreferenced(provider, this, oldFileId, filesEntity.ID, this.ID);
             }
+        }
+        const currentSpaceId = parseUuid(this.SpaceID);
+        const spaceChanged = !wasNew && (decided.kind === 'Move' || (!!previousSpaceId && !!currentSpaceId && previousSpaceId.toLowerCase() !== currentSpaceId.toLowerCase()));
+        const demotedToTeam = !wasNew && previousBand === 'Shared' && this.Band === 'Team';
+        if (provider && (spaceChanged || demotedToTeam)) {
+            await invalidateIncompatibleSourceReceipts(provider, this, this.ID, spaceChanged, this.TransactionGroup);
         }
         const becameShared = this.Band === 'Shared' && (wasNew || previousBand !== 'Shared');
         try {
@@ -314,6 +326,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
 
         const loadedUses: mjBizAppsCollaborationItemUseEntity[] = [];
         const loadedNotices: mjBizAppsCollaborationShareNoticeEntity[] = [];
+        const loadedReceipts: mjBizAppsCollaborationSpaceAgentSourceReceiptEntity[] = [];
 
         try {
             const system = await requireSystemUser(this);
@@ -369,6 +382,14 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 }
             }
 
+            const receiptsDeleted = await deleteSpaceAgentSourceReceiptsForSpaceItem({
+                provider,
+                systemUser: system,
+                spaceItemId: currentItemId,
+                transactionGroup: tg,
+            });
+            loadedReceipts.push(...receiptsDeleted);
+
             this.TransactionGroup = tg;
             const itemQueued = await super.Delete(options);
             if (!itemQueued) {
@@ -414,6 +435,9 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 }
                 for (const n of loadedNotices) {
                     (n as { TransactionGroup?: TransactionGroupBase }).TransactionGroup = undefined;
+                }
+                for (const r of loadedReceipts) {
+                    r.TransactionGroup = null;
                 }
             }
         }
@@ -588,7 +612,7 @@ function removeSpaceFileFromContentPipeline(provider: IMetadataProvider, user: U
             RunNow: true,
             ContextUser: user,
             Provider: provider,
-        }).catch((error: unknown) => {
+        }).catch((error: Error | object | string | number | boolean | null | undefined) => {
             LogError(`Space item content pipeline cleanup: ${error instanceof Error ? error.message : String(error)}`);
         });
     } catch (error) {
@@ -679,6 +703,48 @@ async function isExternalUrlFile(item: SpaceItemEntityServer, user: NonNullable<
         LogError(`isExternalUrlFile check failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     return false;
+}
+
+async function invalidateIncompatibleSourceReceipts(
+    provider: NonNullable<ReturnType<typeof asMetadata>>,
+    contextEntity: SpaceItemEntityServer,
+    spaceItemId: string,
+    spaceChanged: boolean,
+    existingTg: TransactionGroupBase | null | undefined,
+): Promise<void> {
+    const cleanItemId = parseUuid(spaceItemId);
+    if (!cleanItemId) return;
+
+    const system = await requireSystemUser(contextEntity);
+    const isInitiator = !existingTg && typeof provider.CreateTransactionGroup === 'function';
+    const tg = existingTg ?? (isInitiator ? await provider.CreateTransactionGroup() : null);
+
+    let staleReceipts: mjBizAppsCollaborationSpaceAgentSourceReceiptEntity[] = [];
+    try {
+        staleReceipts = await deleteSpaceAgentSourceReceiptsForSpaceItem({
+            provider,
+            systemUser: system,
+            spaceItemId: cleanItemId,
+            sharedOnly: !spaceChanged,
+            transactionGroup: tg,
+        });
+        if (staleReceipts.length === 0) return;
+
+        if (isInitiator && tg) {
+            const committed = await tg.Submit();
+            if (!committed) {
+                const msg = `Space item receipt invalidation failed to commit transaction group for item ${cleanItemId}`;
+                LogError(msg);
+                throw new Error(msg);
+            }
+        }
+    } finally {
+        if (isInitiator) {
+            for (const r of staleReceipts) {
+                r.TransactionGroup = null;
+            }
+        }
+    }
 }
 
 function fail(result: ValidationResult, message: string): ValidationResult {

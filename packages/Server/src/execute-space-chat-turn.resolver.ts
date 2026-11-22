@@ -49,6 +49,10 @@ export class ExecuteSpaceChatTurnPayload {
     @Field({ nullable: true })
     CitationsJSON?: string;
 
+    /** Validated in-reach source receipts persisted for the turn (supplied and cited), as JSON. */
+    @Field({ nullable: true })
+    SourceReceiptsJSON?: string;
+
     /** What the turn gave the agent (B20): the audience, the action ids, the data grant names, the knowledge sources and what was withheld, as JSON. */
     @Field({ nullable: true })
     ToolsJSON?: string;
@@ -103,6 +107,7 @@ export class ExecuteSpaceChatTurnResolver extends ResolverBase {
                 QuotedCount: result.quotedCount,
                 AllowedItemNames: result.allowedItemNames,
                 CitationsJSON: result.citations ? JSON.stringify(result.citations) : undefined,
+                SourceReceiptsJSON: result.sourceReceipts ? JSON.stringify(result.sourceReceipts) : undefined,
                 ToolsJSON: result.tools ? JSON.stringify(result.tools) : undefined,
             };
         } catch (error) {

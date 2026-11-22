@@ -119,6 +119,8 @@ export interface ExecuteSpaceChatTurnGraphQLPayload {
     AllowedItemNames?: string[];
     /** Candidate items in retrieval scope for the turn (sources-in-scope chips), as JSON. */
     CitationsJSON?: string;
+    /** Validated in-reach source receipts persisted for the turn (supplied and cited), as JSON. */
+    SourceReceiptsJSON?: string;
     /** The turn's tools (B20) as JSON: audience, actionIds, dataGrantNames, knowledgeSourceIds, withheld. */
     ToolsJSON?: string;
     ErrorMessage?: string;
@@ -247,7 +249,7 @@ export interface CreateSpaceGraphQLInput {
     ParentID?: string;
     /** D22: whether a sub-space's members come from its parent. Read only with a parent. */
     InheritsMembership?: boolean;
-    Details?: Record<string, unknown>;
+    Details?: Record<string, {} | null | undefined>;
 }
 
 export interface CreateSpaceGraphQLPayload {
@@ -513,6 +515,7 @@ mutation ExecuteSpaceChatTurn($input: ExecuteSpaceChatTurnInput!) {
         QuotedCount
         AllowedItemNames
         CitationsJSON
+        SourceReceiptsJSON
         ToolsJSON
         ErrorMessage
     }

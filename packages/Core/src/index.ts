@@ -184,3 +184,32 @@ export {
 export { mimeTypeForFileName } from './file-types.js';
 export { agentGrantFor, agentRunSettingsFor, audienceOfConversationKind, turnToolsFor } from './turn-tools.js';
 export type { AgentRunSettings, ChatAudience, TurnTools, WithheldAction } from './turn-tools.js';
+export {
+    assertValidReceiptUuid,
+    canReaderAccessSourceReceipt,
+    extractAndValidateSourceReceipts,
+    isReceiptAuthorizedByLiveSources,
+    isSourceReceiptBand,
+    isSourceReceiptKind,
+    isSourceReceiptRankingMode,
+    isValidReceiptUuid,
+    normalizeReceiptId,
+    normalizeReceiptUuid,
+    resolveEffectiveKnowledgeSourceBandsBySpace,
+    stripCitationMarkdown,
+    stripRecordKeyPrefix,
+} from './source-receipts.js';
+export type {
+    ExtractAndValidateSourceReceiptsResult,
+    LiveKnowledgeSourceGrantInput,
+    LiveReceiptSourceSnapshot,
+    LiveSpaceChainNodeInput,
+    LiveSpaceTypeConfigInput,
+    RejectedSourceCitation,
+    SourceReceiptBand,
+    SourceReceiptKind,
+    SourceReceiptRankingMode,
+    SourceReceiptReachContext,
+    SpaceAgentSourceReceiptEntry,
+    ValidatedSuppliedSourceCandidate,
+} from './source-receipts.js';

@@ -243,9 +243,9 @@ export function ResolveSpaceConfiguration(input: ResolveSpaceConfigurationInput)
     for (const kind of GRANT_KINDS) {
         let list: EffectiveGrant[] = [];
         for (const level of levels) {
-            const rows = levelRows(level.level, level.id, level.rows, kind, log);
-            if (!rows.extend.length && !rows.remove.length) continue;
             const mode = listModeAt(level.level, level.settings, typeSettings, kind);
+            const rows = levelRows(level.level, level.id, level.rows, kind, log);
+            if (mode !== 'Replace' && !rows.extend.length && !rows.remove.length) continue;
             if (mode === 'Replace' && !replacedKinds.includes(kind)) replacedKinds.push(kind);
             list = applyLevel(list, rows, mode, log, level.name);
         }

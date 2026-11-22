@@ -1,0 +1,45 @@
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="SpaceID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="SpaceChatID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ConversationID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ConversationDetailID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="AgentRunID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="SourceKind" Type="dropdownlist" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="SpaceItemID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ContentSourceID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="TargetEntityID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="TargetRecordID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="SourceTitle" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Band" Type="dropdownlist" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="WasSupplied" Type="checkbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="WasCited" Type="checkbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="RetrievalRank" Type="number" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="RelevanceScore" Type="number" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="RankingMode" Type="dropdownlist" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="CitationOrdinal" Type="number" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="EstimatedTokens" Type="number" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="WasTruncated" Type="checkbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Sequence" Type="number" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_CreatedAt" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_UpdatedAt" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+</mj-record-form-container>

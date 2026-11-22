@@ -25,6 +25,12 @@ export function startGalleryServer(port = 4250) {
             const pathname = reqUrl.pathname;
             const theme = reqUrl.searchParams.get('theme') === 'dark' ? 'dark' : 'light';
 
+            if (pathname === '/favicon.ico') {
+                res.writeHead(204);
+                res.end();
+                return;
+            }
+
             // Serve Angular app bundle
             if (pathname === '/app.bundle.js') {
                 const bundlePath = join(distDir, 'app.bundle.js');
