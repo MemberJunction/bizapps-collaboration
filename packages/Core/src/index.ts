@@ -185,11 +185,13 @@ export { mimeTypeForFileName } from './file-types.js';
 export { agentGrantFor, agentRunSettingsFor, audienceOfConversationKind, turnToolsFor } from './turn-tools.js';
 export type { AgentRunSettings, ChatAudience, TurnTools, WithheldAction } from './turn-tools.js';
 export {
+    assertValidReceiptUuid,
     canReaderAccessSourceReceipt,
     extractAndValidateSourceReceipts,
     isSourceReceiptBand,
     isSourceReceiptKind,
     isSourceReceiptRankingMode,
+    isValidReceiptUuid,
     normalizeReceiptId,
     normalizeReceiptUuid,
     stripCitationMarkdown,

@@ -21,6 +21,7 @@ import {
     type BaseEntity,
     BaseEngine,
     type BaseEnginePropertyConfig,
+    CompositeKey,
     type IMetadataProvider,
     LogError,
     Metadata,
@@ -37,6 +38,7 @@ import {
     type MemberSnapshot,
     membershipReaches,
     MissingAppSettingsError,
+    normalizeReceiptUuid,
     type ResolvedCollaborationSettings,
     type SpaceNode,
     type SpaceStatusReach,
@@ -638,31 +640,98 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
     }
 
     /**
-     * Loads the source receipts persisted for a space chat conversation, ordered deterministically by Sequence.
-     * Enforces read security via the caller's UserInfo and the entity's row-level security filter.
+     * Loads all source receipts persisted for a space chat conversation using deterministic keyset
+     * pagination (`AfterKey` ordered by `ID ASC`), then sorts by `ConversationDetailID`, `Sequence`, and `ID`.
+     * Validates all UUID inputs before any `RunView` call and enforces read security via the caller's
+     * `UserInfo` and the entity's row-level security filter.
      */
     public async LoadSpaceAgentSourceReceiptsForConversation(
         conversationId: string,
         user: UserInfo,
         provider?: IMetadataProvider,
+        options?: { detailIds?: readonly string[]; pageSize?: number },
     ): Promise<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[]> {
-        if (!conversationId || !user) {
+        const cleanConversationId = normalizeReceiptUuid(conversationId);
+        if (!cleanConversationId || !user) {
             return [];
         }
+
+        let detailFilterClause = '';
+        if (options?.detailIds !== undefined) {
+            if (options.detailIds.length === 0) {
+                return [];
+            }
+            const cleanDetailIds: string[] = [];
+            for (const rawId of options.detailIds) {
+                const cleanId = normalizeReceiptUuid(rawId);
+                if (!cleanId) {
+                    LogError(`LoadSpaceAgentSourceReceiptsForConversation rejected invalid ConversationDetailID: ${String(rawId)}`);
+                    return [];
+                }
+                cleanDetailIds.push(cleanId);
+            }
+            detailFilterClause = ` AND ConversationDetailID IN (${cleanDetailIds.map((id) => `'${id}'`).join(', ')})`;
+        }
+
+        const pageSize =
+            typeof options?.pageSize === 'number' && Number.isInteger(options.pageSize) && options.pageSize > 0
+                ? options.pageSize
+                : 500;
+
         const rv = RunView.FromMetadataProvider(provider ?? Metadata.Provider);
-        const result = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType>({
-            EntityName: 'MJ_BizApps_Collaboration: Space Agent Source Receipts',
-            ExtraFilter: `ConversationID = '${conversationId}'`,
-            OrderBy: 'Sequence ASC, __mj_CreatedAt ASC',
-            ResultType: 'simple',
-            // row-cap-ok: conversation receipt window bounded for UI inspection
-            MaxRows: 500,
-        }, user);
-        if (!result.Success || !result.Results) {
-            LogError(`LoadSpaceAgentSourceReceiptsForConversation failed for ${conversationId}: ${result.ErrorMessage ?? 'unknown error'}`);
-            return [];
+        const allRows: mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[] = [];
+        const seenIds = new Set<string>();
+        let afterKey: CompositeKey | undefined;
+
+        for (;;) {
+            const result = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Agent Source Receipts',
+                ExtraFilter: `ConversationID = '${cleanConversationId}'${detailFilterClause}`,
+                OrderBy: 'ID ASC',
+                ResultType: 'simple',
+                MaxRows: pageSize,
+                ...(afterKey ? { AfterKey: afterKey } : {}),
+            }, user);
+            if (!result.Success || !result.Results) {
+                LogError(`LoadSpaceAgentSourceReceiptsForConversation failed for ${cleanConversationId}: ${result.ErrorMessage ?? 'unknown error'}`);
+                return [];
+            }
+
+            const pageRows = result.Results;
+            for (const row of pageRows) {
+                const rowId = normalizeReceiptUuid(row.ID);
+                if (rowId) {
+                    if (seenIds.has(rowId)) {
+                        LogError(`LoadSpaceAgentSourceReceiptsForConversation aborted: repeated receipt ID ${rowId} indicates pagination cursor failure.`);
+                        return [];
+                    }
+                    seenIds.add(rowId);
+                }
+                allRows.push(row);
+            }
+
+            if (pageRows.length < pageSize) {
+                break;
+            }
+            const lastRow = pageRows[pageRows.length - 1];
+            const lastId = normalizeReceiptUuid(lastRow?.ID);
+            if (!lastId) {
+                LogError(`LoadSpaceAgentSourceReceiptsForConversation aborted: full page missing valid cursor ID.`);
+                break;
+            }
+            afterKey = CompositeKey.FromID(lastId);
         }
-        return result.Results;
+
+        allRows.sort((a, b) => {
+            const detailCmp = (a.ConversationDetailID ?? '').localeCompare(b.ConversationDetailID ?? '');
+            if (detailCmp !== 0) return detailCmp;
+            const seqA = typeof a.Sequence === 'number' ? a.Sequence : 0;
+            const seqB = typeof b.Sequence === 'number' ? b.Sequence : 0;
+            if (seqA !== seqB) return seqA - seqB;
+            return (a.ID ?? '').localeCompare(b.ID ?? '');
+        });
+
+        return allRows;
     }
 }
 

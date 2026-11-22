@@ -95,6 +95,24 @@ export function normalizeReceiptUuid(raw: string | null | undefined): string | n
 }
 
 /**
+ * Returns true strictly when {@link raw} is a valid RFC-formatted UUID string.
+ */
+export function isValidReceiptUuid(raw: string | null | undefined): boolean {
+    return normalizeReceiptUuid(raw) !== null;
+}
+
+/**
+ * Validates and normalizes {@link raw} as a strict UUID, throwing if malformed or containing SQL quotes.
+ */
+export function assertValidReceiptUuid(raw: string | null | undefined, fieldName: string): string {
+    const normalized = normalizeReceiptUuid(raw);
+    if (!normalized) {
+        throw new Error(`Invalid UUID for ${fieldName}.`);
+    }
+    return normalized;
+}
+
+/**
  * Normalizes any non-empty record identifier (UUID or synthetic mock ID) for canonical lookups.
  */
 export function normalizeReceiptId(raw: string | null | undefined): string | null {

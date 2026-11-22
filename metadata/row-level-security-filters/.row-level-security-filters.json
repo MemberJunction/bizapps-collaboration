@@ -586,7 +586,7 @@
     "fields": {
       "Name": "Collaboration: Source Receipts In Reach",
       "Description": "Source receipts on space agent turns where the caller reaches both the conversation and the receipt's (SpaceID, Band) visibility.",
-      "FilterText": "((SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) AND ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+      "FilterText": "((SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) AND (ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE ((sc.Kind IN (N'General', N'Topic') AND Band = N'Shared') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))))"
     }
   }
 ]
