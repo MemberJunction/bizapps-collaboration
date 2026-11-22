@@ -2899,6 +2899,12 @@ export class mjBizAppsCollaborationSpaceType_ {
     @Field({nullable: true}) 
     Configuration?: string;
         
+    @Field({nullable: true, description: "Optional target MJ Application ID that invited users land in for spaces of this type. NULL defaults to the Collaboration application."}) 
+    TargetApplicationID?: string;
+        
+    @Field({nullable: true}) 
+    TargetApplication?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -2978,6 +2984,9 @@ export class CreatemjBizAppsCollaborationSpaceTypeInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field({ nullable: true })
+    TargetApplicationID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -3056,6 +3065,9 @@ export class UpdatemjBizAppsCollaborationSpaceTypeInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field({ nullable: true })
+    TargetApplicationID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3217,6 +3229,12 @@ export class mjBizAppsCollaborationSpace_ {
         
     @Field({nullable: true}) 
     Configuration?: string;
+        
+    @Field({nullable: true, description: "Optional target MJ Application ID that invited users land in for spaces of this type. NULL defaults to the Collaboration application."}) 
+    TargetApplicationID?: string;
+        
+    @Field({nullable: true}) 
+    TargetApplication?: string;
         
     @Field({nullable: true, description: "The status the space is in, one of its type's (SpaceTypeStatus). NULL until the server stamps it: then the type's default while ClosedAt is null, and the type's first terminal status once ClosedAt is set, as fnCollaborationSpaceStatuses derives it."}) 
     @MaxLength(36)

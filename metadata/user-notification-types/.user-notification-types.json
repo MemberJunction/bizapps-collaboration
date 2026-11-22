@@ -30,5 +30,21 @@
       "DefaultSMS": 0,
       "AllowUserPreference": 1
     }
+  },
+  {
+    "_comments": [
+      "Sent when a person is invited to a space via an external identity provider without a magic link. In-app by default; email sent through the host communication provider when configured."
+    ],
+    "primaryKey": {
+      "ID": "D2C3A7F1-4B8E-4E12-9A55-7F3E2D1C0B94"
+    },
+    "fields": {
+      "Name": "Collaboration: Space Invite",
+      "Description": "A person was invited to a space and can sign in using their organization account.",
+      "DefaultInApp": 1,
+      "DefaultEmail": 0,
+      "DefaultSMS": 0,
+      "AllowUserPreference": 1
+    }
   }
 ]

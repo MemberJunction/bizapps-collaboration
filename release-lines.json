@@ -2,7 +2,8 @@
   "$comment": "The line status record. Each release line, the MJ version it was cut for, and whether it is open or LTS. CI reads the copy on next; have one of its CODEOWNERS review changes. See guides/RELEASE_LINES.md.",
   "next": {
     "edgeOnlyMigrations": [
-      "V202611211945__v0.2.x__Space_Agent_Source_Receipts.sql"
+      "V202611211945__v0.2.x__Space_Agent_Source_Receipts.sql",
+      "V202611220100__v0.2.x__SpaceType_TargetApplication.sql"
     ]
   },
   "lines": {

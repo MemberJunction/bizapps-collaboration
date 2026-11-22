@@ -1227,6 +1227,16 @@ export const mjBizAppsCollaborationSpaceTypeSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings`),
+    TargetApplicationID: z.string().nullable().describe(`
+        * * Field Name: Target Application ID
+        * * Display Name: Target Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Optional target MJ Application ID that invited users land in for spaces of this type. NULL defaults to the Collaboration application.`),
+    TargetApplication: z.string().nullable().describe(`
+        * * Field Name: TargetApplication
+        * * Display Name: Target Application
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type mjBizAppsCollaborationSpaceTypeEntityType = z.infer<typeof mjBizAppsCollaborationSpaceTypeSchema>;
@@ -4271,6 +4281,29 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
     }
     set ConfigurationObject(value: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null) {
         this.SetJSONFieldObject<mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: TargetApplicationID
+    * * Display Name: Target Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Optional target MJ Application ID that invited users land in for spaces of this type. NULL defaults to the Collaboration application.
+    */
+    get TargetApplicationID(): string | null {
+        return this.Get('TargetApplicationID');
+    }
+    set TargetApplicationID(value: string | null) {
+        this.Set('TargetApplicationID', value);
+    }
+
+    /**
+    * * Field Name: TargetApplication
+    * * Display Name: Target Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get TargetApplication(): string | null {
+        return this.Get('TargetApplication');
     }
 }
 
