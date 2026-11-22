@@ -41,13 +41,13 @@ export async function bundleGalleryApp() {
   font-style: normal;
   font-weight: 100 900;
   font-display: block;
-  src: url('https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.3.0/files/inter-latin-wght-normal.woff2') format('woff2');
+  src: url('/assets/fonts/inter-latin-wght-normal.woff2') format('woff2');
 }
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
   font-weight: 400;
-  src: url('https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+  src: url('/assets/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');
 }
 `;
 
