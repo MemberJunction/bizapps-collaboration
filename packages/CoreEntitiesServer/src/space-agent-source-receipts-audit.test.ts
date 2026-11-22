@@ -31,11 +31,13 @@ import {
 import { COLLABORATION_SOURCE_RECEIPT_ENTITY } from '../dist/ai-run-lockdown.js';
 import { SpaceAgentSourceReceiptEntityServer } from '../dist/SpaceAgentSourceReceiptEntityServer.js';
 import {
+    ensurePostgresReceiptContextHook,
     loadSpaceAgentSourceReceiptById,
     persistSpaceAgentSourceReceipts,
     type PostgresPoolLike,
     querySpaceAgentSourceReceipts,
     resolveSuppliedKnowledgeSources,
+    runWithPostgresPrivilegedReceiptContext,
     withPostgresReceiptUserContext,
 } from '../dist/space-agent-source-receipts.js';
 
@@ -1946,6 +1948,190 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
         assert.equal(singlePooledClient.releasedCount, 3);
         assert.ok(executedSql.includes('ROLLBACK'));
         assert.ok(executedSql.filter((s) => s === 'RESET app.current_user_id').length >= 3);
+    });
+
+    it('auto-hooks PostgreSQL ExecuteSQL / InternalRunView boundaries without manual helper calls (CR-2)', async () => {
+        let activeAppUser: string | null = null;
+        let activeMjUser: string | null = null;
+        let activeBypass: string | null = null;
+        const observedSql: Array<{ sql: string; appUser: string | null; mjUser: string | null; bypass: string | null }> = [];
+        let rollbackCount = 0;
+
+        const pooledClient = {
+            released: 0,
+            async query(sqlText: string): Promise<{ rows: Array<Record<string, unknown>> }> {
+                if (sqlText.startsWith('SET LOCAL app.current_user_id')) {
+                    activeAppUser = /'([^']+)'/.exec(sqlText)?.[1] ?? null;
+                } else if (sqlText.startsWith('SET LOCAL mj.current_user_id')) {
+                    activeMjUser = /'([^']+)'/.exec(sqlText)?.[1] ?? null;
+                } else if (sqlText.startsWith('SET LOCAL app.bypass_rls')) {
+                    activeBypass = /'([^']+)'/.exec(sqlText)?.[1] ?? null;
+                } else if (sqlText === 'RESET app.current_user_id') {
+                    activeAppUser = null;
+                } else if (sqlText === 'RESET mj.current_user_id') {
+                    activeMjUser = null;
+                } else if (sqlText === 'RESET app.bypass_rls') {
+                    activeBypass = null;
+                } else if (sqlText === 'COMMIT' || sqlText === 'ROLLBACK') {
+                    if (sqlText === 'ROLLBACK') rollbackCount += 1;
+                    activeAppUser = null;
+                    activeMjUser = null;
+                    activeBypass = null;
+                }
+                observedSql.push({ sql: sqlText, appUser: activeAppUser, mjUser: activeMjUser, bypass: activeBypass });
+                if (sqlText.includes('TRIGGER_SQL_ERROR')) {
+                    throw new Error('pg query failed');
+                }
+                return { rows: [{ ID: 'receipt-1', AppUser: activeAppUser, MjUser: activeMjUser, Bypass: activeBypass }] };
+            },
+            release(): void {
+                this.released += 1;
+            },
+        };
+
+        const mockPool: PostgresPoolLike = {
+            async connect() {
+                return pooledClient;
+            },
+        };
+
+        const providerObj: {
+            PlatformKey: string;
+            DatabaseConnection: PostgresPoolLike;
+            ExecuteSQL: (sqlText: string, params?: unknown[], options?: unknown, contextUser?: UserInfo) => Promise<Array<Record<string, unknown>>>;
+            InternalRunView: (params: RunViewParams, contextUser?: UserInfo) => Promise<RunViewResult<Record<string, unknown>>>;
+        } = {
+            PlatformKey: 'postgresql',
+            DatabaseConnection: mockPool,
+            async ExecuteSQL(sqlText: string, _params?: unknown[], _options?: unknown, _contextUser?: UserInfo) {
+                const res = await pooledClient.query(sqlText) as { rows: Array<Record<string, unknown>> };
+                return res.rows;
+            },
+            async InternalRunView(params: RunViewParams, contextUser?: UserInfo) {
+                const rows = await this.ExecuteSQL(`SELECT * FROM __mj_bizappscollaboration."vwSpaceAgentSourceReceipts" /* ${params.EntityName} */`, undefined, undefined, contextUser);
+                return {
+                    Success: true,
+                    Results: rows,
+                    UserViewRunID: '',
+                    TotalRowCount: rows.length,
+                    RowCount: rows.length,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            },
+        };
+
+        assert.equal(ensurePostgresReceiptContextHook(providerObj), true);
+        assert.equal(ensurePostgresReceiptContextHook(providerObj), true, 'Hooking is idempotent');
+
+        // 1. Ordinary InternalRunView for participant sets BOTH GUCs cleanly and resets afterward
+        const rvParticipant = await providerObj.InternalRunView(
+            { EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY, ResultType: 'simple' },
+            makeUser(USER_A_ID, 'Space Participant'),
+        );
+        assert.equal(rvParticipant.Success, true);
+        assert.deepEqual(rvParticipant.Results[0], {
+            ID: 'receipt-1',
+            AppUser: USER_A_ID,
+            MjUser: USER_A_ID,
+            Bypass: null,
+        });
+        assert.equal(activeAppUser, null);
+        assert.equal(activeMjUser, null);
+
+        // 2. Consecutive request for a different user on same pooled client isolates context
+        const outsiderId = '99999999-9999-4999-8999-999999999999';
+        const rvOutsider = await providerObj.InternalRunView(
+            { EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY, ResultType: 'simple' },
+            makeUser(outsiderId, 'Space Participant'),
+        );
+        assert.equal(rvOutsider.Results[0]?.AppUser, outsiderId);
+        assert.equal(rvOutsider.Results[0]?.MjUser, outsiderId);
+        assert.equal(activeAppUser, null);
+
+        // 3. Simulated ExecuteSQL error rolls back and clears GUCs before releasing
+        await assert.rejects(
+            providerObj.ExecuteSQL('SELECT * FROM TRIGGER_SQL_ERROR', undefined, undefined, makeUser(USER_A_ID, 'Space Participant')),
+            /pg query failed/,
+        );
+        assert.equal(rollbackCount, 1);
+        assert.equal(activeAppUser, null);
+        assert.equal(activeMjUser, null);
+
+        // 4. Privileged scope sets app.bypass_rls = 'true' ONLY inside runWithPostgresPrivilegedReceiptContext
+        const privRes = await runWithPostgresPrivilegedReceiptContext(
+            providerObj,
+            () => providerObj.ExecuteSQL('SELECT * FROM __mj_bizappscollaboration."vwSpaceAgentSourceReceipts"', undefined, undefined, makeUser('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Developer')),
+        );
+        assert.equal(privRes[0]?.Bypass, 'true');
+        assert.equal(activeBypass, null, 'app.bypass_rls must reset after privileged scope exits');
+
+        // 5. Ordinary user request after privileged scope has Bypass === null
+        const afterPriv = await providerObj.ExecuteSQL(
+            'SELECT * FROM __mj_bizappscollaboration."vwSpaceAgentSourceReceipts"',
+            undefined,
+            undefined,
+            makeUser(USER_A_ID, 'Space Participant'),
+        );
+        assert.equal(afterPriv[0]?.Bypass, null);
+        assert.equal(afterPriv[0]?.AppUser, USER_A_ID);
+        assert.ok(observedSql.length > 0);
+    });
+
+    it('discards pooled PostgreSQL client via release(true) or end() when ROLLBACK/RESET fails during cleanup (CR-2)', async () => {
+        const releaseDestroyArgs: Array<boolean | Error | undefined> = [];
+        let cleanupArmed = false;
+        const poisonedClient = {
+            async query(sqlText: string): Promise<{ rows: Array<Record<string, unknown>> }> {
+                if (cleanupArmed && (sqlText === 'ROLLBACK' || sqlText.startsWith('RESET '))) {
+                    throw new Error('connection broken during cleanup');
+                }
+                return { rows: [] };
+            },
+            release(destroy?: boolean | Error): void {
+                releaseDestroyArgs.push(destroy);
+            },
+        };
+
+        await assert.rejects(
+            withPostgresReceiptUserContext(
+                { async connect() { return poisonedClient; } },
+                USER_A_ID,
+                async () => {
+                    cleanupArmed = true;
+                    throw new Error('business error');
+                },
+            ),
+            /business error/,
+        );
+        assert.deepEqual(releaseDestroyArgs, [true], 'Dirty pooled client must be discarded with release(true)');
+
+        // When release() accepts no destroy boolean or isn't provided, fallback to client.end()/destroy()
+        let endCalled = 0;
+        let resetArmed = false;
+        const singleConnClient = {
+            async query(sqlText: string): Promise<{ rows: Array<Record<string, unknown>> }> {
+                if (resetArmed && sqlText.startsWith('RESET ')) {
+                    throw new Error('reset failed');
+                }
+                return { rows: [] };
+            },
+            release(): void {
+                throw new Error('release failed');
+            },
+            async end(): Promise<void> {
+                endCalled += 1;
+            },
+        };
+        await withPostgresReceiptUserContext(
+            { async connect() { return singleConnClient; } },
+            USER_A_ID,
+            async () => {
+                resetArmed = true;
+                return 'ok';
+            },
+        );
+        assert.equal(endCalled, 1, 'Client must be closed with end() when release(true) throws');
     });
 });
 

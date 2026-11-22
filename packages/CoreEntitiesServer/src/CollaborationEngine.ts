@@ -45,6 +45,7 @@ import type {
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
 } from '@memberjunction/core-entities';
+import { ensurePostgresReceiptContextHook } from './space-agent-source-receipts.js';
 
 export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
     protected constructor() {
@@ -72,6 +73,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
     }
 
     public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        ensurePostgresReceiptContextHook(provider ?? Metadata.Provider);
         if (!this.Loaded) {
             await this.Config(false, contextUser, provider);
         }
@@ -185,6 +187,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         contextUser?: UserInfo,
         provider?: IMetadataProvider
     ): Promise<void> {
+        ensurePostgresReceiptContextHook(provider ?? Metadata.Provider);
         await this.Base.Config(forceRefresh, contextUser, provider);
         await this.Admin.Config(forceRefresh, contextUser, provider);
     }
@@ -254,6 +257,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         provider?: IMetadataProvider,
         options?: Parameters<CollaborationEngineBase['LoadSpaceAgentSourceReceiptsForConversation']>[3],
     ): Promise<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[]> {
+        ensurePostgresReceiptContextHook(provider ?? Metadata.Provider);
         return this.Base.LoadSpaceAgentSourceReceiptsForConversation(conversationId, user, provider, options);
     }
 

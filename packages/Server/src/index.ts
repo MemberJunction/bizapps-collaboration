@@ -4,9 +4,12 @@
  * subclasses imported below replace them, because @RegisterClass keeps
  * the higher priority.
  */
+import { Metadata } from '@memberjunction/core';
 import { LoadSpaceSubtypeResolver } from '@mj-biz-apps/collaboration-entities';
 import '@mj-biz-apps/collaboration-actions';
 import {
+    ensurePostgresReceiptContextHook,
+    ensurePostgresReceiptContextPrototypeHook,
     LoadItemUseEntityServer,
     LoadShareNoticeEntityServer,
     LoadSpaceAgentSourceReceiptEntityServer,
@@ -20,6 +23,7 @@ import {
     LoadCollaborationAIRunLockdown,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import './generated/generated.js';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
@@ -48,6 +52,22 @@ export const RESOLVER_PATHS = [
 
 export { mintSpaceLink } from './mint-space-link.js';
 
+function installPostgresProviderPrototypeHookFromServer(): void {
+    try {
+        const localRequire = createRequire(import.meta.url);
+        const mjServerEntry = localRequire.resolve('@memberjunction/server');
+        const mjServerRequire = createRequire(mjServerEntry);
+        const pgMod = mjServerRequire('@memberjunction/postgresql-dataprovider') as {
+            PostgreSQLDataProvider?: { prototype?: object };
+        };
+        if (pgMod?.PostgreSQLDataProvider?.prototype) {
+            ensurePostgresReceiptContextPrototypeHook(pgMod.PostgreSQLDataProvider.prototype);
+        }
+    } catch {
+        // Optional when @memberjunction/postgresql-dataprovider is absent in SQL Server-only hosts
+    }
+}
+
 export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceSubtypeResolver();
     LoadItemUseEntityServer();
@@ -61,4 +81,10 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadCollaborationTaskEntityServer();
     LoadSpaceMeetingsAgendaProvider();
     LoadCollaborationAIRunLockdown();
+    installPostgresProviderPrototypeHookFromServer();
+    try {
+        ensurePostgresReceiptContextHook(Metadata.Provider);
+    } catch {
+        // Metadata.Provider may not be configured yet when LoadBizAppsCollaborationServer runs during early test setup
+    }
 }

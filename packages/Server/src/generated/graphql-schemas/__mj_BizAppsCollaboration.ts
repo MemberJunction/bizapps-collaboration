@@ -18,6 +18,7 @@ import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
 import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity, mjBizAppsCollaborationSpaceAgentSourceReceiptEntity, mjBizAppsCollaborationSpaceAnchorEntity, mjBizAppsCollaborationSpaceChatEntity, mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberPinEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceNoteEntity, mjBizAppsCollaborationSpaceRoleTypeEntity, mjBizAppsCollaborationSpaceTypeStatusEntity, mjBizAppsCollaborationSpaceTypeEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import { ensurePostgresReceiptContextHook, loadSpaceAgentSourceReceiptById } from '@mj-biz-apps/collaboration-core-entities-server';
     
 
 //****************************************************************************
@@ -683,29 +684,43 @@ export class mjBizAppsCollaborationSpaceAgentSourceReceiptResolver extends Resol
     @Query(() => RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewResult)
     async RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        ensurePostgresReceiptContextHook(provider);
         return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
     }
 
     @Query(() => RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewResult)
     async RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        ensurePostgresReceiptContextHook(provider);
         return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
     }
 
     @Query(() => RunmjBizAppsCollaborationSpaceAgentSourceReceiptViewResult)
     async RunmjBizAppsCollaborationSpaceAgentSourceReceiptDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        ensurePostgresReceiptContextHook(provider);
         input.EntityName = 'MJ_BizApps_Collaboration: Space Agent Source Receipts';
         return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
     }
 
     @Query(() => mjBizAppsCollaborationSpaceAgentSourceReceipt_, { nullable: true })
     async mjBizAppsCollaborationSpaceAgentSourceReceipt(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpaceAgentSourceReceipt_ | null> {
-        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Agent Source Receipts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceAgentSourceReceipts')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Agent Source Receipts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Agent Source Receipts', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        ensurePostgresReceiptContextHook(provider);
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Agent Source Receipts', userPayload, provider);
+        const contextUser = this.GetUserFromPayload(userPayload);
+        if (!contextUser) {
+            return null;
+        }
+        const loaded = await loadSpaceAgentSourceReceiptById({
+            provider,
+            user: contextUser,
+            receiptId: ID,
+        });
+        if (!loaded.ok || !loaded.receipt) {
+            return null;
+        }
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Agent Source Receipts', loaded.receipt.GetAll(), contextUser, provider);
         return result;
     }
 
@@ -716,6 +731,7 @@ export class mjBizAppsCollaborationSpaceAgentSourceReceiptResolver extends Resol
         @PubSub() pubSub: PubSubEngine
     ) {
         const provider = GetReadWriteProvider(providers);
+        ensurePostgresReceiptContextHook(provider);
         return this.CreateRecord('MJ_BizApps_Collaboration: Space Agent Source Receipts', input, provider, userPayload, pubSub);
     }
 
@@ -726,12 +742,14 @@ export class mjBizAppsCollaborationSpaceAgentSourceReceiptResolver extends Resol
         @PubSub() pubSub: PubSubEngine
     ) {
         const provider = GetReadWriteProvider(providers);
+        ensurePostgresReceiptContextHook(provider);
         return this.UpdateRecord('MJ_BizApps_Collaboration: Space Agent Source Receipts', input, provider, userPayload, pubSub);
     }
 
     @Mutation(() => mjBizAppsCollaborationSpaceAgentSourceReceipt_)
     async DeletemjBizAppsCollaborationSpaceAgentSourceReceipt(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const provider = GetReadWriteProvider(providers);
+        ensurePostgresReceiptContextHook(provider);
         const key = new CompositeKey([{ FieldName: 'ID', Value: ID }]);
         return this.DeleteRecord('MJ_BizApps_Collaboration: Space Agent Source Receipts', key, options, provider, userPayload, pubSub);
     }

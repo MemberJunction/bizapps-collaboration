@@ -12,7 +12,8 @@ import {
     mjBizAppsCollaborationSpaceAgentSourceReceiptEntity,
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
-import { COLLABORATION_ITEM_DELETE_OPERATION, COLLABORATION_SOURCE_RECEIPT_ENTITY } from './ai-run-lockdown.js';
+import { COLLABORATION_SOURCE_RECEIPT_ENTITY } from './ai-run-lockdown.js';
+import { deleteSpaceAgentSourceReceiptsForSpaceItem } from './space-agent-source-receipts.js';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { refusalOf, resolveSpaceDriver, driverBaseContext, subtypeOf } from './space-driver-call.js';
 import type { ItemChangeKind } from './base-space-type-server-driver.js';
@@ -379,38 +380,13 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 }
             }
 
-            const receiptsRes = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>({
-                EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
-                ExtraFilter: `SpaceItemID = '${currentItemId}'`,
-                ResultType: 'entity_object',
-                IgnoreMaxRows: true,
-            }, system);
-            if (!receiptsRes || !receiptsRes.Success) {
-                const msg = `Space item reference cleanup: failed to query Space Agent Source Receipts for item ${currentItemId}: ${receiptsRes?.ErrorMessage ?? 'RunView failed'}`;
-                LogError(msg);
-                return this.failDelete(msg);
-            }
-
-            if (receiptsRes.Results && receiptsRes.Results.length > 0) {
-                for (const receiptEntity of receiptsRes.Results) {
-                    loadedReceipts.push(receiptEntity);
-                    receiptEntity.TransactionGroup = tg;
-                    const queued = await ServerOperationScopeManager.Instance.RunWithAuthority(
-                        {
-                            operationKey: COLLABORATION_ITEM_DELETE_OPERATION,
-                            source: 'ServerEngine',
-                            allowedEntities: [COLLABORATION_SOURCE_RECEIPT_ENTITY],
-                            userId: system.ID,
-                        },
-                        () => receiptEntity.Delete(),
-                    );
-                    if (!queued) {
-                        const msg = `Space item reference cleanup: failed to queue delete for Space Agent Source Receipt ${receiptEntity.ID}`;
-                        LogError(msg);
-                        return this.failDelete(msg);
-                    }
-                }
-            }
+            const receiptsDeleted = await deleteSpaceAgentSourceReceiptsForSpaceItem({
+                provider,
+                systemUser: system,
+                spaceItemId: currentItemId,
+                transactionGroup: tg,
+            });
+            loadedReceipts.push(...receiptsDeleted);
 
             this.TransactionGroup = tg;
             const itemQueued = await super.Delete(options);
@@ -738,47 +714,20 @@ async function invalidateIncompatibleSourceReceipts(
     if (!cleanItemId) return;
 
     const system = await requireSystemUser(contextEntity);
-    const rv = RunView.FromMetadataProvider(provider);
-    const bandClause = spaceChanged ? '' : ` AND Band = 'Shared'`;
-    const receiptsRes = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>({
-        EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
-        ExtraFilter: `SpaceItemID = '${cleanItemId}'${bandClause}`,
-        ResultType: 'entity_object',
-        IgnoreMaxRows: true,
-    }, system);
-
-    if (!receiptsRes || !receiptsRes.Success) {
-        const msg = `Space item receipt invalidation failed to query Space Agent Source Receipts for item ${cleanItemId}: ${receiptsRes?.ErrorMessage ?? 'RunView failed'}`;
-        LogError(msg);
-        throw new Error(msg);
-    }
-
-    const staleReceipts = receiptsRes.Results ?? [];
-    if (staleReceipts.length === 0) return;
-
     const isInitiator = !existingTg && typeof provider.CreateTransactionGroup === 'function';
     const tg = existingTg ?? (isInitiator ? await provider.CreateTransactionGroup() : null);
 
+    let staleReceipts: mjBizAppsCollaborationSpaceAgentSourceReceiptEntity[] = [];
     try {
-        for (const receiptEntity of staleReceipts) {
-            if (tg) {
-                receiptEntity.TransactionGroup = tg;
-            }
-            const deleted = await ServerOperationScopeManager.Instance.RunWithAuthority(
-                {
-                    operationKey: COLLABORATION_ITEM_DELETE_OPERATION,
-                    source: 'ServerEngine',
-                    allowedEntities: [COLLABORATION_SOURCE_RECEIPT_ENTITY],
-                    userId: system.ID,
-                },
-                () => receiptEntity.Delete(),
-            );
-            if (!deleted) {
-                const msg = `Space item receipt invalidation failed to delete stale Space Agent Source Receipt ${receiptEntity.ID}`;
-                LogError(msg);
-                throw new Error(msg);
-            }
-        }
+        staleReceipts = await deleteSpaceAgentSourceReceiptsForSpaceItem({
+            provider,
+            systemUser: system,
+            spaceItemId: cleanItemId,
+            sharedOnly: !spaceChanged,
+            transactionGroup: tg,
+        });
+        if (staleReceipts.length === 0) return;
+
         if (isInitiator && tg) {
             const committed = await tg.Submit();
             if (!committed) {

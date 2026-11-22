@@ -49,7 +49,12 @@ import {
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { toNode, type SpaceRow } from './load-graph.js';
 import { readEveryRow } from './read-every-row.js';
-import { isSingleSourceReceiptAuthorizedForUser } from './space-agent-source-receipts.js';
+import {
+    ensurePostgresReceiptContextHook,
+    installPostgresReceiptProviderAutoHook,
+    isSingleSourceReceiptAuthorizedForUser,
+    runWithPostgresPrivilegedReceiptContext,
+} from './space-agent-source-receipts.js';
 import { isSpaceParticipant } from './task-attribution.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
@@ -216,10 +221,8 @@ export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationS
         CompositeKey: CompositeKey,
         EntityRelationshipsToLoad?: string[],
     ): Promise<boolean> {
-        const loaded = await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad);
-        if (!loaded) {
-            return false;
-        }
+        const provider = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        ensurePostgresReceiptContextHook(provider);
 
         const actingUser = this.ContextCurrentUser ?? asMetadata(this.ProviderToUse)?.CurrentUser;
         if (!actingUser) {
@@ -227,18 +230,28 @@ export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationS
             return false;
         }
 
-        if (
+        const isPrivilegedServerOp =
+            !ServerOperationScopeManager.Instance.IsInDirectClientCrud() &&
             !isSpaceParticipant(actingUser) &&
             ServerOperationScopeManager.Instance.IsOperationActive(
                 [COLLABORATION_AGENT_TURN_OPERATION, COLLABORATION_ITEM_DELETE_OPERATION],
                 COLLABORATION_SOURCE_RECEIPT_ENTITY,
                 actingUser,
-            )
-        ) {
+            );
+
+        const loaded = isPrivilegedServerOp
+            ? await runWithPostgresPrivilegedReceiptContext(provider, () =>
+                  super.InnerLoad(CompositeKey, EntityRelationshipsToLoad),
+              )
+            : await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad);
+        if (!loaded) {
+            return false;
+        }
+
+        if (isPrivilegedServerOp) {
             return true;
         }
 
-        const provider = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
         const authorized = await isSingleSourceReceiptAuthorizedForUser({
             provider,
             user: actingUser,
@@ -266,6 +279,12 @@ export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationS
         if (refusal) {
             return recordRefusal(this, 'save', refusal);
         }
+        const provider = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        ensurePostgresReceiptContextHook(provider);
+        const actingUser = this.ContextCurrentUser ?? provider?.CurrentUser;
+        if (!ServerOperationScopeManager.Instance.IsInDirectClientCrud() && (!actingUser || !isSpaceParticipant(actingUser))) {
+            return runWithPostgresPrivilegedReceiptContext(provider, () => super.Save(options));
+        }
         return super.Save(options);
     }
 
@@ -273,6 +292,12 @@ export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationS
         const refusal = evaluateParticipantSourceReceiptWriteAccess('delete', this.ContextCurrentUser);
         if (refusal) {
             return recordRefusal(this, 'delete', refusal);
+        }
+        const provider = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        ensurePostgresReceiptContextHook(provider);
+        const actingUser = this.ContextCurrentUser ?? provider?.CurrentUser;
+        if (!ServerOperationScopeManager.Instance.IsInDirectClientCrud() && (!actingUser || !isSpaceParticipant(actingUser))) {
+            return runWithPostgresPrivilegedReceiptContext(provider, () => super.Delete(options));
         }
         return super.Delete(options);
     }
@@ -603,4 +628,5 @@ export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationS
 
 export function LoadSpaceAgentSourceReceiptEntityServer(): void {
     void SpaceAgentSourceReceiptEntityServer;
+    installPostgresReceiptProviderAutoHook();
 }

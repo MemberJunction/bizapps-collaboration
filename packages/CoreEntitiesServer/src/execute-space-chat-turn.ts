@@ -44,6 +44,7 @@ import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate
 import { runWithCollaborationAgentTurnAuthority } from './ai-run-lockdown.js';
 import {
     buildSourceReceiptReachContext,
+    ensurePostgresReceiptContextHook,
     persistSpaceAgentSourceReceipts,
     resolveSuppliedKnowledgeSources,
     resolveToolSuppliedSourceCandidates,
@@ -183,6 +184,7 @@ export async function executeSpaceChatTurn(
     user: UserInfo,
     input: ExecuteSpaceChatTurnInput
 ): Promise<ExecuteSpaceChatTurnResult> {
+    ensurePostgresReceiptContextHook(provider);
     // Two calls for one message can both pass the "already replied" reads before either writes its reply, so a message is
     // claimed here for the length of its turn. This holds within one server; a second server would need a database constraint.
     const claim = parseUuid(input.userMessageId);

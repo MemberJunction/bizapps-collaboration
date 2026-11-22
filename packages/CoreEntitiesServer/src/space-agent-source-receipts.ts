@@ -2,7 +2,21 @@
  * Server persistence & fail-closed query service for relational Space Agent Source Receipts (CT-2).
  */
 
-import { type IMetadataProvider, LogError, RunView, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import {
+    type BaseEntity,
+    type CompositeKey,
+    type IMetadataProvider,
+    LogError,
+    ProviderBase,
+    RunView,
+    type RunViewParams,
+    type RunViewResult,
+    ServerOperationScopeManager,
+    type TransactionGroupBase,
+    type UserInfo,
+    WellKnownUserSource,
+} from '@memberjunction/core';
 import {
     canReaderAccessSourceReceipt,
     type CollaborationSettings,
@@ -30,10 +44,16 @@ import {
     mjBizAppsCollaborationSpaceAgentSourceReceiptEntity,
     type mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
 } from '@mj-biz-apps/collaboration-entities';
-import { COLLABORATION_SOURCE_RECEIPT_ENTITY, runWithCollaborationAgentTurnAuthority } from './ai-run-lockdown.js';
+import {
+    COLLABORATION_AGENT_TURN_OPERATION,
+    COLLABORATION_ITEM_DELETE_OPERATION,
+    COLLABORATION_SOURCE_RECEIPT_ENTITY,
+    runWithCollaborationAgentTurnAuthority,
+} from './ai-run-lockdown.js';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { toNode, type SpaceRow } from './load-graph.js';
 import { readEveryRow } from './read-every-row.js';
+import { isSpaceParticipant } from './task-attribution.js';
 import type { TurnToolSourceHit } from './turn-tools.js';
 
 const CONTENT_SOURCES_ENTITY = 'MJ: Content Sources';
@@ -55,6 +75,8 @@ export interface PostgresQueryable {
 
 export interface PostgresPoolClientLike extends PostgresQueryable {
     release?: (err?: boolean | Error) => void;
+    end?: () => Promise<void>;
+    destroy?: () => void;
 }
 
 export interface PostgresPoolLike {
@@ -66,15 +88,196 @@ export interface PostgresReceiptUserContextOptions {
     role?: string;
     /** Explicit system/server bypass flag; ignored when `role === 'cdp_UI'`. */
     bypassRls?: boolean;
+    /** Run the transaction in `BEGIN READ ONLY` mode (aborted with `ROLLBACK`). */
+    readOnly?: boolean;
+    /** Optional statement timeout in milliseconds (`SET LOCAL statement_timeout`). */
+    timeoutMs?: number;
 }
+
+export interface PostgresExecuteOptionsLike {
+    connectionSource?: PostgresQueryable;
+    ignoreAmbientTransaction?: boolean;
+    readOnlyTransaction?: boolean;
+    timeoutMs?: number;
+    description?: string;
+    ignoreLogging?: boolean;
+    isMutation?: boolean;
+}
+
+export interface PostgresHookableProvider {
+    PlatformKey?: string;
+    CurrentUser?: UserInfo;
+    DatabaseConnection?: PostgresPoolLike | PostgresQueryable;
+    IsCallerInAmbientTransaction?: () => boolean;
+    IsInTransaction?: boolean;
+    ActiveTransactionClient?: PostgresQueryable | null;
+    ExecuteSQL?: <T = Record<string, unknown>>(
+        query: string,
+        parameters?: unknown[],
+        options?: PostgresExecuteOptionsLike,
+        contextUser?: UserInfo,
+    ) => Promise<T[]>;
+    ExecuteSQLBatch?: (
+        queries: string[],
+        parameters?: unknown[][] | PostgresExecuteOptionsLike,
+        options?: PostgresExecuteOptionsLike | UserInfo,
+        contextUser?: UserInfo,
+    ) => Promise<Record<string, unknown>[][]>;
+    BeginTransaction?: () => Promise<void>;
+    GetEntityObject?: IMetadataProvider['GetEntityObject'];
+    RunView?: ProviderBase['RunView'];
+    RunViews?: ProviderBase['RunViews'];
+}
+
+interface PostgresReceiptExecutionScope {
+    pool: PostgresPoolLike | PostgresQueryable;
+    client: PostgresQueryable;
+    userId: string | null;
+    bypassRls: boolean;
+    role?: string;
+}
+
+const activePostgresReceiptScope = new AsyncLocalStorage<PostgresReceiptExecutionScope>();
+const privilegedReceiptTargets = new AsyncLocalStorage<Set<object>>();
+const hookedPostgresInstances = new WeakSet<object>();
+const hookedPostgresPrototypes = new WeakSet<object>();
+const hookedProviderBasePrototypes = new WeakSet<object>();
+const hookedExecuteFunctions = new WeakSet<object>();
+const hookedBatchFunctions = new WeakSet<object>();
+const hookedBeginTxFunctions = new WeakSet<object>();
 
 function isPostgresPool(target: PostgresPoolLike | PostgresQueryable): target is PostgresPoolLike {
     return typeof (target as PostgresPoolLike).connect === 'function';
 }
 
+function isPostgresQueryable(value: object | null | undefined): value is PostgresPoolLike | PostgresQueryable {
+    if (!value) return false;
+    const maybePool = value as PostgresPoolLike;
+    const maybeQueryable = value as PostgresQueryable;
+    return typeof maybePool.connect === 'function' || typeof maybeQueryable.query === 'function';
+}
+
+function safeProviderCurrentUser(provider: PostgresHookableProvider): UserInfo | undefined {
+    try {
+        return provider.CurrentUser;
+    } catch {
+        return undefined;
+    }
+}
+
+function resolvePostgresPoolFromProvider(provider: PostgresHookableProvider): PostgresPoolLike | PostgresQueryable | null {
+    const conn = provider.DatabaseConnection;
+    if (conn && typeof conn === 'object' && isPostgresQueryable(conn)) {
+        return conn;
+    }
+    return null;
+}
+
+export function isPostgresProviderCandidate(
+    provider: IMetadataProvider | PostgresHookableProvider | object | null | undefined,
+): provider is PostgresHookableProvider {
+    if (!provider || typeof provider !== 'object') {
+        return false;
+    }
+    const candidate = provider as PostgresHookableProvider;
+    if (candidate.PlatformKey !== undefined && candidate.PlatformKey !== 'postgresql') {
+        return false;
+    }
+    const conn = candidate.DatabaseConnection;
+    return candidate.PlatformKey === 'postgresql' || (Boolean(conn) && typeof conn === 'object' && isPostgresPool(conn));
+}
+
+async function applyPostgresReceiptSessionGucs(
+    client: PostgresQueryable,
+    cleanUserId: string | null,
+    bypassRls: boolean,
+    roleName?: string,
+): Promise<void> {
+    if (roleName) {
+        await client.query(`SET LOCAL ROLE "${roleName}"`);
+    }
+    if (bypassRls && roleName !== 'cdp_UI') {
+        await client.query(`SET LOCAL app.bypass_rls = 'true'`);
+    } else {
+        await client.query('RESET app.bypass_rls');
+    }
+    if (cleanUserId) {
+        await client.query(`SET LOCAL app.current_user_id = '${cleanUserId}'`);
+        await client.query(`SET LOCAL mj.current_user_id = '${cleanUserId}'`);
+    } else {
+        await client.query('RESET app.current_user_id');
+        await client.query('RESET mj.current_user_id');
+    }
+}
+
+async function discardPostgresPoolClient(client: PostgresPoolClientLike): Promise<void> {
+    try {
+        if (typeof client.release === 'function') {
+            client.release(true);
+            return;
+        }
+    } catch {
+        // Fall through to end/destroy
+    }
+    try {
+        if (typeof client.end === 'function') {
+            await client.end();
+            return;
+        }
+    } catch {
+        // Fall through to destroy
+    }
+    try {
+        client.destroy?.();
+    } catch {
+        // Best-effort connection discard
+    }
+}
+
+function isProviderInAmbientTransaction(provider: PostgresHookableProvider): boolean {
+    if (typeof provider.IsCallerInAmbientTransaction === 'function') {
+        try {
+            return provider.IsCallerInAmbientTransaction();
+        } catch {
+            return false;
+        }
+    }
+    return Boolean(provider.IsInTransaction);
+}
+
+function resolveDesiredPostgresContext(
+    provider: PostgresHookableProvider,
+    contextUser?: UserInfo,
+): { userId: string | null; bypassRls: boolean } {
+    const effectiveUser = contextUser ?? safeProviderCurrentUser(provider);
+    const inClientCrud = ServerOperationScopeManager.Instance.IsInDirectClientCrud();
+    const privSet = privilegedReceiptTargets.getStore();
+    const isExplicitPrivileged = Boolean(
+        privSet &&
+        (privSet.has(provider) || (provider.DatabaseConnection && privSet.has(provider.DatabaseConnection))),
+    );
+    const isTurnOrCascadeOp = Boolean(
+        effectiveUser &&
+        !isSpaceParticipant(effectiveUser) &&
+        ServerOperationScopeManager.Instance.IsOperationActive(
+            [COLLABORATION_AGENT_TURN_OPERATION, COLLABORATION_ITEM_DELETE_OPERATION],
+            COLLABORATION_SOURCE_RECEIPT_ENTITY,
+            effectiveUser,
+        ),
+    );
+
+    if (!inClientCrud && (isExplicitPrivileged || isTurnOrCascadeOp) && (!effectiveUser || !isSpaceParticipant(effectiveUser))) {
+        return { userId: null, bypassRls: true };
+    }
+
+    const cleanId = effectiveUser?.ID ? normalizeReceiptUuid(effectiveUser.ID) : null;
+    return { userId: cleanId, bypassRls: false };
+}
+
 /**
  * Executes `fn` inside a PostgreSQL transaction scoped to `userId` using `SET LOCAL app.current_user_id`
- * and guarantees `RESET app.current_user_id` (plus role/bypass cleanup) in a `finally` block so
+ * and `SET LOCAL mj.current_user_id`, and guarantees `RESET` cleanup in a `finally` block (discarding
+ * the pooled client via `release(true)` / `end()` / `destroy()` if `ROLLBACK` or `RESET` fails) so
  * consecutive different-user requests on a reused pooled connection never leak user state.
  */
 export async function withPostgresReceiptUserContext<T>(
@@ -94,53 +297,415 @@ export async function withPostgresReceiptUserContext<T>(
         throw new Error(`Invalid PostgreSQL role identifier: ${roleName}`);
     }
 
+    const effectiveBypassRls = Boolean(options?.bypassRls && roleName !== 'cdp_UI');
+    const activeScope = activePostgresReceiptScope.getStore();
+    if (activeScope && (activeScope.pool === target || activeScope.client === target)) {
+        if (
+            activeScope.userId === cleanUserId &&
+            activeScope.bypassRls === effectiveBypassRls &&
+            (!roleName || activeScope.role === roleName)
+        ) {
+            return await fn(activeScope.client);
+        }
+
+        const savepointName = 'mj_receipt_ctx_sp';
+        await activeScope.client.query(`SAVEPOINT ${savepointName}`);
+        try {
+            await applyPostgresReceiptSessionGucs(activeScope.client, cleanUserId, effectiveBypassRls, roleName);
+            const nestedScope: PostgresReceiptExecutionScope = {
+                pool: target,
+                client: activeScope.client,
+                userId: cleanUserId,
+                bypassRls: effectiveBypassRls,
+                role: roleName ?? activeScope.role,
+            };
+            const nestedResult = await activePostgresReceiptScope.run(nestedScope, () => fn(activeScope.client));
+            await activeScope.client.query(`RELEASE SAVEPOINT ${savepointName}`);
+            await applyPostgresReceiptSessionGucs(activeScope.client, activeScope.userId, activeScope.bypassRls, activeScope.role);
+            return nestedResult;
+        } catch (err) {
+            try {
+                await activeScope.client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+                await activeScope.client.query(`RELEASE SAVEPOINT ${savepointName}`);
+            } catch {
+                // Outer withPostgresReceiptUserContext transaction handles rollback and client discard
+            }
+            throw err;
+        }
+    }
+
     const poolClient: PostgresPoolClientLike | null = isPostgresPool(target) ? await target.connect() : null;
     const client: PostgresQueryable = poolClient ?? (target as PostgresQueryable);
     let inTransaction = false;
+    let cleanupFailed = false;
 
     try {
-        await client.query('BEGIN');
+        await client.query(options?.readOnly ? 'BEGIN READ ONLY' : 'BEGIN');
         inTransaction = true;
-        if (roleName) {
-            await client.query(`SET LOCAL ROLE "${roleName}"`);
+        if (options?.timeoutMs && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0) {
+            await client.query(`SET LOCAL statement_timeout = ${Math.floor(options.timeoutMs)}`);
         }
-        if (options?.bypassRls && roleName !== 'cdp_UI') {
-            await client.query(`SET LOCAL app.bypass_rls = 'true'`);
-        } else {
-            await client.query('RESET app.bypass_rls');
-        }
-        if (cleanUserId) {
-            await client.query(`SET LOCAL app.current_user_id = '${cleanUserId}'`);
-        } else {
-            await client.query('RESET app.current_user_id');
-            await client.query('RESET mj.current_user_id');
-        }
+        await applyPostgresReceiptSessionGucs(client, cleanUserId, effectiveBypassRls, roleName);
 
-        const result = await fn(client);
-        await client.query('COMMIT');
+        const scope: PostgresReceiptExecutionScope = {
+            pool: target,
+            client,
+            userId: cleanUserId,
+            bypassRls: effectiveBypassRls,
+            role: roleName,
+        };
+        const result = await activePostgresReceiptScope.run(scope, () => fn(client));
+        await client.query(options?.readOnly ? 'ROLLBACK' : 'COMMIT');
         inTransaction = false;
         return result;
     } catch (err) {
         if (inTransaction) {
             try {
                 await client.query('ROLLBACK');
+                inTransaction = false;
             } catch {
-                // Best-effort rollback before resetting session state
+                cleanupFailed = true;
             }
         }
         throw err;
     } finally {
-        try {
-            await client.query('RESET app.current_user_id');
-            await client.query('RESET mj.current_user_id');
-            await client.query('RESET app.bypass_rls');
-            await client.query('RESET ROLE');
-        } catch {
-            // Best-effort session GUC reset on connection return
+        if (!cleanupFailed) {
+            try {
+                await client.query('RESET app.current_user_id');
+                await client.query('RESET mj.current_user_id');
+                await client.query('RESET app.bypass_rls');
+                await client.query('RESET ROLE');
+            } catch {
+                cleanupFailed = true;
+            }
         }
-        poolClient?.release?.();
+        if (poolClient) {
+            if (cleanupFailed) {
+                await discardPostgresPoolClient(poolClient);
+            } else {
+                poolClient.release?.();
+            }
+        }
     }
 }
+
+/**
+ * Executes `fn` inside a privileged server receipt context so PostgreSQL server persistence and
+ * cascade cleanup set `SET LOCAL app.bypass_rls = 'true'` on non-`cdp_UI` server connections.
+ */
+export async function runWithPostgresPrivilegedReceiptContext<T>(
+    provider: IMetadataProvider | PostgresHookableProvider | object | null | undefined,
+    fn: () => Promise<T>,
+): Promise<T> {
+    if (!provider || typeof provider !== 'object') {
+        return fn();
+    }
+    ensurePostgresReceiptContextHook(provider);
+    const current = privilegedReceiptTargets.getStore();
+    const next = new Set<object>(current);
+    next.add(provider);
+    const hookable = provider as PostgresHookableProvider;
+    if (hookable.DatabaseConnection && typeof hookable.DatabaseConnection === 'object') {
+        next.add(hookable.DatabaseConnection);
+    }
+    return privilegedReceiptTargets.run(next, fn);
+}
+
+function wrapPostgresExecutionTarget(target: PostgresHookableProvider): boolean {
+    let installed = false;
+
+    const origExecuteSQL = target.ExecuteSQL;
+    if (typeof origExecuteSQL === 'function' && !hookedExecuteFunctions.has(origExecuteSQL)) {
+        const wrappedExecuteSQL = async function <T = Record<string, unknown>>(
+            this: PostgresHookableProvider,
+            query: string,
+            parameters?: unknown[],
+            options?: PostgresExecuteOptionsLike,
+            contextUser?: UserInfo,
+        ): Promise<T[]> {
+            const boundOrig: typeof origExecuteSQL = origExecuteSQL.bind(this);
+            if (!isPostgresProviderCandidate(this) || options?.connectionSource) {
+                return boundOrig<T>(query, parameters, options, contextUser);
+            }
+            if (isProviderInAmbientTransaction(this)) {
+                const txClient = this.ActiveTransactionClient;
+                if (txClient && typeof txClient.query === 'function') {
+                    const desired = resolveDesiredPostgresContext(this, contextUser);
+                    await applyPostgresReceiptSessionGucs(txClient, desired.userId, desired.bypassRls);
+                }
+                return boundOrig<T>(query, parameters, options, contextUser);
+            }
+            const pool = resolvePostgresPoolFromProvider(this);
+            if (!pool) {
+                return boundOrig<T>(query, parameters, options, contextUser);
+            }
+            const desired = resolveDesiredPostgresContext(this, contextUser);
+            return withPostgresReceiptUserContext(
+                pool,
+                desired.userId,
+                (client) =>
+                    boundOrig<T>(
+                        query,
+                        parameters,
+                        { ...options, connectionSource: client },
+                        contextUser,
+                    ),
+                {
+                    bypassRls: desired.bypassRls,
+                    readOnly: options?.readOnlyTransaction,
+                    timeoutMs: options?.timeoutMs,
+                },
+            );
+        };
+        hookedExecuteFunctions.add(wrappedExecuteSQL);
+        target.ExecuteSQL = wrappedExecuteSQL;
+        installed = true;
+    }
+
+    const origExecuteSQLBatch = target.ExecuteSQLBatch;
+    if (typeof origExecuteSQLBatch === 'function' && !hookedBatchFunctions.has(origExecuteSQLBatch)) {
+        const wrappedExecuteSQLBatch = async function (
+            this: PostgresHookableProvider,
+            queries: string[],
+            parameters?: unknown[][] | PostgresExecuteOptionsLike,
+            options?: PostgresExecuteOptionsLike | UserInfo,
+            contextUser?: UserInfo,
+        ): Promise<Record<string, unknown>[][]> {
+            if (!queries || queries.length === 0) {
+                return [];
+            }
+
+            let actualParams: unknown[][] | undefined;
+            let actualOptions: PostgresExecuteOptionsLike | undefined;
+            let actualUser: UserInfo | undefined;
+
+            if (Array.isArray(parameters)) {
+                actualParams = parameters;
+                actualOptions = options as PostgresExecuteOptionsLike | undefined;
+                actualUser = contextUser;
+            } else if (parameters && typeof parameters === 'object' && !('length' in parameters)) {
+                actualParams = undefined;
+                actualOptions = parameters as PostgresExecuteOptionsLike;
+                actualUser = options as UserInfo | undefined;
+            } else {
+                actualParams = undefined;
+                actualOptions = options as PostgresExecuteOptionsLike | undefined;
+                actualUser = contextUser;
+            }
+
+            if (queries.length === 1 && typeof this.ExecuteSQL === 'function') {
+                const execOptions: PostgresExecuteOptionsLike | undefined = actualOptions
+                    ? {
+                          description: actualOptions.description,
+                          ignoreLogging: actualOptions.ignoreLogging,
+                          isMutation: actualOptions.isMutation,
+                          ignoreAmbientTransaction: actualOptions.ignoreAmbientTransaction,
+                          connectionSource: actualOptions.connectionSource,
+                          readOnlyTransaction: actualOptions.readOnlyTransaction,
+                          timeoutMs: actualOptions.timeoutMs,
+                      }
+                    : undefined;
+                const single = await this.ExecuteSQL<Record<string, unknown>>(
+                    queries[0],
+                    actualParams?.[0],
+                    execOptions,
+                    actualUser,
+                );
+                return [single];
+            }
+
+            if (!isPostgresProviderCandidate(this) || actualOptions?.connectionSource) {
+                return origExecuteSQLBatch.call(this, queries, parameters, options, contextUser);
+            }
+            if (isProviderInAmbientTransaction(this)) {
+                const txClient = this.ActiveTransactionClient;
+                if (txClient && typeof txClient.query === 'function') {
+                    const desired = resolveDesiredPostgresContext(this, actualUser);
+                    await applyPostgresReceiptSessionGucs(txClient, desired.userId, desired.bypassRls);
+                }
+                return origExecuteSQLBatch.call(this, queries, parameters, options, contextUser);
+            }
+            const pool = resolvePostgresPoolFromProvider(this);
+            if (!pool) {
+                return origExecuteSQLBatch.call(this, queries, parameters, options, contextUser);
+            }
+            const desired = resolveDesiredPostgresContext(this, actualUser);
+            return withPostgresReceiptUserContext(
+                pool,
+                desired.userId,
+                (client) =>
+                    origExecuteSQLBatch.call(
+                        this,
+                        queries,
+                        actualParams,
+                        { ...actualOptions, connectionSource: client },
+                        actualUser,
+                    ),
+                {
+                    bypassRls: desired.bypassRls,
+                    readOnly: actualOptions?.readOnlyTransaction,
+                    timeoutMs: actualOptions?.timeoutMs,
+                },
+            );
+        };
+        hookedBatchFunctions.add(wrappedExecuteSQLBatch);
+        target.ExecuteSQLBatch = wrappedExecuteSQLBatch;
+        installed = true;
+    }
+
+    const origBeginTransaction = target.BeginTransaction;
+    if (typeof origBeginTransaction === 'function' && !hookedBeginTxFunctions.has(origBeginTransaction)) {
+        const wrappedBeginTransaction = async function (this: PostgresHookableProvider): Promise<void> {
+            await origBeginTransaction.call(this);
+            if (!isPostgresProviderCandidate(this)) {
+                return;
+            }
+            const txClient = this.ActiveTransactionClient;
+            if (txClient && typeof txClient.query === 'function') {
+                const desired = resolveDesiredPostgresContext(this, undefined);
+                if (desired.bypassRls) {
+                    await applyPostgresReceiptSessionGucs(txClient, null, true);
+                }
+            }
+        };
+        hookedBeginTxFunctions.add(wrappedBeginTransaction);
+        target.BeginTransaction = wrappedBeginTransaction;
+        installed = true;
+    }
+
+    return installed;
+}
+
+/**
+ * Installs the transaction-scoped PostgreSQL user-context execution hook directly onto a
+ * `PostgreSQLDataProvider` prototype (`ExecuteSQL`, `ExecuteSQLBatch`, `BeginTransaction`).
+ */
+export function ensurePostgresReceiptContextPrototypeHook(proto: object | null | undefined): boolean {
+    if (!proto || typeof proto !== 'object' || proto === Object.prototype) {
+        return false;
+    }
+    if (hookedPostgresPrototypes.has(proto)) {
+        return true;
+    }
+    const installed = wrapPostgresExecutionTarget(proto as PostgresHookableProvider);
+    if (installed) {
+        hookedPostgresPrototypes.add(proto);
+    }
+    return installed;
+}
+
+/**
+ * Installs the transaction-scoped PostgreSQL user-context hook on `provider` (and its prototype
+ * when `provider` is a class instance such as `PostgreSQLDataProvider`) so ordinary `RunView`,
+ * `Load`, `Save`, `Delete`, and `ExecuteSQL` calls automatically establish and clean up
+ * `app.current_user_id` / `mj.current_user_id` on the same checked-out connection.
+ */
+export function ensurePostgresReceiptContextHook(
+    provider: IMetadataProvider | PostgresHookableProvider | object | null | undefined,
+): boolean {
+    if (!isPostgresProviderCandidate(provider)) {
+        return false;
+    }
+    if (hookedPostgresInstances.has(provider)) {
+        return true;
+    }
+
+    let hooked = false;
+    const proto = Object.getPrototypeOf(provider) as object | null;
+    if (proto && proto !== Object.prototype) {
+        if (ensurePostgresReceiptContextPrototypeHook(proto)) {
+            hooked = true;
+        }
+    }
+
+    if (
+        Object.prototype.hasOwnProperty.call(provider, 'ExecuteSQL') ||
+        Object.prototype.hasOwnProperty.call(provider, 'ExecuteSQLBatch') ||
+        !hooked
+    ) {
+        if (wrapPostgresExecutionTarget(provider)) {
+            hooked = true;
+        }
+    }
+
+    if (hooked || hookedPostgresPrototypes.has(proto ?? provider)) {
+        hookedPostgresInstances.add(provider);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Hooks `ProviderBase.prototype` (`RunView`, `RunViews`, `GetEntityObject`) so any
+ * `PostgreSQLDataProvider` instance created after startup is automatically instrumented
+ * before its first `RunView`, `Load`, or entity operation without requiring manual caller setup.
+ */
+export function installPostgresReceiptProviderAutoHook(): void {
+    const proto = ProviderBase?.prototype as (PostgresHookableProvider & object) | undefined;
+    if (!proto || hookedProviderBasePrototypes.has(proto)) {
+        return;
+    }
+
+    const origRunView = proto.RunView;
+    if (typeof origRunView === 'function') {
+        proto.RunView = function <T = Record<string, unknown>>(
+            this: PostgresHookableProvider,
+            params: RunViewParams,
+            contextUser?: UserInfo,
+        ): Promise<RunViewResult<T>> {
+            ensurePostgresReceiptContextHook(this);
+            const bound: typeof origRunView = origRunView.bind(this);
+            return bound<T>(params, contextUser);
+        };
+    }
+
+    const origRunViews = proto.RunViews;
+    if (typeof origRunViews === 'function') {
+        proto.RunViews = function <T = Record<string, unknown>>(
+            this: PostgresHookableProvider,
+            params: RunViewParams[],
+            contextUser?: UserInfo,
+        ): Promise<RunViewResult<T>[]> {
+            ensurePostgresReceiptContextHook(this);
+            const bound: typeof origRunViews = origRunViews.bind(this);
+            return bound<T>(params, contextUser);
+        };
+    }
+
+    const origGetEntityObject = proto.GetEntityObject;
+    if (typeof origGetEntityObject === 'function') {
+        const origGetEntityFn: NonNullable<PostgresHookableProvider['GetEntityObject']> = origGetEntityObject;
+        function wrappedGetEntityObject<T extends BaseEntity>(
+            this: PostgresHookableProvider,
+            entityName: string,
+            contextUser?: UserInfo,
+        ): Promise<T>;
+        function wrappedGetEntityObject<T extends BaseEntity>(
+            this: PostgresHookableProvider,
+            entityName: string,
+            loadKey: CompositeKey,
+            contextUser?: UserInfo,
+        ): Promise<T>;
+        function wrappedGetEntityObject<T extends BaseEntity>(
+            this: PostgresHookableProvider,
+            entityName: string,
+            loadKeyOrUser?: CompositeKey | UserInfo,
+            contextUser?: UserInfo,
+        ): Promise<T> {
+            ensurePostgresReceiptContextHook(this);
+            const bound: typeof origGetEntityFn = origGetEntityFn.bind(this);
+            if (loadKeyOrUser && typeof loadKeyOrUser === 'object' && 'KeyValuePairs' in loadKeyOrUser) {
+                return bound<T>(entityName, loadKeyOrUser, contextUser);
+            }
+            return bound<T>(entityName, loadKeyOrUser);
+        }
+        proto.GetEntityObject = wrappedGetEntityObject;
+    }
+
+    hookedProviderBasePrototypes.add(proto);
+}
+
+installPostgresReceiptProviderAutoHook();
 
 interface ContentSourceRow {
     ID: string;
@@ -647,94 +1212,97 @@ export async function persistSpaceAgentSourceReceipts(
     }
 
     try {
+        ensurePostgresReceiptContextHook(provider);
         return await runWithCollaborationAgentTurnAuthority(turnUserId, async () => {
-            const rv = RunView.FromMetadataProvider(provider);
-            const existingRows = await readEveryRow<{
-                ID: string;
-                SourceKind: string;
-                SpaceItemID: string | null;
-                ContentSourceID: string | null;
-            }>(
-                rv,
-                {
-                    EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
-                    ExtraFilter: `ConversationDetailID = '${cleanDetailId}'`,
-                    Fields: ['ID', 'SourceKind', 'SpaceItemID', 'ContentSourceID'],
-                },
-                systemUser,
-            );
-
-            const existingIdByKey = new Map<string, string>();
-            for (const row of existingRows) {
-                const key = receiptNaturalKey({
-                    sourceKind: row.SourceKind,
-                    spaceItemId: row.SpaceItemID,
-                    contentSourceId: row.ContentSourceID,
-                });
-                const cleanExistingId = normalizeReceiptUuid(row.ID);
-                if (key && cleanExistingId) {
-                    existingIdByKey.set(key, cleanExistingId);
-                }
-            }
-
-            const savedIds: string[] = [];
-            for (const entry of receipts) {
-                const entity = await provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>(
-                    COLLABORATION_SOURCE_RECEIPT_ENTITY,
+            return await runWithPostgresPrivilegedReceiptContext(provider, async () => {
+                const rv = RunView.FromMetadataProvider(provider);
+                const existingRows = await readEveryRow<{
+                    ID: string;
+                    SourceKind: string;
+                    SpaceItemID: string | null;
+                    ContentSourceID: string | null;
+                }>(
+                    rv,
+                    {
+                        EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
+                        ExtraFilter: `ConversationDetailID = '${cleanDetailId}'`,
+                        Fields: ['ID', 'SourceKind', 'SpaceItemID', 'ContentSourceID'],
+                    },
                     systemUser,
                 );
-                if (!entity) {
-                    return { ok: false, errorMessage: 'Unable to instantiate Space Agent Source Receipt entity.' };
-                }
 
-                const key = receiptNaturalKey(entry);
-                const existingId = key ? existingIdByKey.get(key) : undefined;
-                if (existingId) {
-                    const loaded = await entity.Load(existingId);
-                    if (!loaded) {
-                        return { ok: false, errorMessage: `Failed to load existing source receipt ${existingId} for retry upsert.` };
+                const existingIdByKey = new Map<string, string>();
+                for (const row of existingRows) {
+                    const key = receiptNaturalKey({
+                        sourceKind: row.SourceKind,
+                        spaceItemId: row.SpaceItemID,
+                        contentSourceId: row.ContentSourceID,
+                    });
+                    const cleanExistingId = normalizeReceiptUuid(row.ID);
+                    if (key && cleanExistingId) {
+                        existingIdByKey.set(key, cleanExistingId);
                     }
-                } else {
-                    entity.NewRecord();
                 }
 
-                entity.SpaceID = normalizeReceiptUuid(entry.spaceId)!;
-                entity.SpaceChatID = cleanChatId;
-                entity.ConversationID = cleanConversationId;
-                entity.ConversationDetailID = cleanDetailId;
-                entity.AgentRunID = cleanRunId;
-                entity.SourceKind = entry.sourceKind;
-                entity.SpaceItemID = entry.spaceItemId;
-                entity.ContentSourceID = entry.contentSourceId;
-                entity.TargetEntityID = entry.targetEntityId;
-                entity.TargetRecordID = entry.targetRecordId;
-                entity.SourceTitle = entry.sourceTitle;
-                entity.Band = entry.band;
-                entity.WasSupplied = entry.wasSupplied;
-                entity.WasCited = entry.wasCited;
-                entity.RetrievalRank = entry.retrievalRank;
-                entity.RelevanceScore = entry.relevanceScore;
-                entity.RankingMode = entry.rankingMode;
-                entity.CitationOrdinal = entry.citationOrdinal;
-                entity.EstimatedTokens = entry.estimatedTokens;
-                entity.WasTruncated = entry.wasTruncated;
-                entity.Sequence = entry.sequence;
+                const savedIds: string[] = [];
+                for (const entry of receipts) {
+                    const entity = await provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>(
+                        COLLABORATION_SOURCE_RECEIPT_ENTITY,
+                        systemUser,
+                    );
+                    if (!entity) {
+                        return { ok: false, errorMessage: 'Unable to instantiate Space Agent Source Receipt entity.' };
+                    }
 
-                const saved = await entity.Save();
-                if (!saved || !entity.ID) {
-                    return {
-                        ok: false,
-                        errorMessage: entity.LatestResult?.CompleteMessage ?? 'Failed to save Space Agent Source Receipt row.',
-                    };
+                    const key = receiptNaturalKey(entry);
+                    const existingId = key ? existingIdByKey.get(key) : undefined;
+                    if (existingId) {
+                        const loaded = await entity.Load(existingId);
+                        if (!loaded) {
+                            return { ok: false, errorMessage: `Failed to load existing source receipt ${existingId} for retry upsert.` };
+                        }
+                    } else {
+                        entity.NewRecord();
+                    }
+
+                    entity.SpaceID = normalizeReceiptUuid(entry.spaceId)!;
+                    entity.SpaceChatID = cleanChatId;
+                    entity.ConversationID = cleanConversationId;
+                    entity.ConversationDetailID = cleanDetailId;
+                    entity.AgentRunID = cleanRunId;
+                    entity.SourceKind = entry.sourceKind;
+                    entity.SpaceItemID = entry.spaceItemId;
+                    entity.ContentSourceID = entry.contentSourceId;
+                    entity.TargetEntityID = entry.targetEntityId;
+                    entity.TargetRecordID = entry.targetRecordId;
+                    entity.SourceTitle = entry.sourceTitle;
+                    entity.Band = entry.band;
+                    entity.WasSupplied = entry.wasSupplied;
+                    entity.WasCited = entry.wasCited;
+                    entity.RetrievalRank = entry.retrievalRank;
+                    entity.RelevanceScore = entry.relevanceScore;
+                    entity.RankingMode = entry.rankingMode;
+                    entity.CitationOrdinal = entry.citationOrdinal;
+                    entity.EstimatedTokens = entry.estimatedTokens;
+                    entity.WasTruncated = entry.wasTruncated;
+                    entity.Sequence = entry.sequence;
+
+                    const saved = await entity.Save();
+                    if (!saved || !entity.ID) {
+                        return {
+                            ok: false,
+                            errorMessage: entity.LatestResult?.CompleteMessage ?? 'Failed to save Space Agent Source Receipt row.',
+                        };
+                    }
+                    savedIds.push(entity.ID);
                 }
-                savedIds.push(entity.ID);
-            }
 
-            return {
-                ok: true,
-                persistedCount: savedIds.length,
-                savedIds,
-            };
+                return {
+                    ok: true,
+                    persistedCount: savedIds.length,
+                    savedIds,
+                };
+            });
         }, { spaceChatId: cleanChatId, ...(reachContext ? { reachContext } : {}) });
     } catch (error) {
         return {
@@ -742,6 +1310,70 @@ export async function persistSpaceAgentSourceReceipts(
             errorMessage: error instanceof Error ? error.message : String(error),
         };
     }
+}
+
+export interface DeleteSpaceAgentSourceReceiptsForSpaceItemParams {
+    provider: IMetadataProvider;
+    systemUser: UserInfo;
+    spaceItemId: string;
+    sharedOnly?: boolean;
+    transactionGroup?: TransactionGroupBase | null;
+}
+
+/**
+ * Deletes or invalidates `SpaceAgentSourceReceipt` rows referencing `spaceItemId` inside a
+ * privileged server operation scope and PostgreSQL bypass-RLS transaction context.
+ */
+export async function deleteSpaceAgentSourceReceiptsForSpaceItem(
+    params: DeleteSpaceAgentSourceReceiptsForSpaceItemParams,
+): Promise<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity[]> {
+    const trimmedItemId = typeof params.spaceItemId === 'string' ? params.spaceItemId.trim() : '';
+    const cleanItemId = normalizeReceiptUuid(trimmedItemId) ?? (/^[A-Za-z0-9_-]+$/.test(trimmedItemId) ? trimmedItemId : null);
+    if (!cleanItemId) {
+        return [];
+    }
+
+    ensurePostgresReceiptContextHook(params.provider);
+
+    return runWithPostgresPrivilegedReceiptContext(params.provider, async () => {
+        const rv = RunView.FromMetadataProvider(params.provider);
+        const bandClause = params.sharedOnly ? ` AND Band = 'Shared'` : '';
+        const receiptsRes = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>({
+            EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
+            ExtraFilter: `SpaceItemID = '${cleanItemId}'${bandClause}`,
+            ResultType: 'entity_object',
+            IgnoreMaxRows: true,
+        }, params.systemUser);
+
+        if (!receiptsRes || !receiptsRes.Success) {
+            throw new Error(
+                `Space item receipt cleanup failed to query Space Agent Source Receipts for item ${cleanItemId}: ${receiptsRes?.ErrorMessage ?? 'RunView failed'}`,
+            );
+        }
+
+        const loadedReceipts = receiptsRes.Results ?? [];
+        for (const receiptEntity of loadedReceipts) {
+            if (params.transactionGroup) {
+                receiptEntity.TransactionGroup = params.transactionGroup;
+            }
+            const deleted = await ServerOperationScopeManager.Instance.RunWithAuthority(
+                {
+                    operationKey: COLLABORATION_ITEM_DELETE_OPERATION,
+                    source: 'ServerEngine',
+                    allowedEntities: [COLLABORATION_SOURCE_RECEIPT_ENTITY],
+                    userId: params.systemUser.ID,
+                },
+                () => receiptEntity.Delete(),
+            );
+            if (!deleted) {
+                throw new Error(
+                    `Space item receipt cleanup failed to delete Space Agent Source Receipt ${receiptEntity.ID}`,
+                );
+            }
+        }
+
+        return loadedReceipts;
+    });
 }
 
 /**
@@ -764,6 +1396,7 @@ export async function querySpaceAgentSourceReceipts(
         return { ok: false, receipts: [], filteredOutCount: 0, errorMessage: 'Invalid conversationDetailId UUID.' };
     }
 
+    ensurePostgresReceiptContextHook(params.provider);
     const rv = RunView.FromMetadataProvider(params.provider);
     const chatRes = await rv.RunView<{ ID: string; SpaceID: string; Kind: string; OwnerUserID: string | null }>({
         EntityName: SPACE_CHATS_ENTITY,
@@ -1313,6 +1946,7 @@ export async function loadSpaceAgentSourceReceiptById(
         };
     }
 
+    ensurePostgresReceiptContextHook(params.provider);
     const entity = await params.provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>(
         COLLABORATION_SOURCE_RECEIPT_ENTITY,
         params.user,
