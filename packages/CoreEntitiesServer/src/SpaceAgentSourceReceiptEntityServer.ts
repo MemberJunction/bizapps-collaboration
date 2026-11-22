@@ -20,13 +20,17 @@ import {
 import { RegisterClass } from '@memberjunction/global';
 import {
     canReaderAccessSourceReceipt,
+    type CollaborationSettings,
+    DEFAULT_COLLABORATION_SETTINGS,
     isSourceReceiptBand,
     isSourceReceiptKind,
     isSourceReceiptRankingMode,
+    type LiveKnowledgeSourceGrantInput,
+    type LiveSpaceTypeConfigInput,
     membershipReaches,
     normalizeReceiptUuid,
+    resolveEffectiveKnowledgeSourceBandsBySpace,
     spaceAllowsAgentRetrieval,
-    stripRecordKeyPrefix,
     type MemberSnapshot,
     type RoleFlags,
     type SourceReceiptBand,
@@ -38,16 +42,23 @@ import {
     evaluateParticipantSourceReceiptWriteAccess,
     getCollaborationTurnAuthorityContext,
 } from './ai-run-lockdown.js';
+import { CollaborationEngine } from './CollaborationEngine.js';
 import { toNode, type SpaceRow } from './load-graph.js';
+import { readEveryRow } from './read-every-row.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const CONVERSATION_DETAILS_ENTITY = 'MJ: Conversation Details';
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
+const SPACE_TYPES_ENTITY = 'MJ_BizApps_Collaboration: Space Types';
 const SPACE_CHATS_ENTITY = 'MJ_BizApps_Collaboration: Space Chats';
 const SPACE_ITEMS_ENTITY = 'MJ_BizApps_Collaboration: Space Items';
 const SPACE_GRANTS_ENTITY = 'MJ_BizApps_Collaboration: Space Grants';
 const SPACE_MEMBERS_ENTITY = 'MJ_BizApps_Collaboration: Space Members';
 const SPACE_ROLES_ENTITY = 'MJ_BizApps_Collaboration: Space Role Types';
+
+interface SpaceConfigValidationRow extends SpaceRow {
+    Configuration?: string | null;
+}
 
 interface SpaceChatValidationRow {
     ID: string;
@@ -283,7 +294,7 @@ export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationS
                 },
                 {
                     EntityName: SPACES_ENTITY,
-                    Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID', 'SpaceTypeID'],
+                    Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID', 'SpaceTypeID', 'Configuration'],
                     ResultType: 'simple',
                     // row-cap-ok: refuses on a full page
                     MaxRows: 2000,
@@ -465,48 +476,54 @@ export class SpaceAgentSourceReceiptEntityServer extends mjBizAppsCollaborationS
                     );
                 }
             } else if (this.SourceKind === 'KnowledgeSource' && contentSourceId) {
-                const { chainIds, spaceTypeIds } = resolveSpaceChainIdsAndType(spaceRows, chatSpaceId);
-                if (spaceId !== chatSpaceId && !chainIds.some((id) => id.toLowerCase() === spaceId)) {
-                    const targetChain = resolveSpaceChainIdsAndType(spaceRows, spaceId);
-                    for (const cid of targetChain.chainIds) {
-                        if (!chainIds.some((id) => id.toLowerCase() === cid.toLowerCase())) chainIds.push(cid);
-                    }
-                    for (const tid of targetChain.spaceTypeIds) {
-                        if (!spaceTypeIds.some((t) => t.toLowerCase() === tid.toLowerCase())) spaceTypeIds.push(tid);
-                    }
-                }
-                const spaceClause = chainIds.map((id) => `'${id}'`).join(', ');
-                const typeClause = spaceTypeIds.map((id) => `'${id}'`).join(', ');
-                const scopeParts: string[] = [];
-                if (spaceClause) scopeParts.push(`SpaceID IN (${spaceClause})`);
-                if (typeClause) scopeParts.push(`SpaceTypeID IN (${typeClause})`);
-                scopeParts.push('(SpaceID IS NULL AND SpaceTypeID IS NULL)');
-
-                const grantsRes = await rv.RunView<SpaceGrantValidationRow>({
-                    EntityName: SPACE_GRANTS_ENTITY,
-                    ExtraFilter: `Kind = 'KnowledgeSource' AND (${scopeParts.join(' OR ')})`,
-                    Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetRecordID'],
-                    ResultType: 'simple',
-                    // row-cap-ok: bounded by KnowledgeSource grants on a single space chain
-                    MaxRows: 500,
-                }, actingUser);
-                if (!grantsRes.Success || !grantsRes.Results) {
+                const spaceConfigRows = spacesRes.Results as SpaceConfigValidationRow[];
+                let spaceTypeRows: Array<LiveSpaceTypeConfigInput & { ID: string }> = [];
+                let grantRows: Array<LiveKnowledgeSourceGrantInput & { ID: string }> = [];
+                try {
+                    spaceTypeRows = await readEveryRow<LiveSpaceTypeConfigInput & { ID: string }>(
+                        rv,
+                        {
+                            EntityName: SPACE_TYPES_ENTITY,
+                            ExtraFilter: '',
+                            Fields: ['ID', 'Configuration'],
+                        },
+                        actingUser,
+                    );
+                    grantRows = await readEveryRow<LiveKnowledgeSourceGrantInput & { ID: string }>(
+                        rv,
+                        {
+                            EntityName: SPACE_GRANTS_ENTITY,
+                            ExtraFilter: `Kind = 'KnowledgeSource'`,
+                            Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetEntityID', 'TargetRecordID', 'Sequence'],
+                        },
+                        actingUser,
+                    );
+                } catch {
                     return failValidation(
                         result,
                         'ContentSourceID',
                         'KnowledgeSource grant status could not be verified.',
                     );
                 }
-                const matchingGrants = grantsRes.Results.filter(
-                    (g) => normalizeReceiptUuid(stripRecordKeyPrefix(g.TargetRecordID)) === contentSourceId,
-                );
-                const hasRevoke = matchingGrants.some((g) => g.Mode === 'Revoke');
-                const activeGrant = matchingGrants.find(
-                    (g) =>
-                        g.Mode !== 'Revoke' &&
-                        (g.Band === receiptBand || (receiptBand === 'Team' && g.Band === 'Shared')),
-                );
-                if (hasRevoke || !activeGrant) {
+
+                let appSettings: CollaborationSettings = DEFAULT_COLLABORATION_SETTINGS;
+                try {
+                    if (CollaborationEngine.Instance.Loaded) {
+                        appSettings = CollaborationEngine.Instance.CollaborationSettings;
+                    }
+                } catch {
+                    // Fall back to defaults in mocked unit test providers without ApplicationSettings
+                }
+
+                const effectiveBySpace = resolveEffectiveKnowledgeSourceBandsBySpace({
+                    spaceIds: [spaceId],
+                    spaces: spaceConfigRows,
+                    grants: grantRows,
+                    spaceTypes: spaceTypeRows,
+                    appSettings,
+                });
+                const effectiveBand = effectiveBySpace.get(spaceId)?.get(contentSourceId);
+                if (!effectiveBand || (receiptBand === 'Shared' && effectiveBand !== 'Shared')) {
                     return failValidation(
                         result,
                         'ContentSourceID',

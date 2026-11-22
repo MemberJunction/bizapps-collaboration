@@ -5306,7 +5306,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     private liveReceiptSourcesContext(spaceId: string): LiveReceiptSourcesContext {
-        const cfg = this.configurationOf(spaceId);
         const spaceItems = this.librarySpaceIdLoaded && UUIDsEqual(this.librarySpaceIdLoaded, spaceId)
             ? this.libraryRows.map((row) => ({
                 id: row.id,
@@ -5314,12 +5313,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 band: (row.band === 'Team' ? 'Team' : 'Shared') as 'Shared' | 'Team',
             }))
             : undefined;
-        const knowledgeSourceBandsBySpace = cfg
-            ? { [spaceId.toLowerCase()]: buildActiveKnowledgeSourceBands(cfg) }
-            : undefined;
+        const knowledgeSourceBandsBySpace: Record<string, Record<string, 'Shared' | 'Team'>> = {};
+        for (const [sid, entry] of this.serverConfigurationBySpace.entries()) {
+            knowledgeSourceBandsBySpace[sid.toLowerCase()] = buildActiveKnowledgeSourceBands(entry.configuration);
+        }
         return {
             ...(spaceItems ? { spaceItems, scopedSpaceId: spaceId } : {}),
-            ...(knowledgeSourceBandsBySpace ? { knowledgeSourceBandsBySpace } : {}),
+            knowledgeSourceBandsBySpace,
         };
     }
 

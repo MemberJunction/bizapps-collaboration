@@ -5,12 +5,15 @@
 import { type IMetadataProvider, LogError, RunView, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import {
     canReaderAccessSourceReceipt,
+    type CollaborationSettings,
+    DEFAULT_COLLABORATION_SETTINGS,
     type EffectiveGrant,
     isReceiptAuthorizedByLiveSources,
     isSourceReceiptBand,
     type LiveKnowledgeSourceGrantInput,
     type LiveReceiptSourceSnapshot,
     type LiveSpaceChainNodeInput,
+    type LiveSpaceTypeConfigInput,
     normalizeReceiptUuid,
     resolveEffectiveKnowledgeSourceBandsBySpace,
     type SourceReceiptBand,
@@ -24,6 +27,7 @@ import {
     type mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
 } from '@mj-biz-apps/collaboration-entities';
 import { COLLABORATION_SOURCE_RECEIPT_ENTITY, runWithCollaborationAgentTurnAuthority } from './ai-run-lockdown.js';
+import { CollaborationEngine } from './CollaborationEngine.js';
 import { readEveryRow } from './read-every-row.js';
 import type { TurnToolSourceHit } from './turn-tools.js';
 
@@ -31,6 +35,7 @@ const CONTENT_SOURCES_ENTITY = 'MJ: Content Sources';
 const SPACE_CHATS_ENTITY = 'MJ_BizApps_Collaboration: Space Chats';
 const SPACE_GRANTS_ENTITY = 'MJ_BizApps_Collaboration: Space Grants';
 const SPACE_ITEMS_ENTITY = 'MJ_BizApps_Collaboration: Space Items';
+const SPACE_TYPES_ENTITY = 'MJ_BizApps_Collaboration: Space Types';
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 const TASKS_ENTITY = 'MJ_BizApps_Tasks: Tasks';
 const FILES_ENTITY = 'MJ: Files';
@@ -792,7 +797,7 @@ export async function querySpaceAgentSourceReceipts(
                 {
                     EntityName: SPACES_ENTITY,
                     ExtraFilter: '',
-                    Fields: ['ID', 'ParentID', 'SpaceTypeID'],
+                    Fields: ['ID', 'ParentID', 'SpaceTypeID', 'Configuration'],
                 },
                 grantReader,
             );
@@ -805,6 +810,26 @@ export async function querySpaceAgentSourceReceipts(
             };
         }
 
+        let spaceTypeRows: Array<LiveSpaceTypeConfigInput & { ID: string }> = [];
+        try {
+            spaceTypeRows = await readEveryRow<LiveSpaceTypeConfigInput & { ID: string }>(
+                rv,
+                {
+                    EntityName: SPACE_TYPES_ENTITY,
+                    ExtraFilter: '',
+                    Fields: ['ID', 'Configuration'],
+                },
+                grantReader,
+            );
+        } catch (typeErr) {
+            return {
+                ok: false,
+                receipts: [],
+                filteredOutCount: 0,
+                errorMessage: typeErr instanceof Error ? typeErr.message : String(typeErr),
+            };
+        }
+
         let grantRows: Array<LiveKnowledgeSourceGrantInput & { ID: string }>;
         try {
             grantRows = await readEveryRow<LiveKnowledgeSourceGrantInput & { ID: string }>(
@@ -812,7 +837,7 @@ export async function querySpaceAgentSourceReceipts(
                 {
                     EntityName: SPACE_GRANTS_ENTITY,
                     ExtraFilter: `Kind = 'KnowledgeSource'`,
-                    Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetRecordID', 'Sequence'],
+                    Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetEntityID', 'TargetRecordID', 'Sequence'],
                 },
                 grantReader,
             );
@@ -825,10 +850,21 @@ export async function querySpaceAgentSourceReceipts(
             };
         }
 
+        let appSettings: CollaborationSettings = DEFAULT_COLLABORATION_SETTINGS;
+        try {
+            if (CollaborationEngine.Instance.Loaded) {
+                appSettings = CollaborationEngine.Instance.CollaborationSettings;
+            }
+        } catch {
+            // Fall back to default app settings in mocked test environments without loaded ApplicationSettings
+        }
+
         liveSnapshot.knowledgeSourceBandsBySpace = resolveEffectiveKnowledgeSourceBandsBySpace({
             spaceIds: knowledgeSpaceIds,
             spaces: spaceNodes,
             grants: grantRows,
+            spaceTypes: spaceTypeRows,
+            appSettings,
         });
     }
 

@@ -100,11 +100,31 @@ function isReceiptAuthorizedByClientLiveSources(
     },
     liveSources: LiveReceiptSourcesContext | undefined,
 ): boolean {
-    if (!liveSources) return true;
     const normSpaceId = normalizeReceiptUuid(receipt.spaceId);
     if (!normSpaceId) return false;
 
-    if (receipt.sourceKind === 'SpaceItem' && liveSources.spaceItems) {
+    if (receipt.sourceKind === 'KnowledgeSource') {
+        if (!liveSources?.knowledgeSourceBandsBySpace) {
+            return false;
+        }
+        const spaceGrantsMap = new Map<string, Map<string, SourceReceiptBand>>();
+        for (const [rawSpaceId, rawGrants] of Object.entries(liveSources.knowledgeSourceBandsBySpace)) {
+            const cleanSpaceId = normalizeReceiptUuid(rawSpaceId);
+            if (!cleanSpaceId) continue;
+            const inner = new Map<string, SourceReceiptBand>();
+            for (const [rawSourceId, grantBand] of Object.entries(rawGrants)) {
+                const cleanSourceId = normalizeReceiptUuid(rawSourceId);
+                if (cleanSourceId && isSourceReceiptBand(grantBand)) {
+                    inner.set(cleanSourceId, grantBand);
+                }
+            }
+            spaceGrantsMap.set(cleanSpaceId, inner);
+        }
+        return isReceiptAuthorizedByLiveSources(receipt, { knowledgeSourceBandsBySpace: spaceGrantsMap });
+    }
+
+    if (receipt.sourceKind === 'SpaceItem') {
+        if (!liveSources?.spaceItems) return true;
         const scopedSpaceId = liveSources.scopedSpaceId ? normalizeReceiptUuid(liveSources.scopedSpaceId) : null;
         if (!scopedSpaceId || normSpaceId === scopedSpaceId) {
             const spaceItemsById = new Map<string, { spaceId: string; band: SourceReceiptBand }>();
@@ -115,36 +135,12 @@ function isReceiptAuthorizedByClientLiveSources(
                     spaceItemsById.set(itemId, { spaceId: itemSpaceId, band: item.band });
                 }
             }
-            if (!isReceiptAuthorizedByLiveSources(receipt, { spaceItemsById })) {
-                return false;
-            }
+            return isReceiptAuthorizedByLiveSources(receipt, { spaceItemsById });
         }
+        return true;
     }
 
-    if (receipt.sourceKind === 'KnowledgeSource' && liveSources.knowledgeSourceBandsBySpace) {
-        const spaceGrantsMap = new Map<string, Map<string, SourceReceiptBand>>();
-        let hasSpaceEntry = false;
-        for (const [rawSpaceId, rawGrants] of Object.entries(liveSources.knowledgeSourceBandsBySpace)) {
-            const cleanSpaceId = normalizeReceiptUuid(rawSpaceId);
-            if (!cleanSpaceId) continue;
-            if (cleanSpaceId === normSpaceId) {
-                hasSpaceEntry = true;
-            }
-            const inner = new Map<string, SourceReceiptBand>();
-            for (const [rawSourceId, grantBand] of Object.entries(rawGrants)) {
-                const cleanSourceId = normalizeReceiptUuid(rawSourceId);
-                if (cleanSourceId && isSourceReceiptBand(grantBand)) {
-                    inner.set(cleanSourceId, grantBand);
-                }
-            }
-            spaceGrantsMap.set(cleanSpaceId, inner);
-        }
-        if (hasSpaceEntry && !isReceiptAuthorizedByLiveSources(receipt, { knowledgeSourceBandsBySpace: spaceGrantsMap })) {
-            return false;
-        }
-    }
-
-    return true;
+    return false;
 }
 
 /**

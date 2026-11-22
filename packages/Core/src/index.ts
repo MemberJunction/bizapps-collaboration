@@ -204,6 +204,7 @@ export type {
     LiveKnowledgeSourceGrantInput,
     LiveReceiptSourceSnapshot,
     LiveSpaceChainNodeInput,
+    LiveSpaceTypeConfigInput,
     RejectedSourceCitation,
     SourceReceiptBand,
     SourceReceiptKind,
