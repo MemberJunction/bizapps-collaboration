@@ -7,7 +7,7 @@
  * neither does not receive it. A seat that is still Invited does not get a link.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { type BaseEntity, LogError, Metadata, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { type BaseEntity, LogError, Metadata, RunView, type IMetadataProvider, UserInfo } from '@memberjunction/core';
 import '@memberjunction/core-entities';
 import {
     MJMagicLinkInviteApplicationEntity,
@@ -22,6 +22,7 @@ import '@mj-biz-apps/common-entities';
 import { IsPeopleEntity, mjBizAppsCommonPersonEntity, ResolvePersonIDForUser } from '@mj-biz-apps/common-entities';
 import { callerMayReceiveLink, inviteEmail, linkHandoff, magicLinkBlocksAccount, membershipReaches, refuseInvite, type InviteEmail } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationEngine } from './CollaborationEngine.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { spaceTypeAudience } from './space-audience.js';
 
@@ -31,12 +32,10 @@ const INVITES = 'MJ: Magic Link Invites';
 const USERS = 'MJ: Users';
 const USER_ROLES = 'MJ: User Roles';
 const USER_APPS = 'MJ: User Applications';
-const ROLES = 'MJ: Roles';
 const PEOPLE = 'MJ_BizApps_Common: People';
 const APPLICATION_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 const PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
 const PLACEHOLDER_USER = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
-const STAFF = new Set(['ui', 'developer', 'integration']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface MagicLinkHost {
@@ -76,7 +75,7 @@ export function resolveMagicLinkHost(override?: Partial<MagicLinkHost>): MagicLi
               publicUrl: process.env.PUBLIC_URL || 'http://localhost:4000',
               restrictedRoleName: process.env.MAGIC_LINK_RESTRICTED_ROLE || 'Magic Link Baseline',
               grantableRoleNames: ['Space Participant'],
-              inviteIssuerRoleNames: ['UI', 'Developer', 'Integration'],
+              inviteIssuerRoleNames: [],
               communicationProvider: process.env.MAGIC_LINK_COMM_PROVIDER || undefined,
               fromAddress: process.env.MAGIC_LINK_FROM_ADDRESS || '',
               defaultExpiresInHours: 72,
@@ -227,10 +226,13 @@ async function deliverLink(input: {
     user: UserInfo;
     host: MagicLinkHost;
 }, system: UserInfo, email: string): Promise<MintSpaceLinkResult> {
+    const authProvider = resolveAuthProvider(input.provider);
+    const callerAuthorized = authProvider ? CollaborationEngine.Instance.UserCanIssueSpaceInviteLinks(input.user, authProvider) : false;
     const issuer = callerMayReceiveLink({
         userType: input.user.Type,
         roleNames: (input.user.UserRoles ?? []).map((role) => role.Role ?? '').filter((name) => name.length > 0),
         issuerRoleNames: input.host.inviteIssuerRoleNames,
+        callerAuthorized,
     });
     const handoff = linkHandoff({ emailChannel: !!input.host.communicationProvider, callerIsIssuer: issuer });
     if (handoff === 'withhold') {
@@ -384,6 +386,10 @@ async function createAccount(provider: IMetadataProvider, system: UserInfo, emai
     }
 }
 
+function resolveAuthProvider(provider: IMetadataProvider): IMetadataProvider | undefined {
+    return provider.Authorizations !== undefined ? provider : Metadata.Provider;
+}
+
 async function ensureAccess(provider: IMetadataProvider, system: UserInfo, userId: string): Promise<{ ok: true } | { ok: false; message: string }> {
     const view = RunView.FromMetadataProvider(provider);
     const links = await view.RunView<{ RoleID: string }>({
@@ -394,21 +400,25 @@ async function ensureAccess(provider: IMetadataProvider, system: UserInfo, userI
     }, system);
     if (!links.Success) return { ok: false, message: 'Invite refused: the account roles could not be read.' };
     const roleIds = (links.Results ?? []).map((row) => row.RoleID).filter((id) => UUID.test(id));
-    const names = roleIds.length ? await view.RunView<{ Name: string }>({
-        EntityName: ROLES,
-        ExtraFilter: `ID IN (${roleIds.map((id) => `'${id}'`).join(',')})`,
-        Fields: ['Name'],
-        ResultType: 'simple',
-    }, system) : { Success: true, Results: [] as { Name: string }[] };
-    if (!names.Success) return { ok: false, message: 'Invite refused: the account roles could not be read.' };
-    const staff = (names.Results ?? []).some((row) => STAFF.has(row.Name.trim().toLowerCase()));
     const hasParticipant = roleIds.some((id) => id.toLowerCase() === PARTICIPANT_ROLE_ID.toLowerCase());
-    if (!hasParticipant && !staff) {
-        const role = await provider.GetEntityObject<MJUserRoleEntity>(USER_ROLES, system);
-        role.NewRecord();
-        role.UserID = userId;
-        role.RoleID = PARTICIPANT_ROLE_ID;
-        if (!(await role.Save())) return { ok: false, message: 'The account exists. Space Participant could not be granted.' };
+    if (!hasParticipant) {
+        const authProvider = resolveAuthProvider(provider);
+        const hasStaffAuthorization = authProvider
+            ? CollaborationEngine.Instance.UserHasStaffAuthorization(
+                  new UserInfo(authProvider, {
+                      ID: userId,
+                      UserRoles: roleIds.map((roleId) => ({ UserID: userId, RoleID: roleId })),
+                  }),
+                  authProvider,
+              )
+            : false;
+        if (!hasStaffAuthorization) {
+            const role = await provider.GetEntityObject<MJUserRoleEntity>(USER_ROLES, system);
+            role.NewRecord();
+            role.UserID = userId;
+            role.RoleID = PARTICIPANT_ROLE_ID;
+            if (!(await role.Save())) return { ok: false, message: 'The account exists. Space Participant could not be granted.' };
+        }
     }
     const apps = await view.RunView<{ ID: string }>({
         EntityName: USER_APPS,

@@ -525,7 +525,8 @@ export function authorizeItemWrite(input: {
 
 /**
  * Who may be handed the raw sign-in link. An email channel delivers it to the
- * address instead. Otherwise only an Owner-type account, or a role the host
+ * address instead. Otherwise only an Owner-type account, a caller holding the
+ * declarative MJ Authorization (`callerAuthorized`), or a role the host
  * listed in `inviteIssuerRoleNames`, may see it. A space owner is not enough:
  * the link signs in as the address it names.
  */
@@ -533,8 +534,10 @@ export function callerMayReceiveLink(input: {
     userType: string | null | undefined;
     roleNames: readonly string[];
     issuerRoleNames: readonly string[];
+    callerAuthorized?: boolean;
 }): boolean {
     if ((input.userType ?? '').trim().toLowerCase() === 'owner') return true;
+    if (input.callerAuthorized) return true;
     const allowed = new Set(input.issuerRoleNames.map((name) => name.trim().toLowerCase()).filter((name) => name.length > 0));
     if (allowed.size === 0) return false;
     return input.roleNames.some((name) => allowed.has(name.trim().toLowerCase()));

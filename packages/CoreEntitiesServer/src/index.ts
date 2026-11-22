@@ -143,4 +143,16 @@ export {
     type MagicLinkHost,
     type MintSpaceLinkResult,
 } from './mint-space-link.js';
+export {
+    COLLABORATION_AGENT_TURN_OPERATION,
+    COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES,
+    type CollaborationAIRunEntityName,
+    runWithCollaborationAgentTurnAuthority,
+    evaluateParticipantAIRunWriteAccess,
+    syncPromptRunBasePrototype,
+    CollaborationAIAgentRunEntityServer,
+    CollaborationAIAgentRunStepEntityServer,
+    CollaborationAIPromptRunEntityServer,
+    LoadCollaborationAIRunLockdown,
+} from './ai-run-lockdown.js';
 

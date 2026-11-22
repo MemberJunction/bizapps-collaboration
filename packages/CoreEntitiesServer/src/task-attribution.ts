@@ -10,7 +10,7 @@ import { requireSystemUser } from './load-graph.js';
 import { assigneeSeatMessage, filedTask } from './task-space.js';
 import { asMetadata } from './uuid.js';
 
-const PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
+export const PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
 
 /**
  * These gates run for every save of the entity. One class wins per entity, and a class registered with no priority

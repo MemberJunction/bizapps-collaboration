@@ -4,6 +4,9 @@ metadata/sql_logging/
 codegen.output.log
 node_modules/
 dist/
+.turbo/
+*.tsbuildinfo
+.DS_Store
 .local-storage/
 integration-*.log
 gate-*.log

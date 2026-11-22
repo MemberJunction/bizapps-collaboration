@@ -1,9 +1,17 @@
 import { RegisterClass } from '@memberjunction/global';
+import { RunView, WellKnownUserSource } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { ActionEngineServer } from '@memberjunction/actions';
 import type { ActionParam } from '@memberjunction/actions-base';
 import { COLLABORATION_TEST_AGENT_DRIVER_CLASS } from './test-agent.js';
-import type { ActionChange, ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import type {
+    ActionChange,
+    ExecuteAgentParams,
+    ExecuteAgentResult,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentRunStepEntityExtended,
+    MJAIPromptRunEntityExtended,
+} from '@memberjunction/ai-core-plus';
 import type { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 
 /** The items the space chat turn hands an agent: what its audience may quote. */
@@ -122,6 +130,65 @@ export class CollaborationTestSpaceAgentDriver extends BaseAgent {
             run.Message = replyText;
             if (!(await run.Save())) {
                 throw new Error(`Failed to update AI Agent Run ${run.ID} after running space data`);
+            }
+        }
+
+        // Persist and update legitimate MJ: AI Prompt Runs and MJ: AI Agent Run Steps records
+        // as the acting caller inside the server-orchestrated Space Chat Turn authority scope.
+        const lookupUser = (system ? await WellKnownUserSource.Instance.GetSystemUser(provider) : null) ?? system;
+        if (system && lookupUser) {
+            const rv = RunView.FromMetadataProvider(provider);
+            const [promptsRes, modelsRes, vendorsRes] = await Promise.all([
+                rv.RunView<{ ID: string }>({ EntityName: 'MJ: AI Prompts', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, lookupUser),
+                rv.RunView<{ ID: string }>({ EntityName: 'MJ: AI Models', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, lookupUser),
+                rv.RunView<{ ID: string }>({ EntityName: 'MJ: AI Vendors', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, lookupUser),
+            ]);
+            const promptId = promptsRes.Success ? promptsRes.Results?.[0]?.ID : undefined;
+            const modelId = modelsRes.Success ? modelsRes.Results?.[0]?.ID : undefined;
+            const vendorId = vendorsRes.Success ? vendorsRes.Results?.[0]?.ID : undefined;
+            if (promptId && modelId && vendorId) {
+                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', system);
+                promptRun.NewRecord();
+                promptRun.PromptID = promptId;
+                promptRun.ModelID = modelId;
+                promptRun.VendorID = vendorId;
+                promptRun.AgentID = params.agent.ID;
+                promptRun.RunAt = new Date();
+                promptRun.Success = false;
+                promptRun.RunType = 'Single';
+                promptRun.Messages = JSON.stringify([{ role: 'user', content: 'Space Chat Test Stub prompt' }]);
+                if (!(await promptRun.Save())) {
+                    throw new Error(`Failed to save AI Prompt Run for agent ${params.agent.ID}: ${promptRun.LatestResult?.CompleteMessage ?? ''}`);
+                }
+
+                const step = await provider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', system);
+                step.NewRecord();
+                step.AgentRunID = run.ID;
+                step.StepNumber = 1;
+                step.StepType = 'Prompt';
+                step.StepName = 'Space Chat Test Stub Prompt';
+                step.TargetID = promptId;
+                step.TargetLogID = promptRun.ID;
+                step.Status = 'Running';
+                step.StartedAt = new Date();
+                if (!(await step.Save())) {
+                    throw new Error(`Failed to save AI Agent Run Step for run ${run.ID}: ${step.LatestResult?.CompleteMessage ?? ''}`);
+                }
+
+                promptRun.CompletedAt = new Date();
+                promptRun.Success = true;
+                promptRun.Result = replyText;
+                if (!(await promptRun.Save())) {
+                    throw new Error(`Failed to update AI Prompt Run ${promptRun.ID}: ${promptRun.LatestResult?.CompleteMessage ?? ''}`);
+                }
+
+                step.Status = 'Completed';
+                step.CompletedAt = new Date();
+                step.Success = true;
+                step.OutputData = JSON.stringify({ replyText });
+                if (!(await step.Save())) {
+                    throw new Error(`Failed to update AI Agent Run Step ${step.ID}: ${step.LatestResult?.CompleteMessage ?? ''}`);
+                }
             }
         }
 

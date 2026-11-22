@@ -27,6 +27,7 @@ import { buildSpaceMeetingsAgentContext } from './space-meetings.js';
 import { resolveTurnAgentViaDecision, type ResolveTurnAgentViaDecisionParams, type SpaceChatDecisionRunner } from './space-chat-decision-routing.js';
 import { parseUuid } from './uuid.js';
 import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
+import { runWithCollaborationAgentTurnAuthority } from './ai-run-lockdown.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
@@ -639,7 +640,9 @@ async function runClaimedTurn(
                     },
                 };
 
-                const runResult = await runner.RunAgent(runnerParams);
+                const runResult = await runWithCollaborationAgentTurnAuthority(user.ID, () =>
+                    runner.RunAgent(runnerParams)
+                );
                 finishedResult = runResult ?? undefined;
                 if (runResult?.agentRun?.ID) {
                     agentRunId = runResult.agentRun.ID;

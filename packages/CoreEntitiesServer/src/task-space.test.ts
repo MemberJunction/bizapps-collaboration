@@ -298,15 +298,26 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
         return provider;
     }
 
-    function makeTask(provider: object, user: UserInfo, fields: Array<{ Name: string; Dirty: boolean }> = [{ Name: 'Status', Dirty: true }]) {
+    function makeTask(
+        provider: object,
+        user: UserInfo,
+        fields: Array<{ Name: string; CodeName?: string; Dirty: boolean }> = [{ Name: 'Status', Dirty: true }],
+        overrides: { ID?: string; IsSaved?: boolean; ParentID?: string | null; CreatedByPersonID?: string | null; Status?: string; TypeID?: string | null } = {},
+    ) {
         const task = Object.create(CollaborationTaskEntityServer.prototype) as CollaborationTaskEntityServer;
+        const normalizedFields = fields.map((field) => ({ CodeName: field.CodeName ?? field.Name, ...field }));
         Object.defineProperties(task, {
-            ID: { value: TASK_ID, writable: true },
-            IsSaved: { value: true, writable: true },
-            Fields: { value: fields, writable: true },
+            ID: { value: overrides.ID ?? TASK_ID, writable: true },
+            IsSaved: { value: overrides.IsSaved ?? true, writable: true },
+            ParentID: { value: overrides.ParentID ?? null, writable: true },
+            CreatedByPersonID: { value: overrides.CreatedByPersonID ?? null, writable: true },
+            Status: { value: overrides.Status ?? 'Open', writable: true },
+            TypeID: { value: overrides.TypeID ?? null, writable: true },
+            Fields: { value: normalizedFields, writable: true },
             ProviderToUse: { value: provider, writable: true },
             RunViewProviderToUse: { value: provider, writable: true },
             ContextCurrentUser: { value: user, writable: true },
+            _fieldCache: { value: new Map(), writable: true },
             _resultHistory: { value: [], writable: true },
         });
         return task;
@@ -496,16 +507,12 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
                 ID: ASSIGNEE_USER_ID,
                 UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
             } as Partial<UserInfo> as UserInfo;
-            const task = Object.create(CollaborationTaskEntityServer.prototype) as CollaborationTaskEntityServer;
-            Object.defineProperties(task, {
-                ID: { value: '99999999-9999-4999-8999-999999999999', writable: true },
-                ParentID: { value: TASK_ID, writable: true },
-                IsSaved: { value: false, writable: true },
-                Fields: { value: [{ Name: 'Name', Dirty: true }, { Name: 'ParentID', Dirty: true }], writable: true },
-                ProviderToUse: { value: provider, writable: true },
-                RunViewProviderToUse: { value: provider, writable: true },
-                ContextCurrentUser: { value: user, writable: true },
-            });
+            const task = makeTask(
+                provider,
+                user,
+                [{ Name: 'Name', Dirty: true }, { Name: 'ParentID', Dirty: true }],
+                { ID: '99999999-9999-4999-8999-999999999999', ParentID: TASK_ID, IsSaved: false },
+            );
             const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
             assert.equal(res.Success, false);
             const err = res.Errors.find((e: ValidationErrorInfo) => e.Source === 'ParentID');

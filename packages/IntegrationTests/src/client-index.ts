@@ -26,6 +26,7 @@ import './checks/client/stage2.client.checks.js';
 import './checks/client/stage3.client.checks.js';
 import './checks/client/stage4.client.checks.js';
 import './checks/client/space-meetings.client.checks.js';
+import './checks/client/adversarial-persona.client.checks.js';
 
 export * from './entity-names.js';
 export * from './wire.js';

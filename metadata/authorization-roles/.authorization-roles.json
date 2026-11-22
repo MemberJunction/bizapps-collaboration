@@ -88,5 +88,35 @@
       "RoleID": "@lookup:MJ: Roles.Name=Integration",
       "Type": "Allow"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "C1B2A3D4-E5F6-4789-9ABC-111111111001"
+    },
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Issue Space Invite Links",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C1B2A3D4-E5F6-4789-9ABC-111111111002"
+    },
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Issue Space Invite Links",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C1B2A3D4-E5F6-4789-9ABC-111111111003"
+    },
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Issue Space Invite Links",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow"
+    }
   }
 ]

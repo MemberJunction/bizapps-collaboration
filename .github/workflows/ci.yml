@@ -34,6 +34,7 @@ jobs:
       - run: node scripts/check-downstream-names.mjs
       - run: node scripts/check-mj-inputs.mjs --self-test && node scripts/check-mj-inputs.mjs
       - run: node scripts/check-registered-exports.mjs --self-test && node scripts/check-registered-exports.mjs
+      - run: node scripts/check-no-role-name-auth.mjs --self-test && node scripts/check-no-role-name-auth.mjs
       - name: Check adopted MJ standards
         run: pnpm exec mj standards check
       - run: pnpm run build
@@ -176,4 +177,170 @@ jobs:
         with:
           name: integration-server-log
           path: integration-server.log
+          retention-days: 14
+
+  database-client:
+    name: Build the database from empty and run the client harness (integration-client.mjs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: (github.event_name == 'pull_request' && github.base_ref == 'next') || github.ref == 'refs/heads/next'
+    permissions:
+      contents: read
+    env:
+      DB_HOST: localhost
+      DB_PORT: '1433'
+      DB_DATABASE: collab_ci
+      DB_USERNAME: sa
+      DB_PASSWORD: 'VeryStr0ngP@ssw0rd'
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: 'VeryStr0ngP@ssw0rd'
+      DB_TRUST_SERVER_CERTIFICATE: '1'
+      MJ_CORE_SCHEMA: __mj
+      MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+      MJ_API_KEY: mj-collab-ci-${{ github.run_id }}
+      GRAPHQL_PORT: '4000'
+      MJAPI_PUBLIC_URL: 'http://127.0.0.1:4000'
+      MJAPI_URL: 'http://127.0.0.1:4000'
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: 'VeryStr0ngP@ssw0rd'
+        ports:
+          - 1433:1433
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install joined workspace (MJ next + sibling apps)
+        uses: ./.github/actions/ci-install
+        with:
+          mode: next
+      - name: Build Collaboration, sibling server dependencies, and MJAPI
+        run: |
+          pnpm run build
+          (cd .. && \
+            node MJ/packages/MJAPI/scripts/ensure-manifest.mjs && \
+            pnpm --filter @mj-biz-apps/common-actions --filter @mj-biz-apps/common-activity-sync --filter @mj-biz-apps/common-core-entities-server --filter @mj-biz-apps/tasks-core --filter @mj-biz-apps/tasks-entities-server --filter @mj-biz-apps/tasks-actions run build && \
+            pnpm --filter @mj-biz-apps/common-server --filter @mj-biz-apps/tasks-server --filter mj_api run build)
+      - name: Wait for SQL Server and create the database
+        run: |
+          node --input-type=module -e "
+            import sql from 'mssql';
+            const cfg = { server: 'localhost', port: 1433, user: 'sa', password: process.env.DB_PASSWORD, options: { encrypt: true, trustServerCertificate: true }, connectionTimeout: 5000 };
+            for (let attempt = 1; ; attempt += 1) {
+              try {
+                const pool = await new sql.ConnectionPool({ ...cfg, database: 'master' }).connect();
+                await pool.request().query('SELECT 1');
+                await pool.request().query('CREATE DATABASE [collab_ci]');
+                await pool.close();
+                console.log('SQL Server ready, database created (attempt ' + attempt + ')');
+                break;
+              } catch (error) {
+                if (attempt >= 40) throw error;
+                await new Promise((r) => setTimeout(r, 3000));
+              }
+            }"
+      - name: Throwaway encryption and magic-link keys for CI database
+        run: |
+          echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "MJ_MAGIC_LINK_PRIVATE_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | base64 | tr -d '\n')" >> "$GITHUB_ENV"
+      - name: MemberJunction core, migrations and metadata
+        working-directory: ../MJ
+        run: |
+          node packages/MJCLI/bin/run.js migrate
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+      - name: bizapps-common, with People field-level security
+        working-directory: ../bizapps-common
+        run: |
+          node ../MJ/packages/MJCLI/bin/run.js migrate --schema __mj_BizAppsCommon --dir ./migrations
+          node ../MJ/packages/MJCLI/bin/run.js sync push --dir=metadata --include=entities --ci
+      - name: bizapps-tasks
+        working-directory: ../bizapps-tasks
+        run: node ../MJ/packages/MJCLI/bin/run.js migrate --schema __mj_BizAppsTasks --dir ./migrations
+      - name: This app's baseline and metadata
+        run: |
+          node ../MJ/packages/MJCLI/bin/run.js migrate --schema __mj_BizAppsCollaboration
+          node ../MJ/packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+      - name: The example type and the test metadata
+        run: |
+          node ../MJ/packages/MJCLI/bin/run.js migrate --schema __mj_BizAppsCollabExamples --dir packages/ExampleSpaceTypes/migrations
+          node ../MJ/packages/MJCLI/bin/run.js sync push --dir=metadata-tests --include=row-level-security-filters,entity-permissions,entity-fields,entity-field-permissions,entities,queries,actions --ci
+          node ../MJ/packages/MJCLI/bin/run.js sync push --dir=metadata-tests --include=agents,space-types,space-type-statuses,space-grants --ci
+      - name: The data-reach metadata is what the types declare (B18)
+        run: node scripts/generate-data-reach-filters.mjs --check
+      - name: The sample world
+        run: node packages/IntegrationTests/dist/world/load-world.js
+      - name: Configure and boot MJAPI with Collaboration and example server packages
+        run: |
+          mkdir -p ../MJ/packages/MJAPI/node_modules/@mj-biz-apps
+          ln -sfn "${{ github.workspace }}/../bizapps-common/packages/Server" ../MJ/packages/MJAPI/node_modules/@mj-biz-apps/common-server
+          ln -sfn "${{ github.workspace }}/../bizapps-tasks/packages/Server" ../MJ/packages/MJAPI/node_modules/@mj-biz-apps/tasks-server
+          ln -sfn "${{ github.workspace }}/packages/Server" ../MJ/packages/MJAPI/node_modules/@mj-biz-apps/collaboration-server
+          ln -sfn "${{ github.workspace }}/packages/ExampleSpaceTypes/Server" ../MJ/packages/MJAPI/node_modules/@mj-biz-apps/collaboration-example-space-types-server
+          cat > ../MJ/packages/MJAPI/mj.config.cjs <<'EOF'
+          const base = require('../../mj.config.cjs');
+          module.exports = {
+            ...base,
+            apiKey: process.env.MJ_API_KEY,
+            magicLink: {
+              ...(base.magicLink || {}),
+              enabled: true,
+              grantableRoleNames: ['Space Participant'],
+              provisioningGuard: 'block',
+            },
+            dynamicPackages: {
+              server: [
+                { PackageName: '@mj-biz-apps/common-server', StartupExport: 'LoadBizAppsCommonServer', AppName: 'mj-bizapps-common', Enabled: true },
+                { PackageName: '@mj-biz-apps/tasks-server', StartupExport: 'LoadBizAppsTasksServer', AppName: 'mj-bizapps-tasks', Enabled: true },
+                { PackageName: '@mj-biz-apps/collaboration-server', StartupExport: 'LoadBizAppsCollaborationServer', AppName: 'mj-bizapps-collaboration', Enabled: true },
+                { PackageName: '@mj-biz-apps/collaboration-example-space-types-server', AppName: 'mj-bizapps-collaboration', Enabled: true },
+              ],
+            },
+          };
+          EOF
+          (cd ../MJ/packages/MJAPI && exec node \
+            --import "${{ github.workspace }}/packages/IntegrationTests/dist/world/local-directory-storage.js" \
+            --import "${{ github.workspace }}/packages/IntegrationTests/dist/agents/index.js" \
+            dist/index.js > /tmp/mjapi.log 2>&1) &
+          MJAPI_PID=$!
+          for attempt in $(seq 1 60); do
+            CODE="$(curl -sS -o /tmp/mjapi-health.json -w '%{http_code}' http://127.0.0.1:4000/healthcheck 2>/dev/null || true)"
+            if [ "$CODE" = "200" ]; then
+              echo "MJAPI is ready (attempt ${attempt})."
+              break
+            fi
+            if [ "$CODE" = "503" ] && grep -q '"status":"failed"' /tmp/mjapi-health.json 2>/dev/null; then
+              cat /tmp/mjapi-health.json
+              tail -200 /tmp/mjapi.log
+              exit 1
+            fi
+            if ! kill -0 "$MJAPI_PID" 2>/dev/null; then
+              echo "MJAPI exited early"
+              tail -200 /tmp/mjapi.log
+              exit 1
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              echo "MJAPI timed out"
+              tail -200 /tmp/mjapi.log
+              exit 1
+            fi
+            sleep 5
+          done
+      - name: Client harness, every declared check (GraphQL wire)
+        run: pnpm run test:integration:client
+      - name: Upload client harness and MJAPI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-client-log
+          path: |
+            integration-client.log
+            /tmp/mjapi.log
           retention-days: 14

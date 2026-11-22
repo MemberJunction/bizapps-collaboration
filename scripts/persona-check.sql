@@ -132,15 +132,17 @@ IF EXISTS (
             N'MJ_BizApps_Collaboration: Spaces',
             N'MJ_BizApps_Collaboration: Space Members',
             N'MJ_BizApps_Collaboration: Space Items',
-            -- the chat turn writes a participant's agent runs, steps and prompt runs as the person; the turn's own gate judges them
-            N'MJ: AI Agent Runs',
-            N'MJ: AI Agent Run Steps',
+            -- MJ: AI Prompt Runs has no UserID/AgentRunID column at Create time (AIAgentRunStep.TargetLogID links it afterwards); UpdateRLSFilterID is enforced and the server turn gate blocks Create outside executeSpaceChatTurn
             N'MJ: AI Prompt Runs',
             -- the example subtype's row is the space's own: the space gate judges it (metadata-tests)
             N'MJ_BizApps_Collaboration_Examples: Example Boards'
         ) AND (
             (p.CanCreate = 1 AND p.CreateRLSFilterID IS NULL)
             OR (p.CanUpdate = 1 AND p.UpdateRLSFilterID IS NULL)
+            OR (p.CanDelete = 1 AND p.DeleteRLSFilterID IS NULL)
+        ))
+        OR (p.RoleID = @Participant AND e.Name = N'MJ: AI Prompt Runs' AND (
+            (p.CanUpdate = 1 AND p.UpdateRLSFilterID IS NULL)
             OR (p.CanDelete = 1 AND p.DeleteRLSFilterID IS NULL)
         ))
         OR (p.RoleID = 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AND e.Name IN (
@@ -417,6 +419,39 @@ BEGIN
     );
     IF @MissingAllowedFields > 0
         THROW 50000, 'Space Participant is missing required Allow on allowed People fields.', 1;
+END
+
+-- CT-8: External space participants never see internal staff owner names/IDs on MJ: AI Agents.
+IF EXISTS (SELECT 1 FROM __mj.Entity WHERE Name = N'MJ: AI Agents')
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM __mj.Entity WHERE Name = N'MJ: AI Agents' AND EnableFieldLevelSecurity = 1)
+        THROW 50000, 'Field-level security must be enabled on MJ: AI Agents to project out OwnerUser/OwnerUserID.', 1;
+
+    IF EXISTS (
+        SELECT 1
+        FROM __mj.vwEntityFields ef
+        JOIN __mj.Entity e ON ef.EntityID = e.ID
+        LEFT JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant
+        WHERE e.Name = N'MJ: AI Agents'
+          AND ef.Name IN (N'OwnerUser', N'OwnerUserID')
+          AND ISNULL(efp.ReadAccess, N'') <> N'Deny'
+    )
+        THROW 50000, 'Space Participant must be explicitly denied ReadAccess on MJ: AI Agents OwnerUser and OwnerUserID.', 1;
+
+    DECLARE @MissingAgentAllowed int = (
+        SELECT COUNT(*)
+        FROM (VALUES (N'Name'), (N'Description'), (N'LogoURL'), (N'IconClass'), (N'Status'), (N'TypeID'), (N'Type')) AS a(Name)
+        LEFT JOIN (
+            SELECT ef.Name, efp.ReadAccess
+            FROM __mj.vwEntityFields ef
+            JOIN __mj.Entity e ON ef.EntityID = e.ID
+            JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant
+            WHERE e.Name = N'MJ: AI Agents'
+        ) AS p ON p.Name = a.Name AND p.ReadAccess = N'Allow'
+        WHERE p.Name IS NULL
+    );
+    IF @MissingAgentAllowed > 0
+        THROW 50000, 'Space Participant is missing required Allow on safe readable MJ: AI Agents fields.', 1;
 END
 
 -- Stage 2 (B18, D28): a type's data reach. A participant seated on a chapter space reads that chapter's members through the

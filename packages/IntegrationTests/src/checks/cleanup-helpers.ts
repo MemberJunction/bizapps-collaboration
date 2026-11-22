@@ -178,6 +178,24 @@ async function cleanupConversationUnguarded(
     const rv = RunView.FromMetadataProvider(provider);
     if (conversationId) {
         const byConversation = `ConversationID = '${conversationId}'`;
+        const agentRuns = await readAll(rv, user, 'MJ: AI Agent Runs', byConversation);
+        const promptRunIds = new Set<string>();
+        for (const agentRun of agentRuns) {
+            const steps = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>(
+                {
+                    EntityName: 'MJ: AI Agent Run Steps',
+                    ExtraFilter: `AgentRunID = '${agentRun.ID}' AND StepType = 'Prompt' AND TargetLogID IS NOT NULL`,
+                    Fields: ['ID', 'StepType', 'TargetLogID'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                },
+                user,
+            );
+            Assert(steps.Success === true, `Cleanup could not read AI Agent Run Steps for ${agentRun.ID}: ${steps.ErrorMessage ?? 'unknown error'}`);
+            for (const step of steps.Results ?? []) {
+                if (step.TargetLogID) promptRunIds.add(step.TargetLogID);
+            }
+        }
         const steps: Array<{ entityName: string; filter: string; what: string }> = [
             { entityName: 'MJ: AI Agent Runs', filter: byConversation, what: 'AI Agent Run' },
             { entityName: SPACE_CHAT_ENTITY, filter: byConversation, what: 'Space Chat' },
@@ -188,6 +206,9 @@ async function cleanupConversationUnguarded(
             for (const row of await readAll(rv, user, step.entityName, step.filter)) {
                 await deleteRowAndConfirmUnguarded(provider, user, step.entityName, row.ID, step.what);
             }
+        }
+        for (const promptRunId of promptRunIds) {
+            await deleteRowAndConfirmUnguarded(provider, user, 'MJ: AI Prompt Runs', promptRunId, 'AI Prompt Run');
         }
         await deleteRowAndConfirmUnguarded(provider, user, CONVERSATION_ENTITY, conversationId, 'Conversation');
         for (const step of steps) {

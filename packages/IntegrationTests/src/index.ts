@@ -8,6 +8,7 @@ import {
     LoadShareNoticeEntityServer,
     LoadItemUseEntityServer,
     LoadCollaborationTaskEntityServer,
+    LoadCollaborationAIRunLockdown,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 
 LoadCommonEntities();
@@ -20,6 +21,7 @@ LoadSpaceItemEntityServer();
 LoadShareNoticeEntityServer();
 LoadItemUseEntityServer();
 LoadCollaborationTaskEntityServer();
+LoadCollaborationAIRunLockdown();
 
 import './agents/index.js';
 import './checks/collab-world.checks.js';
@@ -38,6 +40,7 @@ import './checks/stage2.checks.js';
 import './checks/stage3.checks.js';
 import './checks/stage4.checks.js';
 import './checks/space-meetings.checks.js';
+import './checks/adversarial-persona.checks.js';
 
 export * from './entity-names.js';
 export * from './wire.js';

@@ -193,6 +193,7 @@ describe('magic link and roster permission', () => {
 
     it('withholds the sign-in link from a space owner who is not a host issuer', () => {
         assert.equal(callerMayReceiveLink({ userType: 'User', roleNames: ['UI'], issuerRoleNames: [] }), false);
+        assert.equal(callerMayReceiveLink({ userType: 'User', roleNames: [], issuerRoleNames: [], callerAuthorized: true }), true);
         assert.equal(callerMayReceiveLink({ userType: 'Owner', roleNames: [], issuerRoleNames: [] }), true);
         assert.equal(callerMayReceiveLink({ userType: 'User', roleNames: ['UI'], issuerRoleNames: ['UI'] }), true);
         assert.equal(linkHandoff({ emailChannel: false, callerIsIssuer: false }), 'withhold');

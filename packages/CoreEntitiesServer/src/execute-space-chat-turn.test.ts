@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { ConversationEngine } from '@memberjunction/core-entities';
-import { WellKnownUserSource, type EntityInfo, type IMetadataProvider, type IRunViewProvider, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
+import { WellKnownUserSource, type EntityInfo, type IMetadataProvider, type IRunViewProvider, type RunViewParams, type RunViewResult, UserInfo } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import type { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { EXPLICIT_ASK_MARKER, executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/execute-space-chat-turn.js';
+import { COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES, evaluateParticipantAIRunWriteAccess } from '../dist/ai-run-lockdown.js';
+import { PARTICIPANT_ROLE_ID } from '../dist/task-attribution.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
 import { COLLABORATION_SPACE_SCOPE_ID } from '../dist/turn-tools.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
@@ -1387,6 +1389,67 @@ describe('executeSpaceChatTurn', () => {
         assert.equal(disallowedResult.ok, false);
         if (!disallowedResult.ok) {
             assert.match(disallowedResult.message, /not allowed in this space/i);
+        }
+    });
+
+    it('wraps AgentRunner.RunAgent in CT-7 turn authority for Space Participant caller only during execution', async () => {
+        const participantCaller = new UserInfo(undefined, {
+            ID: CALLER_ID,
+            Name: 'Caller',
+            Email: 'caller@example.com',
+            UserRoles: [{ ID: 'ur-caller', UserID: CALLER_ID, RoleID: PARTICIPANT_ROLE_ID, Role: 'Space Participant' }],
+        });
+        const otherParticipant = new UserInfo(undefined, {
+            ID: OTHER_USER_ID,
+            Name: 'Other',
+            Email: 'other@example.com',
+            UserRoles: [{ ID: 'ur-other', UserID: OTHER_USER_ID, RoleID: PARTICIPANT_ROLE_ID, Role: 'Space Participant' }],
+        });
+
+        const observedInsideTurn: Record<string, string | null> = {};
+        const prevRunAgent = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = async <C, R>(
+            params: ExecuteAgentParams<C>
+        ): Promise<ExecuteAgentResult<R>> => {
+            for (const entityName of COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES) {
+                observedInsideTurn[`self:${entityName}`] = evaluateParticipantAIRunWriteAccess(
+                    entityName,
+                    'save',
+                    participantCaller
+                );
+                observedInsideTurn[`other:${entityName}`] = evaluateParticipantAIRunWriteAccess(
+                    entityName,
+                    'save',
+                    otherParticipant
+                );
+            }
+            return prevRunAgent(params);
+        };
+
+        try {
+            const provider = createMockProvider({
+                messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} run check`,
+            });
+            const result = await executeSpaceChatTurn(provider, participantCaller, defaultInput);
+            assert.equal(result.ok, true);
+        } finally {
+            AgentRunner.prototype.RunAgent = prevRunAgent;
+        }
+
+        for (const entityName of COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES) {
+            assert.equal(
+                observedInsideTurn[`self:${entityName}`],
+                null,
+                `Caller must be allowed to write ${entityName} during their active turn`
+            );
+            assert.ok(
+                observedInsideTurn[`other:${entityName}`],
+                `Another participant must remain blocked from writing ${entityName} during caller's turn`
+            );
+            assert.ok(
+                evaluateParticipantAIRunWriteAccess(entityName, 'save', participantCaller),
+                `Caller must be locked down again once executeSpaceChatTurn returns (${entityName})`
+            );
         }
     });
 });
