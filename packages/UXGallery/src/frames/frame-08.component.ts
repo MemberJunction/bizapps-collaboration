@@ -7,8 +7,10 @@ import {
     CollabAudiencePillComponent,
     CollabBandChipComponent,
     CollabChatScopeBarComponent,
+    CollabAnswerSourceReceiptsComponent,
     CollabNewConversationDialogComponent,
     type NewConversationSubmitPayload,
+    type SpaceChatAnswerSourceReceipt,
     type SpaceChatCitationModel,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
@@ -34,6 +36,7 @@ import { FRAME_08_FIXTURE, type Frame08FixtureData } from '../fixtures/frame-08.
         CollabAudiencePillComponent,
         CollabBandChipComponent,
         CollabChatScopeBarComponent,
+        CollabAnswerSourceReceiptsComponent,
         CollabNewConversationDialogComponent,
         MJButtonDirective,
         ExampleBoardNextMeetingCard,
@@ -158,6 +161,39 @@ import { FRAME_08_FIXTURE, type Frame08FixtureData } from '../fixtures/frame-08.
                                 [Citations]="sourcesInScope"
                                 (RetrievalScopeChanged)="chatRetrievalScope = $event"
                             />
+                            <div class="chat-transcript" data-testid="frame-08-chat-transcript">
+                                <div class="chat-msg">
+                                    <div class="chat-msg-head">
+                                        <span class="chat-msg-author">Dana Whitfield</span>
+                                        <span class="chat-msg-time">9:41 AM</span>
+                                    </div>
+                                    <div class="chat-msg-body">
+                                        @Sage what does the FY2026 audit pack say about internal control testing and external auditor independence?
+                                    </div>
+                                </div>
+                                <div class="chat-msg is-ai" data-testid="frame-08-agent-answer">
+                                    <div class="chat-msg-head">
+                                        <span class="chat-msg-author">Sage</span>
+                                        <span class="chat-ai-badge">Assistant</span>
+                                        <span class="chat-msg-time">9:42 AM</span>
+                                    </div>
+                                    <div class="chat-msg-body" data-testid="frame-08-agent-answer-body">
+                                        The FY2026 Audit Committee Pack confirms quarterly walkthroughs for key revenue controls and annual rotation review under the Audit Charter Review Memo.
+                                    </div>
+                                    <mjc-answer-source-receipts
+                                        [MessageId]="'msg-audit-answer-1'"
+                                        [AudienceBand]="activeChatKind === 'Private' ? 'Team' : 'Shared'"
+                                        [Receipts]="answerSourceReceipts"
+                                        (ReceiptOpenRequested)="onGalleryReceiptOpen($event)"
+                                    />
+                                </div>
+                                @if (openedReceiptLabel) {
+                                    <div class="opened-source-banner" data-testid="gallery-opened-source-banner" role="status">
+                                        <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
+                                        <span>Opened source: <strong>{{ openedReceiptLabel }}</strong></span>
+                                    </div>
+                                }
+                            </div>
                         </div>
                         @if (showNewConversationDialog) {
                             <mjc-new-conversation-dialog
@@ -306,6 +342,64 @@ import { FRAME_08_FIXTURE, type Frame08FixtureData } from '../fixtures/frame-08.
             font-size: 12px;
             color: var(--mj-text-secondary);
         }
+        .chat-transcript {
+            display: flex;
+            flex-direction: column;
+            gap: var(--mj-space-3);
+            padding: var(--mj-space-4) var(--mj-space-5);
+            background: var(--mj-bg-surface);
+        }
+        .chat-msg {
+            display: flex;
+            flex-direction: column;
+            gap: var(--mj-space-1-5);
+            padding: var(--mj-space-3);
+            border-radius: var(--mj-radius-md);
+            border: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface-card);
+        }
+        .chat-msg.is-ai {
+            background: var(--mj-bg-surface);
+            border-color: var(--mj-border-strong);
+        }
+        .chat-msg-head {
+            display: flex;
+            align-items: center;
+            gap: var(--mj-space-2);
+            font-size: var(--mj-text-xs);
+        }
+        .chat-msg-author {
+            font-weight: var(--mj-font-bold);
+            color: var(--mj-text-primary);
+        }
+        .chat-ai-badge {
+            padding: 1px var(--mj-space-1-5);
+            border-radius: var(--mj-radius-pill);
+            font-size: var(--mj-text-xs);
+            font-weight: var(--mj-font-semibold);
+            background: var(--mj-status-info-bg);
+            color: var(--mj-status-info-text);
+            border: 1px solid var(--mj-status-info-border);
+        }
+        .chat-msg-time {
+            color: var(--mj-text-muted);
+        }
+        .chat-msg-body {
+            font-size: var(--mj-text-sm);
+            color: var(--mj-text-primary);
+            line-height: 1.5;
+        }
+        .opened-source-banner {
+            display: flex;
+            align-items: center;
+            gap: var(--mj-space-2);
+            padding: var(--mj-space-2) var(--mj-space-3);
+            border-radius: var(--mj-radius-sm);
+            border: 1px solid var(--mj-status-info-border);
+            background: var(--mj-status-info-bg);
+            color: var(--mj-status-info-text);
+            font-size: var(--mj-text-xs);
+        }
     `],
 })
 export class Frame08Component {
@@ -333,6 +427,76 @@ export class Frame08Component {
             Band: 'Shared',
         },
     ];
+    public openedReceiptLabel = '';
+    public answerSourceReceipts: SpaceChatAnswerSourceReceipt[] = [
+        {
+            id: 'rcpt-board-pack',
+            conversationDetailId: 'msg-audit-answer-1',
+            spaceId: 'space-audit-committee',
+            sourceKind: 'SpaceItem',
+            spaceItemId: 'item-board-pack-fy26',
+            contentSourceId: null,
+            targetEntityId: 'entity-files',
+            targetRecordId: 'ID|file-board-pack-fy26',
+            sourceTitle: 'FY2026 Audit Committee Pack.pdf',
+            band: 'Shared',
+            wasSupplied: true,
+            wasCited: true,
+            retrievalRank: 1,
+            relevanceScore: 0.96,
+            rankingMode: 'vector',
+            citationOrdinal: 1,
+            estimatedTokens: 340,
+            wasTruncated: false,
+            sequence: 1,
+        },
+        {
+            id: 'rcpt-charter-review',
+            conversationDetailId: 'msg-audit-answer-1',
+            spaceId: 'space-audit-committee',
+            sourceKind: 'SpaceItem',
+            spaceItemId: 'item-charter-review',
+            contentSourceId: null,
+            targetEntityId: 'entity-files',
+            targetRecordId: 'ID|file-charter-review',
+            sourceTitle: 'Audit Charter Review Memo.docx',
+            band: 'Shared',
+            wasSupplied: true,
+            wasCited: true,
+            retrievalRank: 2,
+            relevanceScore: 0.87,
+            rankingMode: 'lexical',
+            citationOrdinal: 2,
+            estimatedTokens: 215,
+            wasTruncated: false,
+            sequence: 2,
+        },
+        {
+            id: 'rcpt-internal-fee-memo',
+            conversationDetailId: 'msg-audit-answer-1',
+            spaceId: 'space-audit-committee',
+            sourceKind: 'SpaceItem',
+            spaceItemId: 'item-internal-fee-memo',
+            contentSourceId: null,
+            targetEntityId: 'entity-files',
+            targetRecordId: 'ID|file-internal-fee-memo',
+            sourceTitle: 'Internal Partner Fee Margin.xlsx',
+            band: 'Team',
+            wasSupplied: true,
+            wasCited: true,
+            retrievalRank: 3,
+            relevanceScore: 0.91,
+            rankingMode: 'vector',
+            citationOrdinal: 3,
+            estimatedTokens: 180,
+            wasTruncated: false,
+            sequence: 3,
+        },
+    ];
+
+    public onGalleryReceiptOpen(receipt: SpaceChatAnswerSourceReceipt): void {
+        this.openedReceiptLabel = `${receipt.sourceTitle} (${receipt.band})`;
+    }
 
     public onConversationCreated(payload: NewConversationSubmitPayload): void {
         this.activeChatName = payload.name;
