@@ -24,7 +24,7 @@ import {
 } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { loadSpaceConfiguration } from './space-configuration.js';
-import { COLLABORATION_SPACE_SCOPE_ID, resolveTurnTools, type SpaceTurnContext } from './turn-tools.js';
+import { COLLABORATION_SPACE_SCOPE_ID, resolveTurnTools, type SpaceTurnContext, type TurnToolSourceHit } from './turn-tools.js';
 import type { AgentContextResult } from './base-space-type-server-driver.js';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { readEveryRow } from './read-every-row.js';
@@ -46,6 +46,7 @@ import {
     buildSourceReceiptReachContext,
     persistSpaceAgentSourceReceipts,
     resolveSuppliedKnowledgeSources,
+    resolveToolSuppliedSourceCandidates,
 } from './space-agent-source-receipts.js';
 
 const DETAILS = 'MJ: Conversation Details';
@@ -485,7 +486,7 @@ async function runClaimedTurn(
         withheld: turnTools.withheld,
     };
     // What Run space data reads when the agent calls it; the run's id is filled in once the run exists (A2)
-    const turnContext: SpaceTurnContext = { spaceId, conversationId, audience, spaceData: turnTools.spaceData, agentRunId: null };
+    const turnContext: SpaceTurnContext = { spaceId, conversationId, audience, spaceData: turnTools.spaceData, agentRunId: null, toolSourceHits: [] };
 
     // 7c. The type's word on the turn (item 83): the people in the chat, by band, then the driver's instructions and data
     const speakerLabels = new Map<string, string>();
@@ -535,6 +536,7 @@ async function runClaimedTurn(
     let retrieval: Awaited<ReturnType<typeof resolveSpaceAgentRetrieval>>;
     try {
         retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId, {
+            spaceChatId: foundChat.ID,
             conversationKind: foundChat.Kind,
             participantUserIds: isOneToOneAssistant ? [callerId] : undefined,
             narrowing: effectiveNarrowing,
@@ -758,14 +760,9 @@ async function runClaimedTurn(
                       wasTruncated: false,
                   }));
 
-        const suppliedKnowledgeCandidates = await resolveSuppliedKnowledgeSources(
-            provider,
-            system,
-            spaceId,
-            loaded.configuration.Grants.KnowledgeSource,
-            toolsGiven.knowledgeSourceIds,
-            audience,
-        );
+        // Accumulate validated sources returned by in-turn search/knowledge tools (e.g. Scoped Search)
+        const stepToolHits = extractToolSourceHitsFromAgentRun(finishedResult);
+        const allToolHits: TurnToolSourceHit[] = [...(turnContext.toolSourceHits ?? []), ...stepToolHits];
 
         const receiptReachContext = buildSourceReceiptReachContext(
             audience,
@@ -773,14 +770,43 @@ async function runClaimedTurn(
             retrieval.allowedBandsBySpace,
             retrieval.searchedSpaceIds,
         );
+
+        const initialItemIdSet = new Set(
+            suppliedItemCandidates
+                .map((c) => normalizeReceiptUuid(c.spaceItemId))
+                .filter((id): id is string => id !== null),
+        );
+        const toolResolved = await resolveToolSuppliedSourceCandidates({
+            provider,
+            systemUser: system,
+            toolHits: allToolHits,
+            reachContext: receiptReachContext,
+            alreadySuppliedSpaceItemIds: initialItemIdSet,
+        });
+
+        const suppliedKnowledgeCandidates = await resolveSuppliedKnowledgeSources(
+            provider,
+            system,
+            spaceId,
+            loaded.configuration.Grants.KnowledgeSource,
+            toolsGiven.knowledgeSourceIds,
+            audience,
+            toolResolved.suppliedKnowledgeSourceIds,
+        );
+
         const receiptExtraction = extractAndValidateSourceReceipts(
-            [...suppliedItemCandidates, ...suppliedKnowledgeCandidates],
+            [...suppliedItemCandidates, ...toolResolved.spaceItemCandidates, ...suppliedKnowledgeCandidates],
             agentReplyText,
             receiptReachContext,
         );
-        if (receiptExtraction.rejectedCandidates.length > 0 || receiptExtraction.rejectedCitations.length > 0) {
+        if (
+            receiptExtraction.rejectedCandidates.length > 0 ||
+            receiptExtraction.rejectedCitations.length > 0 ||
+            toolResolved.rejectedCount > 0
+        ) {
             LogError(
-                `executeSpaceChatTurn: filtered ${receiptExtraction.rejectedCandidates.length} out-of-scope candidate(s) and ` +
+                `executeSpaceChatTurn: filtered ${receiptExtraction.rejectedCandidates.length} out-of-scope candidate(s), ` +
+                `${toolResolved.rejectedCount} out-of-scope tool hit(s), and ` +
                 `${receiptExtraction.rejectedCitations.length} unverified citation marker(s) for conversationDetail ${assistantDetail.ID}.`,
             );
         }
@@ -794,6 +820,7 @@ async function runClaimedTurn(
             conversationDetailId: assistantDetail.ID,
             agentRunId,
             receipts: receiptExtraction.receipts,
+            reachContext: receiptReachContext,
         });
         if (persistReceiptsResult.ok === false) {
             const receiptErrMsg = `Failed to persist source receipts: ${persistReceiptsResult.errorMessage}`;
@@ -812,9 +839,29 @@ async function runClaimedTurn(
                 .filter((r) => r.sourceKind === 'SpaceItem' && r.spaceItemId)
                 .map((r) => normalizeReceiptUuid(r.spaceItemId)),
         );
+        const citationsByItemId = new Map<string, SpaceAgentCitation>();
+        for (const c of citations) {
+            const cid = normalizeReceiptUuid(c.SpaceItemID);
+            if (cid && persistedItemIdSet.has(cid)) {
+                citationsByItemId.set(cid, c);
+            }
+        }
+        for (const tc of toolResolved.spaceItemCandidates) {
+            const cid = normalizeReceiptUuid(tc.spaceItemId);
+            if (cid && persistedItemIdSet.has(cid) && !citationsByItemId.has(cid)) {
+                citationsByItemId.set(cid, {
+                    SpaceItemID: tc.spaceItemId!,
+                    SpaceID: tc.spaceId,
+                    EntityID: tc.targetEntityId ?? '',
+                    RecordID: tc.targetRecordId ?? '',
+                    Name: tc.sourceTitle,
+                    Band: tc.band,
+                });
+            }
+        }
         const validatedCitations =
             receiptExtraction.receipts.length > 0
-                ? citations.filter((c) => persistedItemIdSet.has(normalizeReceiptUuid(c.SpaceItemID)))
+                ? Array.from(citationsByItemId.values())
                 : citations;
 
         // Save final assistant reply as system user
@@ -924,5 +971,140 @@ async function resolveParentReplyAgent(
         return { ok: false, message: 'The message replies to a person and does not mention an agent.' };
     }
     return { ok: false, message: 'The message does not mention an agent.' };
+}
+
+interface ParsedStepSearchItem {
+    EntityName?: string | null;
+    RecordID?: string | null;
+    Title?: string | null;
+    RecordName?: string | null;
+    Score?: number | null;
+    SourceType?: string | null;
+    ContentSourceID?: string | null;
+    SpaceItemID?: string | null;
+    RawMetadata?: string | Record<string, string | number | boolean | null> | null;
+}
+
+interface ParsedStepOutput {
+    Results?: ParsedStepSearchItem[];
+    ContentSourceID?: string | null;
+    KnowledgeSourceIDs?: string[];
+    result?: {
+        success?: boolean;
+        data?: {
+            Results?: ParsedStepSearchItem[];
+            ContentSourceID?: string | null;
+            KnowledgeSourceIDs?: string[];
+        };
+    };
+}
+
+function collectSearchItemsFromArray(rawItems: readonly ParsedStepSearchItem[], out: TurnToolSourceHit[]): void {
+    for (const item of rawItems) {
+        if (!item || typeof item !== 'object') continue;
+        const entityName = typeof item.EntityName === 'string' ? item.EntityName.trim() : '';
+        const recordId = typeof item.RecordID === 'string' ? item.RecordID.trim() : '';
+        const title =
+            (typeof item.Title === 'string' && item.Title.trim()) ||
+            (typeof item.RecordName === 'string' && item.RecordName.trim()) ||
+            null;
+        const score = typeof item.Score === 'number' && Number.isFinite(item.Score) ? item.Score : null;
+        const rankingMode: TurnToolSourceHit['rankingMode'] = item.SourceType === 'vector' ? 'vector' : 'lexical';
+        let contentSourceId = typeof item.ContentSourceID === 'string' ? parseUuid(item.ContentSourceID) : null;
+        if (!contentSourceId && item.RawMetadata && typeof item.RawMetadata === 'object') {
+            const rawCid = item.RawMetadata['ContentSourceID'];
+            if (typeof rawCid === 'string') contentSourceId = parseUuid(rawCid);
+        } else if (!contentSourceId && typeof item.RawMetadata === 'string') {
+            try {
+                const parsedMeta = JSON.parse(item.RawMetadata) as Record<string, string | number | boolean | null>;
+                if (typeof parsedMeta['ContentSourceID'] === 'string') {
+                    contentSourceId = parseUuid(parsedMeta['ContentSourceID']);
+                }
+            } catch {
+                // ignore malformed metadata JSON
+            }
+        }
+        const explicitSpaceItemId = typeof item.SpaceItemID === 'string' ? parseUuid(item.SpaceItemID) : null;
+
+        if (entityName === 'MJ: Content Sources' || (contentSourceId && !recordId && !explicitSpaceItemId)) {
+            const cid = contentSourceId ?? parseUuid(recordId);
+            if (cid) {
+                out.push({
+                    sourceKind: 'KnowledgeSource',
+                    contentSourceId: cid,
+                    entityName: 'MJ: Content Sources',
+                    recordId: recordId || cid,
+                    title,
+                    score,
+                    rankingMode: 'grant',
+                });
+            }
+            continue;
+        }
+        if (explicitSpaceItemId || recordId) {
+            out.push({
+                sourceKind: 'SpaceItem',
+                ...(explicitSpaceItemId
+                    ? { spaceItemId: explicitSpaceItemId }
+                    : entityName === 'MJ_BizApps_Collaboration: Space Items'
+                        ? { spaceItemId: parseUuid(recordId) }
+                        : {}),
+                ...(contentSourceId ? { contentSourceId } : {}),
+                entityName: entityName || null,
+                recordId: recordId || explicitSpaceItemId,
+                title,
+                score,
+                rankingMode,
+            });
+        }
+    }
+}
+
+function extractToolSourceHitsFromAgentRun(runResult: ExecuteAgentResult | undefined): TurnToolSourceHit[] {
+    const out: TurnToolSourceHit[] = [];
+    const steps = runResult?.agentRun?.Steps;
+    if (!Array.isArray(steps)) {
+        return out;
+    }
+    for (const step of steps) {
+        if (!step || typeof step.OutputData !== 'string' || !step.OutputData.trim()) continue;
+        let parsed: ParsedStepOutput;
+        try {
+            parsed = JSON.parse(step.OutputData) as ParsedStepOutput;
+        } catch {
+            continue;
+        }
+        if (!parsed || typeof parsed !== 'object') continue;
+        if (Array.isArray(parsed.Results)) {
+            collectSearchItemsFromArray(parsed.Results, out);
+        }
+        if (parsed.result?.success !== false && parsed.result?.data) {
+            const data = parsed.result.data;
+            if (Array.isArray(data.Results)) {
+                collectSearchItemsFromArray(data.Results, out);
+            }
+            if (typeof data.ContentSourceID === 'string') {
+                const cid = parseUuid(data.ContentSourceID);
+                if (cid) out.push({ sourceKind: 'KnowledgeSource', contentSourceId: cid, rankingMode: 'grant' });
+            }
+            if (Array.isArray(data.KnowledgeSourceIDs)) {
+                for (const rawCid of data.KnowledgeSourceIDs) {
+                    const cid = parseUuid(rawCid);
+                    if (cid) out.push({ sourceKind: 'KnowledgeSource', contentSourceId: cid, rankingMode: 'grant' });
+                }
+            }
+        }
+        if (typeof parsed.ContentSourceID === 'string') {
+            const cid = parseUuid(parsed.ContentSourceID);
+            if (cid) out.push({ sourceKind: 'KnowledgeSource', contentSourceId: cid, rankingMode: 'grant' });
+        }
+        if (Array.isArray(parsed.KnowledgeSourceIDs)) {
+            for (const rawCid of parsed.KnowledgeSourceIDs) {
+                const cid = parseUuid(rawCid);
+                if (cid) out.push({ sourceKind: 'KnowledgeSource', contentSourceId: cid, rankingMode: 'grant' });
+            }
+        }
+    }
+    return out;
 }
 

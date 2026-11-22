@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import {
     BaseEntity,
     BaseEntityResult,
@@ -7,6 +8,7 @@ import {
     ServerOperationScopeManager,
     type UserInfo,
 } from '@memberjunction/core';
+import type { SourceReceiptReachContext } from '@mj-biz-apps/collaboration-core';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import {
     MJAIAgentRunEntityExtended,
@@ -37,18 +39,44 @@ export const COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES = [
 
 export type CollaborationAIRunEntityName = typeof COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES[number];
 
+export interface CollaborationTurnAuthorityContext {
+    userId: string;
+    spaceChatId?: string;
+    reachContext?: SourceReceiptReachContext;
+}
+
+const turnAuthorityStorage = new AsyncLocalStorage<CollaborationTurnAuthorityContext>();
+
+/**
+ * Returns the active turn's authority context (userId, optional spaceChatId and reachContext) when executing inside {@link runWithCollaborationAgentTurnAuthority}.
+ */
+export function getCollaborationTurnAuthorityContext(): CollaborationTurnAuthorityContext | undefined {
+    return turnAuthorityStorage.getStore();
+}
+
 /**
  * Executes {@link fn} inside the server-orchestrated Space Chat Turn authority scope for {@link userId}.
  */
-export function runWithCollaborationAgentTurnAuthority<T>(userId: string, fn: () => T): T {
-    return ServerOperationScopeManager.Instance.RunWithAuthority(
-        {
-            operationKey: COLLABORATION_AGENT_TURN_OPERATION,
-            source: 'ServerEngine',
-            allowedEntities: [...COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES, COLLABORATION_SOURCE_RECEIPT_ENTITY],
-            userId,
-        },
-        fn
+export function runWithCollaborationAgentTurnAuthority<T>(
+    userId: string,
+    fn: () => T,
+    options?: { spaceChatId?: string; reachContext?: SourceReceiptReachContext },
+): T {
+    const ctx: CollaborationTurnAuthorityContext = {
+        userId,
+        ...(options?.spaceChatId ? { spaceChatId: options.spaceChatId } : {}),
+        ...(options?.reachContext ? { reachContext: options.reachContext } : {}),
+    };
+    return turnAuthorityStorage.run(ctx, () =>
+        ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: COLLABORATION_AGENT_TURN_OPERATION,
+                source: 'ServerEngine',
+                allowedEntities: [...COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES, COLLABORATION_SOURCE_RECEIPT_ENTITY],
+                userId,
+            },
+            fn
+        ),
     );
 }
 

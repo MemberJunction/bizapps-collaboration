@@ -6,7 +6,6 @@ import { type IMetadataProvider, LogError, RunView, type UserInfo } from '@membe
 import {
     canReaderAccessSourceReceipt,
     type EffectiveGrant,
-    normalizeReceiptId,
     normalizeReceiptUuid,
     type SourceReceiptBand,
     type SourceReceiptReachContext,
@@ -19,9 +18,14 @@ import {
     type mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
 } from '@mj-biz-apps/collaboration-entities';
 import { COLLABORATION_SOURCE_RECEIPT_ENTITY, runWithCollaborationAgentTurnAuthority } from './ai-run-lockdown.js';
+import { readEveryRow } from './read-every-row.js';
+import type { TurnToolSourceHit } from './turn-tools.js';
 
 const CONTENT_SOURCES_ENTITY = 'MJ: Content Sources';
 const SPACE_CHATS_ENTITY = 'MJ_BizApps_Collaboration: Space Chats';
+const SPACE_ITEMS_ENTITY = 'MJ_BizApps_Collaboration: Space Items';
+const TASKS_ENTITY = 'MJ_BizApps_Tasks: Tasks';
+const FILES_ENTITY = 'MJ: Files';
 
 interface ContentSourceRow {
     ID: string;
@@ -37,6 +41,7 @@ export interface PersistSpaceAgentSourceReceiptsParams {
     conversationDetailId: string;
     agentRunId?: string | null;
     receipts: readonly SpaceAgentSourceReceiptEntry[];
+    reachContext?: SourceReceiptReachContext;
 }
 
 export type PersistSpaceAgentSourceReceiptsResult =
@@ -60,8 +65,8 @@ export interface QuerySpaceAgentSourceReceiptsResult {
 }
 
 /**
- * Resolves the granted in-reach knowledge sources into validated receipt candidates bounded
- * strictly by `chatAudience`.
+ * Resolves only the granted in-reach knowledge sources that were actually supplied/retrieved
+ * in the turn context or tool results, strictly bounded by `chatAudience`.
  */
 export async function resolveSuppliedKnowledgeSources(
     provider: IMetadataProvider,
@@ -70,9 +75,13 @@ export async function resolveSuppliedKnowledgeSources(
     knowledgeGrants: readonly EffectiveGrant[],
     knowledgeSourceIdsInForce: readonly string[],
     chatAudience: SourceReceiptBand,
+    suppliedKnowledgeSourceIds?: ReadonlySet<string>,
 ): Promise<ValidatedSuppliedSourceCandidate[]> {
     const cleanSpaceId = normalizeReceiptUuid(spaceId);
     if (!cleanSpaceId || knowledgeSourceIdsInForce.length === 0) {
+        return [];
+    }
+    if (suppliedKnowledgeSourceIds && suppliedKnowledgeSourceIds.size === 0) {
         return [];
     }
 
@@ -89,6 +98,9 @@ export async function resolveSuppliedKnowledgeSources(
         }
         const strippedId = normalizeReceiptUuid(stripRecordKeyPrefix(grant.TargetRecordID));
         if (!strippedId || !inForceSet.has(strippedId)) {
+            continue;
+        }
+        if (suppliedKnowledgeSourceIds && !suppliedKnowledgeSourceIds.has(strippedId)) {
             continue;
         }
         eligibleGrants.push({ contentSourceId: strippedId, grant });
@@ -195,23 +207,285 @@ export function buildSourceReceiptReachContext(
     };
 }
 
+export interface ResolveToolSuppliedSourcesParams {
+    provider: IMetadataProvider;
+    systemUser: UserInfo;
+    toolHits: readonly TurnToolSourceHit[];
+    reachContext: SourceReceiptReachContext;
+    alreadySuppliedSpaceItemIds: ReadonlySet<string>;
+}
+
+export interface ResolveToolSuppliedSourcesResult {
+    spaceItemCandidates: ValidatedSuppliedSourceCandidate[];
+    suppliedKnowledgeSourceIds: Set<string>;
+    rejectedCount: number;
+}
+
+/**
+ * Resolves and fail-closed validates sources returned by in-turn search or knowledge tools
+ * (e.g. `CollaborationScopedSearchAction`) against the turn's `(space, band)` reach before
+ * merging them into receipt candidates.
+ */
+export async function resolveToolSuppliedSourceCandidates(
+    params: ResolveToolSuppliedSourcesParams,
+): Promise<ResolveToolSuppliedSourcesResult> {
+    const spaceItemCandidates: ValidatedSuppliedSourceCandidate[] = [];
+    const suppliedKnowledgeSourceIds = new Set<string>();
+    let rejectedCount = 0;
+
+    if (params.toolHits.length === 0) {
+        return { spaceItemCandidates, suppliedKnowledgeSourceIds, rejectedCount };
+    }
+
+    const directSpaceItemIds = new Set<string>();
+    const taskRecordIds = new Set<string>();
+    const chunkIds = new Set<string>();
+    const contentItemIds = new Set<string>();
+    const hitBySpaceItemId = new Map<string, TurnToolSourceHit>();
+    const hitByTaskRecordId = new Map<string, TurnToolSourceHit>();
+
+    for (const hit of params.toolHits) {
+        if (hit.sourceKind === 'KnowledgeSource') {
+            const cid = normalizeReceiptUuid(stripRecordKeyPrefix(hit.contentSourceId ?? hit.recordId));
+            if (cid) suppliedKnowledgeSourceIds.add(cid);
+            continue;
+        }
+        const directItemId = normalizeReceiptUuid(stripRecordKeyPrefix(hit.spaceItemId));
+        if (directItemId) {
+            directSpaceItemIds.add(directItemId);
+            if (!hitBySpaceItemId.has(directItemId)) hitBySpaceItemId.set(directItemId, hit);
+            continue;
+        }
+        const recId = normalizeReceiptUuid(stripRecordKeyPrefix(hit.recordId));
+        if (!recId) continue;
+        if (hit.entityName === SPACE_ITEMS_ENTITY) {
+            directSpaceItemIds.add(recId);
+            if (!hitBySpaceItemId.has(recId)) hitBySpaceItemId.set(recId, hit);
+        } else if (hit.entityName === TASKS_ENTITY) {
+            taskRecordIds.add(recId);
+            if (!hitByTaskRecordId.has(recId)) hitByTaskRecordId.set(recId, hit);
+        } else if (hit.entityName === 'MJ: Content Item Chunks') {
+            chunkIds.add(recId);
+        } else if (hit.entityName === 'MJ: Content Items') {
+            contentItemIds.add(recId);
+        } else {
+            const cid = normalizeReceiptUuid(stripRecordKeyPrefix(hit.contentSourceId));
+            if (cid) suppliedKnowledgeSourceIds.add(cid);
+        }
+    }
+
+    const rv = RunView.FromMetadataProvider(params.provider);
+
+    // Resolve chunk -> contentItem -> ERD -> SpaceItem / ContentSource if any chunk hits arrived
+    if (chunkIds.size > 0) {
+        try {
+            const chunkFilter = Array.from(chunkIds).map((id) => `'${id}'`).join(', ');
+            const chunksRes = await rv.RunView<{ ID: string; ContentItemID: string }>({
+                EntityName: 'MJ: Content Item Chunks',
+                ExtraFilter: `ID IN (${chunkFilter})`,
+                Fields: ['ID', 'ContentItemID'],
+                ResultType: 'simple',
+                // row-cap-ok: bounded by tool hit count in a single turn
+                MaxRows: 500,
+            }, params.systemUser);
+            for (const row of chunksRes.Success && chunksRes.Results ? chunksRes.Results : []) {
+                const ciId = normalizeReceiptUuid(row.ContentItemID);
+                if (ciId) contentItemIds.add(ciId);
+            }
+        } catch (err) {
+            LogError(`resolveToolSuppliedSourceCandidates chunk lookup warning: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    if (contentItemIds.size > 0) {
+        try {
+            const ciFilter = Array.from(contentItemIds).map((id) => `'${id}'`).join(', ');
+            const ciRes = await rv.RunView<{ ID: string; ContentSourceID: string | null; EntityRecordDocumentID: string | null }>({
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `ID IN (${ciFilter})`,
+                Fields: ['ID', 'ContentSourceID', 'EntityRecordDocumentID'],
+                ResultType: 'simple',
+                // row-cap-ok: bounded by tool hit count in a single turn
+                MaxRows: 500,
+            }, params.systemUser);
+            const erdIds: string[] = [];
+            for (const row of ciRes.Success && ciRes.Results ? ciRes.Results : []) {
+                const csId = normalizeReceiptUuid(row.ContentSourceID);
+                if (csId) suppliedKnowledgeSourceIds.add(csId);
+                const erdId = normalizeReceiptUuid(row.EntityRecordDocumentID);
+                if (erdId) erdIds.push(erdId);
+            }
+            if (erdIds.length > 0) {
+                const erdFilter = erdIds.map((id) => `'${id}'`).join(', ');
+                const erdRes = await rv.RunView<{ ID: string; Entity: string; RecordID: string }>({
+                    EntityName: 'MJ: Entity Record Documents',
+                    ExtraFilter: `ID IN (${erdFilter}) AND Entity = '${SPACE_ITEMS_ENTITY}'`,
+                    Fields: ['ID', 'Entity', 'RecordID'],
+                    ResultType: 'simple',
+                    // row-cap-ok: bounded by tool hit count in a single turn
+                    MaxRows: 500,
+                }, params.systemUser);
+                for (const erd of erdRes.Success && erdRes.Results ? erdRes.Results : []) {
+                    const siId = normalizeReceiptUuid(stripRecordKeyPrefix(erd.RecordID));
+                    if (siId) directSpaceItemIds.add(siId);
+                }
+            }
+        } catch (err) {
+            LogError(`resolveToolSuppliedSourceCandidates content item lookup warning: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    interface SpaceItemLookupRow {
+        ID: string;
+        SpaceID: string;
+        EntityID: string;
+        RecordID: string;
+        Band: string;
+    }
+
+    const resolvedItems: SpaceItemLookupRow[] = [];
+    if (directSpaceItemIds.size > 0) {
+        const idList = Array.from(directSpaceItemIds).map((id) => `'${id}'`).join(', ');
+        const siRes = await rv.RunView<SpaceItemLookupRow>({
+            EntityName: SPACE_ITEMS_ENTITY,
+            ExtraFilter: `ID IN (${idList})`,
+            Fields: ['ID', 'SpaceID', 'EntityID', 'RecordID', 'Band'],
+            ResultType: 'simple',
+            // row-cap-ok: bounded by tool hit count in a single turn
+            MaxRows: 500,
+        }, params.systemUser);
+        if (siRes.Success && siRes.Results) {
+            resolvedItems.push(...siRes.Results);
+        }
+    }
+
+    if (taskRecordIds.size > 0) {
+        const tasksEntity = typeof params.provider.EntityByName === 'function'
+            ? params.provider.EntityByName(TASKS_ENTITY)
+            : undefined;
+        const taskRecClauses = Array.from(taskRecordIds).flatMap((id) => [`'ID|${id}'`, `'${id}'`]).join(', ');
+        const entityFilter = tasksEntity?.ID ? ` AND EntityID = '${normalizeReceiptUuid(tasksEntity.ID) ?? tasksEntity.ID}'` : '';
+        const taskSiRes = await rv.RunView<SpaceItemLookupRow>({
+            EntityName: SPACE_ITEMS_ENTITY,
+            ExtraFilter: `RecordID IN (${taskRecClauses})${entityFilter}`,
+            Fields: ['ID', 'SpaceID', 'EntityID', 'RecordID', 'Band'],
+            ResultType: 'simple',
+            // row-cap-ok: bounded by tool hit count in a single turn
+            MaxRows: 500,
+        }, params.systemUser);
+        if (taskSiRes.Success && taskSiRes.Results) {
+            resolvedItems.push(...taskSiRes.Results);
+        }
+    }
+
+    // Resolve target titles when missing from tool hits
+    const fileRecordIds = new Set<string>();
+    const taskTargetIds = new Set<string>();
+    const filesEntityId = typeof params.provider.EntityByName === 'function'
+        ? normalizeReceiptUuid(params.provider.EntityByName(FILES_ENTITY)?.ID)
+        : null;
+    const tasksEntityId = typeof params.provider.EntityByName === 'function'
+        ? normalizeReceiptUuid(params.provider.EntityByName(TASKS_ENTITY)?.ID)
+        : null;
+
+    for (const item of resolvedItems) {
+        const targetId = normalizeReceiptUuid(stripRecordKeyPrefix(item.RecordID));
+        const entId = normalizeReceiptUuid(item.EntityID);
+        if (!targetId) continue;
+        if (filesEntityId && entId === filesEntityId) fileRecordIds.add(targetId);
+        else if (tasksEntityId && entId === tasksEntityId) taskTargetIds.add(targetId);
+    }
+
+    const titleByTargetId = new Map<string, string>();
+    const lookupTitles = async (entityName: string, ids: Set<string>): Promise<void> => {
+        if (ids.size === 0) return;
+        try {
+            const inClause = Array.from(ids).map((id) => `'${id}'`).join(', ');
+            const res = await rv.RunView<{ ID: string; Name: string | null }>({
+                EntityName: entityName,
+                ExtraFilter: `ID IN (${inClause})`,
+                Fields: ['ID', 'Name'],
+                ResultType: 'simple',
+                // row-cap-ok: bounded by tool hit count in a single turn
+                MaxRows: 500,
+            }, params.systemUser);
+            for (const row of res.Success && res.Results ? res.Results : []) {
+                const rid = normalizeReceiptUuid(row.ID);
+                if (rid && row.Name?.trim()) titleByTargetId.set(rid, row.Name.trim());
+            }
+        } catch (err) {
+            LogError(`resolveToolSuppliedSourceCandidates title lookup warning: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    };
+    await Promise.all([
+        lookupTitles(FILES_ENTITY, fileRecordIds),
+        lookupTitles(TASKS_ENTITY, taskTargetIds),
+    ]);
+
+    const seenCandidateIds = new Set<string>(params.alreadySuppliedSpaceItemIds);
+    for (const item of resolvedItems) {
+        const cleanItemId = normalizeReceiptUuid(item.ID);
+        const cleanSpaceId = normalizeReceiptUuid(item.SpaceID);
+        const band: SourceReceiptBand | null = item.Band === 'Team' ? 'Team' : item.Band === 'Shared' ? 'Shared' : null;
+        if (!cleanItemId || !cleanSpaceId || !band) {
+            rejectedCount += 1;
+            continue;
+        }
+        if (!canReaderAccessSourceReceipt({ spaceId: cleanSpaceId, band }, params.reachContext)) {
+            rejectedCount += 1;
+            continue;
+        }
+        if (seenCandidateIds.has(cleanItemId)) {
+            continue;
+        }
+        seenCandidateIds.add(cleanItemId);
+
+        const cleanTargetId = normalizeReceiptUuid(stripRecordKeyPrefix(item.RecordID));
+        const hitMeta =
+            hitBySpaceItemId.get(cleanItemId) ??
+            (cleanTargetId ? hitByTaskRecordId.get(cleanTargetId) : undefined);
+        const title =
+            (cleanTargetId ? titleByTargetId.get(cleanTargetId) : undefined) ??
+            hitMeta?.title?.trim() ??
+            `Item ${cleanItemId.slice(0, 8)}`;
+
+        spaceItemCandidates.push({
+            sourceKind: 'SpaceItem',
+            spaceId: cleanSpaceId,
+            spaceItemId: cleanItemId,
+            contentSourceId: null,
+            targetEntityId: normalizeReceiptUuid(item.EntityID),
+            targetRecordId: item.RecordID || null,
+            sourceTitle: title,
+            band,
+            retrievalRank: null,
+            relevanceScore: hitMeta?.score ?? null,
+            rankingMode: hitMeta?.rankingMode ?? 'lexical',
+            estimatedTokens: 0,
+            wasTruncated: false,
+        });
+    }
+
+    return { spaceItemCandidates, suppliedKnowledgeSourceIds, rejectedCount };
+}
+
 function receiptNaturalKey(entry: {
     sourceKind: string;
     spaceItemId: string | null;
     contentSourceId: string | null;
 }): string | null {
     if (entry.sourceKind === 'SpaceItem') {
-        const id = normalizeReceiptId(entry.spaceItemId);
+        const id = normalizeReceiptUuid(entry.spaceItemId);
         return id ? `SpaceItem:${id}` : null;
     }
-    const id = normalizeReceiptId(entry.contentSourceId);
+    const id = normalizeReceiptUuid(entry.contentSourceId);
     return id ? `KnowledgeSource:${id}` : null;
 }
 
 /**
  * Idempotently persists validated source receipts for an assistant message detail row.
- * Retries against the same `ConversationDetailID` update existing rows in place instead of
- * creating duplicates.
+ * Validates all UUID identifiers strictly before executing any database queries, and uses
+ * keyset-paged lookup so retries update existing rows in place without truncation or duplicates.
  */
 export async function persistSpaceAgentSourceReceipts(
     params: PersistSpaceAgentSourceReceiptsParams,
@@ -225,56 +499,64 @@ export async function persistSpaceAgentSourceReceipts(
         conversationDetailId,
         agentRunId,
         receipts,
+        reachContext,
     } = params;
+
+    const cleanChatId = normalizeReceiptUuid(spaceChatId);
+    const cleanConversationId = normalizeReceiptUuid(conversationId);
+    const cleanDetailId = normalizeReceiptUuid(conversationDetailId);
+    const hasAgentRunId = agentRunId !== undefined && agentRunId !== null && String(agentRunId).trim().length > 0;
+    const cleanRunId = hasAgentRunId ? normalizeReceiptUuid(agentRunId) : null;
+
+    if (!cleanChatId || !cleanConversationId || !cleanDetailId || (hasAgentRunId && !cleanRunId)) {
+        return {
+            ok: false,
+            errorMessage: 'Cannot persist source receipts without valid UUIDs for SpaceChatID, ConversationID, ConversationDetailID, and AgentRunID.',
+        };
+    }
 
     if (receipts.length === 0) {
         return { ok: true, persistedCount: 0, savedIds: [] };
     }
 
-    const cleanChatId = normalizeReceiptId(spaceChatId);
-    const cleanConversationId = normalizeReceiptId(conversationId);
-    const cleanDetailId = normalizeReceiptId(conversationDetailId);
-    const cleanRunId = normalizeReceiptId(agentRunId);
-
-    if (!cleanChatId || !cleanConversationId || !cleanDetailId) {
-        return {
-            ok: false,
-            errorMessage: 'Cannot persist source receipts without valid SpaceChatID, ConversationID, and ConversationDetailID.',
-        };
+    for (const entry of receipts) {
+        if (!normalizeReceiptUuid(entry.spaceId)) {
+            return { ok: false, errorMessage: 'Cannot persist source receipt with invalid SpaceID UUID.' };
+        }
+        if (entry.sourceKind === 'SpaceItem' && !normalizeReceiptUuid(entry.spaceItemId)) {
+            return { ok: false, errorMessage: 'Cannot persist SpaceItem source receipt with invalid SpaceItemID UUID.' };
+        }
+        if (entry.sourceKind === 'KnowledgeSource' && !normalizeReceiptUuid(entry.contentSourceId)) {
+            return { ok: false, errorMessage: 'Cannot persist KnowledgeSource receipt with invalid ContentSourceID UUID.' };
+        }
     }
 
     try {
         return await runWithCollaborationAgentTurnAuthority(turnUserId, async () => {
             const rv = RunView.FromMetadataProvider(provider);
-            const existingRes = await rv.RunView<{
+            const existingRows = await readEveryRow<{
                 ID: string;
                 SourceKind: string;
                 SpaceItemID: string | null;
                 ContentSourceID: string | null;
-            }>({
-                EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
-                ExtraFilter: `ConversationDetailID = '${cleanDetailId}'`,
-                Fields: ['ID', 'SourceKind', 'SpaceItemID', 'ContentSourceID'],
-                ResultType: 'simple',
-                // row-cap-ok: bounded by per-turn top-k retrieval plus granted knowledge sources on one message
-                MaxRows: 500,
-            }, systemUser);
-
-            if (!existingRes.Success) {
-                return {
-                    ok: false,
-                    errorMessage: existingRes.ErrorMessage ?? 'Failed to inspect existing source receipts prior to persistence.',
-                };
-            }
+            }>(
+                rv,
+                {
+                    EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
+                    ExtraFilter: `ConversationDetailID = '${cleanDetailId}'`,
+                    Fields: ['ID', 'SourceKind', 'SpaceItemID', 'ContentSourceID'],
+                },
+                systemUser,
+            );
 
             const existingIdByKey = new Map<string, string>();
-            for (const row of existingRes.Results ?? []) {
+            for (const row of existingRows) {
                 const key = receiptNaturalKey({
                     sourceKind: row.SourceKind,
                     spaceItemId: row.SpaceItemID,
                     contentSourceId: row.ContentSourceID,
                 });
-                const cleanExistingId = normalizeReceiptId(row.ID);
+                const cleanExistingId = normalizeReceiptUuid(row.ID);
                 if (key && cleanExistingId) {
                     existingIdByKey.set(key, cleanExistingId);
                 }
@@ -301,7 +583,7 @@ export async function persistSpaceAgentSourceReceipts(
                     entity.NewRecord();
                 }
 
-                entity.SpaceID = entry.spaceId;
+                entity.SpaceID = normalizeReceiptUuid(entry.spaceId)!;
                 entity.SpaceChatID = cleanChatId;
                 entity.ConversationID = cleanConversationId;
                 entity.ConversationDetailID = cleanDetailId;
@@ -338,7 +620,7 @@ export async function persistSpaceAgentSourceReceipts(
                 persistedCount: savedIds.length,
                 savedIds,
             };
-        });
+        }, { spaceChatId: cleanChatId, ...(reachContext ? { reachContext } : {}) });
     } catch (error) {
         return {
             ok: false,
@@ -348,8 +630,8 @@ export async function persistSpaceAgentSourceReceipts(
 }
 
 /**
- * Queries source receipts for a conversation or assistant detail with strict fail-closed
- * caller `(space, band)` filtering layered on top of MJ's entity RLS.
+ * Queries source receipts for a conversation or assistant detail with strict UUID validation,
+ * deterministic keyset pagination (no 500-row truncation), and fail-closed caller `(space, band)` filtering.
  */
 export async function querySpaceAgentSourceReceipts(
     params: QuerySpaceAgentSourceReceiptsParams,
@@ -357,6 +639,14 @@ export async function querySpaceAgentSourceReceipts(
     const cleanConversationId = normalizeReceiptUuid(params.conversationId);
     if (!cleanConversationId || !params.user) {
         return { ok: false, receipts: [], filteredOutCount: 0, errorMessage: 'Invalid conversation or user.' };
+    }
+
+    const hasDetailId =
+        params.conversationDetailId !== undefined &&
+        params.conversationDetailId !== null;
+    const cleanDetailId = hasDetailId ? normalizeReceiptUuid(params.conversationDetailId) : null;
+    if (hasDetailId && !cleanDetailId) {
+        return { ok: false, receipts: [], filteredOutCount: 0, errorMessage: 'Invalid conversationDetailId UUID.' };
     }
 
     const rv = RunView.FromMetadataProvider(params.provider);
@@ -386,26 +676,43 @@ export async function querySpaceAgentSourceReceipts(
                 ? 'Team'
                 : 'Shared';
 
-    const cleanDetailId = normalizeReceiptUuid(params.conversationDetailId);
     const detailClause = cleanDetailId ? ` AND ConversationDetailID = '${cleanDetailId}'` : '';
 
-    const receiptRes = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType>({
-        EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
-        ExtraFilter: `ConversationID = '${cleanConversationId}'${detailClause}`,
-        OrderBy: 'Sequence ASC, __mj_CreatedAt ASC',
-        ResultType: 'simple',
-        // row-cap-ok: bounded by conversation message receipt window queried for turn display/audit
-        MaxRows: 500,
-    }, params.user);
-
-    if (!receiptRes.Success || !receiptRes.Results) {
+    let allRows: mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[];
+    try {
+        allRows = await readEveryRow<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType>(
+            rv,
+            {
+                EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
+                ExtraFilter: `ConversationID = '${cleanConversationId}'${detailClause}`,
+                Fields: [
+                    'ID', 'SpaceID', 'SpaceChatID', 'ConversationID', 'ConversationDetailID',
+                    'AgentRunID', 'SourceKind', 'SpaceItemID', 'ContentSourceID',
+                    'TargetEntityID', 'TargetRecordID', 'SourceTitle', 'Band',
+                    'WasSupplied', 'WasCited', 'RetrievalRank', 'RelevanceScore',
+                    'RankingMode', 'CitationOrdinal', 'EstimatedTokens', 'WasTruncated', 'Sequence',
+                    '__mj_CreatedAt',
+                ],
+            },
+            params.user,
+        );
+    } catch (readErr) {
         return {
             ok: false,
             receipts: [],
             filteredOutCount: 0,
-            errorMessage: receiptRes.ErrorMessage ?? 'Failed to query source receipts.',
+            errorMessage: readErr instanceof Error ? readErr.message : String(readErr),
         };
     }
+
+    allRows.sort((a, b) => {
+        const detailCmp = (a.ConversationDetailID ?? '').localeCompare(b.ConversationDetailID ?? '');
+        if (detailCmp !== 0) return detailCmp;
+        const seqA = typeof a.Sequence === 'number' ? a.Sequence : 0;
+        const seqB = typeof b.Sequence === 'number' ? b.Sequence : 0;
+        if (seqA !== seqB) return seqA - seqB;
+        return (a.ID ?? '').localeCompare(b.ID ?? '');
+    });
 
     const reachContext: SourceReceiptReachContext = {
         chatAudience,
@@ -415,7 +722,7 @@ export async function querySpaceAgentSourceReceipts(
     const allowed: mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[] = [];
     let filteredOutCount = 0;
 
-    for (const row of receiptRes.Results) {
+    for (const row of allRows) {
         const band = row.Band === 'Team' ? 'Team' : row.Band === 'Shared' ? 'Shared' : null;
         if (!band || !canReaderAccessSourceReceipt({ spaceId: row.SpaceID, band }, reachContext)) {
             filteredOutCount += 1;

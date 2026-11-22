@@ -13,7 +13,8 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { ScopedSearchAction } from '@memberjunction/core-actions';
-import { COLLABORATION_SPACE_SCOPE_ID } from './turn-tools.js';
+import { COLLABORATION_SPACE_SCOPE_ID, type TurnToolSourceHit } from './turn-tools.js';
+import { parseUuid } from './uuid.js';
 
 /** The key MJ registers Scoped Search under; registering after it here outranks it. */
 const SCOPED_SEARCH_DRIVER_CLASS = '__Scoped_Search';
@@ -34,11 +35,97 @@ export function unquoteSpaceSearch(params: Pick<RunActionParams, 'Params' | 'Run
     if (query && typeof query.Value === 'string') query.Value = unwrapPhraseQuotes(query.Value);
 }
 
+interface ScopedSearchResultLike {
+    EntityName?: string | null;
+    RecordID?: string | null;
+    Title?: string | null;
+    RecordName?: string | null;
+    Score?: number | null;
+    SourceType?: string | null;
+    RawMetadata?: string | Record<string, string | number | boolean | null> | null;
+}
+
+interface TurnContextWithToolHits {
+    toolSourceHits?: TurnToolSourceHit[];
+}
+
+function readRawMetaContentSourceId(rawMeta: ScopedSearchResultLike['RawMetadata']): string | null {
+    if (!rawMeta) return null;
+    if (typeof rawMeta === 'string') {
+        try {
+            const parsed = JSON.parse(rawMeta) as Record<string, string | number | boolean | null>;
+            return typeof parsed['ContentSourceID'] === 'string' ? parseUuid(parsed['ContentSourceID']) : null;
+        } catch {
+            return null;
+        }
+    }
+    return typeof rawMeta['ContentSourceID'] === 'string' ? parseUuid(rawMeta['ContentSourceID']) : null;
+}
+
+export function recordScopedSearchHitsOnContext(
+    params: Pick<RunActionParams, 'Context' | 'RunScope'>,
+    result: ActionResultSimple,
+): void {
+    if (!result.Success || !params.RunScope?.SearchScopeIDs?.some((id) => UUIDsEqual(id, COLLABORATION_SPACE_SCOPE_ID))) {
+        return;
+    }
+    const ctx = params.Context as TurnContextWithToolHits | undefined;
+    if (!ctx || !Array.isArray(ctx.toolSourceHits)) {
+        return;
+    }
+    const resultsParam = result.Params?.find((p) => p.Name.trim().toLowerCase() === 'results');
+    if (!resultsParam || !Array.isArray(resultsParam.Value)) {
+        return;
+    }
+    for (const rawItem of resultsParam.Value as ScopedSearchResultLike[]) {
+        if (!rawItem || typeof rawItem !== 'object') continue;
+        const entityName = typeof rawItem.EntityName === 'string' ? rawItem.EntityName.trim() : '';
+        const recordId = typeof rawItem.RecordID === 'string' ? rawItem.RecordID.trim() : '';
+        const title = (typeof rawItem.Title === 'string' && rawItem.Title.trim()) ||
+            (typeof rawItem.RecordName === 'string' && rawItem.RecordName.trim()) ||
+            null;
+        const score = typeof rawItem.Score === 'number' && Number.isFinite(rawItem.Score) ? rawItem.Score : null;
+        const rankingMode: TurnToolSourceHit['rankingMode'] = rawItem.SourceType === 'vector' ? 'vector' : 'lexical';
+        const contentSourceId = readRawMetaContentSourceId(rawItem.RawMetadata);
+
+        if (entityName === 'MJ: Content Sources' || (contentSourceId && !recordId)) {
+            const cid = contentSourceId ?? parseUuid(recordId);
+            if (cid) {
+                ctx.toolSourceHits.push({
+                    sourceKind: 'KnowledgeSource',
+                    contentSourceId: cid,
+                    entityName: 'MJ: Content Sources',
+                    recordId: recordId || cid,
+                    title,
+                    score,
+                    rankingMode: 'grant',
+                });
+            }
+            continue;
+        }
+
+        if (recordId) {
+            ctx.toolSourceHits.push({
+                sourceKind: 'SpaceItem',
+                ...(entityName === 'MJ_BizApps_Collaboration: Space Items' ? { spaceItemId: parseUuid(recordId) } : {}),
+                ...(contentSourceId ? { contentSourceId } : {}),
+                entityName: entityName || null,
+                recordId,
+                title,
+                score,
+                rankingMode,
+            });
+        }
+    }
+}
+
 @RegisterClass(BaseAction, SCOPED_SEARCH_DRIVER_CLASS)
 export class CollaborationScopedSearchAction extends ScopedSearchAction {
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         unquoteSpaceSearch(params);
-        return super.InternalRunAction(params);
+        const result = await super.InternalRunAction(params);
+        recordScopedSearchHitsOnContext(params, result);
+        return result;
     }
 }
 
