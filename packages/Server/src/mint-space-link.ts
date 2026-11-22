@@ -4,11 +4,18 @@ import { type UserInfo } from '@memberjunction/core';
 import { configInfo } from '@memberjunction/server';
 import { handInviteToEngine, type InviteEmail } from '@mj-biz-apps/collaboration-core';
 import {
+    inviteSpaceMember as inviteSpaceMemberCore,
     mintSpaceLink as mintSpaceLinkCore,
+    resolveInvitedSeatsForUser,
     resolveMagicLinkHost,
     setMagicLinkHostProvider,
+    SPACE_INVITE_NOTIFICATION_TYPE,
+    type IdpSignInNotification,
     type MagicLinkHost,
     type MintSpaceLinkResult,
+    type ResolvedInvitedSeat,
+    type ResolveInvitedSeatsResult,
+    type ResolvedTargetApplication,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 
 async function sendInviteEmailViaEngine(system: UserInfo, providerName: string, draft: InviteEmail): Promise<boolean> {
@@ -54,4 +61,19 @@ export async function mintSpaceLink(input: Parameters<typeof mintSpaceLinkCore>[
     return mintSpaceLinkCore({ ...input, host });
 }
 
-export { resolveMagicLinkHost, setMagicLinkHostProvider, type MagicLinkHost, type MintSpaceLinkResult };
+export async function inviteSpaceMember(input: Parameters<typeof inviteSpaceMemberCore>[0]): Promise<MintSpaceLinkResult> {
+    return mintSpaceLink(input);
+}
+
+export {
+    resolveInvitedSeatsForUser,
+    resolveMagicLinkHost,
+    setMagicLinkHostProvider,
+    SPACE_INVITE_NOTIFICATION_TYPE,
+    type IdpSignInNotification,
+    type MagicLinkHost,
+    type MintSpaceLinkResult,
+    type ResolvedInvitedSeat,
+    type ResolveInvitedSeatsResult,
+    type ResolvedTargetApplication,
+};

@@ -1,4 +1,4 @@
-import { Metadata, RunView, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
+import { type IMetadataProvider, Metadata, RunView, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
 import { membershipReaches, type MemberSnapshot, type RoleFlags, type SpaceNode } from '@mj-biz-apps/collaboration-core';
 import { CollaborationEngine } from './CollaborationEngine.js';
@@ -20,10 +20,17 @@ export interface WriteContext {
     ownerCount: number;
     /** The target space's type, for the rules that read the type's promise (item 157). */
     typeId?: string | null;
+    /** Target space's display name when returned by the space query. */
+    spaceName?: string | null;
+    /** Target MJ Application ID declared on the space's type, or null for the host default. */
+    targetApplicationId?: string | null;
+    /** Target MJ Application display name joined on vwSpaceTypes, if present. */
+    targetApplicationName?: string | null;
 }
 
 export interface SpaceRow {
     ID: string;
+    Name?: string | null;
     ParentID: string | null;
     InheritsMembership: boolean;
     OwnerID: string;
@@ -64,9 +71,10 @@ async function one<T>(rv: RunView, entityName: string, filter: string, user: Use
 }
 
 /** Ancestors of `startId`, including it, following ParentID. Stops if a parent is not visible. */
-async function chain(rv: RunView, startId: string, user: UserInfo): Promise<{ nodes: SpaceNode[]; typeId: string | null }> {
+async function chain(rv: RunView, startId: string, user: UserInfo): Promise<{ nodes: SpaceNode[]; typeId: string | null; spaceName: string | null }> {
     const nodes: SpaceNode[] = [];
     let typeId: string | null = null;
+    let spaceName: string | null = null;
     let current: string | null = startId;
     const seen = new Set<string>();
     while (current && !seen.has(current)) {
@@ -79,22 +87,32 @@ async function chain(rv: RunView, startId: string, user: UserInfo): Promise<{ no
         if (!typeId) {
             typeId = row.SpaceTypeID;
         }
+        if (spaceName === null && row.Name) {
+            spaceName = row.Name.trim() || null;
+        }
         nodes.push(toNode(row));
         current = row.ParentID;
     }
-    return { nodes, typeId };
+    return { nodes, typeId, spaceName };
 }
 
 /**
  * The rows a write needs: the target chain, the caller's memberships, the
  * granted role, and the target's roster count. Not the whole estate.
  */
-export async function loadWriteContext(entity: BaseEntity, user: UserInfo, spaceId: string, roleId: string | null, previousRoleId: string | null = null): Promise<WriteContext> {
-    const rv = runViewFor(entity);
+export async function loadWriteContext(
+    entity: BaseEntity | null,
+    user: UserInfo,
+    spaceId: string,
+    roleId: string | null,
+    previousRoleId: string | null = null,
+    providerOverride?: IMetadataProvider,
+): Promise<WriteContext> {
+    const rv = providerOverride ? RunView.FromMetadataProvider(providerOverride) : entity ? runViewFor(entity) : new RunView();
     const caller = parseUuid(user.ID);
     const space = parseUuid(spaceId);
     if (!caller || !space) {
-        return { spaces: [], memberships: [], role: null, roles: new Map(), approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0, typeId: null };
+        return { spaces: [], memberships: [], role: null, roles: new Map(), approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0, typeId: null, spaceName: null, targetApplicationId: null, targetApplicationName: null };
     }
     const results = await rv.RunViews([
         { EntityName: MEMBERS, ExtraFilter: `UserID = '${caller}'`, MaxRows: 2000 },
@@ -108,7 +126,14 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
             throw new Error('Refusing the write: a roster page came back full, so the check would be incomplete.');
         }
     }
-    const system = await requireSystemUser(entity);
+    const system = providerOverride
+        ? await requireSystemUserFromProvider(providerOverride, entity)
+        : entity
+          ? await requireSystemUser(entity)
+          : null;
+    if (!system) {
+        throw new Error('Refusing the write: the system user is not available, so the roster cannot be counted.');
+    }
     const counted = await one<{ ID: string }>(rv, MEMBERS, `SpaceID = '${space}' AND Status <> 'Removed'`, system);
     const ownerRoles = await one<{ ID: string }>(rv, ROLES, 'IsOwnerRole = 1', system);
     const ownerIds = ownerRoles.map((role) => `'${role.ID}'`).join(', ');
@@ -119,7 +144,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
     const spaces = walked.nodes;
     const typeId = walked.typeId;
     const typeRows = typeId && parseUuid(typeId)
-        ? await one<{ InviteApproval: 'Approve' | 'AutoApprove'; MemberCap: number | null }>(rv, TYPES, `ID = '${parseUuid(typeId)}'`, user)
+        ? await one<{ InviteApproval: 'Approve' | 'AutoApprove'; MemberCap: number | null; TargetApplicationID?: string | null; TargetApplication?: string | null }>(rv, TYPES, `ID = '${parseUuid(typeId)}'`, user)
         : [];
     const memberRows = (results[0].Results ?? []) as { SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: MemberSnapshot['band']; SpaceRoleTypeID: string }[];
     const roleRows = (results[1].Results ?? []) as { Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean; ID: string }[];
@@ -155,7 +180,19 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
         memberCount: counted.length,
         ownerCount: owners.length,
         typeId: typeId ? parseUuid(typeId) : null,
+        spaceName: walked.spaceName,
+        targetApplicationId: parseUuid(typeRows[0]?.TargetApplicationID ?? ''),
+        targetApplicationName: typeRows[0]?.TargetApplication?.trim() || null,
     };
+}
+
+async function requireSystemUserFromProvider(provider: IMetadataProvider, fallbackEntity: BaseEntity | null): Promise<UserInfo> {
+    const resolved = asMetadata(provider) ?? (fallbackEntity ? asMetadata(fallbackEntity.ProviderToUse) : null);
+    const system = resolved ? await WellKnownUserSource.Instance.GetSystemUser(resolved) : null;
+    if (!system) {
+        throw new Error('Refusing the write: the system user is not available, so the roster cannot be counted.');
+    }
+    return system;
 }
 
 function roleFilter(roleId: string | null, previousRoleId: string | null): string {

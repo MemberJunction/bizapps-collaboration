@@ -50,7 +50,11 @@ export const RESOLVER_PATHS = [
     resolve(here, 'ensure-meeting-space-chat.resolver.{js,ts}'),
 ];
 
-export { mintSpaceLink } from './mint-space-link.js';
+export {
+    inviteSpaceMember,
+    mintSpaceLink,
+    resolveInvitedSeatsForUser,
+} from './mint-space-link.js';
 
 function installPostgresProviderPrototypeHookFromServer(): void {
     try {

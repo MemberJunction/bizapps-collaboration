@@ -171,11 +171,18 @@ export type {
     SpaceMeetingsResult,
 } from './space-meetings.js';
 export {
+    inviteSpaceMember,
     mintSpaceLink,
+    resolveInvitedSeatsForUser,
     resolveMagicLinkHost,
     setMagicLinkHostProvider,
+    SPACE_INVITE_NOTIFICATION_TYPE,
+    type IdpSignInNotification,
     type MagicLinkHost,
     type MintSpaceLinkResult,
+    type ResolvedInvitedSeat,
+    type ResolveInvitedSeatsResult,
+    type ResolvedTargetApplication,
 } from './mint-space-link.js';
 export {
     COLLABORATION_AGENT_TURN_OPERATION,

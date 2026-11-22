@@ -550,13 +550,45 @@ export interface InviteEmail {
     body: string;
 }
 
+/** Resolves the SpaceType's configured target MJ Application ID, falling back to `defaultApplicationId` when unset. */
+export function resolveTargetApplicationId(
+    typeTargetApplicationId: string | null | undefined,
+    defaultApplicationId: string,
+): string {
+    const trimmed = (typeTargetApplicationId ?? '').trim();
+    return trimmed.length > 0 ? trimmed : defaultApplicationId;
+}
+
 /** The message MJ's mailer is asked to send. `from` is the host's magicLink.fromAddress. */
-export function inviteEmail(input: { from: string; to: string; url: string }): InviteEmail {
+export function inviteEmail(input: { from: string; to: string; url: string; applicationName?: string }): InviteEmail {
+    const appName = input.applicationName?.trim() || 'Collaboration';
     return {
         from: input.from,
         to: input.to,
-        subject: "You've been invited to Collaboration",
+        subject: `You've been invited to ${appName}`,
         body: `Open this link to sign in:\n\n${input.url}\n\nThis link is single-use and will expire.`,
+    };
+}
+
+/**
+ * The sign-in notification email sent when magic links are disabled and the invited person
+ * authenticates through an external identity provider (such as Auth0 or WorkOS).
+ */
+export function idpInviteEmail(input: {
+    from: string;
+    to: string;
+    signInUrl: string;
+    applicationName?: string;
+    spaceName?: string | null;
+}): InviteEmail {
+    const appName = input.applicationName?.trim() || 'Collaboration';
+    const space = input.spaceName?.trim();
+    const location = space ? `"${space}" in ${appName}` : appName;
+    return {
+        from: input.from,
+        to: input.to,
+        subject: `You've been invited to ${appName}`,
+        body: `You have been invited to ${location}.\n\nSign in with your organization account at:\n\n${input.signInUrl}\n\nUse the email address ${input.to} when signing in.`,
     };
 }
 
