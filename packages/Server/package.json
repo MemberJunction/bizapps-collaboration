@@ -15,7 +15,7 @@
     "build": "tsc",
     "test": "tsc && node --test src/upload-limit.test.ts src/turn-observer.test.ts src/source-receipt-resolver.test.ts"
   },
-  "license": "UNLICENSED",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@mj-biz-apps/collaboration-actions": "0.1.0",
     "@mj-biz-apps/collaboration-core": "0.1.0",

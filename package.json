@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "BizApps Collaboration — shared spaces for collaborative team and outside work.",
-  "license": "UNLICENSED",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "@memberjunction/cli": "6.3.0-edge.1",
     "@memberjunction/core": "6.3.0-edge.1",
