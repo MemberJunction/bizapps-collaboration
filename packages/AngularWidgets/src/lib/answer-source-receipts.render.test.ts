@@ -97,6 +97,12 @@ describe('CollabAnswerSourceReceiptsComponent', () => {
 
         const chips = host.querySelectorAll<HTMLButtonElement>('[data-testid="answer-citation-chip"]');
         expect(chips).toHaveLength(2);
+        for (const chip of Array.from(chips)) {
+            expect(chip.tagName).toBe('BUTTON');
+            expect(chip.getAttribute('type')).toBe('button');
+            expect(chip.getAttribute('role')).toBeNull();
+            expect(chip.closest('[role="list"] [role="listitem"]')).not.toBeNull();
+        }
         expect(chips[0].textContent).toContain('[1]');
         expect(chips[0].textContent).toContain('Q3 Financial Controls.pdf');
         expect(chips[1].textContent).toContain('[2]');

@@ -76,23 +76,24 @@ export function sortAnswerSourceReceipts(
         @if (citedReceipts.length > 0) {
           <div class="answer-citation-chips" role="list" aria-label="Cited sources">
             @for (receipt of citedReceipts; track receipt.id) {
-              <button
-                type="button"
-                role="listitem"
-                class="answer-citation-chip"
-                data-testid="answer-citation-chip"
-                [attr.data-receipt-id]="receipt.id"
-                [attr.data-band]="receipt.band"
-                [title]="'Open cited source: ' + cleanTitle(receipt.sourceTitle)"
-                (click)="onOpenReceipt(receipt)">
-                @if (receipt.citationOrdinal !== null) {
-                  <span class="citation-ordinal" data-testid="citation-ordinal">[{{ receipt.citationOrdinal }}]</span>
-                }
-                <i [class]="sourceIconClass(receipt)" class="citation-kind-icon" aria-hidden="true"></i>
-                <span class="citation-chip-title">{{ cleanTitle(receipt.sourceTitle) }}</span>
-                <mjc-band-chip [Band]="receipt.band" Size="sm" />
-                <i class="fa-solid fa-arrow-up-right-from-square citation-open-icon" aria-hidden="true"></i>
-              </button>
+              <span role="listitem" class="answer-citation-chip-item">
+                <button
+                  type="button"
+                  class="answer-citation-chip"
+                  data-testid="answer-citation-chip"
+                  [attr.data-receipt-id]="receipt.id"
+                  [attr.data-band]="receipt.band"
+                  [title]="'Open cited source: ' + cleanTitle(receipt.sourceTitle)"
+                  (click)="onOpenReceipt(receipt)">
+                  @if (receipt.citationOrdinal !== null) {
+                    <span class="citation-ordinal" data-testid="citation-ordinal">[{{ receipt.citationOrdinal }}]</span>
+                  }
+                  <i [class]="sourceIconClass(receipt)" class="citation-kind-icon" aria-hidden="true"></i>
+                  <span class="citation-chip-title">{{ cleanTitle(receipt.sourceTitle) }}</span>
+                  <mjc-band-chip [Band]="receipt.band" Size="sm" />
+                  <i class="fa-solid fa-arrow-up-right-from-square citation-open-icon" aria-hidden="true"></i>
+                </button>
+              </span>
             }
           </div>
         }
@@ -223,6 +224,11 @@ export function sortAnswerSourceReceipts(
         align-items: center;
         flex-wrap: wrap;
         gap: var(--mj-space-1-5);
+      }
+
+      .answer-citation-chip-item {
+        display: inline-flex;
+        max-width: 100%;
       }
 
       .answer-citation-chip {

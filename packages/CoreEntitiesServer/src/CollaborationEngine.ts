@@ -252,8 +252,9 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         conversationId: string,
         user: UserInfo,
         provider?: IMetadataProvider,
+        options?: Parameters<CollaborationEngineBase['LoadSpaceAgentSourceReceiptsForConversation']>[3],
     ): Promise<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[]> {
-        return this.Base.LoadSpaceAgentSourceReceiptsForConversation(conversationId, user, provider);
+        return this.Base.LoadSpaceAgentSourceReceiptsForConversation(conversationId, user, provider, options);
     }
 
     /**

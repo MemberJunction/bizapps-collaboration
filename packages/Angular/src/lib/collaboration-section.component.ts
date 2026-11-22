@@ -14,8 +14,10 @@ import { rulesForSpace, rulesFromServerDocument, sameRules } from './logic/space
 import { recordLinkKeyPairs } from './logic/record-link.js';
 import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
 import {
+    buildActiveKnowledgeSourceBands,
     buildClientReceiptReachContext,
     filterAndMapSourceReceipts,
+    type LiveReceiptSourcesContext,
     mergeAnswerSourceReceipts,
     parseTurnSourceReceiptsPayload,
     resolveSourceReceiptOpenTarget,
@@ -1576,6 +1578,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isSubmittingAsk = false;
     public chatCitations: SpaceChatCitationModel[] = [];
     public chatSourceReceipts: SpaceChatAnswerSourceReceipt[] = [];
+    private rawConversationReceipts: Awaited<ReturnType<CollaborationEngineBase['LoadSpaceAgentSourceReceiptsForConversation']>> = [];
+    private streamedTurnReceipts: Array<{ detailId: string; rawJson: string }> = [];
+    private librarySpaceIdLoaded: string | null = null;
     private readonly receiptReads = new LatestOnly();
 
     public async updateCanConfigureCurrentSpace(): Promise<void> {
@@ -2675,6 +2680,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (!json) return;
         try {
             this.serverConfigurationBySpace.set(key, { configuration: JSON.parse(json) as EffectiveSpaceConfiguration, full });
+            if (this.activeSpaceId && UUIDsEqual(this.activeSpaceId, key)) {
+                this.refreshVisibleSourceReceipts(this.activeSpaceId);
+            }
         } catch (error) {
             this.logOnce(`configuration:${key}`, `The configuration of space ${key} does not parse: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -3256,7 +3264,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.resetStage4(spaceId);
         this.activeConversationId = '';
         this.chatCitations = [];
-        this.chatSourceReceipts = [];
+        this.clearConversationSourceReceipts();
+        this.librarySpaceIdLoaded = null;
         this.overviewRoomMessages = [];
         this.spaceConversations = [];
         this.bandChoice = null;
@@ -3564,6 +3573,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
             if (!itemsRes?.Success || !itemsRes.Results || itemsRes.Results.length === 0) {
                 this.libraryRows = [];
+                this.librarySpaceIdLoaded = itemsRes?.Success ? spaceId : null;
                 this.libraryTotalCount = 0;
                 this.librarySharedCount = 0;
                 this.libraryTeamCount = 0;
@@ -3571,6 +3581,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.overviewTeamItems = [];
                 this.libraryCollections = [];
                 this.librarySmartViews = [];
+                if (itemsRes?.Success && UUIDsEqual(this.activeSpaceId, spaceId)) {
+                    this.refreshVisibleSourceReceipts(spaceId);
+                }
                 return;
             }
 
@@ -3669,11 +3682,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
 
             this.libraryRows = rows;
+            this.librarySpaceIdLoaded = spaceId;
             this.libraryTotalCount = rows.length;
             this.librarySharedCount = shared.length;
             this.libraryTeamCount = team.length;
             this.overviewSharedItems = shared;
             this.overviewTeamItems = team;
+            if (UUIDsEqual(this.activeSpaceId, spaceId)) {
+                this.refreshVisibleSourceReceipts(spaceId);
+            }
 
             this.libraryCollections = Array.from(folderCounts.entries()).map(([folder, info], idx) => ({
                 id: 'folder-' + idx,
@@ -3696,6 +3713,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             LogError('Error loading space items: ' + (err instanceof Error ? err.message : String(err)));
             if (!isCurrent()) return;
             this.libraryRows = [];
+            this.librarySpaceIdLoaded = null;
             this.libraryTotalCount = 0;
             this.librarySharedCount = 0;
             this.libraryTeamCount = 0;
@@ -3781,7 +3799,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 void this.loadConversationSourceReceipts(spaceId, this.activeConversationId, isCurrent);
             } else {
                 this.overviewRoomMessages = [];
-                this.chatSourceReceipts = [];
+                this.clearConversationSourceReceipts();
             }
         } catch (err) {
             LogError('Error loading space conversations: ' + (err instanceof Error ? err.message : String(err)));
@@ -4563,7 +4581,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.activeView = 'space';
         this.activeConversationId = convId;
         this.chatCitations = [];
-        this.chatSourceReceipts = [];
+        this.clearConversationSourceReceipts();
+        this.librarySpaceIdLoaded = null;
         const item = this.spaceConversations.find(c => UUIDsEqual(c.id, convId));
         // A conversation the list doesn't hold says nothing of its band: the band stays what it was
         if (item) this.chatAudienceBand = item.band === 'Team' ? 'Team' : 'Shared';
@@ -5194,7 +5213,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (res.ConversationID) {
                 this.activeConversationId = res.ConversationID;
                 this.chatCitations = [];
-                this.chatSourceReceipts = [];
+                this.clearConversationSourceReceipts();
                 this.setTab('Chat');
                 this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
                 await this.loadSpaceChatHostRules(spaceId, res.ConversationID);
@@ -5286,12 +5305,55 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         });
     }
 
-    private async loadConversationSourceReceipts(spaceId: string, convId: string, isCurrent: () => boolean): Promise<void> {
-        if (!isValidUuid(spaceId) || !isValidUuid(convId) || !this.currentUser) {
+    private liveReceiptSourcesContext(spaceId: string): LiveReceiptSourcesContext {
+        const cfg = this.configurationOf(spaceId);
+        const spaceItems = this.librarySpaceIdLoaded && UUIDsEqual(this.librarySpaceIdLoaded, spaceId)
+            ? this.libraryRows.map((row) => ({
+                id: row.id,
+                spaceId,
+                band: (row.band === 'Team' ? 'Team' : 'Shared') as 'Shared' | 'Team',
+            }))
+            : undefined;
+        const knowledgeSourceBandsBySpace = cfg
+            ? { [spaceId.toLowerCase()]: buildActiveKnowledgeSourceBands(cfg) }
+            : undefined;
+        return {
+            ...(spaceItems ? { spaceItems, scopedSpaceId: spaceId } : {}),
+            ...(knowledgeSourceBandsBySpace ? { knowledgeSourceBandsBySpace } : {}),
+        };
+    }
+
+    private clearConversationSourceReceipts(): void {
+        this.rawConversationReceipts = [];
+        this.streamedTurnReceipts = [];
+        this.chatSourceReceipts = [];
+    }
+
+    private refreshVisibleSourceReceipts(spaceId: string): void {
+        if (!isValidUuid(spaceId)) {
             this.chatSourceReceipts = [];
             return;
         }
+        const reach = this.receiptReachContext(spaceId);
+        const liveSources = this.liveReceiptSourcesContext(spaceId);
+        let mapped = filterAndMapSourceReceipts(this.rawConversationReceipts, reach, liveSources);
+        for (const streamed of this.streamedTurnReceipts) {
+            const parsed = parseTurnSourceReceiptsPayload(streamed.rawJson, streamed.detailId, reach, liveSources);
+            mapped = mergeAnswerSourceReceipts(mapped, parsed);
+        }
+        this.chatSourceReceipts = mapped;
+    }
+
+    private async loadConversationSourceReceipts(spaceId: string, convId: string, isCurrent: () => boolean): Promise<void> {
+        if (!isValidUuid(spaceId) || !isValidUuid(convId) || !this.currentUser) {
+            this.clearConversationSourceReceipts();
+            return;
+        }
         const isLatest = this.receiptReads.Begin();
+        const cfg = this.configurationOf(spaceId);
+        const activeKnowledgeSourceBandsBySpace = cfg
+            ? { [spaceId.toLowerCase()]: buildActiveKnowledgeSourceBands(cfg) }
+            : undefined;
         try {
             await guardedLoad(
                 () => isLatest() && isCurrent() && UUIDsEqual(this.activeConversationId, convId),
@@ -5299,16 +5361,18 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     convId,
                     this.currentUser!,
                     this.ProviderToUse,
+                    activeKnowledgeSourceBandsBySpace ? { activeKnowledgeSourceBandsBySpace } : undefined,
                 ),
                 (loadedRows) => {
-                    this.chatSourceReceipts = filterAndMapSourceReceipts(loadedRows, this.receiptReachContext(spaceId));
+                    this.rawConversationReceipts = loadedRows;
+                    this.refreshVisibleSourceReceipts(spaceId);
                     this.RefreshView();
                 },
             );
         } catch (err) {
             LogError('Failed to load conversation source receipts: ' + (err instanceof Error ? err.message : String(err)));
             if (isLatest() && isCurrent() && UUIDsEqual(this.activeConversationId, convId)) {
-                this.chatSourceReceipts = [];
+                this.clearConversationSourceReceipts();
                 this.RefreshView();
             }
         }
@@ -5326,12 +5390,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const result = spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request, this.chatRetrievalScope)));
             this.chatCitations = result.Citations ?? [];
             if (result.SourceReceiptsJSON && result.ReplyDetailIds?.[0]) {
-                const parsed = parseTurnSourceReceiptsPayload(
-                    result.SourceReceiptsJSON,
-                    result.ReplyDetailIds[0],
-                    this.receiptReachContext(this.activeSpaceId),
-                );
-                this.chatSourceReceipts = mergeAnswerSourceReceipts(this.chatSourceReceipts, parsed);
+                this.streamedTurnReceipts.push({
+                    detailId: result.ReplyDetailIds[0],
+                    rawJson: result.SourceReceiptsJSON,
+                });
+                this.refreshVisibleSourceReceipts(this.activeSpaceId);
             }
             this.RefreshView();
             return result;

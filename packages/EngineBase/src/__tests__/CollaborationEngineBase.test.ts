@@ -283,6 +283,22 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
                 async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
                     runViewCalls.push(params);
+                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                        const liveItems = rows.map((r) => ({
+                            ID: r.SpaceItemID,
+                            SpaceID: r.SpaceID,
+                            Band: r.Band,
+                        }));
+                        return {
+                            Success: true,
+                            Results: liveItems as Partial<T>[] as T[],
+                            UserViewRunID: '',
+                            TotalRowCount: liveItems.length,
+                            RowCount: liveItems.length,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        };
+                    }
                     const afterId = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
                     const filtered = afterId ? rows.filter((r) => r.ID.toLowerCase() > afterId) : rows;
                     const page = params.MaxRows ? filtered.slice(0, params.MaxRows) : filtered;
@@ -306,7 +322,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             );
 
             expect(loaded).toHaveLength(totalReceipts);
-            expect(runViewCalls).toHaveLength(4);
+            expect(runViewCalls.filter((c) => c.EntityName === 'MJ_BizApps_Collaboration: Space Agent Source Receipts')).toHaveLength(4);
             const perAnswerCounts = new Map<string, number>();
             for (const r of loaded) {
                 perAnswerCounts.set(r.ConversationDetailID, (perAnswerCounts.get(r.ConversationDetailID) ?? 0) + 1);
@@ -315,6 +331,262 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             for (const count of perAnswerCounts.values()) {
                 expect(count).toBe(50);
             }
+        });
+
+        it('filters stale receipts when SpaceItem is demoted/moved or KnowledgeSource grant is removed/demoted (CR-1)', async () => {
+            const spaceA = '11111111-1111-4111-8111-111111111111';
+            const spaceB = '22222222-2222-4222-8222-222222222222';
+            const demotedItem = 'cccc0000-0000-4000-8000-000000000001';
+            const movedItem = 'cccc0000-0000-4000-8000-000000000002';
+            const validItem = 'cccc0000-0000-4000-8000-000000000003';
+            const revokedKs = 'dddd0000-0000-4000-8000-000000000004';
+            const demotedKs = 'dddd0000-0000-4000-8000-000000000005';
+            const validKs = 'dddd0000-0000-4000-8000-000000000006';
+
+            const receiptRows: mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[] = [
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000001',
+                    SpaceID: spaceA,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'SpaceItem',
+                    SpaceItemID: demotedItem,
+                    ContentSourceID: null,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Demoted Item',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: true,
+                    RetrievalRank: 1,
+                    RelevanceScore: 0.9,
+                    RankingMode: 'lexical',
+                    CitationOrdinal: 1,
+                    EstimatedTokens: 50,
+                    WasTruncated: false,
+                    Sequence: 1,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Space A',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000002',
+                    SpaceID: spaceA,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'SpaceItem',
+                    SpaceItemID: movedItem,
+                    ContentSourceID: null,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Moved Item',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: false,
+                    RetrievalRank: 2,
+                    RelevanceScore: 0.8,
+                    RankingMode: 'lexical',
+                    CitationOrdinal: null,
+                    EstimatedTokens: 50,
+                    WasTruncated: false,
+                    Sequence: 2,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Space A',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000003',
+                    SpaceID: spaceA,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'SpaceItem',
+                    SpaceItemID: validItem,
+                    ContentSourceID: null,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Valid Shared Item',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: true,
+                    RetrievalRank: 3,
+                    RelevanceScore: 0.7,
+                    RankingMode: 'lexical',
+                    CitationOrdinal: 2,
+                    EstimatedTokens: 50,
+                    WasTruncated: false,
+                    Sequence: 3,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Space A',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000004',
+                    SpaceID: spaceA,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'KnowledgeSource',
+                    SpaceItemID: null,
+                    ContentSourceID: revokedKs,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Revoked KS',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: false,
+                    RetrievalRank: null,
+                    RelevanceScore: null,
+                    RankingMode: 'grant',
+                    CitationOrdinal: null,
+                    EstimatedTokens: 0,
+                    WasTruncated: false,
+                    Sequence: 4,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Space A',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000005',
+                    SpaceID: spaceA,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'KnowledgeSource',
+                    SpaceItemID: null,
+                    ContentSourceID: demotedKs,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Demoted KS',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: false,
+                    RetrievalRank: null,
+                    RelevanceScore: null,
+                    RankingMode: 'grant',
+                    CitationOrdinal: null,
+                    EstimatedTokens: 0,
+                    WasTruncated: false,
+                    Sequence: 5,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Space A',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+                {
+                    ID: 'bbbb0000-0000-4000-8000-000000000006',
+                    SpaceID: spaceA,
+                    SpaceChatID: '44444444-4444-4444-8444-444444444444',
+                    ConversationID: CONV_UUID,
+                    ConversationDetailID: 'aaaa0000-0000-4000-8000-000000000001',
+                    AgentRunID: null,
+                    SourceKind: 'KnowledgeSource',
+                    SpaceItemID: null,
+                    ContentSourceID: validKs,
+                    TargetEntityID: null,
+                    TargetRecordID: null,
+                    SourceTitle: 'Valid Shared KS',
+                    Band: 'Shared',
+                    WasSupplied: true,
+                    WasCited: false,
+                    RetrievalRank: null,
+                    RelevanceScore: null,
+                    RankingMode: 'grant',
+                    CitationOrdinal: null,
+                    EstimatedTokens: 0,
+                    WasTruncated: false,
+                    Sequence: 6,
+                    __mj_CreatedAt: new Date('2026-11-21T00:00:00Z'),
+                    __mj_UpdatedAt: new Date('2026-11-21T00:00:00Z'),
+                    Space: 'Space A',
+                    SpaceChat: 'General',
+                    Conversation: 'General',
+                    ContentSource: null,
+                    TargetEntity: null,
+                },
+            ];
+
+            const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
+                async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
+                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                        return {
+                            Success: true,
+                            Results: [
+                                { ID: demotedItem, SpaceID: spaceA, Band: 'Team' },
+                                { ID: movedItem, SpaceID: spaceB, Band: 'Shared' },
+                                { ID: validItem, SpaceID: spaceA, Band: 'Shared' },
+                            ] as Partial<T>[] as T[],
+                            UserViewRunID: '',
+                            TotalRowCount: 3,
+                            RowCount: 3,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        };
+                    }
+                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
+                        return {
+                            Success: false,
+                            ErrorMessage: 'Permission denied on Space Grants',
+                            Results: [] as T[],
+                            UserViewRunID: '',
+                            TotalRowCount: 0,
+                            RowCount: 0,
+                            ExecutionTime: 1,
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: receiptRows as Partial<T>[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: receiptRows.length,
+                        RowCount: receiptRows.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                },
+            };
+
+            const loaded = await engine.LoadSpaceAgentSourceReceiptsForConversation(
+                CONV_UUID,
+                mockUser,
+                providerObj as IMetadataProvider,
+                {
+                    activeKnowledgeSourceBandsBySpace: {
+                        [spaceA]: {
+                            [demotedKs]: 'Team',
+                            [validKs]: 'Shared',
+                        },
+                    },
+                },
+            );
+
+            expect(loaded.map((r) => r.SourceTitle)).toEqual(['Valid Shared Item', 'Valid Shared KS']);
         });
     });
 });

@@ -192,6 +192,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const wasFileItem = !wasNew && !!filesEntity && oldEntityId.toLowerCase() === filesEntity.ID.toLowerCase();
         const oldRawRecId = wasFileItem ? String(own.oldValues.RecordID ?? this.RecordID ?? '') : '';
         const oldFileId = oldRawRecId ? parseUuid(oldRawRecId.toLowerCase().startsWith('id|') ? oldRawRecId.slice(3) : oldRawRecId) : null;
+        const previousSpaceId = parseUuid(String(this.Fields.find((field) => field.Name === 'SpaceID')?.OldValue ?? own.oldValues.SpaceID ?? this.SpaceID ?? ''));
         this.readingForSave = own;
         let ok = false;
         try {
@@ -209,6 +210,12 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             if (!nowFileId || nowFileId.toLowerCase() !== oldFileId.toLowerCase()) {
                 await cleanupStoredFileIfUnreferenced(provider, this, oldFileId, filesEntity.ID, this.ID);
             }
+        }
+        const currentSpaceId = parseUuid(this.SpaceID);
+        const spaceChanged = !wasNew && (decided.kind === 'Move' || (!!previousSpaceId && !!currentSpaceId && previousSpaceId.toLowerCase() !== currentSpaceId.toLowerCase()));
+        const demotedToTeam = !wasNew && previousBand === 'Shared' && this.Band === 'Team';
+        if (provider && (spaceChanged || demotedToTeam)) {
+            await invalidateIncompatibleSourceReceipts(provider, this, this.ID, spaceChanged, this.TransactionGroup);
         }
         const becameShared = this.Band === 'Shared' && (wasNew || previousBand !== 'Shared');
         try {
@@ -718,6 +725,75 @@ async function isExternalUrlFile(item: SpaceItemEntityServer, user: NonNullable<
         LogError(`isExternalUrlFile check failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     return false;
+}
+
+async function invalidateIncompatibleSourceReceipts(
+    provider: NonNullable<ReturnType<typeof asMetadata>>,
+    contextEntity: SpaceItemEntityServer,
+    spaceItemId: string,
+    spaceChanged: boolean,
+    existingTg: TransactionGroupBase | null | undefined,
+): Promise<void> {
+    const cleanItemId = parseUuid(spaceItemId);
+    if (!cleanItemId) return;
+
+    const system = await requireSystemUser(contextEntity);
+    const rv = RunView.FromMetadataProvider(provider);
+    const bandClause = spaceChanged ? '' : ` AND Band = 'Shared'`;
+    const receiptsRes = await rv.RunView<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>({
+        EntityName: COLLABORATION_SOURCE_RECEIPT_ENTITY,
+        ExtraFilter: `SpaceItemID = '${cleanItemId}'${bandClause}`,
+        ResultType: 'entity_object',
+        IgnoreMaxRows: true,
+    }, system);
+
+    if (!receiptsRes || !receiptsRes.Success) {
+        const msg = `Space item receipt invalidation failed to query Space Agent Source Receipts for item ${cleanItemId}: ${receiptsRes?.ErrorMessage ?? 'RunView failed'}`;
+        LogError(msg);
+        throw new Error(msg);
+    }
+
+    const staleReceipts = receiptsRes.Results ?? [];
+    if (staleReceipts.length === 0) return;
+
+    const isInitiator = !existingTg && typeof provider.CreateTransactionGroup === 'function';
+    const tg = existingTg ?? (isInitiator ? await provider.CreateTransactionGroup() : null);
+
+    try {
+        for (const receiptEntity of staleReceipts) {
+            if (tg) {
+                receiptEntity.TransactionGroup = tg;
+            }
+            const deleted = await ServerOperationScopeManager.Instance.RunWithAuthority(
+                {
+                    operationKey: COLLABORATION_ITEM_DELETE_OPERATION,
+                    source: 'ServerEngine',
+                    allowedEntities: [COLLABORATION_SOURCE_RECEIPT_ENTITY],
+                    userId: system.ID,
+                },
+                () => receiptEntity.Delete(),
+            );
+            if (!deleted) {
+                const msg = `Space item receipt invalidation failed to delete stale Space Agent Source Receipt ${receiptEntity.ID}`;
+                LogError(msg);
+                throw new Error(msg);
+            }
+        }
+        if (isInitiator && tg) {
+            const committed = await tg.Submit();
+            if (!committed) {
+                const msg = `Space item receipt invalidation failed to commit transaction group for item ${cleanItemId}`;
+                LogError(msg);
+                throw new Error(msg);
+            }
+        }
+    } finally {
+        if (isInitiator) {
+            for (const r of staleReceipts) {
+                r.TransactionGroup = null;
+            }
+        }
+    }
 }
 
 function fail(result: ValidationResult, message: string): ValidationResult {

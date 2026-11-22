@@ -2,11 +2,17 @@
  * Server persistence & fail-closed query service for relational Space Agent Source Receipts (CT-2).
  */
 
-import { type IMetadataProvider, LogError, RunView, type UserInfo } from '@memberjunction/core';
+import { type IMetadataProvider, LogError, RunView, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import {
     canReaderAccessSourceReceipt,
     type EffectiveGrant,
+    isReceiptAuthorizedByLiveSources,
+    isSourceReceiptBand,
+    type LiveKnowledgeSourceGrantInput,
+    type LiveReceiptSourceSnapshot,
+    type LiveSpaceChainNodeInput,
     normalizeReceiptUuid,
+    resolveEffectiveKnowledgeSourceBandsBySpace,
     type SourceReceiptBand,
     type SourceReceiptReachContext,
     type SpaceAgentSourceReceiptEntry,
@@ -23,9 +29,12 @@ import type { TurnToolSourceHit } from './turn-tools.js';
 
 const CONTENT_SOURCES_ENTITY = 'MJ: Content Sources';
 const SPACE_CHATS_ENTITY = 'MJ_BizApps_Collaboration: Space Chats';
+const SPACE_GRANTS_ENTITY = 'MJ_BizApps_Collaboration: Space Grants';
 const SPACE_ITEMS_ENTITY = 'MJ_BizApps_Collaboration: Space Items';
+const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 const TASKS_ENTITY = 'MJ_BizApps_Tasks: Tasks';
 const FILES_ENTITY = 'MJ: Files';
+const LIVE_CHECK_BATCH_SIZE = 200;
 
 interface ContentSourceRow {
     ID: string;
@@ -719,12 +728,129 @@ export async function querySpaceAgentSourceReceipts(
         inReachSpaceBands: params.inReachSpaceBands,
     };
 
+    const liveSnapshot: LiveReceiptSourceSnapshot = {};
+    const spaceItemIds = [
+        ...new Set(
+            allRows
+                .filter((r) => r.SourceKind === 'SpaceItem')
+                .map((r) => normalizeReceiptUuid(r.SpaceItemID))
+                .filter((id): id is string => !!id),
+        ),
+    ];
+    if (spaceItemIds.length > 0) {
+        const spaceItemsById = new Map<string, { spaceId: string; band: SourceReceiptBand }>();
+        for (let offset = 0; offset < spaceItemIds.length; offset += LIVE_CHECK_BATCH_SIZE) {
+            const batch = spaceItemIds.slice(offset, offset + LIVE_CHECK_BATCH_SIZE);
+            const itemsRes = await rv.RunView<{ ID: string; SpaceID: string; Band: string }>({
+                EntityName: SPACE_ITEMS_ENTITY,
+                ExtraFilter: `ID IN (${batch.map((id) => `'${id}'`).join(', ')})`,
+                Fields: ['ID', 'SpaceID', 'Band'],
+                ResultType: 'simple',
+                // row-cap-ok: bounded by deduplicated SpaceItemID batch (<= 200)
+                MaxRows: LIVE_CHECK_BATCH_SIZE,
+            }, params.user);
+            if (!itemsRes.Success || !itemsRes.Results) {
+                return {
+                    ok: false,
+                    receipts: [],
+                    filteredOutCount: 0,
+                    errorMessage: itemsRes.ErrorMessage ?? 'Failed to verify live SpaceItem visibility.',
+                };
+            }
+            for (const row of itemsRes.Results) {
+                const id = normalizeReceiptUuid(row.ID);
+                const itemSpaceId = normalizeReceiptUuid(row.SpaceID);
+                if (id && itemSpaceId && isSourceReceiptBand(row.Band)) {
+                    spaceItemsById.set(id, { spaceId: itemSpaceId, band: row.Band });
+                }
+            }
+        }
+        liveSnapshot.spaceItemsById = spaceItemsById;
+    }
+
+    const knowledgeSpaceIds = [
+        ...new Set(
+            allRows
+                .filter((r) => r.SourceKind === 'KnowledgeSource')
+                .map((r) => normalizeReceiptUuid(r.SpaceID))
+                .filter((id): id is string => !!id),
+        ),
+    ];
+    if (knowledgeSpaceIds.length > 0) {
+        let grantReader = params.user;
+        try {
+            const resolvedSystem = await WellKnownUserSource.Instance?.GetSystemUser(params.provider);
+            if (resolvedSystem) grantReader = resolvedSystem;
+        } catch {
+            // Fall back to caller user in mocked test providers without WellKnownUserSource initialization
+        }
+
+        let spaceNodes: Array<LiveSpaceChainNodeInput & { ID: string }> = [];
+        try {
+            spaceNodes = await readEveryRow<LiveSpaceChainNodeInput & { ID: string }>(
+                rv,
+                {
+                    EntityName: SPACES_ENTITY,
+                    ExtraFilter: '',
+                    Fields: ['ID', 'ParentID', 'SpaceTypeID'],
+                },
+                grantReader,
+            );
+        } catch (spaceErr) {
+            return {
+                ok: false,
+                receipts: [],
+                filteredOutCount: 0,
+                errorMessage: spaceErr instanceof Error ? spaceErr.message : String(spaceErr),
+            };
+        }
+
+        let grantRows: Array<LiveKnowledgeSourceGrantInput & { ID: string }>;
+        try {
+            grantRows = await readEveryRow<LiveKnowledgeSourceGrantInput & { ID: string }>(
+                rv,
+                {
+                    EntityName: SPACE_GRANTS_ENTITY,
+                    ExtraFilter: `Kind = 'KnowledgeSource'`,
+                    Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetRecordID', 'Sequence'],
+                },
+                grantReader,
+            );
+        } catch (grantErr) {
+            return {
+                ok: false,
+                receipts: [],
+                filteredOutCount: 0,
+                errorMessage: grantErr instanceof Error ? grantErr.message : String(grantErr),
+            };
+        }
+
+        liveSnapshot.knowledgeSourceBandsBySpace = resolveEffectiveKnowledgeSourceBandsBySpace({
+            spaceIds: knowledgeSpaceIds,
+            spaces: spaceNodes,
+            grants: grantRows,
+        });
+    }
+
     const allowed: mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[] = [];
     let filteredOutCount = 0;
 
     for (const row of allRows) {
         const band = row.Band === 'Team' ? 'Team' : row.Band === 'Shared' ? 'Shared' : null;
-        if (!band || !canReaderAccessSourceReceipt({ spaceId: row.SpaceID, band }, reachContext)) {
+        if (
+            !band ||
+            !canReaderAccessSourceReceipt({ spaceId: row.SpaceID, band }, reachContext) ||
+            !isReceiptAuthorizedByLiveSources(
+                {
+                    spaceId: row.SpaceID,
+                    sourceKind: row.SourceKind,
+                    spaceItemId: row.SpaceItemID,
+                    contentSourceId: row.ContentSourceID,
+                    band,
+                },
+                liveSnapshot,
+            )
+        ) {
             filteredOutCount += 1;
             continue;
         }

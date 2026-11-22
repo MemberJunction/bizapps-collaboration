@@ -381,3 +381,153 @@ export function extractAndValidateSourceReceipts(
         rejectedCitations,
     };
 }
+
+export interface LiveKnowledgeSourceGrantInput {
+    SpaceID?: string | null;
+    SpaceTypeID?: string | null;
+    Kind?: string | null;
+    Mode?: string | null;
+    Band?: string | null;
+    TargetRecordID?: string | null;
+    Sequence?: number | null;
+}
+
+export interface LiveSpaceChainNodeInput {
+    ID: string;
+    ParentID?: string | null;
+    SpaceTypeID?: string | null;
+}
+
+export interface LiveReceiptSourceSnapshot {
+    spaceItemsById?: ReadonlyMap<string, { spaceId: string; band: SourceReceiptBand }>;
+    knowledgeSourceBandsBySpace?: ReadonlyMap<string, ReadonlyMap<string, SourceReceiptBand>>;
+}
+
+function sameUuid(a: string | null | undefined, b: string | null | undefined): boolean {
+    const na = normalizeReceiptUuid(a);
+    const nb = normalizeReceiptUuid(b);
+    return !!na && !!nb && na === nb;
+}
+
+/**
+ * Computes effective KnowledgeSource grant bands (`ContentSourceID -> Band`) per target space ID
+ * following App -> Type -> Same-Type Ancestors top-down -> Space precedence.
+ */
+export function resolveEffectiveKnowledgeSourceBandsBySpace(params: {
+    spaceIds: readonly string[];
+    spaces: readonly LiveSpaceChainNodeInput[];
+    grants: readonly LiveKnowledgeSourceGrantInput[];
+}): Map<string, Map<string, SourceReceiptBand>> {
+    const spaceById = new Map<string, LiveSpaceChainNodeInput>();
+    for (const s of params.spaces) {
+        const id = normalizeReceiptUuid(s.ID);
+        if (id) {
+            spaceById.set(id, s);
+        }
+    }
+
+    const ksGrants = params.grants.filter((g) => !g.Kind || g.Kind === 'KnowledgeSource');
+    const applyGrantLevel = (target: Map<string, SourceReceiptBand>, rows: readonly LiveKnowledgeSourceGrantInput[]): void => {
+        const ordered = rows.slice().sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+        for (const g of ordered) {
+            const targetId = normalizeReceiptUuid(stripRecordKeyPrefix(g.TargetRecordID));
+            if (!targetId) continue;
+            const mode = (g.Mode ?? 'Extend').trim();
+            if (mode === 'Remove' || mode === 'Revoke') {
+                target.delete(targetId);
+                continue;
+            }
+            if (mode === 'Extend' && isSourceReceiptBand(g.Band ?? '')) {
+                target.set(targetId, g.Band as SourceReceiptBand);
+            }
+        }
+    };
+
+    const appGrants = ksGrants.filter((g) => !normalizeReceiptUuid(g.SpaceID) && !normalizeReceiptUuid(g.SpaceTypeID));
+    const result = new Map<string, Map<string, SourceReceiptBand>>();
+
+    for (const rawSpaceId of params.spaceIds) {
+        const spaceId = normalizeReceiptUuid(rawSpaceId);
+        if (!spaceId || result.has(spaceId)) continue;
+
+        const bands = new Map<string, SourceReceiptBand>();
+        applyGrantLevel(bands, appGrants);
+
+        const leaf = spaceById.get(spaceId);
+        const typeId = normalizeReceiptUuid(leaf?.SpaceTypeID);
+        if (typeId) {
+            applyGrantLevel(
+                bands,
+                ksGrants.filter((g) => !normalizeReceiptUuid(g.SpaceID) && sameUuid(g.SpaceTypeID, typeId)),
+            );
+        }
+
+        // Same-type ancestor chain top-down -> leaf space
+        const chain: string[] = [spaceId];
+        const visited = new Set<string>([spaceId]);
+        let cursor = leaf;
+        while (cursor?.ParentID) {
+            const parentId = normalizeReceiptUuid(cursor.ParentID);
+            if (!parentId || visited.has(parentId)) break;
+            visited.add(parentId);
+            const parent = spaceById.get(parentId);
+            if (!parent) break;
+            if ((normalizeReceiptUuid(parent.SpaceTypeID) ?? null) !== typeId) break;
+            chain.unshift(parentId);
+            cursor = parent;
+        }
+
+        for (const cid of chain) {
+            applyGrantLevel(
+                bands,
+                ksGrants.filter((g) => sameUuid(g.SpaceID, cid)),
+            );
+        }
+
+        result.set(spaceId, bands);
+    }
+
+    return result;
+}
+
+/**
+ * Verifies a persisted or streamed source receipt against current live SpaceItem and/or KnowledgeSource state.
+ */
+export function isReceiptAuthorizedByLiveSources(
+    receipt: {
+        spaceId: string;
+        sourceKind: string;
+        spaceItemId?: string | null;
+        contentSourceId?: string | null;
+        band: SourceReceiptBand;
+    },
+    snapshot: LiveReceiptSourceSnapshot,
+): boolean {
+    const receiptSpaceId = normalizeReceiptUuid(receipt.spaceId);
+    if (!receiptSpaceId) return false;
+
+    if (receipt.sourceKind === 'SpaceItem') {
+        if (!snapshot.spaceItemsById) return true;
+        const itemId = normalizeReceiptUuid(receipt.spaceItemId);
+        if (!itemId) return false;
+        const liveItem = snapshot.spaceItemsById.get(itemId);
+        if (!liveItem) return false;
+        if (normalizeReceiptUuid(liveItem.spaceId) !== receiptSpaceId) return false;
+        if (receipt.band === 'Shared' && liveItem.band !== 'Shared') return false;
+        return true;
+    }
+
+    if (receipt.sourceKind === 'KnowledgeSource') {
+        if (!snapshot.knowledgeSourceBandsBySpace) return true;
+        const sourceId = normalizeReceiptUuid(receipt.contentSourceId);
+        if (!sourceId) return false;
+        const spaceGrants = snapshot.knowledgeSourceBandsBySpace.get(receiptSpaceId);
+        if (!spaceGrants) return false;
+        const liveBand = spaceGrants.get(sourceId);
+        if (!liveBand) return false;
+        if (receipt.band === 'Shared' && liveBand !== 'Shared') return false;
+        return true;
+    }
+
+    return false;
+}

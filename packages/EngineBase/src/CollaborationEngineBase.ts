@@ -35,11 +35,18 @@ import {
     type AgentRetrieval,
     type CollaborationSettings,
     defaultStatus,
+    isReceiptAuthorizedByLiveSources,
+    isSourceReceiptBand,
+    type LiveKnowledgeSourceGrantInput,
+    type LiveReceiptSourceSnapshot,
+    type LiveSpaceChainNodeInput,
     type MemberSnapshot,
     membershipReaches,
     MissingAppSettingsError,
     normalizeReceiptUuid,
     type ResolvedCollaborationSettings,
+    resolveEffectiveKnowledgeSourceBandsBySpace,
+    type SourceReceiptBand,
     type SpaceNode,
     type SpaceStatusReach,
     ValidateCollaborationSettings,
@@ -649,7 +656,11 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         conversationId: string,
         user: UserInfo,
         provider?: IMetadataProvider,
-        options?: { detailIds?: readonly string[]; pageSize?: number },
+        options?: {
+            detailIds?: readonly string[];
+            pageSize?: number;
+            activeKnowledgeSourceBandsBySpace?: Readonly<Record<string, Readonly<Record<string, SourceReceiptBand>>>>;
+        },
     ): Promise<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[]> {
         const cleanConversationId = normalizeReceiptUuid(conversationId);
         if (!cleanConversationId || !user) {
@@ -731,7 +742,124 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             return (a.ID ?? '').localeCompare(b.ID ?? '');
         });
 
-        return allRows;
+        if (allRows.length === 0) {
+            return [];
+        }
+
+        const liveSnapshot: LiveReceiptSourceSnapshot = {};
+        const spaceItemIds = [
+            ...new Set(
+                allRows
+                    .filter((r) => r.SourceKind === 'SpaceItem')
+                    .map((r) => normalizeReceiptUuid(r.SpaceItemID))
+                    .filter((id): id is string => !!id),
+            ),
+        ];
+
+        if (spaceItemIds.length > 0) {
+            const spaceItemsById = new Map<string, { spaceId: string; band: SourceReceiptBand }>();
+            const batchSize = 200;
+            for (let offset = 0; offset < spaceItemIds.length; offset += batchSize) {
+                const batch = spaceItemIds.slice(offset, offset + batchSize);
+                const itemsRes = await rv.RunView<{ ID: string; SpaceID: string; Band: string }>({
+                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                    ExtraFilter: `ID IN (${batch.map((id) => `'${id}'`).join(', ')})`,
+                    Fields: ['ID', 'SpaceID', 'Band'],
+                    ResultType: 'simple',
+                    // row-cap-ok: bounded by deduplicated receipt SpaceItemID batch (<= 200)
+                    MaxRows: batchSize,
+                }, user);
+                if (!itemsRes.Success || !itemsRes.Results) {
+                    LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to verify live Space Items: ${itemsRes.ErrorMessage ?? 'unknown error'}`);
+                    return [];
+                }
+                for (const item of itemsRes.Results) {
+                    const id = normalizeReceiptUuid(item.ID);
+                    const itemSpaceId = normalizeReceiptUuid(item.SpaceID);
+                    if (id && itemSpaceId && isSourceReceiptBand(item.Band)) {
+                        spaceItemsById.set(id, { spaceId: itemSpaceId, band: item.Band });
+                    }
+                }
+            }
+            liveSnapshot.spaceItemsById = spaceItemsById;
+        }
+
+        const knowledgeSpaceIds = [
+            ...new Set(
+                allRows
+                    .filter((r) => r.SourceKind === 'KnowledgeSource')
+                    .map((r) => normalizeReceiptUuid(r.SpaceID))
+                    .filter((id): id is string => !!id),
+            ),
+        ];
+
+        if (knowledgeSpaceIds.length > 0) {
+            if (options?.activeKnowledgeSourceBandsBySpace) {
+                const bySpace = new Map<string, Map<string, SourceReceiptBand>>();
+                for (const [rawSpaceId, rawGrants] of Object.entries(options.activeKnowledgeSourceBandsBySpace)) {
+                    const cleanSpaceId = normalizeReceiptUuid(rawSpaceId);
+                    if (!cleanSpaceId) continue;
+                    const inner = new Map<string, SourceReceiptBand>();
+                    for (const [rawSourceId, grantBand] of Object.entries(rawGrants)) {
+                        const cleanSourceId = normalizeReceiptUuid(rawSourceId);
+                        if (cleanSourceId && isSourceReceiptBand(grantBand)) {
+                            inner.set(cleanSourceId, grantBand);
+                        }
+                    }
+                    bySpace.set(cleanSpaceId, inner);
+                }
+                liveSnapshot.knowledgeSourceBandsBySpace = bySpace;
+            } else {
+                const grantsRes = await rv.RunView<LiveKnowledgeSourceGrantInput>({
+                    EntityName: 'MJ_BizApps_Collaboration: Space Grants',
+                    ExtraFilter: `Kind = 'KnowledgeSource'`,
+                    Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetRecordID', 'Sequence'],
+                    ResultType: 'simple',
+                    // row-cap-ok: bounded by KnowledgeSource grant configuration catalog
+                    MaxRows: 2000,
+                }, user);
+
+                if (grantsRes.Success && grantsRes.Results) {
+                    const spacesRes = await rv.RunView<LiveSpaceChainNodeInput>({
+                        EntityName: 'MJ_BizApps_Collaboration: Spaces',
+                        Fields: ['ID', 'ParentID', 'SpaceTypeID'],
+                        ResultType: 'simple',
+                        // row-cap-ok: bounded by space hierarchy for grant inheritance resolution
+                        MaxRows: 2000,
+                    }, user);
+                    if (!spacesRes.Success || !spacesRes.Results) {
+                        LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to read Spaces for grant resolution: ${spacesRes.ErrorMessage ?? 'unknown error'}`);
+                        return [];
+                    }
+                    liveSnapshot.knowledgeSourceBandsBySpace = resolveEffectiveKnowledgeSourceBandsBySpace({
+                        spaceIds: knowledgeSpaceIds,
+                        spaces: spacesRes.Results,
+                        grants: grantsRes.Results,
+                    });
+                } else {
+                    const errMsg = grantsRes.ErrorMessage ?? 'unknown error';
+                    const isPermissionDenied = /permission|denied|does not have read|unauthorized/i.test(errMsg);
+                    if (!isPermissionDenied) {
+                        LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to verify Space Grants: ${errMsg}`);
+                        return [];
+                    }
+                }
+            }
+        }
+
+        return allRows.filter((row) => {
+            if (!isSourceReceiptBand(row.Band)) return false;
+            return isReceiptAuthorizedByLiveSources(
+                {
+                    spaceId: row.SpaceID,
+                    sourceKind: row.SourceKind,
+                    spaceItemId: row.SpaceItemID,
+                    contentSourceId: row.ContentSourceID,
+                    band: row.Band,
+                },
+                liveSnapshot,
+            );
+        });
     }
 }
 

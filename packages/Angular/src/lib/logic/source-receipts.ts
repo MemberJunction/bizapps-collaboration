@@ -1,5 +1,8 @@
 import {
     canReaderAccessSourceReceipt,
+    type EffectiveSpaceConfiguration,
+    isReceiptAuthorizedByLiveSources,
+    isSourceReceiptBand,
     normalizeReceiptUuid,
     type SourceReceiptBand,
     type SourceReceiptKind,
@@ -65,19 +68,113 @@ function normalizeRankingMode(raw: string): SourceReceiptRankingMode {
     return 'none';
 }
 
+export interface LiveReceiptSourcesContext {
+    spaceItems?: ReadonlyArray<{ id: string; spaceId?: string; band: SourceReceiptBand }>;
+    scopedSpaceId?: string;
+    knowledgeSourceBandsBySpace?: Readonly<Record<string, Readonly<Record<string, SourceReceiptBand>>>>;
+}
+
+/**
+ * Extracts active `KnowledgeSource` grant bands (`ContentSourceID -> Band`) from a resolved space configuration.
+ */
+export function buildActiveKnowledgeSourceBands(
+    configuration: EffectiveSpaceConfiguration | null | undefined,
+): Record<string, SourceReceiptBand> {
+    const out: Record<string, SourceReceiptBand> = {};
+    for (const grant of configuration?.Grants?.KnowledgeSource ?? []) {
+        const id = normalizeReceiptUuid(stripRecordKeyPrefix(grant.TargetRecordID));
+        if (id && isSourceReceiptBand(grant.Band)) {
+            out[id] = grant.Band;
+        }
+    }
+    return out;
+}
+
+function isReceiptAuthorizedByClientLiveSources(
+    receipt: {
+        spaceId: string;
+        sourceKind: string;
+        spaceItemId?: string | null;
+        contentSourceId?: string | null;
+        band: SourceReceiptBand;
+    },
+    liveSources: LiveReceiptSourcesContext | undefined,
+): boolean {
+    if (!liveSources) return true;
+    const normSpaceId = normalizeReceiptUuid(receipt.spaceId);
+    if (!normSpaceId) return false;
+
+    if (receipt.sourceKind === 'SpaceItem' && liveSources.spaceItems) {
+        const scopedSpaceId = liveSources.scopedSpaceId ? normalizeReceiptUuid(liveSources.scopedSpaceId) : null;
+        if (!scopedSpaceId || normSpaceId === scopedSpaceId) {
+            const spaceItemsById = new Map<string, { spaceId: string; band: SourceReceiptBand }>();
+            for (const item of liveSources.spaceItems) {
+                const itemId = normalizeReceiptUuid(item.id);
+                const itemSpaceId = normalizeReceiptUuid(item.spaceId) ?? normSpaceId;
+                if (itemId && isSourceReceiptBand(item.band)) {
+                    spaceItemsById.set(itemId, { spaceId: itemSpaceId, band: item.band });
+                }
+            }
+            if (!isReceiptAuthorizedByLiveSources(receipt, { spaceItemsById })) {
+                return false;
+            }
+        }
+    }
+
+    if (receipt.sourceKind === 'KnowledgeSource' && liveSources.knowledgeSourceBandsBySpace) {
+        const spaceGrantsMap = new Map<string, Map<string, SourceReceiptBand>>();
+        let hasSpaceEntry = false;
+        for (const [rawSpaceId, rawGrants] of Object.entries(liveSources.knowledgeSourceBandsBySpace)) {
+            const cleanSpaceId = normalizeReceiptUuid(rawSpaceId);
+            if (!cleanSpaceId) continue;
+            if (cleanSpaceId === normSpaceId) {
+                hasSpaceEntry = true;
+            }
+            const inner = new Map<string, SourceReceiptBand>();
+            for (const [rawSourceId, grantBand] of Object.entries(rawGrants)) {
+                const cleanSourceId = normalizeReceiptUuid(rawSourceId);
+                if (cleanSourceId && isSourceReceiptBand(grantBand)) {
+                    inner.set(cleanSourceId, grantBand);
+                }
+            }
+            spaceGrantsMap.set(cleanSpaceId, inner);
+        }
+        if (hasSpaceEntry && !isReceiptAuthorizedByLiveSources(receipt, { knowledgeSourceBandsBySpace: spaceGrantsMap })) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 /**
  * Converts persisted `SpaceAgentSourceReceipt` rows into typed UI models, enforcing fail-closed
- * `(space, band)` reach validation so out-of-reach rows are never returned.
+ * `(space, band)` reach validation and optional current live source authorization.
  */
 export function filterAndMapSourceReceipts(
     rows: readonly mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[],
     reach: SourceReceiptReachContext,
+    liveSources?: LiveReceiptSourcesContext,
 ): SpaceChatAnswerSourceReceipt[] {
     const out: SpaceChatAnswerSourceReceipt[] = [];
     for (const row of rows) {
         const band: SourceReceiptBand | null = row.Band === 'Team' ? 'Team' : row.Band === 'Shared' ? 'Shared' : null;
         if (!band) continue;
         if (!canReaderAccessSourceReceipt({ spaceId: row.SpaceID, band }, reach)) {
+            continue;
+        }
+        if (
+            !isReceiptAuthorizedByClientLiveSources(
+                {
+                    spaceId: row.SpaceID,
+                    sourceKind: row.SourceKind,
+                    spaceItemId: row.SpaceItemID,
+                    contentSourceId: row.ContentSourceID,
+                    band,
+                },
+                liveSources,
+            )
+        ) {
             continue;
         }
         const cleanTitle = stripCitationMarkdown(row.SourceTitle) || 'Untitled source';
@@ -141,6 +238,7 @@ export function parseTurnSourceReceiptsPayload(
     rawJson: string | null | undefined,
     conversationDetailId: string | null | undefined,
     reach: SourceReceiptReachContext,
+    liveSources?: LiveReceiptSourcesContext,
 ): SpaceChatAnswerSourceReceipt[] {
     if (!rawJson || !conversationDetailId) return [];
     let parsed: JsonParsedPayload;
@@ -167,6 +265,20 @@ export function parseTurnSourceReceiptsPayload(
         const contentSourceId = typeof item.contentSourceId === 'string' ? normalizeReceiptUuid(item.contentSourceId) : null;
         if (sourceKind === 'SpaceItem' && (!spaceItemId || item.contentSourceId != null)) continue;
         if (sourceKind === 'KnowledgeSource' && (!contentSourceId || item.spaceItemId != null)) continue;
+        if (
+            !isReceiptAuthorizedByClientLiveSources(
+                {
+                    spaceId,
+                    sourceKind,
+                    spaceItemId,
+                    contentSourceId,
+                    band: item.band,
+                },
+                liveSources,
+            )
+        ) {
+            continue;
+        }
 
         if (typeof item.sourceTitle !== 'string' || !item.sourceTitle.trim()) continue;
         const cleanTitle = stripCitationMarkdown(item.sourceTitle) || 'Untitled source';

@@ -1149,4 +1149,142 @@ describe('space-agent-retrieval scale & ranked relevance (CT-4)', () => {
         assert.equal(withheldDecision?.item.Assignees, undefined);
         assert.equal(withheldDecision?.item.ChunkTexts, undefined);
     });
+
+    it('loads >2,000 chunks via keyset paging and prioritizes query-matching passages within the per-source token ceiling (CR-3)', async () => {
+        const needlePhrase = 'quarterly revenue forecast';
+        const targetItemId = makeUuid('D0000099', 1);
+        const targetFileId = makeUuid('F0000099', 1);
+        const distractorItemId = makeUuid('D0000099', 2);
+        const distractorFileId = makeUuid('F0000099', 2);
+
+        // 2,500 chunks on a single item with the sole matching passage at chunk #2499
+        const chunkTexts: string[] = [];
+        for (let i = 0; i < 2500; i++) {
+            const seq = i + 1;
+            chunkTexts.push(
+                seq === 2499
+                    ? `Passage ${seq}: ${needlePhrase} projects 24 percent ARR growth for Q4.`
+                    : `Passage ${seq}: Standard appendix operational note filler paragraph number ${seq} with routine details.`,
+            );
+        }
+
+        const world: SyntheticWorld = {
+            items: [
+                { ID: targetItemId, SpaceID: ROOT_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: `ID|${targetFileId}`, Band: 'Shared' },
+                { ID: distractorItemId, SpaceID: ROOT_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: `ID|${distractorFileId}`, Band: 'Shared' },
+            ],
+            filesById: new Map([
+                [targetFileId.toLowerCase(), { ID: targetFileId, Name: 'Annual Financial Workbook', Description: 'Long financial ledger', ContentType: 'application/pdf' }],
+                [distractorFileId.toLowerCase(), { ID: distractorFileId, Name: 'Weekly Operations Summary', Description: 'Routine weekly shift checklist', ContentType: 'text/plain' }],
+            ]),
+            tasksById: new Map(),
+            taskAssignments: [],
+            peopleById: new Map(),
+            chunksByItemId: new Map([[targetItemId.toLowerCase(), chunkTexts]]),
+        };
+
+        const baseProvider = createScaleProvider(world) as IMetadataProvider & IRunViewProvider;
+        const provider: IMetadataProvider & IRunViewProvider = {
+            ...baseProvider,
+            async RunView<T>(params: RunViewParams, user?: UserInfo): Promise<RunViewResult<T>> {
+                if (params.EntityName === 'MJ: Content Item Chunks') {
+                    const baseRes = await baseProvider.RunView<{ ID: string; ContentItemID: string; Text: string; Sequence: number }>(params, user);
+                    const rawRows = baseRes.Results ?? [];
+                    // Simulate SQL 2,000-row page cap + AfterKey cursor on ID ASC
+                    const padded = rawRows.map((r, idx) => ({
+                        ...r,
+                        ID: makeUuid('CC000001', (r.Sequence ?? idx) + 1),
+                    }));
+                    const afterId = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toUpperCase() : '';
+                    let ordered = padded;
+                    if (typeof params.OrderBy === 'string' && params.OrderBy.includes('ID ASC')) {
+                        ordered = [...padded].sort((a, b) => a.ID.localeCompare(b.ID));
+                    } else {
+                        ordered = [...padded].sort((a, b) => a.Sequence - b.Sequence);
+                    }
+                    const filtered = afterId ? ordered.filter((r) => r.ID > afterId) : ordered;
+                    const limit = Math.min(params.MaxRows ?? 2000, 2000);
+                    const page = filtered.slice(0, limit);
+                    return {
+                        ...baseRes,
+                        Results: page as object[] as T[],
+                        RowCount: page.length,
+                        TotalRowCount: page.length,
+                    };
+                }
+                return baseProvider.RunView<T>(params, user);
+            },
+        };
+
+        const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+        const res = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
+            conversationKind: 'Private',
+            rankingQuery: needlePhrase,
+            topK: 1,
+        });
+
+        assert.equal(res.quotedItems.length, 1);
+        assert.equal(res.quotedItems[0].ID, targetItemId);
+        const joinedChunks = (res.quotedItems[0].ChunkTexts ?? []).join(' ');
+        assert.ok(
+            joinedChunks.includes(needlePhrase),
+            'Bounded prompt chunks must prioritize and retain the matching passage at chunk #2499 above sequence order',
+        );
+    });
+
+    it('enforces explicit options.query filter on vector search hits and falls back to lexical when zero vector hits match (CR-4)', async () => {
+        const vectorNonMatchingId = makeUuid('D0000088', 1);
+        const vectorNonMatchingFileId = makeUuid('F0000088', 1);
+        const lexicalMatchingId = makeUuid('D0000088', 2);
+        const lexicalMatchingFileId = makeUuid('F0000088', 2);
+
+        const world: SyntheticWorld = {
+            items: [
+                {
+                    ID: vectorNonMatchingId,
+                    SpaceID: ROOT_SPACE_ID,
+                    EntityID: FILES_ENTITY_ID,
+                    RecordID: `ID|${vectorNonMatchingFileId}`,
+                    Band: 'Shared',
+                },
+                {
+                    ID: lexicalMatchingId,
+                    SpaceID: ROOT_SPACE_ID,
+                    EntityID: FILES_ENTITY_ID,
+                    RecordID: `ID|${lexicalMatchingFileId}`,
+                    Band: 'Shared',
+                },
+            ],
+            filesById: new Map([
+                [vectorNonMatchingFileId.toLowerCase(), { ID: vectorNonMatchingFileId, Name: 'Unrelated Onboarding Handbook', Description: 'Welcome orientation checklist', ContentType: 'application/pdf' }],
+                [lexicalMatchingFileId.toLowerCase(), { ID: lexicalMatchingFileId, Name: 'Subprocessor Audit Ledger', Description: 'SOC2 compliance vendor ledger', ContentType: 'application/pdf' }],
+            ]),
+            tasksById: new Map(),
+            taskAssignments: [],
+            peopleById: new Map(),
+            chunksByItemId: new Map(),
+        };
+
+        const provider = createScaleProvider(world);
+        const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+        const vectorAdapter: SpaceAgentVectorSearchAdapter = {
+            name: 'test-vector-explicit-query',
+            isConfigured() {
+                return true;
+            },
+            async search(): Promise<readonly SpaceAgentVectorHit[]> {
+                return [{ spaceItemId: vectorNonMatchingId, score: 0.99 }];
+            },
+        };
+
+        const res = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
+            conversationKind: 'Private',
+            query: 'subprocessor',
+            topK: 5,
+            vectorSearch: vectorAdapter,
+        });
+
+        assert.equal(res.quotedItems.some((i) => i.ID === vectorNonMatchingId), false, 'Non-matching vector hit must not satisfy explicit options.query');
+        assert.equal(res.quotedItems.some((i) => i.ID === lexicalMatchingId), true, 'Lexical fallback must supply explicit query matches when zero vector hits match');
+    });
 });

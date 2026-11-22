@@ -312,4 +312,63 @@ describe('Space chat source receipts client logic (CT-2)', () => {
         assert.equal(parsed[0].sourceKind, 'KnowledgeSource');
         assert.equal(parsed[0].contentSourceId, CONTENT_SRC);
     });
+
+    it('excludes historical and streamed receipts whose SpaceItem demoted/moved or KnowledgeSource grant was revoked/demoted (CR-1)', () => {
+        const reach = buildClientReceiptReachContext({
+            chatAudience: 'Team',
+            activeSpaceId: SPACE_A,
+            canSeeTeamOnActiveSpace: true,
+            reachableSpaces: [{ id: SPACE_A, canSeeTeam: true }],
+        });
+
+        const liveSources = {
+            scopedSpaceId: SPACE_A,
+            spaceItems: [
+                { id: ITEM_SHARED, spaceId: SPACE_A, band: 'Team' as const },
+                { id: ITEM_TEAM, spaceId: SPACE_B, band: 'Shared' as const },
+            ],
+            knowledgeSourceBandsBySpace: {
+                [SPACE_A]: {
+                    [CONTENT_SRC]: 'Team' as const,
+                },
+            },
+        };
+
+        const rows = [
+            makeEntityRow({ ID: 'r1', SpaceID: SPACE_A, SpaceItemID: ITEM_SHARED, Band: 'Shared', SourceTitle: 'Demoted Shared Doc' }),
+            makeEntityRow({ ID: 'r2', SpaceID: SPACE_A, SpaceItemID: ITEM_TEAM, Band: 'Shared', SourceTitle: 'Moved Space Doc' }),
+            makeEntityRow({ ID: 'r3', SpaceID: SPACE_A, SpaceItemID: 'dddd0000-0000-4000-8000-000000000099', Band: 'Shared', SourceTitle: 'Deleted Doc' }),
+            makeEntityRow({ ID: 'r4', SpaceID: SPACE_A, SourceKind: 'KnowledgeSource', SpaceItemID: null, ContentSourceID: CONTENT_SRC, Band: 'Shared', SourceTitle: 'Demoted Knowledge Guide' }),
+            makeEntityRow({ ID: 'r5', SpaceID: SPACE_A, SourceKind: 'KnowledgeSource', SpaceItemID: null, ContentSourceID: 'eeee0000-0000-4000-8000-000000000099', Band: 'Shared', SourceTitle: 'Revoked Knowledge Guide' }),
+            makeEntityRow({ ID: 'r6', SpaceID: SPACE_A, SpaceItemID: ITEM_SHARED, Band: 'Team', SourceTitle: 'Now Team Doc in Team Chat' }),
+            makeEntityRow({ ID: 'r7', SpaceID: SPACE_A, SourceKind: 'KnowledgeSource', SpaceItemID: null, ContentSourceID: CONTENT_SRC, Band: 'Team', SourceTitle: 'Now Team Guide in Team Chat' }),
+        ];
+
+        const filtered = filterAndMapSourceReceipts(rows, reach, liveSources);
+        assert.deepEqual(
+            filtered.map((r) => r.sourceTitle),
+            ['Now Team Doc in Team Chat', 'Now Team Guide in Team Chat'],
+        );
+
+        const streamedJson = JSON.stringify([
+            {
+                sourceKind: 'SpaceItem',
+                spaceId: SPACE_A,
+                spaceItemId: ITEM_SHARED,
+                contentSourceId: null,
+                sourceTitle: 'Demoted Streamed Doc',
+                band: 'Shared',
+            },
+            {
+                sourceKind: 'KnowledgeSource',
+                spaceId: SPACE_A,
+                spaceItemId: null,
+                contentSourceId: 'eeee0000-0000-4000-8000-000000000099',
+                sourceTitle: 'Revoked Streamed Guide',
+                band: 'Shared',
+            },
+        ]);
+        const streamedFiltered = parseTurnSourceReceiptsPayload(streamedJson, DETAIL_1, reach, liveSources);
+        assert.equal(streamedFiltered.length, 0);
+    });
 });

@@ -207,6 +207,10 @@ describe('Space chat source receipts & OpenApp v3 readiness (CT-2)', () => {
 
         const chips = receiptsRegion!.querySelectorAll<HTMLButtonElement>('[data-testid="answer-citation-chip"]');
         expect(chips).toHaveLength(1);
+        expect(chips[0].tagName).toBe('BUTTON');
+        expect(chips[0].getAttribute('type')).toBe('button');
+        expect(chips[0].getAttribute('role')).toBeNull();
+        expect(chips[0].closest('[role="list"] [role="listitem"]')).not.toBeNull();
         expect(chips[0].textContent).toContain('[1]');
         expect(chips[0].textContent).toContain('FY2026 Audit Committee Pack.pdf');
 

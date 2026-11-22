@@ -381,12 +381,61 @@ function budgetAssigneesToFit<TItem extends SpaceAgentItemShape>(
     return { item: { ...item, Assignees: [] }, truncated: true };
 }
 
+/**
+ * Orders a candidate item's chunks so passages matching the query (exact phrase first,
+ * then distinct matching query terms, then total term matches) are placed ahead of
+ * non-matching chunks, preserving original sequence order within ties.
+ */
+export function prioritizeChunksForQuery(chunks: readonly string[], queryText?: string): string[] {
+    if (chunks.length <= 1 || !queryText) {
+        return [...chunks];
+    }
+    const cleanQuery = queryText.trim().toLowerCase();
+    const queryTerms = Array.from(new Set(tokenizeForSearch(cleanQuery)));
+    if (!cleanQuery && queryTerms.length === 0) {
+        return [...chunks];
+    }
+
+    const scored = chunks.map((chunk, index) => {
+        const lower = chunk.toLowerCase();
+        const exactPhraseScore = cleanQuery.length >= 2 && lower.includes(cleanQuery) ? 1000 : 0;
+        let distinctTermHits = 0;
+        let totalTermHits = 0;
+        if (queryTerms.length > 0) {
+            const chunkTokens = tokenizeForSearch(lower);
+            const tokenCounts = new Map<string, number>();
+            for (const tok of chunkTokens) {
+                tokenCounts.set(tok, (tokenCounts.get(tok) ?? 0) + 1);
+            }
+            for (const term of queryTerms) {
+                const count = tokenCounts.get(term) ?? 0;
+                if (count > 0) {
+                    distinctTermHits += 1;
+                    totalTermHits += count;
+                } else if (lower.includes(term)) {
+                    distinctTermHits += 1;
+                    totalTermHits += 1;
+                }
+            }
+        }
+        const score = exactPhraseScore + distinctTermHits * 20 + totalTermHits;
+        return { chunk, index, score };
+    });
+
+    scored.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.index - b.index));
+    return scored.map((entry) => entry.chunk);
+}
+
 function budgetSingleItem<TItem extends SpaceAgentItemShape>(
     item: TItem,
     tokenCeiling: number,
+    queryText?: string,
 ): { item: TItem; estimatedTokens: number; truncated: boolean; fits: boolean } {
     let truncated = false;
-    let working: TItem = { ...item };
+    let working: TItem =
+        item.ChunkTexts && item.ChunkTexts.length > 1 && queryText
+            ? { ...item, ChunkTexts: prioritizeChunksForQuery(item.ChunkTexts, queryText) }
+            : { ...item };
 
     if (working.Name.length > MAX_TITLE_CHARS) {
         working.Name = `${working.Name.slice(0, MAX_TITLE_CHARS - 1).trimEnd()}…`;
@@ -514,7 +563,7 @@ function budgetSingleItem<TItem extends SpaceAgentItemShape>(
  */
 export function applyContextTokenBudget<TItem extends SpaceAgentItemShape>(
     ranked: readonly RankedCandidateOutcome<TItem>[],
-    options: { topK: number; maxTokensPerSource: number; maxContextTokens: number },
+    options: { topK: number; maxTokensPerSource: number; maxContextTokens: number; queryText?: string },
 ): {
     items: TItem[];
     suppliedSources: SpaceAgentSuppliedSource[];
@@ -530,7 +579,7 @@ export function applyContextTokenBudget<TItem extends SpaceAgentItemShape>(
         if (remainingContext < 4) break;
 
         const itemBudget = Math.min(options.maxTokensPerSource, remainingContext);
-        const budgeted = budgetSingleItem(entry.item, itemBudget);
+        const budgeted = budgetSingleItem(entry.item, itemBudget, options.queryText);
         if (!budgeted.fits || budgeted.estimatedTokens > itemBudget || totalEstimatedTokens + budgeted.estimatedTokens > options.maxContextTokens) {
             continue;
         }

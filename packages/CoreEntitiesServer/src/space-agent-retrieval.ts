@@ -28,6 +28,8 @@ import {
     DEFAULT_MAX_TOKENS_PER_SOURCE,
     DEFAULT_RETRIEVAL_TOP_K,
     HostSearchEngineVectorAdapter,
+    MAX_RETRIEVAL_TOP_K,
+    prioritizeChunksForQuery,
     renderCandidateItemPromptLine,
     resolveActiveVectorSearchAdapter,
     scoreItemsLexically,
@@ -56,6 +58,7 @@ export {
     MAX_CONTEXT_TOKENS_CEILING,
     MAX_RETRIEVAL_TOP_K,
     MAX_TOKENS_PER_SOURCE_CEILING,
+    prioritizeChunksForQuery,
     renderCandidateItemPromptLine,
     scoreItemsLexically,
     setHostVectorSearchAdapter,
@@ -911,6 +914,9 @@ export async function resolveSpaceAgentRetrieval(
         const vectorAdapter = await resolveActiveVectorSearchAdapter(provider, user, options?.vectorSearch);
         if (vectorAdapter) {
             try {
+                const vectorFetchTopK = explicitFilterQuery
+                    ? Math.min(MAX_RETRIEVAL_TOP_K, Math.max(effectiveTopK * 3, effectiveTopK))
+                    : effectiveTopK;
                 const rawHits = await vectorAdapter.search({
                     queryText: rankingQueryText,
                     ...(options?.spaceChatId ? { spaceChatId: options.spaceChatId } : {}),
@@ -921,7 +927,7 @@ export async function resolveSpaceAgentRetrieval(
                     allowedSpaceItemIds,
                     audienceUserIds: principalIds,
                     ...(options?.audienceUsers ? { audienceUsers: options.audienceUsers } : {}),
-                    topK: effectiveTopK,
+                    topK: vectorFetchTopK,
                     user,
                     provider,
                 });
@@ -941,7 +947,7 @@ export async function resolveSpaceAgentRetrieval(
                         if (row) hitRows.push({ row, score });
                     }
                     hitRows.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.row.originalIndex - b.row.originalIndex));
-                    const topHitRows = hitRows.slice(0, effectiveTopK);
+                    const topHitRows = hitRows.slice(0, vectorFetchTopK);
                     const matchedRows = topHitRows.map((h) => h.row);
                     const matchedItemIds = matchedRows.map((r) => r.raw.ID);
                     const matchedTaskIds = matchedRows
@@ -954,7 +960,7 @@ export async function resolveSpaceAgentRetrieval(
                         loadTaskAssigneesByTaskId(provider, rvUser, user, matchedTaskIds),
                     ]);
 
-                    rankedCandidates = topHitRows.map(({ row, score }) => {
+                    const vectorCandidates: RankedCandidateOutcome<SpaceAgentCandidateItem>[] = topHitRows.map(({ row, score }) => {
                         const normId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
                         const chunkTexts = chunksBySpaceItemId.get(normId);
                         const assignees = row.cleanTargetRecordId ? assigneesByTaskId.Get(row.cleanTargetRecordId) : undefined;
@@ -965,8 +971,17 @@ export async function resolveSpaceAgentRetrieval(
                             originalIndex: row.originalIndex,
                         };
                     });
-                    rankingMode = 'vector';
-                    vectorSearchUsed = true;
+
+                    const queryLower = explicitFilterQuery.toLowerCase();
+                    const filteredVectorCandidates = explicitFilterQuery
+                        ? vectorCandidates.filter((c) => matchesExplicitQuery(c.item, queryLower))
+                        : vectorCandidates;
+
+                    if (filteredVectorCandidates.length > 0) {
+                        rankedCandidates = filteredVectorCandidates.slice(0, effectiveTopK);
+                        rankingMode = 'vector';
+                        vectorSearchUsed = true;
+                    }
                 }
             } catch (vectorErr) {
                 LogError(`resolveSpaceAgentRetrieval vector search failed; falling back to lexical ranking: ${vectorErr instanceof Error ? vectorErr.message : String(vectorErr)}`);
@@ -1034,6 +1049,7 @@ export async function resolveSpaceAgentRetrieval(
             // anywhere in a 50,000+ item library are never discarded prior to scoring.
             const shortlistCap = Math.max(effectiveTopK * 4, 150);
             let shortlist: Array<{ row: PreFilteredSpaceItem; score: number }> = [];
+            let matchingChunksByItemId = new Map<string, string[]>();
 
             if (rankingQueryText.length > 0) {
                 const allItemIds = inScopeRows.map((r) => r.raw.ID);
@@ -1042,10 +1058,11 @@ export async function resolveSpaceAgentRetrieval(
                     .map((r) => r.cleanTargetRecordId!);
                 const queryTerms = Array.from(new Set(tokenizeForSearch(rankingQueryText)));
 
-                const [matchingChunksByItemId, assigneesByTaskId] = await Promise.all([
+                const [discoveredChunksByItemId, assigneesByTaskId] = await Promise.all([
                     discoverMatchingChunkTextsBySpaceItemId(provider, rvUser, user, allItemIds, queryTerms, explicitFilterQuery),
                     loadTaskAssigneesByTaskId(provider, rvUser, user, allTaskIds),
                 ]);
+                matchingChunksByItemId = discoveredChunksByItemId;
 
                 const queryLower = explicitFilterQuery.toLowerCase();
                 const discoveredItems: RankableSpaceItem<SpaceAgentCandidateItem>[] = inScopeRows.map((row) => {
@@ -1090,7 +1107,7 @@ export async function resolveSpaceAgentRetrieval(
 
                 const enrichedShortlist: RankableSpaceItem<SpaceAgentCandidateItem>[] = shortlist.map(({ row }) => {
                     const normId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
-                    const chunkTexts = chunksBySpaceItemId.get(normId);
+                    const chunkTexts = mergeChunkTexts(matchingChunksByItemId.get(normId), chunksBySpaceItemId.get(normId));
                     const assignees = row.cleanTargetRecordId ? assigneesByTaskId.Get(row.cleanTargetRecordId) : undefined;
                     return {
                         item: buildCandidateItem(row, targetNames.get(row.targetKey), chunkTexts, assignees, true),
@@ -1127,6 +1144,7 @@ export async function resolveSpaceAgentRetrieval(
         topK: effectiveTopK,
         maxTokensPerSource: effectiveMaxTokensPerSource,
         maxContextTokens: effectiveMaxContextTokens,
+        ...(rankingQueryText ? { queryText: rankingQueryText } : {}),
     });
 
     const quotedItems = budgeted.items;
@@ -1659,6 +1677,21 @@ async function discoverMatchingChunkTextsBySpaceItemId(
     return result;
 }
 
+function mergeChunkTexts(
+    discovered: readonly string[] | undefined,
+    loaded: readonly string[] | undefined,
+): string[] | undefined {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const chunk of [...(discovered ?? []), ...(loaded ?? [])]) {
+        const trimmed = chunk.trim();
+        if (!trimmed || seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        out.push(trimmed);
+    }
+    return out.length > 0 ? out : undefined;
+}
+
 async function loadChunksBySpaceItemId(
     provider: IMetadataProvider,
     rvUser: RunView,
@@ -1687,13 +1720,14 @@ async function loadChunksBySpaceItemId(
 
         for (let start = 0; start < ciIds.length; start += ID_LOOKUP_BATCH_SIZE) {
             const ciInList = ciIds.slice(start, start + ID_LOOKUP_BATCH_SIZE).map((id) => `'${id}'`).join(', ');
+            const extraFilter = `DeleteStatus IS NULL AND ContentItemID IN (${ciInList})`;
             const chunksRes = await rvUser.RunView<{ ID: string; ContentItemID: string; Text: string | null; Sequence: number }>(
                 {
                     EntityName: 'MJ: Content Item Chunks',
-                    ExtraFilter: `DeleteStatus IS NULL AND ContentItemID IN (${ciInList})`,
+                    ExtraFilter: extraFilter,
                     Fields: ['ID', 'ContentItemID', 'Text', 'Sequence'],
                     OrderBy: 'Sequence ASC',
-                    // row-cap-ok: bounded chunk lookup for shortlisted candidates
+                    // row-cap-ok: falls back to keyset readEveryRow when batch page fills (>= 2000)
                     MaxRows: 2000,
                     ResultType: 'simple',
                     BypassCache: true,
@@ -1703,7 +1737,20 @@ async function loadChunksBySpaceItemId(
             if (!chunksRes.Success || !chunksRes.Results) {
                 continue;
             }
-            for (const chunk of chunksRes.Results) {
+            let chunkRows = chunksRes.Results;
+            if (chunkRows.length >= 2000) {
+                chunkRows = await readEveryRow<{ ID: string; ContentItemID: string; Text: string | null; Sequence: number }>(
+                    rvUser,
+                    {
+                        EntityName: 'MJ: Content Item Chunks',
+                        ExtraFilter: extraFilter,
+                        Fields: ['ID', 'ContentItemID', 'Text', 'Sequence'],
+                    },
+                    user,
+                );
+                chunkRows.sort((a, b) => (a.Sequence !== b.Sequence ? a.Sequence - b.Sequence : String(a.ID ?? '').localeCompare(String(b.ID ?? ''))));
+            }
+            for (const chunk of chunkRows) {
                 const ciId = parseUuid(chunk.ContentItemID)?.toLowerCase();
                 const spaceItemId = ciId ? spaceItemIdByCiId.get(ciId) : undefined;
                 const normalizedText = typeof chunk.Text === 'string' ? chunk.Text.replace(/\s+/g, ' ').trim() : '';

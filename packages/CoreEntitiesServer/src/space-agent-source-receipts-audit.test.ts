@@ -254,6 +254,60 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
                         ErrorMessage: '',
                     };
                 }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                    const liveItems: Array<Record<string, string>> = [
+                        { ID: ITEM_SHARED_ID, SpaceID: SPACE_A, Band: 'Shared' },
+                        { ID: ITEM_TEAM_ID, SpaceID: SPACE_A, Band: 'Team' },
+                        { ID: ITEM_OTHER_SPACE_ID, SpaceID: SPACE_B, Band: 'Shared' },
+                    ];
+                    return {
+                        Success: true,
+                        Results: liveItems as Partial<T>[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: liveItems.length,
+                        RowCount: liveItems.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                    const spaces: Array<Record<string, string | null>> = [
+                        { ID: SPACE_A, ParentID: null, SpaceTypeID: null },
+                        { ID: SPACE_B, ParentID: null, SpaceTypeID: null },
+                    ];
+                    return {
+                        Success: true,
+                        Results: spaces as Partial<T>[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: spaces.length,
+                        RowCount: spaces.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
+                    const grants: Array<Record<string, string | number | null>> = [
+                        {
+                            ID: '99999999-0000-4000-8000-000000000001',
+                            SpaceID: SPACE_A,
+                            SpaceTypeID: null,
+                            Kind: 'KnowledgeSource',
+                            Mode: 'Extend',
+                            Band: 'Shared',
+                            TargetRecordID: CONTENT_SRC_SHARED_ID,
+                            Sequence: 1,
+                        },
+                    ];
+                    return {
+                        Success: true,
+                        Results: grants as Partial<T>[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: grants.length,
+                        RowCount: grants.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
                 return {
                     Success: true,
                     Results: [] as T[],
@@ -498,19 +552,35 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
             assert.ok(pgsql.includes(token), `PG migration missing ${token}`);
         }
 
-        // Verify RLS filter checks both Band/SpaceID AND SpaceChat reach with balanced parentheses & valid SQL predicate syntax
+        // Verify PG idempotent table DDL and CodeGen ordering (views/SPs/triggers/data after CodeGen banner)
+        for (const pgTable of [
+            'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."Space"',
+            'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceChat"',
+            'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceItem"',
+            'CREATE TABLE IF NOT EXISTS __mj_bizappscollaboration."SpaceAgentSourceReceipt"',
+        ]) {
+            assert.ok(pgsql.includes(pgTable), `PG migration must contain idempotent ${pgTable}`);
+        }
+        assert.ok(
+            pgsql.indexOf('vwSpaceAgentSourceReceipts') > pgsql.indexOf(codegenBanner),
+            'PG migration views/SPs/triggers/data must appear AFTER the CodeGen banner',
+        );
+
+        // Verify RLS filter checks Band/SpaceID, SpaceChat reach, AND current source visibility
         const rlsEntry = rlsJson.find((e) => e.fields?.Name === 'Collaboration: Source Receipts In Reach');
         assert.ok(rlsEntry, 'RLS filter Collaboration: Source Receipts In Reach must exist');
         const filterText = rlsEntry.fields?.FilterText ?? '';
         assert.ok(filterText.includes('CanSeeTeam = 1'), 'RLS must gate Team receipts on CanSeeTeam = 1');
         assert.ok(filterText.includes("Band = N'Shared'"), 'RLS must allow Shared receipts when Band = Shared');
         assert.ok(filterText.includes('SpaceChat'), 'RLS must also enforce SpaceChat conversation reach');
+        assert.ok(filterText.includes('SpaceItem'), 'RLS must verify current SpaceItem existence, space, and band');
+        assert.ok(filterText.includes('SpaceGrant'), 'RLS must verify active KnowledgeSource SpaceGrant status');
 
         const parsedSql = parseAndValidateSqlWherePredicate(filterText);
         assert.equal(parsedSql.parenDepth, 0, 'RLS FilterText parentheses must be balanced to 0');
         assert.equal(parsedSql.minParenDepth, 0, 'RLS FilterText must never dip below depth 0');
         assert.equal(parsedSql.unclosedQuote, false, 'RLS FilterText string literals must be balanced');
-        assert.ok(parsedSql.topLevelParts.length === 2 && parsedSql.topLevelOp === 'AND', 'RLS FilterText must have two explicitly parenthesized top-level AND clauses');
+        assert.ok(parsedSql.topLevelParts.length === 3 && parsedSql.topLevelOp === 'AND', 'RLS FilterText must have three explicitly parenthesized top-level AND clauses');
     });
 
     it('rejects malformed or quote-containing IDs before executing any RunView queries (CR-5)', async () => {
@@ -881,6 +951,22 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
                         ErrorMessage: '',
                     };
                 }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                    const liveItems: T[] = stored.map((r) => ({
+                        ID: r.SpaceItemID,
+                        SpaceID: r.SpaceID,
+                        Band: r.Band,
+                    })) as object[] as T[];
+                    return {
+                        Success: true,
+                        Results: liveItems,
+                        UserViewRunID: '',
+                        TotalRowCount: liveItems.length,
+                        RowCount: liveItems.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
                 const afterId = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
                 const filtered = afterId ? stored.filter((r) => r.ID.toLowerCase() > afterId) : stored;
                 const page = params.MaxRows ? filtered.slice(0, params.MaxRows) : filtered;
@@ -907,6 +993,264 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
 
         assert.equal(res.ok, true);
         assert.equal(res.receipts.length, 620, 'All 620 receipts across 13 answers must load without 500-row truncation');
+    });
+
+    it('excludes historical receipts when live SpaceItem demotes, moves, or KnowledgeSource grant is removed or demoted (CR-1)', async () => {
+        const movedItemId = 'dddd0000-0000-4000-8000-000000000071';
+        const demotedItemId = 'dddd0000-0000-4000-8000-000000000072';
+        const validItemId = 'dddd0000-0000-4000-8000-000000000073';
+        const removedKsId = 'eeee0000-0000-4000-8000-000000000074';
+        const demotedKsId = 'eeee0000-0000-4000-8000-000000000075';
+        const activeKsId = 'eeee0000-0000-4000-8000-000000000076';
+
+        const storedReceipts: MockReceiptRow[] = [
+            {
+                ID: 'f0000000-0000-4000-8000-000000000701',
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'SpaceItem',
+                SpaceItemID: demotedItemId,
+                ContentSourceID: null,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${demotedItemId}`,
+                SourceTitle: 'Demoted Shared Doc',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: true,
+                RetrievalRank: 1,
+                RelevanceScore: 0.9,
+                RankingMode: 'lexical',
+                CitationOrdinal: 1,
+                EstimatedTokens: 50,
+                WasTruncated: false,
+                Sequence: 1,
+            },
+            {
+                ID: 'f0000000-0000-4000-8000-000000000702',
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'SpaceItem',
+                SpaceItemID: movedItemId,
+                ContentSourceID: null,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${movedItemId}`,
+                SourceTitle: 'Moved Space Doc',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: 2,
+                RelevanceScore: 0.8,
+                RankingMode: 'lexical',
+                CitationOrdinal: null,
+                EstimatedTokens: 50,
+                WasTruncated: false,
+                Sequence: 2,
+            },
+            {
+                ID: 'f0000000-0000-4000-8000-000000000703',
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'SpaceItem',
+                SpaceItemID: validItemId,
+                ContentSourceID: null,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${validItemId}`,
+                SourceTitle: 'Still Shared Doc',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: true,
+                RetrievalRank: 3,
+                RelevanceScore: 0.75,
+                RankingMode: 'lexical',
+                CitationOrdinal: 2,
+                EstimatedTokens: 50,
+                WasTruncated: false,
+                Sequence: 3,
+            },
+            {
+                ID: 'f0000000-0000-4000-8000-000000000704',
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: removedKsId,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${removedKsId}`,
+                SourceTitle: 'Removed App Grant Guide',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 4,
+            },
+            {
+                ID: 'f0000000-0000-4000-8000-000000000705',
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: demotedKsId,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${demotedKsId}`,
+                SourceTitle: 'Demoted KS Guide',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 5,
+            },
+            {
+                ID: 'f0000000-0000-4000-8000-000000000706',
+                SpaceID: SPACE_A,
+                SpaceChatID: SPACE_CHAT_ID,
+                ConversationID: CONV_ID,
+                ConversationDetailID: ASST_DETAIL_ID,
+                AgentRunID: null,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: activeKsId,
+                TargetEntityID: TARGET_ENTITY_ID,
+                TargetRecordID: `ID|${activeKsId}`,
+                SourceTitle: 'Active Shared Guide',
+                Band: 'Shared',
+                WasSupplied: true,
+                WasCited: false,
+                RetrievalRank: null,
+                RelevanceScore: null,
+                RankingMode: 'grant',
+                CitationOrdinal: null,
+                EstimatedTokens: 0,
+                WasTruncated: false,
+                Sequence: 6,
+            },
+        ];
+
+        const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
+            Entities: [],
+            async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: SPACE_CHAT_ID, SpaceID: SPACE_A, ConversationID: CONV_ID, Kind: 'General', OwnerUserID: null }] as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: 1,
+                        RowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === COLLABORATION_SOURCE_RECEIPT_ENTITY) {
+                    const afterId = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
+                    const page = storedReceipts.filter((r) => !afterId || r.ID.toLowerCase() > afterId);
+                    return {
+                        Success: true,
+                        Results: page as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: page.length,
+                        RowCount: page.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                    // Demoted to Team, Moved to SPACE_B, Valid remains Shared on SPACE_A
+                    const items = [
+                        { ID: demotedItemId, SpaceID: SPACE_A, Band: 'Team' },
+                        { ID: movedItemId, SpaceID: SPACE_B, Band: 'Shared' },
+                        { ID: validItemId, SpaceID: SPACE_A, Band: 'Shared' },
+                    ];
+                    return {
+                        Success: true,
+                        Results: items as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: items.length,
+                        RowCount: items.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                    const spaces = [{ ID: SPACE_A, ParentID: null, SpaceTypeID: null }];
+                    return {
+                        Success: true,
+                        Results: spaces as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: 1,
+                        RowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
+                    const grants = [
+                        { ID: '1', SpaceID: null, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: removedKsId, Sequence: 1 },
+                        { ID: '2', SpaceID: SPACE_A, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Remove', Band: 'Shared', TargetRecordID: removedKsId, Sequence: 2 },
+                        { ID: '3', SpaceID: null, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: demotedKsId, Sequence: 1 },
+                        { ID: '4', SpaceID: SPACE_A, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Team', TargetRecordID: demotedKsId, Sequence: 2 },
+                        { ID: '5', SpaceID: SPACE_A, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: activeKsId, Sequence: 1 },
+                    ];
+                    return {
+                        Success: true,
+                        Results: grants as object[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: grants.length,
+                        RowCount: grants.length,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: [] as T[],
+                    UserViewRunID: '',
+                    TotalRowCount: 0,
+                    RowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            },
+        };
+
+        const staffUser = makeUser(USER_A_ID, 'Space Participant');
+        const res = await querySpaceAgentSourceReceipts({
+            provider: providerObj as IMetadataProvider,
+            user: staffUser,
+            conversationId: CONV_ID,
+            inReachSpaceBands: new Map([[SPACE_A, new Set(['Shared', 'Team'] as const)]]),
+            callerCanSeeTeam: true,
+        });
+
+        assert.equal(res.ok, true);
+        assert.deepEqual(
+            res.receipts.map((r) => r.SourceTitle),
+            ['Still Shared Doc', 'Active Shared Guide'],
+        );
+        assert.equal(res.filteredOutCount, 4);
     });
 });
 

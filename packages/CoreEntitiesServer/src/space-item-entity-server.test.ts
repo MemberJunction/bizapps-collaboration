@@ -893,6 +893,110 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
         }
     });
+
+    it('Save() invalidates Shared Space Agent Source Receipts when Band demotes Shared -> Team (CR-1)', async () => {
+        const itemId = 'aaaaaaaa-0000-4000-8000-000000000011';
+        const receiptFilters: string[] = [];
+        const deletedReceipts: string[] = [];
+        const provider = createDeleteMockProvider({
+            receiptsResult: [{ ID: 'stale-shared-receipt' }],
+            onRunView: (params) => {
+                if (params.EntityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && params.ExtraFilter) {
+                    receiptFilters.push(params.ExtraFilter);
+                    assert.equal(params.IgnoreMaxRows, true);
+                }
+            },
+            onChildDelete: (entityName, entity) => {
+                if (entityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && entity instanceof SpaceAgentSourceReceiptEntityServer) {
+                    deletedReceipts.push(entity.ID);
+                }
+            },
+        });
+
+        const item = createMockItem(provider);
+        Object.defineProperties(item, {
+            ID: { value: itemId, writable: true },
+            Band: { value: 'Team', writable: true },
+            EntityID: { value: OTHER_ENTITY_ID, writable: true },
+            Fields: {
+                value: [
+                    { Name: 'SpaceID', Dirty: false, Value: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2', OldValue: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2' },
+                    { Name: 'Band', Dirty: true, Value: 'Team', OldValue: 'Shared' },
+                    { Name: 'EntityID', Dirty: false, Value: OTHER_ENTITY_ID, OldValue: OTHER_ENTITY_ID },
+                    { Name: 'RecordID', Dirty: false, Value: `ID|${FILE_ID}`, OldValue: `ID|${FILE_ID}` },
+                ],
+                writable: true,
+            },
+        });
+
+        const originalSave = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save = async () => true;
+        try {
+            const ok = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+                SpaceItemEntityServer.prototype.Save.call(item),
+            );
+            assert.equal(ok, true);
+            assert.deepEqual(deletedReceipts, ['stale-shared-receipt']);
+            assert.equal(receiptFilters.length, 1);
+            assert.ok(receiptFilters[0].includes(`SpaceItemID = '${itemId}'`));
+            assert.ok(receiptFilters[0].includes("Band = 'Shared'"));
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save = originalSave;
+        }
+    });
+
+    it('Save() invalidates all Space Agent Source Receipts when SpaceItem moves to another space (CR-1)', async () => {
+        const itemId = 'aaaaaaaa-0000-4000-8000-000000000012';
+        const oldSpaceId = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2';
+        const newSpaceId = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE3';
+        const receiptFilters: string[] = [];
+        const deletedReceipts: string[] = [];
+        const provider = createDeleteMockProvider({
+            receiptsResult: [{ ID: 'moved-receipt-shared' }, { ID: 'moved-receipt-team' }],
+            onRunView: (params) => {
+                if (params.EntityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && params.ExtraFilter) {
+                    receiptFilters.push(params.ExtraFilter);
+                    assert.equal(params.IgnoreMaxRows, true);
+                }
+            },
+            onChildDelete: (entityName, entity) => {
+                if (entityName === COLLABORATION_SOURCE_RECEIPT_ENTITY && entity instanceof SpaceAgentSourceReceiptEntityServer) {
+                    deletedReceipts.push(entity.ID);
+                }
+            },
+        });
+
+        const item = createMockItem(provider);
+        Object.defineProperties(item, {
+            ID: { value: itemId, writable: true },
+            SpaceID: { value: newSpaceId, writable: true },
+            Band: { value: 'Shared', writable: true },
+            EntityID: { value: OTHER_ENTITY_ID, writable: true },
+            Fields: {
+                value: [
+                    { Name: 'SpaceID', Dirty: true, Value: newSpaceId, OldValue: oldSpaceId },
+                    { Name: 'Band', Dirty: false, Value: 'Shared', OldValue: 'Shared' },
+                    { Name: 'EntityID', Dirty: false, Value: OTHER_ENTITY_ID, OldValue: OTHER_ENTITY_ID },
+                    { Name: 'RecordID', Dirty: false, Value: `ID|${FILE_ID}`, OldValue: `ID|${FILE_ID}` },
+                ],
+                writable: true,
+            },
+        });
+
+        const originalSave = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save = async () => true;
+        try {
+            const ok = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+                SpaceItemEntityServer.prototype.Save.call(item),
+            );
+            assert.equal(ok, true);
+            assert.deepEqual(deletedReceipts, ['moved-receipt-shared', 'moved-receipt-team']);
+            assert.equal(receiptFilters.length, 1);
+            assert.equal(receiptFilters[0], `SpaceItemID = '${itemId}'`);
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Save = originalSave;
+        }
+    });
 });
 
 
