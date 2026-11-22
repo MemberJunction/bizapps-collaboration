@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import {
+    ApplicationInfo,
     AuthorizationInfo,
     AuthorizationRoleInfo,
     type EntityInfo,
     EntityUserPermissionInfo,
     type IMetadataProvider,
+    RoleInfo,
     UserInfo,
     type UserRoleInfo,
     WellKnownUserSource,
@@ -26,6 +28,8 @@ const ISSUE_LINKS_AUTH_ID = '88888888-8888-4888-8888-888888888883';
 const UI_ROLE_ID = '99999999-9999-4999-8999-999999999991';
 const CUSTOM_STAFF_ROLE_ID = '99999999-9999-4999-8999-999999999992';
 const PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
+const COLLABORATION_APP_ID = '94f5906b-38ab-4a9f-bfca-3d395bbbc198';
+const VENDOR_PORTAL_APP_ID = 'cccccccc-1111-4111-8111-111111111111';
 
 function createAuthMetadata(grants: {
     rootRoleIds?: string[];
@@ -71,11 +75,18 @@ interface MockLinkTestOptions {
         administerRoleIds?: string[];
         issueLinksRoleIds?: string[];
     };
+    targetApplicationId?: string | null;
+    targetApplicationName?: string | null;
+    applications?: Array<{ ID: string; Name: string; Path?: string | null }>;
+    roles?: Array<{ ID: string; Name: string }>;
 }
 
 function createMintMockProvider(options: MockLinkTestOptions) {
     const grantedUserRoles: Array<{ UserID: string; RoleID: string }> = [];
-    const savedInvites: Array<{ Email: string; RoleID: string }> = [];
+    const grantedUserApps: Array<{ UserID: string; ApplicationID: string }> = [];
+    const savedInvites: Array<{ Email: string; RoleID: string; ApplicationID: string }> = [];
+    const savedInviteApps: Array<{ InviteID: string; ApplicationID: string }> = [];
+    const savedInviteRoles: Array<{ InviteID: string; RoleID: string }> = [];
     const authMeta = createAuthMetadata(options.authGrants);
 
     const perm = new EntityUserPermissionInfo();
@@ -91,6 +102,7 @@ function createMintMockProvider(options: MockLinkTestOptions) {
                 Success: true,
                 Results: [{
                     ID: SPACE_ID,
+                    Name: 'Deal Room Alpha',
                     ParentID: null,
                     InheritsMembership: false,
                     OwnerID: OWNER_USER_ID,
@@ -104,7 +116,13 @@ function createMintMockProvider(options: MockLinkTestOptions) {
         if (EntityName === 'MJ_BizApps_Collaboration: Space Types') {
             return {
                 Success: true,
-                Results: [{ ID: SPACE_TYPE_ID, InviteApproval: 'AutoApprove', MemberCap: null }],
+                Results: [{
+                    ID: SPACE_TYPE_ID,
+                    InviteApproval: 'AutoApprove',
+                    MemberCap: null,
+                    TargetApplicationID: options.targetApplicationId ?? null,
+                    TargetApplication: options.targetApplicationName ?? null,
+                }],
             };
         }
         if (EntityName === 'MJ_BizApps_Collaboration: Space Role Types') {
@@ -160,12 +178,29 @@ function createMintMockProvider(options: MockLinkTestOptions) {
             };
         }
         if (EntityName === 'MJ: User Applications') {
-            return { Success: true, Results: [{ ID: 'app-grant-1' }] };
+            const hasRequestedApp = options.targetApplicationId
+                ? ExtraFilter.toLowerCase().includes(options.targetApplicationId.toLowerCase())
+                : ExtraFilter.toLowerCase().includes(COLLABORATION_APP_ID.toLowerCase());
+            return { Success: true, Results: hasRequestedApp && !options.targetApplicationId ? [{ ID: 'app-grant-1' }] : [] };
+        }
+        if (EntityName === 'MJ: Applications') {
+            return { Success: true, Results: options.applications ?? [] };
+        }
+        if (EntityName === 'MJ: Roles') {
+            return { Success: true, Results: options.roles ?? [] };
         }
         return { Success: true, Results: [] };
     };
 
+    const providerApplications: ApplicationInfo[] = [];
+    const providerRoles = (options.roles ?? []).map((role) => new RoleInfo({
+        ID: role.ID,
+        Name: role.Name,
+    }));
+
     const providerObj = {
+        Applications: providerApplications,
+        Roles: providerRoles,
         Authorizations: authMeta.Authorizations,
         AuthorizationRoles: authMeta.AuthorizationRoles,
         Entities: [] as EntityInfo[],
@@ -210,13 +245,27 @@ function createMintMockProvider(options: MockLinkTestOptions) {
                     },
                 };
             }
+            if (entityName === 'MJ: User Applications') {
+                const draft = { UserID: '', ApplicationID: '' };
+                return {
+                    set UserID(v: string) { draft.UserID = v; },
+                    set ApplicationID(v: string) { draft.ApplicationID = v; },
+                    set Sequence(_v: number) {},
+                    set IsActive(_v: boolean) {},
+                    NewRecord() {},
+                    async Save() {
+                        grantedUserApps.push({ ...draft });
+                        return true;
+                    },
+                };
+            }
             if (entityName === 'MJ: Magic Link Invites') {
-                const draft = { Email: '', RoleID: '' };
+                const draft = { Email: '', RoleID: '', ApplicationID: '' };
                 return {
                     ID: 'invite-1',
                     set TokenHash(_v: string) {},
                     set Email(v: string) { draft.Email = v; },
-                    set ApplicationID(_v: string) {},
+                    set ApplicationID(v: string) { draft.ApplicationID = v; },
                     set RoleID(v: string) { draft.RoleID = v; },
                     set ExpiresAt(_v: Date) {},
                     set MaxUses(_v: number) {},
@@ -232,6 +281,30 @@ function createMintMockProvider(options: MockLinkTestOptions) {
                     },
                 };
             }
+            if (entityName === 'MJ: Magic Link Invite Applications') {
+                const draft = { InviteID: '', ApplicationID: '' };
+                return {
+                    set InviteID(v: string) { draft.InviteID = v; },
+                    set ApplicationID(v: string) { draft.ApplicationID = v; },
+                    NewRecord() {},
+                    async Save() {
+                        savedInviteApps.push({ ...draft });
+                        return true;
+                    },
+                };
+            }
+            if (entityName === 'MJ: Magic Link Invite Roles') {
+                const draft = { InviteID: '', RoleID: '' };
+                return {
+                    set InviteID(v: string) { draft.InviteID = v; },
+                    set RoleID(v: string) { draft.RoleID = v; },
+                    NewRecord() {},
+                    async Save() {
+                        savedInviteRoles.push({ ...draft });
+                        return true;
+                    },
+                };
+            }
             return {
                 NewRecord() {},
                 async Load() { return false; },
@@ -241,8 +314,15 @@ function createMintMockProvider(options: MockLinkTestOptions) {
     };
 
     const provider = providerObj as Partial<IMetadataProvider> as IMetadataProvider;
+    for (const app of options.applications ?? []) {
+        providerApplications.push(new ApplicationInfo({
+            ID: app.ID,
+            Name: app.Name,
+            Path: app.Path ?? undefined,
+        }, provider));
+    }
     authMeta.attachProvider(provider);
-    return { provider, grantedUserRoles, savedInvites };
+    return { provider, grantedUserRoles, grantedUserApps, savedInvites, savedInviteApps, savedInviteRoles };
 }
 
 describe('mintSpaceLink declarative MJ Authorization (CT-5)', () => {
@@ -389,5 +469,89 @@ describe('mintSpaceLink declarative MJ Authorization (CT-5)', () => {
 
         assert.equal(res.ok, true);
         assert.deepEqual(grantedUserRoles, [{ UserID: INVITEE_USER_ID, RoleID: PARTICIPANT_ROLE_ID }]);
+    });
+
+    it('uses SpaceType.TargetApplicationID for app grants, invite rows, and invite email copy (CX-6)', async () => {
+        const sentEmails: Array<{ subject: string; body: string }> = [];
+        const customParticipantRoleId = 'dddddddd-1111-4111-8111-111111111111';
+        const { provider, grantedUserRoles, grantedUserApps, savedInvites, savedInviteApps, savedInviteRoles } = createMintMockProvider({
+            inviteeRoleIds: [],
+            authGrants: { issueLinksRoleIds: [CUSTOM_STAFF_ROLE_ID] },
+            targetApplicationId: VENDOR_PORTAL_APP_ID,
+            targetApplicationName: 'Vendor Portal',
+            applications: [
+                { ID: COLLABORATION_APP_ID, Name: 'Collaboration', Path: 'collaboration' },
+                { ID: VENDOR_PORTAL_APP_ID, Name: 'Vendor Portal', Path: 'vendor-portal' },
+            ],
+            roles: [
+                { ID: customParticipantRoleId, Name: 'Space Participant' },
+            ],
+        });
+        const caller = new UserInfo(provider, {
+            ID: OWNER_USER_ID,
+            Type: 'User',
+            UserRoles: [{ UserID: OWNER_USER_ID, RoleID: CUSTOM_STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+        });
+
+        const res = await mintSpaceLink({
+            provider,
+            user: caller,
+            spaceId: SPACE_ID,
+            email: 'vendor@example.test',
+            roleId: GUEST_SPACE_ROLE_ID,
+            host: {
+                ...hostConfig,
+                communicationProvider: 'smtp',
+                fromAddress: 'noreply@example.test',
+                sendInviteEmail: async (_system, _providerName, email) => {
+                    sentEmails.push({ subject: email.subject, body: email.body });
+                    return true;
+                },
+            },
+        });
+
+        assert.equal(res.ok, true);
+        assert.equal(res.sent, true);
+        assert.equal(res.targetApplicationId, VENDOR_PORTAL_APP_ID);
+        assert.equal(res.targetApplicationName, 'Vendor Portal');
+        assert.deepEqual(grantedUserRoles, [{ UserID: INVITEE_USER_ID, RoleID: customParticipantRoleId }]);
+        assert.deepEqual(grantedUserApps, [{ UserID: INVITEE_USER_ID, ApplicationID: VENDOR_PORTAL_APP_ID }]);
+        assert.equal(savedInvites[0]?.ApplicationID, VENDOR_PORTAL_APP_ID);
+        assert.equal(savedInvites[0]?.RoleID, customParticipantRoleId);
+        assert.deepEqual(savedInviteApps, [{ InviteID: 'invite-1', ApplicationID: VENDOR_PORTAL_APP_ID }]);
+        assert.deepEqual(savedInviteRoles, [{ InviteID: 'invite-1', RoleID: customParticipantRoleId }]);
+        assert.match(sentEmails[0]?.subject ?? '', /Vendor Portal/);
+        assert.doesNotMatch(sentEmails[0]?.subject ?? '', /Collaboration/);
+    });
+
+    it('falls back gracefully to Collaboration when SpaceType.TargetApplicationID is null (CX-6)', async () => {
+        const { provider, savedInvites, savedInviteApps } = createMintMockProvider({
+            inviteeRoleIds: [PARTICIPANT_ROLE_ID],
+            authGrants: { issueLinksRoleIds: [CUSTOM_STAFF_ROLE_ID] },
+            targetApplicationId: null,
+            applications: [
+                { ID: COLLABORATION_APP_ID, Name: 'Collaboration', Path: 'collaboration' },
+            ],
+        });
+        const caller = new UserInfo(provider, {
+            ID: OWNER_USER_ID,
+            Type: 'User',
+            UserRoles: [{ UserID: OWNER_USER_ID, RoleID: CUSTOM_STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+        });
+
+        const res = await mintSpaceLink({
+            provider,
+            user: caller,
+            spaceId: SPACE_ID,
+            email: 'guest@example.test',
+            roleId: GUEST_SPACE_ROLE_ID,
+            host: hostConfig,
+        });
+
+        assert.equal(res.ok, true);
+        assert.equal(res.targetApplicationId, COLLABORATION_APP_ID);
+        assert.equal(res.targetApplicationName, 'Collaboration');
+        assert.equal(savedInvites[0]?.ApplicationID, COLLABORATION_APP_ID);
+        assert.deepEqual(savedInviteApps, [{ InviteID: 'invite-1', ApplicationID: COLLABORATION_APP_ID }]);
     });
 });

@@ -550,13 +550,18 @@ export interface InviteEmail {
     body: string;
 }
 
-/** Resolves the SpaceType's configured target MJ Application ID, falling back to `defaultApplicationId` when unset. */
+const RULE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const FALLBACK_COLLAB_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
+
+/** Resolves the SpaceType's configured target MJ Application ID, falling back to `defaultApplicationId` when unset or invalid. */
 export function resolveTargetApplicationId(
     typeTargetApplicationId: string | null | undefined,
-    defaultApplicationId: string,
+    defaultApplicationId: string = FALLBACK_COLLAB_APP_ID,
 ): string {
     const trimmed = (typeTargetApplicationId ?? '').trim();
-    return trimmed.length > 0 ? trimmed : defaultApplicationId;
+    if (RULE_UUID_RE.test(trimmed)) return trimmed;
+    const trimmedDefault = (defaultApplicationId ?? '').trim();
+    return RULE_UUID_RE.test(trimmedDefault) ? trimmedDefault : FALLBACK_COLLAB_APP_ID;
 }
 
 /** The message MJ's mailer is asked to send. `from` is the host's magicLink.fromAddress. */
@@ -566,7 +571,7 @@ export function inviteEmail(input: { from: string; to: string; url: string; appl
         from: input.from,
         to: input.to,
         subject: `You've been invited to ${appName}`,
-        body: `Open this link to sign in:\n\n${input.url}\n\nThis link is single-use and will expire.`,
+        body: `Open this link to sign in to ${appName}:\n\n${input.url}\n\nThis link is single-use and will expire.`,
     };
 }
 

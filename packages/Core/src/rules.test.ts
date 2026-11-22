@@ -12,12 +12,14 @@ import {
     wouldStrandLastOwner,
     callerMayReceiveLink,
     handInviteToEngine,
+    idpInviteEmail,
     inviteEmail,
     linkHandoff,
     lockoutMessage,
     magicLinkBlocksAccount,
     resourcesFromRoster,
     membershipReaches,
+    resolveTargetApplicationId,
     rosterActions,
     rosterBySeat,
     seatSpacesForSubtree,
@@ -266,6 +268,45 @@ describe('magic link and roster permission', () => {
         assert.equal(sent[0]?.from, 'invites@example.com');
         assert.equal(sent[0]?.to, 'bea@example.com');
         assert.match(sent[0]?.body ?? '', /token=abc/);
+        assert.match(sent[0]?.subject ?? '', /Collaboration/);
+    });
+
+    it('uses the SpaceType applicationName in inviteEmail when provided', () => {
+        const message = inviteEmail({
+            from: 'invites@example.com',
+            to: 'bea@example.com',
+            url: 'http://host/magic-link/redeem?token=abc',
+            applicationName: 'Vendor Portal',
+        });
+        assert.match(message.subject, /Vendor Portal/);
+        assert.doesNotMatch(message.subject, /Collaboration/);
+        assert.match(message.body, /Vendor Portal/);
+    });
+
+    it('builds an external IdP sign-in notification email without a magic-link token', () => {
+        const message = idpInviteEmail({
+            from: 'invites@example.com',
+            to: 'bea@example.com',
+            signInUrl: 'https://host.example/app/vendor-portal',
+            applicationName: 'Vendor Portal',
+            spaceName: 'Acme Onboarding',
+        });
+        assert.equal(message.from, 'invites@example.com');
+        assert.equal(message.to, 'bea@example.com');
+        assert.match(message.subject, /Vendor Portal/);
+        assert.match(message.body, /Acme Onboarding/);
+        assert.match(message.body, /https:\/\/host\.example\/app\/vendor-portal/);
+        assert.doesNotMatch(message.body, /magic-link\/redeem/);
+    });
+
+    it('resolves TargetApplicationID from SpaceType with graceful default fallback', () => {
+        const customAppId = 'cccccccc-1111-4111-8111-111111111111';
+        const fallbackAppId = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
+        assert.equal(resolveTargetApplicationId(customAppId), customAppId);
+        assert.equal(resolveTargetApplicationId(`  ${customAppId}  `), customAppId);
+        assert.equal(resolveTargetApplicationId(null, fallbackAppId), fallbackAppId);
+        assert.equal(resolveTargetApplicationId('not-a-uuid', fallbackAppId), fallbackAppId);
+        assert.equal(resolveTargetApplicationId(null), '94F5906B-38AB-4A9F-BFCA-3D395BBBC198');
     });
 
     it('grants read to a member who reaches the space, and update to the owner', () => {
