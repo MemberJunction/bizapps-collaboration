@@ -43,13 +43,15 @@ import {
     USER_ROLE_ENTITY,
 } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext, SameID } from '../../wire.js';
-import { buildUserKeyProvider, mintUserApiKey } from '../../persona-provider.js';
+import { buildUserKeyProviderWithRetry, mintUserApiKey } from '../../persona-provider.js';
 import { cleanupConversation, cleanupStep, deleteRowAndConfirm, deleteWhere, registerChecks, runAllSteps } from '../cleanup-helpers.js';
 import { makePdf, purgeTestSpaceItemPipelineRows, waitForSpaceItemPipeline } from '../content-pipeline-fixtures.js';
 import { attachTestAgent, detachTestAgent } from '../test-agent-attachment.js';
 
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
+const DELIVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000003';
+const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
 const HARBOR_SPACE_ID = 'C1000001-0000-4000-8000-000000000006';
 const COLLABORATION_SEARCH_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
 const PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
@@ -369,11 +371,14 @@ const checks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const bea = await getPersonaClientContext(ctx, 'bea');
+            const dana = await getPersonaClientContext(ctx, 'dana');
             const harper = await getPersonaClientContext(ctx, 'harper');
             const { sharedRootId, teamRootId } = await resolveDiscoveryTaskRoots(ctx);
             const stamp = Date.now();
             let createdTaskId: string | null = null;
             let createdItemId: string | null = null;
+            let clampedTaskId: string | null = null;
+            let clampedItemId: string | null = null;
 
             try {
                 const beaShared = await FindRows<{ ID: string }>(asPersona(ctx, bea), TASK_ENTITY, `ID = '${sharedRootId}'`, ['ID'], bea.User, { BypassCache: true });
@@ -402,7 +407,30 @@ const checks: NamedCheck[] = [
                     Name: `${MARK} AP1 team ${stamp}`,
                     Band: 'Team',
                 });
-                Assert(!teamBandAttempt.Success, 'Bea cannot file Team task in Discovery over wire');
+                Assert(
+                    teamBandAttempt.Success === true && !!teamBandAttempt.ItemID,
+                    `Bea request for Team band clamps to Shared over wire: ${teamBandAttempt.ErrorMessage ?? ''}`,
+                );
+                clampedTaskId = teamBandAttempt.TaskID ?? null;
+                clampedItemId = teamBandAttempt.ItemID ?? null;
+                if (clampedItemId) {
+                    const [clampedItem] = await FindRows<{ Band: string }>(
+                        ctx,
+                        SPACE_ITEM_ENTITY,
+                        `ID = '${clampedItemId}'`,
+                        ['Band'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    Assert(clampedItem?.Band === 'Shared', `Persisted SpaceItem Band for Bea over wire must be Shared, saw ${clampedItem?.Band}`);
+                }
+
+                const danaGuestAttempt = await clientOf(dana).CreateSpaceTask({
+                    SpaceID: COMMITTEE_SPACE_ID,
+                    Name: `${MARK} AP1 guest ${stamp}`,
+                    Band: 'Shared',
+                });
+                Assert(!danaGuestAttempt.Success, 'Read-only guest Dana cannot file task in Committee over wire');
 
                 const harperAttempt = await clientOf(harper).CreateSpaceTask({
                     SpaceID: DISCOVERY_SPACE_ID,
@@ -424,6 +452,7 @@ const checks: NamedCheck[] = [
                 createdTaskId = created.TaskID ?? null;
                 createdItemId = created.ItemID ?? null;
             } finally {
+                await cleanupTaskRows(ctx, clampedTaskId, clampedItemId);
                 await cleanupTaskRows(ctx, createdTaskId, createdItemId);
             }
         },
@@ -489,6 +518,17 @@ const checks: NamedCheck[] = [
                     Visibility: 'Private',
                 });
                 Assert(!caseyPrivChat.Success, 'Non-attendee Casey cannot ensure chat for Private meeting over wire');
+
+                const caseyDeliveryCreate = await clientOf(casey).CreateSpaceMeeting({
+                    SpaceID: DELIVERY_SPACE_ID,
+                    Name: `${MARK} AP2 Casey Sealed Trespass ${stamp}`,
+                    StartsAt: startsAt,
+                    EndsAt: endsAt,
+                    TimeZone: 'America/Chicago',
+                    LocationType: 'Virtual',
+                    Visibility: 'Standard',
+                });
+                Assert(!caseyDeliveryCreate.Success, 'Casey cannot schedule meeting in Delivery (sealed child outside reach) over wire');
 
                 const harperCreate = await clientOf(harper).CreateSpaceMeeting({
                     SpaceID: NORTHWIND_SPACE_ID,
@@ -883,6 +923,8 @@ const checks: NamedCheck[] = [
             const tempUserRoleIds: string[] = [];
             let tempPersonId: string | null = null;
             let tempMemberId: string | null = null;
+            let clampedTaskId: string | null = null;
+            let clampedItemId: string | null = null;
             let mintedKeyId: string | null = null;
             let mintedScopeRuleId: string | null = null;
             let teamUploadItemId: string | null = null;
@@ -932,7 +974,7 @@ const checks: NamedCheck[] = [
                 const [clientMemberRole] = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'client-member'", ['ID']);
                 Assert(!!clientMemberRole?.ID, 'Seeded client-member SpaceRoleType exists');
 
-                const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                const seat = await ada.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada.User);
                 seat.NewRecord();
                 seat.SpaceID = DISCOVERY_SPACE_ID;
                 seat.UserID = tempUserId;
@@ -947,11 +989,11 @@ const checks: NamedCheck[] = [
                 mintedScopeRuleId = minted.scopeRuleId;
 
                 // Wait for MJAPI UserCache debounce so CurrentUser reflects both roles
-                let multiProvider = await buildUserKeyProvider(minted.rawKey);
-                const cacheDeadline = Date.now() + 10_000;
+                let multiProvider = await buildUserKeyProviderWithRetry(minted.rawKey);
+                const cacheDeadline = Date.now() + 15_000;
                 while ((multiProvider.CurrentUser?.UserRoles?.length ?? 0) < 2 && Date.now() < cacheDeadline) {
                     await new Promise((r) => setTimeout(r, 350));
-                    multiProvider = await buildUserKeyProvider(minted.rawKey);
+                    multiProvider = await buildUserKeyProviderWithRetry(minted.rawKey);
                 }
                 const multiUser = multiProvider.CurrentUser;
                 Assert(!!multiUser && multiUser.UserRoles.length >= 2, `MJAPI sees >= 2 roles for multi-role user (saw ${multiUser?.UserRoles.length ?? 0})`);
@@ -989,7 +1031,30 @@ const checks: NamedCheck[] = [
                     Name: `${MARK} AP6 wire team task ${stamp}`,
                     Band: 'Team',
                 });
-                Assert(!teamTaskAttempt.Success, 'Multi-role user cannot file Team task over wire');
+                Assert(
+                    teamTaskAttempt.Success === true && !!teamTaskAttempt.ItemID,
+                    `Multi-role client-member Team band request clamps to Shared over wire: ${teamTaskAttempt.ErrorMessage ?? ''}`,
+                );
+                clampedTaskId = teamTaskAttempt.TaskID ?? null;
+                clampedItemId = teamTaskAttempt.ItemID ?? null;
+                if (clampedItemId) {
+                    const [clampedItem] = await FindRows<{ Band: string }>(
+                        ctx,
+                        SPACE_ITEM_ENTITY,
+                        `ID = '${clampedItemId}'`,
+                        ['Band'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    Assert(clampedItem?.Band === 'Shared', `Persisted SpaceItem Band for multi-role wire must be Shared, saw ${clampedItem?.Band}`);
+                }
+
+                const harborTaskAttempt = await multiClient.CreateSpaceTask({
+                    SpaceID: HARBOR_SPACE_ID,
+                    Name: `${MARK} AP6 wire harbor trespass ${stamp}`,
+                    Band: 'Shared',
+                });
+                Assert(!harborTaskAttempt.Success, 'Multi-role user cannot file task in Harbor over wire');
 
                 const meetings = await FindRows<{ ID: string }>(multiCtx, MEETING_ENTITY, '', ['ID'], multiUser, { BypassCache: true });
                 Assert(meetings.length === 0, 'Multi-role user sees 0 unseated Northwind meetings over wire');
@@ -1100,6 +1165,7 @@ const checks: NamedCheck[] = [
                 if (adaRunId) await deleteRowAndConfirm(ctx.Provider, ctx.User, AGENT_RUN_ENTITY, adaRunId, 'AP6 wire Ada control run');
                 if (adaPromptRunId) await deleteRowAndConfirm(ctx.Provider, ctx.User, PROMPT_RUN_ENTITY, adaPromptRunId, 'AP6 wire Ada control prompt run');
                 if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
+                await cleanupTaskRows(ctx, clampedTaskId, clampedItemId);
                 if (mintedScopeRuleId) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: API Key Scopes', mintedScopeRuleId, 'AP6 wire key scope');
                 if (mintedKeyId) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: API Keys', mintedKeyId, 'AP6 wire api key');
                 if (teamUploadItemId) {

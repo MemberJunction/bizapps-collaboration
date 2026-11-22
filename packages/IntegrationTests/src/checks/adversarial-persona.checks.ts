@@ -62,6 +62,8 @@ import { attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
 
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
+const DELIVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000003';
+const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
 const HARBOR_SPACE_ID = 'C1000001-0000-4000-8000-000000000006';
 const COLLABORATION_SEARCH_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
 const PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
@@ -387,11 +389,14 @@ const checks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaContext(ctx, 'bea');
+            const danaUser = await GetPersonaUser(ctx, 'dana');
             const harperCtx = await getPersonaContext(ctx, 'harper');
             const { sharedRootId, teamRootId } = await resolveDiscoveryTaskRoots(ctx);
             const stamp = Date.now();
             let createdTaskId: string | null = null;
             let createdItemId: string | null = null;
+            let clampedTaskId: string | null = null;
+            let clampedItemId: string | null = null;
 
             try {
                 // 1. Read boundaries
@@ -421,7 +426,30 @@ const checks: NamedCheck[] = [
                     name: `${MARK} AP1 team band escalation ${stamp}`,
                     band: 'Team',
                 });
-                Assert(!beaTeamBandAttempt.ok, 'Bea cannot file task into Team band on Discovery');
+                Assert(
+                    beaTeamBandAttempt.ok === true && beaTeamBandAttempt.band === 'Shared',
+                    `Bea request for Team band must clamp to Shared (never land on Team): ${beaTeamBandAttempt.ok ? beaTeamBandAttempt.band : beaTeamBandAttempt.message}`,
+                );
+                if (beaTeamBandAttempt.ok) {
+                    clampedTaskId = beaTeamBandAttempt.taskId;
+                    clampedItemId = beaTeamBandAttempt.itemId;
+                    const [clampedItem] = await FindRows<{ Band: string }>(
+                        ctx,
+                        SPACE_ITEM_ENTITY,
+                        `ID = '${beaTeamBandAttempt.itemId}'`,
+                        ['Band'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    Assert(clampedItem?.Band === 'Shared', `Persisted SpaceItem Band for Bea must be Shared, saw ${clampedItem?.Band}`);
+                }
+
+                const danaGuestAttempt = await createSpaceTask(ctx.Provider, danaUser, {
+                    spaceId: COMMITTEE_SPACE_ID,
+                    name: `${MARK} AP1 guest trespass ${stamp}`,
+                    band: 'Shared',
+                });
+                Assert(!danaGuestAttempt.ok, 'Read-only guest Dana cannot file task into Committee');
 
                 const harperDiscoveryAttempt = await createSpaceTask(ctx.Provider, harperCtx.User, {
                     spaceId: DISCOVERY_SPACE_ID,
@@ -446,6 +474,7 @@ const checks: NamedCheck[] = [
                     createdItemId = created.itemId;
                 }
             } finally {
+                await cleanupTaskWithLinks(ctx, clampedTaskId, clampedItemId);
                 await cleanupTaskWithLinks(ctx, createdTaskId, createdItemId);
             }
         },
@@ -520,8 +549,8 @@ const checks: NamedCheck[] = [
                 });
                 Assert(!caseyPrivChat.ok, 'Non-attendee Casey cannot ensure chat for Private meeting');
 
-                const caseyDiscoveryMeeting = await createSpaceMeeting(ctx.Provider, caseyCtx.User, {
-                    spaceId: DISCOVERY_SPACE_ID,
+                const caseyDeliveryMeeting = await createSpaceMeeting(ctx.Provider, caseyCtx.User, {
+                    spaceId: DELIVERY_SPACE_ID,
                     name: `${MARK} AP2 Casey Trespass ${stamp}`,
                     startsAt,
                     endsAt,
@@ -529,7 +558,7 @@ const checks: NamedCheck[] = [
                     locationType: 'Virtual',
                     visibility: 'Standard',
                 });
-                Assert(!caseyDiscoveryMeeting.ok, 'Casey cannot schedule a meeting in Discovery (outside reach)');
+                Assert(!caseyDeliveryMeeting.ok, 'Casey cannot schedule a meeting in Delivery (sealed child outside reach)');
 
                 const harperNorthwindMeeting = await createSpaceMeeting(ctx.Provider, harperCtx.User, {
                     spaceId: NORTHWIND_SPACE_ID,
@@ -1020,6 +1049,8 @@ const checks: NamedCheck[] = [
             const tempUserRoleIds: string[] = [];
             let tempPersonId: string | null = null;
             let tempMemberId: string | null = null;
+            let clampedTaskId: string | null = null;
+            let clampedItemId: string | null = null;
             let teamUploadItemId: string | null = null;
             let teamUploadFileId: string | null = null;
             let genConvId: string | null = null;
@@ -1066,7 +1097,7 @@ const checks: NamedCheck[] = [
                 const [clientMemberRole] = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'client-member'", ['ID']);
                 Assert(!!clientMemberRole?.ID, 'Seeded client-member SpaceRoleType exists');
 
-                const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
                 seat.NewRecord();
                 seat.SpaceID = DISCOVERY_SPACE_ID;
                 seat.UserID = tempUserId;
@@ -1116,7 +1147,30 @@ const checks: NamedCheck[] = [
                     name: `${MARK} AP6 team task ${stamp}`,
                     band: 'Team',
                 });
-                Assert(!multiTeamTaskWrite.ok, 'Multi-role user cannot file a Team task');
+                Assert(
+                    multiTeamTaskWrite.ok === true && multiTeamTaskWrite.band === 'Shared',
+                    `Multi-role client-member Team band request must clamp to Shared: ${multiTeamTaskWrite.ok ? multiTeamTaskWrite.band : multiTeamTaskWrite.message}`,
+                );
+                if (multiTeamTaskWrite.ok) {
+                    clampedTaskId = multiTeamTaskWrite.taskId;
+                    clampedItemId = multiTeamTaskWrite.itemId;
+                    const [clampedItem] = await FindRows<{ Band: string }>(
+                        ctx,
+                        SPACE_ITEM_ENTITY,
+                        `ID = '${multiTeamTaskWrite.itemId}'`,
+                        ['Band'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    Assert(clampedItem?.Band === 'Shared', `Persisted SpaceItem Band for multi-role user must be Shared, saw ${clampedItem?.Band}`);
+                }
+
+                const multiHarborTaskWrite = await createSpaceTask(ctx.Provider, multiUser!, {
+                    spaceId: HARBOR_SPACE_ID,
+                    name: `${MARK} AP6 harbor trespass ${stamp}`,
+                    band: 'Shared',
+                });
+                Assert(!multiHarborTaskWrite.ok, 'Multi-role user cannot file a task in Harbor');
 
                 // 2. Meetings (no Northwind seat -> 0 Northwind meetings, direct Save() refused)
                 const nwMeetings = await FindRows<{ ID: string }>(multiCtx, MEETING_ENTITY, '', ['ID'], multiUser, { BypassCache: true });
@@ -1278,6 +1332,7 @@ const checks: NamedCheck[] = [
                 Assert(!inviteAttempt.ok, 'Multi-role non-staff user MUST NOT issue space invite links (CT-5)');
             } finally {
                 if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
+                await cleanupTaskWithLinks(ctx, clampedTaskId, clampedItemId);
                 if (teamUploadItemId) {
                     await purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, [teamUploadItemId]);
                     await deleteWhere(ctx.Provider, ctx.User, SHARE_NOTICE_ENTITY, `ItemID = '${teamUploadItemId}'`, 'AP6 share notice');
