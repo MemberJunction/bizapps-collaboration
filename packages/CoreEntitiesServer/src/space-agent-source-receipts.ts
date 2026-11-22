@@ -1744,10 +1744,11 @@ export async function isSingleSourceReceiptAuthorizedForUser(
         return false;
     }
 
+    const isPrivilegedOwner = user.Type?.trim() === 'Owner' && !isSpaceParticipant(user);
     if ((chat.Kind === 'General' || chat.Kind === 'Topic') && band !== 'Shared') {
         return false;
     }
-    if (chat.Kind === 'Assistant' && normalizeReceiptUuid(chat.OwnerUserID) !== cleanUserId) {
+    if (!isPrivilegedOwner && chat.Kind === 'Assistant' && normalizeReceiptUuid(chat.OwnerUserID) !== cleanUserId) {
         return false;
     }
 
@@ -1770,7 +1771,7 @@ export async function isSingleSourceReceiptAuthorizedForUser(
         return false;
     }
 
-    if (user.Type !== 'Owner') {
+    if (!isPrivilegedOwner) {
         const [membersRes, rolesRes] = await Promise.all([
             rv.RunView<{
                 SpaceID: string;

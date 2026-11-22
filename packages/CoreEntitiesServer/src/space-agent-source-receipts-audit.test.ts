@@ -2203,6 +2203,115 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
             assert.match(evaluateParticipantSourceReceiptWriteAccess('delete', regularUser) ?? '', /forbidden/i);
         });
     });
+
+    it('authorizes NCHAR-padded Owner without memberships in isSingleSourceReceiptAuthorizedForUser while denying Space Participant Owner', async () => {
+        const { isSingleSourceReceiptAuthorizedForUser } = await import('../dist/space-agent-source-receipts.js');
+        const paddedOwner: UserInfo = {
+            ...makeUser(SYSTEM_USER_ID, 'Developer'),
+            Type: 'Owner          ',
+        } as UserInfo;
+        const participantPaddedOwner: UserInfo = {
+            ...paddedOwner,
+            UserRoles: [
+                {
+                    ID: 'ur-sp-padded',
+                    UserID: SYSTEM_USER_ID,
+                    RoleID: PARTICIPANT_ROLE_ID,
+                    Role: 'Space Participant',
+                    User: 'System',
+                    RoleName: 'Space Participant',
+                } as Partial<UserInfo['UserRoles'][number]> as UserInfo['UserRoles'][number],
+            ],
+        } as UserInfo;
+        const nonOwner = makeUser(USER_A_ID, 'User');
+
+        const receiptSpaceId = SPACE_A;
+        const receiptChatId = '44444444-4444-4444-8444-444444444444';
+        const receiptConvId = '55555555-5555-4555-8555-555555555555';
+        const receiptItemId = '66666666-6666-4666-8666-666666666666';
+
+        const runViewProvider = {
+            async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: receiptChatId,
+                                SpaceID: receiptSpaceId,
+                                ConversationID: receiptConvId,
+                                Kind: 'Assistant',
+                                OwnerUserID: USER_A_ID,
+                            },
+                        ] as T[],
+                    } as RunViewResult<T>;
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: receiptSpaceId,
+                                ParentID: null,
+                                InheritsMembership: false,
+                                OwnerID: USER_A_ID,
+                                AgentRetrieval: 'Inherited',
+                                AllowParentAssignees: false,
+                                ClosedAt: null,
+                                StatusID: null,
+                                SpaceTypeID: null,
+                                Configuration: null,
+                            },
+                        ] as T[],
+                    } as RunViewResult<T>;
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: receiptItemId,
+                                SpaceID: receiptSpaceId,
+                                Band: 'Shared',
+                            },
+                        ] as T[],
+                    } as RunViewResult<T>;
+                }
+                return { Success: true, Results: [] as T[] } as RunViewResult<T>;
+            },
+            async RunViews<T>(paramsList: RunViewParams[]): Promise<Array<RunViewResult<T>>> {
+                return Promise.all(paramsList.map((p) => this.RunView<T>(p)));
+            },
+        };
+        const mockProv = runViewProvider as Partial<IMetadataProvider & IRunViewProvider> as IMetadataProvider;
+
+        const baseReceipt = {
+            ID: '77777777-7777-4777-8777-777777777777',
+            SpaceID: receiptSpaceId,
+            SpaceChatID: receiptChatId,
+            ConversationID: receiptConvId,
+            SourceKind: 'SpaceItem',
+            SpaceItemID: receiptItemId,
+            ContentSourceID: null,
+            Band: 'Shared',
+        };
+
+        assert.equal(
+            await isSingleSourceReceiptAuthorizedForUser({ provider: mockProv, user: paddedOwner, receipt: baseReceipt }),
+            true,
+            'SQL Server NCHAR-padded Owner without Space Participant role must be authorized for cleanup/admin load',
+        );
+        assert.equal(
+            await isSingleSourceReceiptAuthorizedForUser({ provider: mockProv, user: participantPaddedOwner, receipt: baseReceipt }),
+            false,
+            'Owner holding Space Participant role without space membership must remain denied',
+        );
+        assert.equal(
+            await isSingleSourceReceiptAuthorizedForUser({ provider: mockProv, user: nonOwner, receipt: baseReceipt }),
+            false,
+            'Non-owner without space membership must remain denied',
+        );
+    });
 });
 
 /**
