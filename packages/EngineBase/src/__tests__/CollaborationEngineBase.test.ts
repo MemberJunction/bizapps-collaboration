@@ -72,12 +72,14 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
         ];
 
         // Assign mock internal state
-        (engine as unknown as { _spaceTypes: unknown[] })._spaceTypes = mockTypes;
-        (engine as unknown as { _spaceRoleTypes: unknown[] })._spaceRoleTypes = mockRoleTypes;
-        (engine as unknown as { _applicationSettings: unknown[] })._applicationSettings = mockAppSettings;
+        const reloadEngine = (): Promise<void> =>
+            (Reflect.get(engine, 'AdditionalLoading') as () => Promise<void>).call(engine);
+        Reflect.set(engine, '_spaceTypes', mockTypes);
+        Reflect.set(engine, '_spaceRoleTypes', mockRoleTypes);
+        Reflect.set(engine, '_applicationSettings', mockAppSettings);
 
         // Reset indexes
-        void (engine as unknown as { AdditionalLoading: () => Promise<void> }).AdditionalLoading();
+        void reloadEngine();
     });
 
     it('looks up space types by ID and by code (case-insensitive)', () => {
@@ -114,10 +116,10 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             Code: 'community',
             Name: 'Community',
         };
-        (engine as unknown as { _spaceTypes: unknown[] })._spaceTypes.push(newType);
+        (Reflect.get(engine, '_spaceTypes') as Partial<mjBizAppsCollaborationSpaceTypeEntity>[]).push(newType);
 
         // BaseEngine triggers AdditionalLoading on entity save or reload
-        await (engine as unknown as { AdditionalLoading: () => Promise<void> }).AdditionalLoading();
+        await (Reflect.get(engine, 'AdditionalLoading') as () => Promise<void>).call(engine);
 
         // New row is immediately accessible without a process restart
         const newlyFound = engine.SpaceTypeById('type-333');
@@ -146,40 +148,48 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
     });
 
     describe('settings fail closed', () => {
-        type Internals = { _spaceTypes: Array<Partial<mjBizAppsCollaborationSpaceTypeEntity>>; _applicationSettings: unknown[] };
+        type EngineSettingRow = { ApplicationID: string; Application: string; Name: string; Value: string };
+        const internals = {
+            get _applicationSettings(): EngineSettingRow[] {
+                return Reflect.get(engine, '_applicationSettings') as EngineSettingRow[];
+            },
+            set _applicationSettings(rows: EngineSettingRow[]) {
+                Reflect.set(engine, '_applicationSettings', rows);
+            },
+        };
+        const resetCachedSettings = (): void => {
+            Reflect.set(engine, '_cachedParsedSettings', undefined);
+        };
 
         it('refuses to resolve when the app settings row does not validate, instead of using it anyway', () => {
-            const internals = engine as unknown as Internals;
             const held = internals._applicationSettings;
             internals._applicationSettings = [{
                 ApplicationID: 'unused', Application: 'Collaboration', Name: 'CollaborationSettings',
                 Value: JSON.stringify({ Chats: { WhoCanStart: 'Owner' } }),
             }];
-            (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            resetCachedSettings();
             try {
                 expect(() => engine.CollaborationSettings).toThrow(/CollaborationSettings are invalid/);
             } finally {
                 internals._applicationSettings = held;
-                (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+                resetCachedSettings();
             }
         });
 
         it('refuses to resolve when the app settings row is missing, instead of falling back to defaults', () => {
-            const internals = engine as unknown as Internals;
             const held = internals._applicationSettings;
             internals._applicationSettings = [];
-            (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            resetCachedSettings();
             try {
                 expect(() => engine.CollaborationSettings).toThrow();
             } finally {
                 internals._applicationSettings = held;
-                (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+                resetCachedSettings();
             }
         });
 
         it('says the same thing on every read of a refused row, and reads a fixed row after a reload', async () => {
-            const internals = engine as unknown as Internals;
-            const reload = () => (engine as unknown as { AdditionalLoading: () => Promise<void> }).AdditionalLoading();
+            const reload = () => (Reflect.get(engine, 'AdditionalLoading') as () => Promise<void>).call(engine);
             const held = internals._applicationSettings;
             const rowWith = (value: string) => [{
                 ApplicationID: 'unused', Application: 'Collaboration', Name: 'CollaborationSettings', Value: value,
@@ -861,7 +871,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             // 3. When Space Grants read is denied and GetSpaceConfiguration (via ExecuteGQL) is available -> resolves via server config
             const providerWithGql = {
                 ...providerObj,
-                async ExecuteGQL(_query: string, variables?: Record<string, unknown>) {
+                async ExecuteGQL(_query: string, variables?: Record<string, string | number | boolean | null>) {
                     const sid = String(variables?.spaceId ?? '').toLowerCase();
                     if (sid === leafId) {
                         return {
@@ -893,7 +903,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             const loadedViaGql = await engine.LoadSpaceAgentSourceReceiptsForConversation(
                 CONV_UUID,
                 mockUser,
-                providerWithGql as unknown as IMetadataProvider,
+                providerWithGql as Partial<IMetadataProvider> as IMetadataProvider,
             );
             expect(loadedViaGql.map((r) => r.SourceTitle)).toEqual(['Valid Shared KS']);
         });

@@ -72,9 +72,10 @@ describe('SpaceAgentSourceReceipt generated GraphQL resolver (CR-2)', () => {
         let activeAppUser: string | null = null;
         let activeMjUser: string | null = null;
 
+        type MockSqlCell = string | number | boolean | null;
         const pooledClient = {
             releasedCount: 0,
-            async query(sqlText: string): Promise<{ rows: Array<Record<string, unknown>> }> {
+            async query(sqlText: string): Promise<{ rows: Array<Record<string, MockSqlCell>> }> {
                 if (sqlText.startsWith('SET LOCAL app.current_user_id')) {
                     activeAppUser = /'([^']+)'/.exec(sqlText)?.[1] ?? null;
                 } else if (sqlText.startsWith('SET LOCAL mj.current_user_id')) {
@@ -226,7 +227,7 @@ describe('SpaceAgentSourceReceipt generated GraphQL resolver (CR-2)', () => {
             EntityByID(id: string) {
                 return id === entityInfo.ID ? entityInfo : undefined;
             },
-            async ExecuteSQL(_sqlText: string, _params?: unknown[], _options?: unknown, _contextUser?: UserInfo) {
+            async ExecuteSQL(_sqlText: string, _params?: ReadonlyArray<string | number | boolean | null>, _options?: object, _contextUser?: UserInfo) {
                 observedContextDuringSql.push({ appUser: activeAppUser, mjUser: activeMjUser });
                 return [];
             },

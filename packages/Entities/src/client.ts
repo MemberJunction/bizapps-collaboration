@@ -249,7 +249,7 @@ export interface CreateSpaceGraphQLInput {
     ParentID?: string;
     /** D22: whether a sub-space's members come from its parent. Read only with a parent. */
     InheritsMembership?: boolean;
-    Details?: Record<string, unknown>;
+    Details?: Record<string, {} | null | undefined>;
 }
 
 export interface CreateSpaceGraphQLPayload {

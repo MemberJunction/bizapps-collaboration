@@ -1830,7 +1830,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
         }
         if (!serverRules || refreshRules) void this.loadServerRules(space, browserWalkError);
-        const tabFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; label?: string; icon?: string; sortKey?: number }): SpaceTabDescriptor => ({
+        const tabFactory = (reg: { SubClass: SpaceTabDescriptor['component'] | object }, meta: { contributionKey: string; label?: string; icon?: string; sortKey?: number }): SpaceTabDescriptor => ({
             key: meta.contributionKey,
             label: meta.label ?? meta.contributionKey,
             icon: meta.icon,
@@ -1851,7 +1851,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }, (err) => this.logOnce(`tabs:${space.ID}`, `The UI driver of space type '${code}' failed building the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`),
         // The labels the type's own settings give, which need no driver: a driver that failed doesn't take them away
         (key, label) => new BaseSpaceTypeUIDriver().GetTabLabel(ctx, key, label));
-        const cardFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; title?: string; sortKey?: number; side?: 'Shared' | 'Team' }): SpaceOverviewCardDescriptor => ({
+        const cardFactory = (reg: { SubClass: SpaceOverviewCardDescriptor['component'] | object }, meta: { contributionKey: string; title?: string; sortKey?: number; side?: 'Shared' | 'Team' }): SpaceOverviewCardDescriptor => ({
             key: meta.contributionKey,
             title: meta.title ?? meta.contributionKey,
             sortKey: meta.sortKey,
@@ -2638,7 +2638,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public dataEntries: DataEntryModel[] = [];
     public selectedDataGrantId: string | null = null;
     public dataRun: DataRunModel | null = null;
-    public dataEmbedded: { spec: ComponentSpec; props: Record<string, unknown> } | null = null;
+    public dataEmbedded: { spec: ComponentSpec; props: Record<string, string | number | boolean | object | null | undefined> } | null = null;
     private dataRunRequestId = 0;
     public isSpaceStarred = false;
     public isTogglingStar = false;
@@ -3208,7 +3208,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     : await client.RunSpaceQuery({ SpaceID: spaceId, GrantID: entry.grantId });
                 if (!current()) return;
                 if (!res.Success) { this.dataRun = { grantId: entry.grantId, status: 'error', columns: [], rows: [], rowCount: 0, message: res.ErrorMessage ?? 'The run was refused.' }; return; }
-                const rows = (JSON.parse(res.RowsJSON ?? '[]') as Record<string, unknown>[]).slice(0, 200);
+                const rows = (JSON.parse(res.RowsJSON ?? '[]') as DataRunModel['rows']).slice(0, 200);
                 const columns = rows.length ? Object.keys(rows[0]).filter((key) => !key.startsWith('__mj_')) : [];
                 this.dataRun = { grantId: entry.grantId, status: 'rows', columns, rows, rowCount: res.RowCount ?? rows.length, message: '' };
             } else if (entry.kind === 'Dashboard') {
@@ -3221,7 +3221,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 if (!current()) return;
                 if (!res.Success || !res.SpecificationJSON) { this.dataRun = { grantId: entry.grantId, status: 'error', columns: [], rows: [], rowCount: 0, message: res.ErrorMessage ?? 'The component was refused.' }; return; }
                 const spec = JSON.parse(res.SpecificationJSON) as ComponentSpec;
-                const props = JSON.parse(res.PropsJSON ?? '{}') as Record<string, unknown>;
+                const props = JSON.parse(res.PropsJSON ?? '{}') as Record<string, string | number | boolean | object | null | undefined>;
                 this.dataEmbedded = { spec, props };
                 this.dataRun = { grantId: entry.grantId, status: 'embedded', columns: [], rows: [], rowCount: 0, message: '' };
             }
@@ -4060,7 +4060,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                             Fields: ['ID', 'Email', 'UserImageURL'],
                             ResultType: 'simple',
                             MaxRows: userIds.length,
-                        }).catch((userErr: unknown) => {
+                        }).catch((userErr: Error | object | string | number | boolean | null | undefined) => {
                             LogError('Error loading user emails and photos for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
                             return null;
                         }),

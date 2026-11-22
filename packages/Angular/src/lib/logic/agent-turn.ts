@@ -72,6 +72,6 @@ export function spaceTurnResult(payload: ExecuteSpaceChatTurnGraphQLPayload): Sp
 }
 
 /** A turn that threw before the server answered: the chat hears why, and no reply row. */
-export function spaceTurnFailure(error: unknown): SpaceTurnResult {
+export function spaceTurnFailure(error: {} | null | undefined): SpaceTurnResult {
     return { Success: false, ErrorMessage: error instanceof Error ? error.message : 'The chat turn failed.' };
 }

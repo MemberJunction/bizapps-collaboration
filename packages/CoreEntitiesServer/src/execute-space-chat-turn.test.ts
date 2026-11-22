@@ -19,7 +19,7 @@ import { seedAppSettings } from './app-settings.test-support.ts';
 function mockResult<T>(results: readonly object[]): RunViewResult<T> {
     return {
         Success: true,
-        Results: results as unknown as T[],
+        Results: (results as object) as T[],
         RowCount: results.length,
         TotalRowCount: results.length,
         ExecutionTime: 0,
@@ -29,7 +29,7 @@ function mockResult<T>(results: readonly object[]): RunViewResult<T> {
 
 /** A stand-in for an entity or engine object the code under test only reads a few members of. */
 function stubOf<T>(value: object): T {
-    return value as unknown as T;
+    return value as T;
 }
 
 describe('executeSpaceChatTurn', () => {
@@ -64,7 +64,7 @@ describe('executeSpaceChatTurn', () => {
     let origResolveSpaceAndType: typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
     before(() => {
         origResolveSpaceAndType = ServerDriverRegistry.Instance.ResolveSpaceAndType.bind(ServerDriverRegistry.Instance);
-        ServerDriverRegistry.Instance.ResolveSpaceAndType = (() => resolveDriver()) as unknown as typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = stubOf<typeof ServerDriverRegistry.Instance.ResolveSpaceAndType>(() => resolveDriver());
         restoreAppSettings = seedAppSettings();
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
@@ -846,10 +846,10 @@ describe('executeSpaceChatTurn', () => {
             ],
         });
 
-        let capturedMessages: Array<{ role: string; content: unknown }> | undefined;
+        let capturedMessages: Array<{ role: string; content: string | object | null | undefined }> | undefined;
         const heldRunAgent = AgentRunner.prototype.RunAgent;
         AgentRunner.prototype.RunAgent = async (params) => {
-            capturedMessages = (params.conversationMessages ?? []) as Array<{ role: string; content: unknown }>;
+            capturedMessages = (params.conversationMessages ?? []) as Array<{ role: string; content: string | object | null | undefined }>;
             return heldRunAgent.call(AgentRunner.prototype, params) as never;
         };
 
@@ -951,10 +951,10 @@ describe('executeSpaceChatTurn', () => {
         const provider = createMockProvider({
             messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`,
         });
-        let capturedRunParams: Record<string, unknown> | undefined;
+        let capturedRunParams: { Audience?: { Mode: string; UserIDs: string[] } } | undefined;
         const heldRunAgent = AgentRunner.prototype.RunAgent;
         AgentRunner.prototype.RunAgent = async (params) => {
-            capturedRunParams = params as unknown as Record<string, unknown>;
+            capturedRunParams = stubOf<{ Audience?: { Mode: string; UserIDs: string[] } }>(params);
             return heldRunAgent.call(AgentRunner.prototype, params) as never;
         };
         let result: Awaited<ReturnType<typeof executeSpaceChatTurn>>;
@@ -1003,11 +1003,11 @@ describe('executeSpaceChatTurn', () => {
     });
 
     /** Runs a turn with the agent runner watched: what the run was given, or undefined when no run was started. */
-    async function runWatchedTurn(provider: MockMetadataProvider, input: ExecuteSpaceChatTurnInput): Promise<{ result: Awaited<ReturnType<typeof executeSpaceChatTurn>>; runParams: Record<string, unknown> | undefined }> {
-        let runParams: Record<string, unknown> | undefined;
+    async function runWatchedTurn(provider: MockMetadataProvider, input: ExecuteSpaceChatTurnInput): Promise<{ result: Awaited<ReturnType<typeof executeSpaceChatTurn>>; runParams: { Audience?: { Mode: string; UserIDs: string[] } } | undefined }> {
+        let runParams: { Audience?: { Mode: string; UserIDs: string[] } } | undefined;
         const heldRunAgent = AgentRunner.prototype.RunAgent;
         AgentRunner.prototype.RunAgent = async (params) => {
-            runParams = params as unknown as Record<string, unknown>;
+            runParams = stubOf<{ Audience?: { Mode: string; UserIDs: string[] } }>(params);
             return heldRunAgent.call(AgentRunner.prototype, params) as never;
         };
         try {

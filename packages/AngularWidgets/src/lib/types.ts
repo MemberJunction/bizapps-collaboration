@@ -343,12 +343,14 @@ export interface SpaceChatAnswerSourceReceipt {
   sequence: number;
 }
 
+export type DataRowValue = string | number | boolean | Date | object | null | undefined;
+
 /** What running an entry gave: rows for a view or query; an embedded host for a dashboard or component; or why nothing. */
 export interface DataRunModel {
   grantId: string;
   status: 'running' | 'rows' | 'embedded' | 'unavailable' | 'error';
   columns: string[];
-  rows: Record<string, unknown>[];
+  rows: Record<string, DataRowValue>[];
   rowCount: number;
   message: string;
 }

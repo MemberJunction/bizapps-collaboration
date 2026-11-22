@@ -80,7 +80,9 @@ async function deleteRowAndConfirmUnguarded(
  */
 const cleanupFailures = new AsyncLocalStorage<Error[]>();
 
-function reportCleanupFailure(error: unknown): void {
+type CleanupErrorValue = {} | null | undefined;
+
+function reportCleanupFailure(error: CleanupErrorValue): void {
     const failure = error instanceof Error ? error : new Error(String(error));
     const sink = cleanupFailures.getStore();
     if (!sink) throw failure;
@@ -132,7 +134,7 @@ export async function deleteInvitee(provider: IMetadataProvider, user: UserInfo,
  * doesn't leave the rest behind.
  */
 export async function runAllSteps(steps: ReadonlyArray<() => Promise<void>>): Promise<void> {
-    let first: unknown;
+    let first: CleanupErrorValue;
     let failed = false;
     for (const step of steps) {
         try {

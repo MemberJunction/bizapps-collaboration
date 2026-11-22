@@ -67,13 +67,42 @@ export interface ChatRecordLink {
 /** Token fields that are not key values, as MJ's `ConversationUtility.RECORD_LINK_RESERVED_KEYS`. */
 const RECORD_LINK_RESERVED_KEYS = new Set(['_mode', 'type', 'name', 'entityName', 'configurationId', 'configurationName', 'configId', 'config', 'keys', 'id']);
 
+type ChatTokenValue = string | number | boolean | object | null | undefined;
+type ChatTokenContent = Record<string, ChatTokenValue>;
+
+interface ChatMessageInputLike extends Record<string, ChatTokenValue> {
+  ConversationId?: string;
+  conversationId?: string;
+  ParentMessageId?: string | null;
+  parentMessageId?: string | null;
+  dataCache?: { getConversationDetail?: (id: string, user: UserInfo | null) => Promise<ChatTokenValue> };
+  MessageSent?: {
+    emit?: (detail: ChatTokenValue) => void;
+    subscribe?: (fn: (msg: ChatThreadMessageLike) => void) => { unsubscribe: () => void };
+  };
+  IntentCheckStarted?: { subscribe?: (fn: () => void) => { unsubscribe: () => void } };
+  IntentCheckCompleted?: { subscribe?: (fn: () => void) => { unsubscribe: () => void } };
+}
+
+interface ChatAreaRefLike {
+  slotTemplate?: object;
+  DisplayMessages?: ChatThreadMessageLike[];
+  messages?: ChatThreadMessageLike[];
+  OnJumpToMessage?: (id: string) => void;
+  OnMessageSent?: (detail: ChatTokenValue) => void;
+  messageInputComponents?: { toArray?: () => Array<ChatMessageInputLike> };
+  isProcessing?: boolean;
+  StatusText?: string | null;
+  StatusElapsed?: string | null;
+}
+
 /**
  * The `@{...}` tokens in a message, found as MJ's `ConversationUtility.ParseSpecialContent` finds them: by brace depth, so a
  * name holding `{v2}` or a nested `keys` object stays inside its token. `content` is null when the token is not a JSON object.
  * A copy because `@memberjunction/ai-core-plus` is not a dependency here; MJ's is the reference.
  */
-function parseMessageTokens(text: string): Array<{ start: number; end: number; content: Record<string, unknown> | null }> {
-  const tokens: Array<{ start: number; end: number; content: Record<string, unknown> | null }> = [];
+function parseMessageTokens(text: string): Array<{ start: number; end: number; content: ChatTokenContent | null }> {
+  const tokens: Array<{ start: number; end: number; content: ChatTokenContent | null }> = [];
   let index = 0;
   while (index < text.length) {
     const at = text.indexOf('@{', index);
@@ -90,10 +119,10 @@ function parseMessageTokens(text: string): Array<{ start: number; end: number; c
     if (close === -1) break;
     // As MJ's parseToken: the text inside `@{ }` is the object's body, unless it is itself an object (`@{{...}}`)
     const inner = text.slice(at + 2, close);
-    let content: Record<string, unknown> | null = null;
+    let content: ChatTokenContent | null = null;
     try {
-      const parsed: unknown = JSON.parse(inner.trim().startsWith('{') ? inner : `{${inner}}`);
-      content = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+      const parsed = JSON.parse(inner.trim().startsWith('{') ? inner : `{${inner}}`) as ChatTokenValue;
+      content = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as ChatTokenContent) : null;
     } catch {
       content = null;
     }
@@ -104,11 +133,11 @@ function parseMessageTokens(text: string): Array<{ start: number; end: number; c
 }
 
 /** A record link's key values, as MJ's `ConversationUtility.RecordLinkKeyMap`: nested `keys`, sibling fields, and `id` for `ID`. */
-function recordLinkKeys(content: Record<string, unknown>): Record<string, string | number> {
+function recordLinkKeys(content: ChatTokenContent): Record<string, string | number> {
   const keys: Record<string, string | number> = {};
   const nested = content['keys'];
   if (nested && typeof nested === 'object') {
-    for (const [k, v] of Object.entries(nested as Record<string, unknown>)) {
+    for (const [k, v] of Object.entries(nested as ChatTokenContent)) {
       if ((typeof v === 'string' || typeof v === 'number') && v !== '') keys[k] = v;
     }
   }
@@ -1719,10 +1748,10 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     @Optional() @Inject(ChangeDetectorRef) private readonly cdr?: ChangeDetectorRef,
   ) {}
 
-  @ViewChild('chatAreaRef') private chatArea?: unknown;
+  @ViewChild('chatAreaRef') private chatArea?: ChatAreaRefLike;
 
-  private boundChatArea: unknown = null;
-  private boundInputInstance: unknown = null;
+  private boundChatArea: ChatAreaRefLike | null = null;
+  private boundInputInstance: ChatMessageInputLike | null = null;
   private cleanups: Array<() => void> = [];
   private noAgentPromptTimer: ReturnType<typeof setTimeout> | undefined;
   private threadDrafts = new Map<string, string>();
@@ -1813,7 +1842,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   }
 
   public get hasRealChatArea(): boolean {
-    const area = this.chatArea as { slotTemplate?: unknown } | undefined;
+    const area = this.chatArea;
     return typeof area?.slotTemplate === 'function';
   }
 
@@ -2472,7 +2501,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     return parts;
   }
 
-  private tokenPart(content: Record<string, unknown> | null): ChatMessagePart {
+  private tokenPart(content: ChatTokenContent | null): ChatMessagePart {
     const name = typeof content?.['name'] === 'string' ? content['name'].trim() : '';
     const entityName = content?.['entityName'];
     if (content && (content['_mode'] || 'mention') === 'mention' && content['type'] === 'record' && typeof entityName === 'string' && entityName) {
@@ -2676,11 +2705,8 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     });
 
     if (result?.Success && result.ReplyDetailIds?.length) {
-      const activeInput = this.getActiveMessageInput() as {
-        dataCache?: { getConversationDetail?: (id: string, user: UserInfo | null) => Promise<unknown> };
-        MessageSent?: { emit?: (detail: unknown) => void };
-      } | null;
-      const area = this.chatArea as { OnMessageSent?: (detail: unknown) => void } | undefined;
+      const activeInput = this.getActiveMessageInput();
+      const area = this.chatArea;
 
       for (const detailId of result.ReplyDetailIds) {
         if (!detailId) continue;
@@ -2706,11 +2732,8 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.cdr?.markForCheck();
   }
 
-  private getActiveMessageInput(): Record<string, unknown> | null {
-    const area = this.chatArea as {
-      messageInputComponents?: { toArray?: () => Array<Record<string, unknown>> };
-    } | undefined;
-    const list = area?.messageInputComponents?.toArray?.() ?? [];
+  private getActiveMessageInput(): ChatMessageInputLike | null {
+    const list = this.chatArea?.messageInputComponents?.toArray?.() ?? [];
     if (list.length === 0) return null;
     const matching = list.find((inp) => inp['ConversationId'] === this.ConversationId || inp['conversationId'] === this.ConversationId);
     return matching ?? list[0] ?? null;

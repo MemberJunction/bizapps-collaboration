@@ -23,6 +23,10 @@ let restoreAppSettingsRow: () => void;
 before(() => { restoreAppSettingsRow = seedAppSettings(); });
 after(() => restoreAppSettingsRow());
 
+function stubObject<T extends object>(value: object): T {
+    return value as T;
+}
+
 describe('SpaceItemEntityServer file ownership and validation', () => {
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
     let origResolveSpaceAndType: typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
@@ -32,7 +36,8 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         src.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' } as UserInfo);
         // A delete asks the space type's driver first; these tests are about files, so the space's driver is the default one
         origResolveSpaceAndType = ServerDriverRegistry.Instance.ResolveSpaceAndType.bind(ServerDriverRegistry.Instance);
-        ServerDriverRegistry.Instance.ResolveSpaceAndType = (async () => ({ driver: new BaseSpaceTypeServerDriver(), space: {}, spaceType: {} })) as unknown as typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = async () =>
+            stubObject<Awaited<ReturnType<typeof origResolveSpaceAndType>>>({ driver: new BaseSpaceTypeServerDriver(), space: {}, spaceType: {} });
     });
     after(() => {
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
@@ -86,15 +91,15 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 });
             },
             async GetEntityObject(_entityName: string) {
-                return {
+                return stubObject<BaseEntity>({
                     ProviderID: options?.fileProviderId,
                     async Load() { return true; },
                     async InnerLoad() { return true; },
                     async Delete() { return true; },
-                } as unknown as BaseEntity;
+                });
             },
         };
-        return mock as unknown as IMetadataProvider;
+        return stubObject<IMetadataProvider>(mock);
     }
 
     it('refuses saving a new file item that was not vouched through space upload', async () => {
@@ -295,7 +300,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                             ID: r.ID,
                             TransactionGroup: undefined as TransactionGroupBase | undefined,
                             async Delete() {
-                                opts.onChildDelete?.(params.EntityName, ent as unknown as BaseEntity);
+                                opts.onChildDelete?.(params.EntityName, stubObject<BaseEntity>(ent));
                                 return true;
                             },
                         };
@@ -309,7 +314,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                             ID: r.ID,
                             TransactionGroup: undefined as TransactionGroupBase | undefined,
                             async Delete() {
-                                opts.onChildDelete?.(params.EntityName, ent as unknown as BaseEntity);
+                                opts.onChildDelete?.(params.EntityName, stubObject<BaseEntity>(ent));
                                 return true;
                             },
                         };
@@ -361,14 +366,14 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                     TransactionGroup: undefined as TransactionGroupBase | undefined,
                     async Load() { return true; },
                     async Delete() {
-                        opts.onChildDelete?.(entityName, entity as unknown as BaseEntity);
+                        opts.onChildDelete?.(entityName, stubObject<BaseEntity>(entity));
                         return true;
                     },
                 };
-                return entity as unknown as BaseEntity;
+                return stubObject<BaseEntity>(entity);
             },
         };
-        return mock as unknown as IMetadataProvider;
+        return stubObject<IMetadataProvider>(mock);
     }
 
     function createMockItem(provider: IMetadataProvider, recordId: string = `ID|${FILE_ID}`): SpaceItemEntityServer {
@@ -410,7 +415,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             ID: { value: 'item-1', writable: true },
             SpaceID: { value: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2', writable: true },
             IsSaved: { value: true, writable: true },
-            ProviderToUse: { value: providerMock as unknown as IMetadataProvider, writable: true },
+            ProviderToUse: { value: stubObject<IMetadataProvider>(providerMock), writable: true },
             ContextCurrentUser: { value: user, writable: true },
             CheckPermissions: {
                 value: (_type: EntityPermissionType, throwError: boolean) => {
@@ -611,10 +616,10 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         });
         provider.CreateTransactionGroup = async () => {
             createdGroupsCount++;
-            return {
+            return stubObject<TransactionGroupBase>({
                 AddTransaction() {},
                 async Submit() { return !shouldFail; },
-            } as unknown as TransactionGroupBase;
+            });
         };
 
         const item = createMockItem(provider);
@@ -651,7 +656,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
         type NotificationCallback = (n: { success: boolean }) => void;
         const subscribers: NotificationCallback[] = [];
-        const callerTg = {
+        const callerTg = stubObject<TransactionGroupBase>({
             AddTransaction() {},
             async Submit() { return true; },
             TransactionNotifications$: {
@@ -660,7 +665,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                     return { unsubscribe() {} };
                 },
             },
-        } as unknown as TransactionGroupBase;
+        });
 
         item.TransactionGroup = callerTg;
 
@@ -693,7 +698,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
         type NotificationCallback = (n: { success: boolean }) => void;
         const subscribers: NotificationCallback[] = [];
-        const callerTg = {
+        const callerTg = stubObject<TransactionGroupBase>({
             AddTransaction() {},
             async Submit() { return false; },
             TransactionNotifications$: {
@@ -702,7 +707,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                     return { unsubscribe() {} };
                 },
             },
-        } as unknown as TransactionGroupBase;
+        });
 
         item.TransactionGroup = callerTg;
 
@@ -747,14 +752,14 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 return origEntityByName(name);
             }) as IMetadataProvider['EntityByName'];
 
-            const rvProvider = provider as unknown as { RunView: (params: { EntityName: string; ExtraFilter?: string }) => Promise<unknown> };
-            const origRunView = rvProvider.RunView.bind(provider);
-            rvProvider.RunView = async (params: { EntityName: string; ExtraFilter?: string }) => {
+            type MockRunViewFn = (params: { EntityName: string; ExtraFilter?: string }) => Promise<object>;
+            const origRunView = (Reflect.get(provider, 'RunView') as MockRunViewFn).bind(provider);
+            Reflect.set(provider, 'RunView', async (params: { EntityName: string; ExtraFilter?: string }) => {
                 if (params.EntityName === 'MJ: Content Items') {
                     return { Success: true, Results: [{ ID: 'CI-TOMBSTONE-1' }] };
                 }
                 return origRunView(params);
-            };
+            });
 
             const origGetEntityObject = provider.GetEntityObject.bind(provider);
             provider.GetEntityObject = (async (entityName: string, contextUser?: UserInfo) => {
@@ -767,7 +772,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                             return true;
                         },
                     };
-                    return ciEntity as unknown as BaseEntity;
+                    return stubObject<BaseEntity>(ciEntity);
                 }
                 return origGetEntityObject(entityName, contextUser);
             }) as IMetadataProvider['GetEntityObject'];
@@ -812,25 +817,25 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 if (name === 'MJ: Content Items') return { ID: 'CONTENT-ITEMS-ID', Name: 'MJ: Content Items' } as never;
                 return origEntityByName(name);
             }) as IMetadataProvider['EntityByName'];
-            const rvProvider = provider as unknown as { RunView: (params: { EntityName: string }) => Promise<unknown> };
-            const origRunView = rvProvider.RunView.bind(provider);
-            rvProvider.RunView = async (params: { EntityName: string }) => {
+            type MockRunViewFn = (params: { EntityName: string }) => Promise<object>;
+            const origRunView = (Reflect.get(provider, 'RunView') as MockRunViewFn).bind(provider);
+            Reflect.set(provider, 'RunView', async (params: { EntityName: string }) => {
                 if (params.EntityName === 'MJ: Content Items') {
                     return { Success: true, Results: lateItemAttached ? [{ ID: 'CI-LATE' }] : [] };
                 }
                 return origRunView(params);
-            };
+            });
             const origGetEntityObject = provider.GetEntityObject.bind(provider);
             provider.GetEntityObject = (async (entityName: string, contextUser?: UserInfo) => {
                 if (entityName === 'MJ: Content Items') {
-                    return {
+                    return stubObject<BaseEntity>({
                         FileID: FILE_ID as string | null,
                         async InnerLoad() { return true; },
                         async Save() { detached.push('CI-LATE'); lateItemAttached = false; return true; },
-                    } as unknown as BaseEntity;
+                    });
                 }
                 if (entityName === 'MJ: Files') {
-                    return {
+                    return stubObject<BaseEntity>({
                         IsSaved: true,
                         ProviderKey: null,
                         async Load() { return true; },
@@ -842,7 +847,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                             }
                             return !lateItemAttached;
                         },
-                    } as unknown as BaseEntity;
+                    });
                 }
                 return origGetEntityObject(entityName, contextUser);
             }) as IMetadataProvider['GetEntityObject'];

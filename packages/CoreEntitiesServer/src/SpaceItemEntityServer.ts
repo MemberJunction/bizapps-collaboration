@@ -48,10 +48,12 @@ export function decideItemKind(change: { isNew: boolean; spaceChanged: boolean; 
     return 'Update';
 }
 
+type SpaceItemFieldValue = string | number | boolean | Date | object | null | undefined;
+
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity {
     /** What this save changes, read once. */
-    private readChange(): { kind: ItemChangeKind; oldValues: Record<string, unknown>; changed: boolean } {
+    private readChange(): { kind: ItemChangeKind; oldValues: Record<string, SpaceItemFieldValue>; changed: boolean } {
         const isNew = !this.IsSaved;
         return {
             kind: decideItemKind({
@@ -66,11 +68,11 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     }
 
     /** What `Save` read, handed to validation so a save has one reading. Validation called on its own reads for itself. */
-    private readingForSave: { kind: ItemChangeKind; oldValues: Record<string, unknown>; changed: boolean } | null = null;
+    private readingForSave: { kind: ItemChangeKind; oldValues: Record<string, SpaceItemFieldValue>; changed: boolean } | null = null;
 
     /** What each changed field held before this save, by field name. System columns are left out. */
-    private dirtyOldValues(): Record<string, unknown> {
-        const old: Record<string, unknown> = {};
+    private dirtyOldValues(): Record<string, SpaceItemFieldValue> {
+        const old: Record<string, SpaceItemFieldValue> = {};
         for (const field of this.Fields) {
             if (field.Dirty && !field.Name.startsWith('__mj_')) old[field.Name] = field.OldValue;
         }
@@ -610,7 +612,7 @@ function removeSpaceFileFromContentPipeline(provider: IMetadataProvider, user: U
             RunNow: true,
             ContextUser: user,
             Provider: provider,
-        }).catch((error: unknown) => {
+        }).catch((error: Error | object | string | number | boolean | null | undefined) => {
             LogError(`Space item content pipeline cleanup: ${error instanceof Error ? error.message : String(error)}`);
         });
     } catch (error) {

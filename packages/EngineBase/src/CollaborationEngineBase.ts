@@ -326,9 +326,9 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             return this.refuseSettings(new MissingAppSettingsError());
         }
 
-        let parsed: unknown;
+        let parsed: object | string | number | boolean | null = null;
         try {
-            parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            parsed = typeof raw === 'string' ? (JSON.parse(raw) as object) : raw;
         } catch (e) {
             const message = `Failed to parse CollaborationSettings JSON: ${e instanceof Error ? e.message : String(e)}`;
             LogError(message);
