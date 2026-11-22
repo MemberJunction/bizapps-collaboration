@@ -170,6 +170,8 @@ CREATE OR REPLACE FUNCTION __mj_BizAppsCollaboration."spCreateSpaceType"(
 )
 RETURNS SETOF __mj_BizAppsCollaboration."vwSpaceTypes" AS
 $$
+DECLARE
+    v_id UUID;
 BEGIN
 IF p_ID IS NOT NULL THEN
         -- User provided a value, use it
@@ -226,7 +228,8 @@ IF p_ID IS NOT NULL THEN
                 CASE WHEN p_SpaceExtensionEntity_Clear = TRUE THEN NULL ELSE COALESCE(p_SpaceExtensionEntity, NULL) END,
                 CASE WHEN p_Configuration_Clear = TRUE THEN NULL ELSE COALESCE(p_Configuration, NULL) END,
                 CASE WHEN p_TargetApplicationID_Clear = TRUE THEN NULL ELSE COALESCE(p_TargetApplicationID, NULL) END
-            );
+            )
+        RETURNING "ID" INTO v_id;
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
         INSERT INTO __mj_BizAppsCollaboration."SpaceType"
@@ -280,10 +283,11 @@ IF p_ID IS NOT NULL THEN
                 CASE WHEN p_SpaceExtensionEntity_Clear = TRUE THEN NULL ELSE COALESCE(p_SpaceExtensionEntity, NULL) END,
                 CASE WHEN p_Configuration_Clear = TRUE THEN NULL ELSE COALESCE(p_Configuration, NULL) END,
                 CASE WHEN p_TargetApplicationID_Clear = TRUE THEN NULL ELSE COALESCE(p_TargetApplicationID, NULL) END
-            );
+            )
+        RETURNING "ID" INTO v_id;
     END IF;
     -- return the new record from the base view, which might have some calculated fields
-    RETURN QUERY SELECT * FROM __mj_BizAppsCollaboration."vwSpaceTypes" WHERE "ID" = p_ID;
+    RETURN QUERY SELECT * FROM __mj_BizAppsCollaboration."vwSpaceTypes" WHERE "ID" = v_id;
 END;
 $$ LANGUAGE plpgsql;
 
