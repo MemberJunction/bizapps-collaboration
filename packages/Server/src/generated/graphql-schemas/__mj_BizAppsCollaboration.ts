@@ -3230,12 +3230,6 @@ export class mjBizAppsCollaborationSpace_ {
     @Field({nullable: true}) 
     Configuration?: string;
         
-    @Field({nullable: true, description: "Optional target MJ Application ID that invited users land in for spaces of this type. NULL defaults to the Collaboration application."}) 
-    TargetApplicationID?: string;
-        
-    @Field({nullable: true}) 
-    TargetApplication?: string;
-        
     @Field({nullable: true, description: "The status the space is in, one of its type's (SpaceTypeStatus). NULL until the server stamps it: then the type's default while ClosedAt is null, and the type's first terminal status once ClosedAt is set, as fnCollaborationSpaceStatuses derives it."}) 
     @MaxLength(36)
     StatusID?: string;
