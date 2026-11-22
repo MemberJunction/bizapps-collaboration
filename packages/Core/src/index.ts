@@ -192,6 +192,7 @@ export {
     isSourceReceiptRankingMode,
     normalizeReceiptId,
     normalizeReceiptUuid,
+    stripCitationMarkdown,
     stripRecordKeyPrefix,
 } from './source-receipts.js';
 export type {

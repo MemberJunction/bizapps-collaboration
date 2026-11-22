@@ -13,6 +13,13 @@ import { buildConversationEntries, chooseActiveConversation } from './logic/conv
 import { rulesForSpace, rulesFromServerDocument, sameRules } from './logic/space-rules';
 import { recordLinkKeyPairs } from './logic/record-link.js';
 import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
+import {
+    buildClientReceiptReachContext,
+    filterAndMapSourceReceipts,
+    mergeAnswerSourceReceipts,
+    parseTurnSourceReceiptsPayload,
+    resolveSourceReceiptOpenTarget,
+} from './logic/source-receipts.js';
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
@@ -98,6 +105,7 @@ import {
     type BeforeInviteEvent,
     type BeforePostMessageEvent,
     type BeforeStartChatEvent,
+    type SpaceChatAnswerSourceReceipt,
     type SpaceChatCitationModel,
     type SpaceOverviewCardDescriptor,
     type SpaceTabDescriptor,
@@ -1141,8 +1149,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [RetrievalScope]="chatRetrievalScope"
                                                     [AllowEverythingScope]="isOneToOneActiveConversation"
                                                     [Citations]="chatCitations"
+                                                    [SourceReceipts]="chatSourceReceipts"
                                                     (RetrievalScopeChanged)="onChatRetrievalScopeChanged($event)"
                                                     (CitationClicked)="onChatCitationClicked($event)"
+                                                    (SourceReceiptOpenRequested)="onChatSourceReceiptOpen($event)"
+                                                    (AfterAgentTurnCompleted)="onChatAfterAgentTurnCompleted()"
                                                     [AutoNameConversation]="false"
                                                     [ComposerDraft]="composerDraft"
                                                     (ComposerDraftConsumed)="composerDraft = null"
@@ -1564,6 +1575,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public loadErrorMessage = '';
     public isSubmittingAsk = false;
     public chatCitations: SpaceChatCitationModel[] = [];
+    public chatSourceReceipts: SpaceChatAnswerSourceReceipt[] = [];
+    private readonly receiptReads = new LatestOnly();
 
     public async updateCanConfigureCurrentSpace(): Promise<void> {
         // The grants can change while the page is open (a host edits them): what the page offers follows them on the next selection
@@ -3242,6 +3255,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private resetForSelection(spaceId: string): void {
         this.resetStage4(spaceId);
         this.activeConversationId = '';
+        this.chatCitations = [];
+        this.chatSourceReceipts = [];
         this.overviewRoomMessages = [];
         this.spaceConversations = [];
         this.bandChoice = null;
@@ -3672,6 +3687,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 { id: 'shared', name: 'Shared', iconClass: 'fa-solid fa-eye', count: shared.length },
                 ...(this.canSeeTeamSide ? [{ id: 'team', name: 'Team only', iconClass: 'fa-solid fa-lock', count: team.length }] : []),
             ];
+            if (this.pendingPinTarget?.startsWith('item:')) {
+                const target = this.pendingPinTarget;
+                this.pendingPinTarget = null;
+                this.showPinTarget('item', target.slice('item:'.length));
+            }
         } catch (err) {
             LogError('Error loading space items: ' + (err instanceof Error ? err.message : String(err)));
             if (!isCurrent()) return;
@@ -3758,8 +3778,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             if (this.activeConversationId) {
                 await this.loadOverviewMessages(this.activeConversationId, isCurrent);
+                void this.loadConversationSourceReceipts(spaceId, this.activeConversationId, isCurrent);
             } else {
                 this.overviewRoomMessages = [];
+                this.chatSourceReceipts = [];
             }
         } catch (err) {
             LogError('Error loading space conversations: ' + (err instanceof Error ? err.message : String(err)));
@@ -4286,6 +4308,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     // is never shown over the previous conversation's messages
                     void this.loadOverviewMessages(params['conv'], this.currentSelection());
                     void this.loadSpaceChatHostRules(this.activeSpaceId, params['conv']);
+                    void this.loadConversationSourceReceipts(this.activeSpaceId, params['conv'], this.currentSelection());
                 }
             }
         }
@@ -4539,6 +4562,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onSpaceConversationSelected(convId: string): void {
         this.activeView = 'space';
         this.activeConversationId = convId;
+        this.chatCitations = [];
+        this.chatSourceReceipts = [];
         const item = this.spaceConversations.find(c => UUIDsEqual(c.id, convId));
         // A conversation the list doesn't hold says nothing of its band: the band stays what it was
         if (item) this.chatAudienceBand = item.band === 'Team' ? 'Team' : 'Shared';
@@ -4546,6 +4571,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.UpdateQueryParams({ view: 'space', tab: this.activeTab.toLowerCase(), conv: convId });
         void this.loadOverviewMessages(convId, this.currentSelection());
         void this.loadSpaceChatHostRules(this.activeSpaceId, convId);
+        void this.loadConversationSourceReceipts(this.activeSpaceId, convId, this.currentSelection());
         this.syncStateWithAgent();
         this.RefreshView();
     }
@@ -5167,9 +5193,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (!isCurrent()) return;
             if (res.ConversationID) {
                 this.activeConversationId = res.ConversationID;
+                this.chatCitations = [];
+                this.chatSourceReceipts = [];
                 this.setTab('Chat');
                 this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
                 await this.loadSpaceChatHostRules(spaceId, res.ConversationID);
+                void this.loadConversationSourceReceipts(spaceId, res.ConversationID, isCurrent);
                 if (!isCurrent()) return;
             }
             this.syncStateWithAgent();
@@ -5245,11 +5274,65 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
+    private receiptReachContext(spaceId: string) {
+        return buildClientReceiptReachContext({
+            chatAudience: this.chatAudienceBand,
+            activeSpaceId: spaceId,
+            canSeeTeamOnActiveSpace: this.canSeeTeamSide,
+            reachableSpaces: this.rawSpaces.map((s) => ({
+                id: s.ID,
+                canSeeTeam: UUIDsEqual(s.ID, spaceId) ? this.canSeeTeamSide : this.chatAudienceBand === 'Team',
+            })),
+        });
+    }
+
+    private async loadConversationSourceReceipts(spaceId: string, convId: string, isCurrent: () => boolean): Promise<void> {
+        if (!isValidUuid(spaceId) || !isValidUuid(convId) || !this.currentUser) {
+            this.chatSourceReceipts = [];
+            return;
+        }
+        const isLatest = this.receiptReads.Begin();
+        try {
+            await guardedLoad(
+                () => isLatest() && isCurrent() && UUIDsEqual(this.activeConversationId, convId),
+                () => CollaborationEngineBase.Instance.LoadSpaceAgentSourceReceiptsForConversation(
+                    convId,
+                    this.currentUser!,
+                    this.ProviderToUse,
+                ),
+                (loadedRows) => {
+                    this.chatSourceReceipts = filterAndMapSourceReceipts(loadedRows, this.receiptReachContext(spaceId));
+                    this.RefreshView();
+                },
+            );
+        } catch (err) {
+            LogError('Failed to load conversation source receipts: ' + (err instanceof Error ? err.message : String(err)));
+            if (isLatest() && isCurrent() && UUIDsEqual(this.activeConversationId, convId)) {
+                this.chatSourceReceipts = [];
+                this.RefreshView();
+            }
+        }
+    }
+
+    public onChatAfterAgentTurnCompleted(): void {
+        if (this.activeSpaceId && this.activeConversationId) {
+            void this.loadConversationSourceReceipts(this.activeSpaceId, this.activeConversationId, this.currentSelection());
+        }
+    }
+
     public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
             const result = spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request, this.chatRetrievalScope)));
             this.chatCitations = result.Citations ?? [];
+            if (result.SourceReceiptsJSON && result.ReplyDetailIds?.[0]) {
+                const parsed = parseTurnSourceReceiptsPayload(
+                    result.SourceReceiptsJSON,
+                    result.ReplyDetailIds[0],
+                    this.receiptReachContext(this.activeSpaceId),
+                );
+                this.chatSourceReceipts = mergeAnswerSourceReceipts(this.chatSourceReceipts, parsed);
+            }
             this.RefreshView();
             return result;
         } catch (error) {
@@ -5267,6 +5350,35 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.UpdateQueryParams({ tab: 'library', item: citation.SpaceItemID });
         void this.showPreviewFor(citation.SpaceItemID);
         this.RefreshView();
+    }
+
+    public onChatSourceReceiptOpen(receipt: SpaceChatAnswerSourceReceipt): void {
+        const target = resolveSourceReceiptOpenTarget(
+            receipt,
+            this.activeSpaceId,
+            this.libraryRows,
+            this.hasTab('Library'),
+        );
+        switch (target.kind) {
+            case 'library-preview':
+                this.selectedItemId = target.spaceItemId;
+                this.isDrawerOpen = true;
+                this.setTab('Library');
+                this.UpdateQueryParams({ tab: 'library', item: target.spaceItemId });
+                void this.showPreviewFor(target.spaceItemId);
+                this.RefreshView();
+                break;
+            case 'space-item':
+                this.pendingPinTarget = `item:${target.spaceItemId}`;
+                this.openSpaceOnTab(target.spaceId, 'Library');
+                break;
+            case 'entity-record':
+                SharedService.Instance.OpenEntityRecord(target.entityName, CompositeKey.FromID(target.recordId));
+                break;
+            case 'unavailable':
+                SharedService.Instance.CreateSimpleNotification(target.message, 'warning', 4000);
+                break;
+        }
     }
 
     public onTaskSelected(task: TaskItemModel): void {

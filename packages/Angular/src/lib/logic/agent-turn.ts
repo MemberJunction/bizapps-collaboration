@@ -24,6 +24,7 @@ export interface SpaceTurnResult {
     ReplyDetailIds?: string[];
     AgentRunId?: string;
     Citations?: SpaceTurnCitation[];
+    SourceReceiptsJSON?: string;
 }
 
 /**
@@ -66,6 +67,7 @@ export function spaceTurnResult(payload: ExecuteSpaceChatTurnGraphQLPayload): Sp
         ReplyDetailIds: payload.ReplyDetailIDs,
         AgentRunId: payload.AgentRunID,
         ...(citations ? { Citations: citations } : {}),
+        ...(payload.SourceReceiptsJSON ? { SourceReceiptsJSON: payload.SourceReceiptsJSON } : {}),
     };
 }
 

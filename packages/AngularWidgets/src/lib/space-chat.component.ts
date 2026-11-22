@@ -37,7 +37,13 @@ import {
   MJMenuTriggerDirective,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import type { SpaceBand, SpaceMemberModel } from './types';
+import type { SpaceBand, SpaceChatAnswerSourceReceipt, SpaceMemberModel } from './types';
+import {
+  CollabAnswerSourceReceiptsComponent,
+  canDisplaySourceReceiptInAudience,
+  sortAnswerSourceReceipts,
+  stripCitationMarkdown,
+} from './answer-source-receipts.component';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -344,6 +350,7 @@ export class CollabChatScopeBarComponent {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    CollabAnswerSourceReceiptsComponent,
     CollabAvatarComponent,
     CollabBandChipComponent,
     CollabChatScopeBarComponent,
@@ -636,6 +643,14 @@ export class CollabChatScopeBarComponent {
                     </button>
                   }
 
+                  @if (isAiMessage(message) && getReceiptsForMessage(message.ID).length > 0) {
+                    <mjc-answer-source-receipts
+                      [MessageId]="message.ID"
+                      [AudienceBand]="AudienceBand"
+                      [Receipts]="getReceiptsForMessage(message.ID)"
+                      (ReceiptOpenRequested)="onSourceReceiptOpen($event)" />
+                  }
+
                   @if (!IsReadOnly && message.ID && !isThreadExpanded(message.ID)) {
                     <button
                       type="button"
@@ -690,6 +705,13 @@ export class CollabChatScopeBarComponent {
                             </div>
                           </div>
                           <div class="thread-reply-body">@for (part of getMessageParts(reply); track $index) {@if (part.record; as record) {<button type="button" class="thread-record-link" data-testid="thread-record-link" [title]="'Open ' + (part.text || record.entityName)" [attr.aria-label]="'Open ' + (part.text || record.entityName)" (click)="RecordLinkOpenRequested.emit(record)"><i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>{{ part.text }}</button>} @else {{{ part.text }}}}</div>
+                          @if (isAiMessage(reply) && getReceiptsForMessage(reply.ID).length > 0) {
+                            <mjc-answer-source-receipts
+                              [MessageId]="reply.ID"
+                              [AudienceBand]="AudienceBand"
+                              [Receipts]="getReceiptsForMessage(reply.ID)"
+                              (ReceiptOpenRequested)="onSourceReceiptOpen($event)" />
+                          }
                         </div>
                       </div>
                     }
@@ -1878,12 +1900,15 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   @Input() public RetrievalScope: 'ThisSpace' | 'Subtree' | 'Everything' = 'Subtree';
   @Input() public AllowEverythingScope = false;
   @Input() public Citations: readonly SpaceChatCitationModel[] = [];
+  @Input() public SourceReceipts: readonly SpaceChatAnswerSourceReceipt[] = [];
 
   @Output() public NewConversationRequested = new EventEmitter<void>();
   @Output() public ComposerDraftConsumed = new EventEmitter<void>();
   @Output() public PendingMessageConsumed = new EventEmitter<void>();
   @Output() public RetrievalScopeChanged = new EventEmitter<'ThisSpace' | 'Subtree' | 'Everything'>();
   @Output() public CitationClicked = new EventEmitter<SpaceChatCitationModel>();
+  @Output() public SourceReceiptOpenRequested = new EventEmitter<SpaceChatAnswerSourceReceipt>();
+  @Output() public AfterAgentTurnCompleted = new EventEmitter<void>();
 
   public onNewConversation(): void {
     this.NewConversationRequested.emit();
@@ -1902,6 +1927,25 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
 
   public onCitationClick(citation: SpaceChatCitationModel): void {
     this.CitationClicked.emit(citation);
+  }
+
+  public onSourceReceiptOpen(receipt: SpaceChatAnswerSourceReceipt): void {
+    this.SourceReceiptOpenRequested.emit(receipt);
+  }
+
+  /**
+   * Returns all persisted in-reach source receipts for a specific assistant message ID,
+   * filtered fail-closed against `AudienceBand` and ordered deterministically.
+   */
+  public getReceiptsForMessage(messageId: string | null | undefined): SpaceChatAnswerSourceReceipt[] {
+    const cleanId = (messageId ?? '').trim().toLowerCase();
+    if (!cleanId || this.SourceReceipts.length === 0) {
+      return [];
+    }
+    const matching = this.SourceReceipts.filter(
+      (r) => r.conversationDetailId.trim().toLowerCase() === cleanId && canDisplaySourceReceiptInAudience(r, this.AudienceBand),
+    );
+    return sortAnswerSourceReceipts(matching);
   }
 
   public onComposerDraftConsumed(): void {
@@ -2438,7 +2482,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   }
 
   public getMessageExcerpt(message: ChatThreadMessageLike | null | undefined, maxLen = 80): string {
-    const raw = this.getFormattedMessageBody(message).replace(/\s+/g, ' ').trim();
+    const raw = stripCitationMarkdown(this.getFormattedMessageBody(message));
     if (raw.length <= maxLen) return raw;
     return raw.slice(0, Math.max(0, maxLen - 1)).trimEnd() + '…';
   }
@@ -2574,6 +2618,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
 
   public onAfterAgentTurn(_args: AfterAgentTurnEventArgs): void {
     this.onAgentTurnCompleted();
+    this.AfterAgentTurnCompleted.emit();
   }
 
   public onAgentTurnStarted(info: { agentName?: string | null; route?: AgentTurnRoute | null; statusText?: string | null }): void {
@@ -2739,6 +2784,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       const hasInProgress = this.allMessages.some((m) => (m.Status ?? '').trim().toLowerCase() === 'in-progress');
       if (!hasInProgress) {
         this.onAgentTurnCompleted();
+        this.AfterAgentTurnCompleted.emit();
         return;
       }
     }

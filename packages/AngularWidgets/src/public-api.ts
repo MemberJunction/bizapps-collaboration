@@ -70,6 +70,12 @@ export {
     type ChatMessagePart,
     type PendingAgentPromptState,
 } from './lib/space-chat.component';
+export {
+    CollabAnswerSourceReceiptsComponent,
+    canDisplaySourceReceiptInAudience,
+    sortAnswerSourceReceipts,
+    stripCitationMarkdown,
+} from './lib/answer-source-receipts.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';
 export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';

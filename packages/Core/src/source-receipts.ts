@@ -65,6 +65,28 @@ export interface ExtractAndValidateSourceReceiptsResult {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SOURCE_MARKER_REGEX = /\[(?:source|cite)\s*:\s*([^\]\s]+)\s*\]/gi;
+const RAW_CITATION_MARKER_REGEX = /\[(?:source|cite)\s*:[^\]]*\]/gi;
+const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\((?:[^)]+)\)/g;
+const MARKDOWN_HEADING_REGEX = /^#{1,6}\s+/gm;
+const MARKDOWN_FENCE_REGEX = /```[\s\S]*?```/g;
+
+/**
+ * Strips raw Markdown syntax and `[source:...]` / `[cite:...]` markers from source titles and excerpts
+ * so rendered citation chips and plain-text views never leak raw Markdown tokens.
+ */
+export function stripCitationMarkdown(raw: string | null | undefined): string {
+    if (typeof raw !== 'string') return '';
+    return raw
+        .replace(RAW_CITATION_MARKER_REGEX, '')
+        .replace(MARKDOWN_FENCE_REGEX, '')
+        .replace(MARKDOWN_LINK_REGEX, '$1')
+        .replace(MARKDOWN_HEADING_REGEX, '')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/__([^_]+)__/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
 
 export function normalizeReceiptUuid(raw: string | null | undefined): string | null {
     if (typeof raw !== 'string') return null;
