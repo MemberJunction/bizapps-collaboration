@@ -143,6 +143,171 @@ GO
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Deterministic display sequence of the receipt on the assistant message.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpaceAgentSourceReceipt', @level2type = N'COLUMN', @level2name = N'Sequence';
 GO
 
+-- 4. Authoritative multi-level KnowledgeSource effective grant resolver for RLS parity
+CREATE OR ALTER FUNCTION [${flyway:defaultSchema}].[fnEffectiveKnowledgeSourceGrants]()
+RETURNS @EffectiveGrants TABLE (
+    [SpaceID] UNIQUEIDENTIFIER NOT NULL,
+    [ContentSourceID] UNIQUEIDENTIFIER NOT NULL,
+    [Band] NVARCHAR(20) NOT NULL
+)
+AS
+BEGIN
+    ;WITH SpaceAncestors AS (
+        SELECT
+            s.[ID] AS [TargetSpaceID],
+            s.[ID] AS [AncestorSpaceID],
+            s.[ParentID],
+            s.[SpaceTypeID] AS [TargetSpaceTypeID],
+            s.[Configuration] AS [AncestorConfiguration],
+            0 AS [Depth],
+            1000 AS [LevelRank],
+            CAST(CONVERT(varchar(36), s.[ID]) AS varchar(max)) AS [Path]
+        FROM [${flyway:defaultSchema}].[Space] AS s
+
+        UNION ALL
+
+        SELECT
+            sa.[TargetSpaceID],
+            p.[ID] AS [AncestorSpaceID],
+            p.[ParentID],
+            sa.[TargetSpaceTypeID],
+            p.[Configuration] AS [AncestorConfiguration],
+            sa.[Depth] + 1 AS [Depth],
+            1000 - (sa.[Depth] + 1) AS [LevelRank],
+            sa.[Path] + '/' + CONVERT(varchar(36), p.[ID]) AS [Path]
+        FROM SpaceAncestors AS sa
+        INNER JOIN [${flyway:defaultSchema}].[Space] AS p ON p.[ID] = sa.[ParentID]
+        WHERE sa.[Depth] < 32
+          AND sa.[Path] NOT LIKE '%' + CONVERT(varchar(36), p.[ID]) + '%'
+          AND ISNULL(p.[SpaceTypeID], '00000000-0000-0000-0000-000000000000') = ISNULL(sa.[TargetSpaceTypeID], '00000000-0000-0000-0000-000000000000')
+    ),
+    TypeAllowsOverride AS (
+        SELECT
+            st.[ID] AS [SpaceTypeID],
+            CASE
+                WHEN st.[Configuration] IS NOT NULL
+                 AND ISJSON(st.[Configuration]) = 1
+                 AND JSON_QUERY(st.[Configuration], '$.SpaceOverridable') IS NOT NULL
+                 AND EXISTS (
+                     SELECT 1
+                     FROM OPENJSON(st.[Configuration], '$.SpaceOverridable') AS ov
+                     WHERE ov.[value] IN (N'Grants.KnowledgeSource', N'Grants')
+                 )
+                THEN 1 ELSE 0
+            END AS [MayOverrideKnowledgeSource],
+            CASE
+                WHEN st.[Configuration] IS NOT NULL
+                 AND ISJSON(st.[Configuration]) = 1
+                 AND JSON_VALUE(st.[Configuration], '$.Grants.KnowledgeSource.ListMode') = N'Replace'
+                THEN 1 ELSE 0
+            END AS [TypeReplacesKnowledgeSource]
+        FROM [${flyway:defaultSchema}].[SpaceType] AS st
+    ),
+    ReplaceCutoffs AS (
+        SELECT
+            s.[ID] AS [TargetSpaceID],
+            CASE
+                WHEN COALESCE(MAX(spaceRep.[LevelRank]), 0) > CASE WHEN COALESCE(MAX(tao.[TypeReplacesKnowledgeSource]), 0) = 1 THEN 1 ELSE 0 END
+                THEN COALESCE(MAX(spaceRep.[LevelRank]), 0)
+                ELSE CASE WHEN COALESCE(MAX(tao.[TypeReplacesKnowledgeSource]), 0) = 1 THEN 1 ELSE 0 END
+            END AS [CutoffRank]
+        FROM [${flyway:defaultSchema}].[Space] AS s
+        LEFT JOIN TypeAllowsOverride AS tao ON tao.[SpaceTypeID] = s.[SpaceTypeID]
+        LEFT JOIN SpaceAncestors AS spaceRep
+            ON spaceRep.[TargetSpaceID] = s.[ID]
+           AND COALESCE(tao.[MayOverrideKnowledgeSource], 0) = 1
+           AND spaceRep.[AncestorConfiguration] IS NOT NULL
+           AND ISJSON(spaceRep.[AncestorConfiguration]) = 1
+           AND JSON_VALUE(spaceRep.[AncestorConfiguration], '$.Grants.KnowledgeSource.ListMode') = N'Replace'
+        GROUP BY s.[ID]
+    ),
+    CandidateGrants AS (
+        SELECT
+            sa.[TargetSpaceID] AS [SpaceID],
+            TRY_CAST(SUBSTRING(sg.[TargetRecordID], CASE WHEN sg.[TargetRecordID] LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) AS [ContentSourceID],
+            sg.[Mode],
+            sg.[Band],
+            sg.[Sequence],
+            sa.[LevelRank]
+        FROM SpaceAncestors AS sa
+        INNER JOIN [${flyway:defaultSchema}].[SpaceGrant] AS sg ON sg.[SpaceID] = sa.[AncestorSpaceID]
+        WHERE sg.[Kind] = N'KnowledgeSource'
+
+        UNION ALL
+
+        SELECT
+            s.[ID] AS [SpaceID],
+            TRY_CAST(SUBSTRING(sg.[TargetRecordID], CASE WHEN sg.[TargetRecordID] LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) AS [ContentSourceID],
+            sg.[Mode],
+            sg.[Band],
+            sg.[Sequence],
+            1 AS [LevelRank]
+        FROM [${flyway:defaultSchema}].[Space] AS s
+        INNER JOIN [${flyway:defaultSchema}].[SpaceGrant] AS sg
+            ON sg.[SpaceID] IS NULL AND sg.[SpaceTypeID] = s.[SpaceTypeID]
+        WHERE sg.[Kind] = N'KnowledgeSource'
+
+        UNION ALL
+
+        SELECT
+            s.[ID] AS [SpaceID],
+            TRY_CAST(SUBSTRING(sg.[TargetRecordID], CASE WHEN sg.[TargetRecordID] LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) AS [ContentSourceID],
+            sg.[Mode],
+            sg.[Band],
+            sg.[Sequence],
+            0 AS [LevelRank]
+        FROM [${flyway:defaultSchema}].[Space] AS s
+        INNER JOIN [${flyway:defaultSchema}].[SpaceGrant] AS sg
+            ON sg.[SpaceID] IS NULL AND sg.[SpaceTypeID] IS NULL
+        WHERE sg.[Kind] = N'KnowledgeSource'
+    ),
+    RankedGrants AS (
+        SELECT
+            cg.[SpaceID],
+            cg.[ContentSourceID],
+            cg.[Mode],
+            cg.[Band],
+            ROW_NUMBER() OVER (
+                PARTITION BY cg.[SpaceID], cg.[ContentSourceID]
+                ORDER BY cg.[LevelRank] DESC,
+                         CASE WHEN cg.[Mode] = N'Remove' THEN 1 ELSE 0 END DESC,
+                         cg.[Sequence] DESC
+            ) AS [rn]
+        FROM CandidateGrants AS cg
+        INNER JOIN ReplaceCutoffs AS rc ON rc.[TargetSpaceID] = cg.[SpaceID]
+        WHERE cg.[ContentSourceID] IS NOT NULL
+          AND cg.[LevelRank] >= rc.[CutoffRank]
+    )
+    INSERT INTO @EffectiveGrants ([SpaceID], [ContentSourceID], [Band])
+    SELECT [SpaceID], [ContentSourceID], [Band]
+    FROM RankedGrants
+    WHERE [rn] = 1
+      AND [Mode] = N'Extend'
+      AND [Band] IN (N'Shared', N'Team')
+    OPTION (MAXRECURSION 32);
+
+    RETURN;
+END;
+GO
+
+GRANT SELECT ON [${flyway:defaultSchema}].[fnEffectiveKnowledgeSourceGrants] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.extended_properties
+    WHERE major_id = OBJECT_ID(N'[${flyway:defaultSchema}].[fnEffectiveKnowledgeSourceGrants]')
+      AND name = N'MS_Description'
+)
+BEGIN
+    EXEC sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Resolves effective KnowledgeSource grants per space across App, SpaceType, and unbroken same-type ancestor chain with ListMode=Replace cutoffs and Extend/Remove overrides.',
+        @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+        @level1type = N'FUNCTION', @level1name = N'fnEffectiveKnowledgeSourceGrants';
+END;
+GO
+
 
 
 
