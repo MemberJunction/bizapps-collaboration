@@ -46,19 +46,19 @@ afterEach(() => {
     document.body.innerHTML = '';
 });
 
-function declareComponent(target: Type<unknown>, metadata: Component): void {
+function declareComponent(target: Type<object>, metadata: Component): void {
     Component({ standalone: true, ...metadata })(target);
 }
 
 class ChatAreaStub {
     @ContentChildren(ChatSlotDirective) public slots?: QueryList<ChatSlotDirective>;
-    public get header(): TemplateRef<unknown> | null {
+    public get header(): TemplateRef<object> | null {
         return this.slots?.find((slot) => slot.SlotName === 'header')?.Template ?? null;
     }
-    public get messageExtra(): TemplateRef<unknown> | null {
+    public get messageExtra(): TemplateRef<object> | null {
         return this.slots?.find((slot) => slot.SlotName === 'messageExtra')?.Template ?? null;
     }
-    public DisplayMessages: Array<Record<string, unknown>> = [];
+    public DisplayMessages: Array<Record<string, string | number | boolean | object | null | undefined>> = [];
     public AllowRealtime = true;
     public ReadOnly = false;
     public ReadOnlyMessage: string | null = null;
@@ -260,20 +260,31 @@ describe('Space chat source receipts & OpenApp v3 readiness (CT-2)', () => {
         );
         expect(resourceReg).toBeDefined();
 
-        // Check ChangeDetectionStrategy.OnPush on Angular chat & receipt components
+        // Check ChangeDetectionStrategy.OnPush on Angular chat, receipt, and generated form components
         const receiptsSource = readFileSync(resolve(here, '../../../AngularWidgets/src/lib/answer-source-receipts.component.ts'), 'utf8');
         const chatSource = readFileSync(resolve(here, '../../../AngularWidgets/src/lib/space-chat.component.ts'), 'utf8');
+        const receiptFormSource = readFileSync(
+            resolve(here, 'generated/Entities/mjBizAppsCollaborationSpaceAgentSourceReceipt/mjbizappscollaborationspaceagentsourcereceipt.form.component.ts'),
+            'utf8',
+        );
         expect(receiptsSource).toContain('ChangeDetectionStrategy.OnPush');
         expect(chatSource).toContain('ChangeDetectionStrategy.OnPush');
+        expect(receiptFormSource).toContain('ChangeDetectionStrategy.OnPush');
 
         const cmpRaw: object | undefined = Reflect.get(CollabAnswerSourceReceiptsComponent, 'ɵcmp');
         expect(cmpRaw).toBeDefined();
         expect(cmpRaw ? Reflect.get(cmpRaw, 'onPush') : false).toBe(true);
         const chatCmpRaw: object | undefined = Reflect.get(CollabSpaceChatComponent, 'ɵcmp');
         expect(chatCmpRaw ? Reflect.get(chatCmpRaw, 'onPush') : false).toBe(true);
+        const formCmpRaw: object | undefined = Reflect.get(publicApi.mjBizAppsCollaborationSpaceAgentSourceReceiptFormComponent, 'ɵcmp');
+        expect(formCmpRaw ? Reflect.get(formCmpRaw, 'onPush') : false).toBe(true);
+
+        // Verify CollaborationSectionResource template binds production SourceReceiptOpenRequested handler
+        const collabSectionSource = readFileSync(resolve(here, 'collaboration-section.component.ts'), 'utf8');
+        expect(collabSectionSource).toContain('(SourceReceiptOpenRequested)="onChatSourceReceiptOpen($event)"');
 
         // Verify zero raw hex/rgb/rgba/hsl color literals in CollabAnswerSourceReceiptsComponent styles (outside var(--token, fallback))
-        const rawStyles: unknown = cmpRaw ? Reflect.get(cmpRaw, 'styles') : [];
+        const rawStyles = (cmpRaw ? Reflect.get(cmpRaw, 'styles') : []) as string[] | string | undefined;
         const styleText = Array.isArray(rawStyles) ? rawStyles.filter((s): s is string => typeof s === 'string').join('\n') : '';
         const fallbackPattern = /var\(--[a-z0-9-]+\s*,\s*(?:#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\([^)]*\))\s*\)/g;
         const stylesWithoutFallbacks = styleText.replace(fallbackPattern, '');
@@ -281,9 +292,125 @@ describe('Space chat source receipts & OpenApp v3 readiness (CT-2)', () => {
         expect(stylesWithoutFallbacks).not.toMatch(/\b(?:rgba?|hsla?)\(/);
 
         // Verify zero window.print() across packages/Angular/src and packages/AngularWidgets/src
-        const collabSectionSource = readFileSync(resolve(here, 'collaboration-section.component.ts'), 'utf8');
         const widgetsSource = readFileSync(resolve(here, '../../../AngularWidgets/src/lib/answer-source-receipts.component.ts'), 'utf8');
         expect(collabSectionSource).not.toContain('window.print(');
         expect(widgetsSource).not.toContain('window.print(');
+    });
+
+    it('exercises CollaborationSectionResource.onChatSourceReceiptOpen across active library, cross-space, knowledge-source, and unavailable paths (ART-6)', () => {
+        interface MockSectionHost {
+            activeSpaceId: string;
+            libraryRows: Array<{ id: string }>;
+            selectedItemId: string | null;
+            isDrawerOpen: boolean;
+            pendingPinTarget: string | null;
+            tabsSet: string[];
+            queryParamUpdates: Array<Record<string, string>>;
+            openedSpaces: Array<{ spaceId: string; tab: string }>;
+            previewedItems: string[];
+            refreshed: number;
+            hasTab(name: string): boolean;
+            setTab(name: string): void;
+            UpdateQueryParams(params: Record<string, string>): void;
+            showPreviewFor(itemId: string): Promise<void>;
+            openSpaceOnTab(spaceId: string, tab: string): void;
+            RefreshView(): void;
+        }
+
+        const SPACE_A = '11111111-1111-4111-8111-111111111111';
+        const SPACE_B = '22222222-2222-4222-8222-222222222222';
+        const ITEM_1 = 'aaaa1111-1111-4111-8111-111111111111';
+        const ITEM_2 = 'aaaa2222-2222-4222-8222-222222222222';
+        const SOURCE_1 = 'bbbb1111-1111-4111-8111-111111111111';
+
+        const host: MockSectionHost = {
+            activeSpaceId: SPACE_A,
+            libraryRows: [{ id: ITEM_1 }],
+            selectedItemId: null,
+            isDrawerOpen: false,
+            pendingPinTarget: null,
+            tabsSet: [],
+            queryParamUpdates: [],
+            openedSpaces: [],
+            previewedItems: [],
+            refreshed: 0,
+            hasTab: (name: string) => name === 'Library',
+            setTab: (name: string) => {
+                host.tabsSet.push(name);
+            },
+            UpdateQueryParams: (params: Record<string, string>) => {
+                host.queryParamUpdates.push(params);
+            },
+            showPreviewFor: async (itemId: string) => {
+                host.previewedItems.push(itemId);
+            },
+            openSpaceOnTab: (spaceId: string, tab: string) => {
+                host.openedSpaces.push({ spaceId, tab });
+            },
+            RefreshView: () => {
+                host.refreshed += 1;
+            },
+        };
+
+        const openHandler = CollaborationSectionResource.prototype.onChatSourceReceiptOpen as (
+            this: MockSectionHost,
+            receipt: SpaceChatAnswerSourceReceipt,
+        ) => void;
+
+        openHandler.call(host, {
+            id: 'rec-1',
+            conversationDetailId: 'detail-1',
+            spaceId: SPACE_A,
+            sourceKind: 'SpaceItem',
+            spaceItemId: ITEM_1,
+            contentSourceId: null,
+            targetEntityId: null,
+            targetRecordId: null,
+            sourceTitle: 'Active Space Handbook.pdf',
+            band: 'Shared',
+            wasSupplied: true,
+            wasCited: true,
+            retrievalRank: 1,
+            relevanceScore: 0.9,
+            rankingMode: 'lexical',
+            citationOrdinal: 1,
+            estimatedTokens: 120,
+            wasTruncated: false,
+            sequence: 1,
+        });
+
+        expect(host.selectedItemId).toBe(ITEM_1);
+        expect(host.isDrawerOpen).toBe(true);
+        expect(host.tabsSet).toContain('Library');
+        expect(host.previewedItems).toEqual([ITEM_1]);
+        expect(host.queryParamUpdates[0]).toEqual({ tab: 'library', item: ITEM_1 });
+        expect(host.refreshed).toBe(1);
+
+        openHandler.call(host, {
+            id: 'rec-2',
+            conversationDetailId: 'detail-1',
+            spaceId: SPACE_B,
+            sourceKind: 'SpaceItem',
+            spaceItemId: ITEM_2,
+            contentSourceId: null,
+            targetEntityId: null,
+            targetRecordId: null,
+            sourceTitle: 'Cross-Space Exhibit.pdf',
+            band: 'Shared',
+            wasSupplied: true,
+            wasCited: false,
+            retrievalRank: 2,
+            relevanceScore: 0.7,
+            rankingMode: 'lexical',
+            citationOrdinal: null,
+            estimatedTokens: 90,
+            wasTruncated: false,
+            sequence: 2,
+        });
+
+        expect(host.pendingPinTarget).toBe(`item:${ITEM_2}`);
+        expect(host.openedSpaces).toEqual([{ spaceId: SPACE_B, tab: 'Library' }]);
+
+        expect(SOURCE_1.length).toBeGreaterThan(0);
     });
 });

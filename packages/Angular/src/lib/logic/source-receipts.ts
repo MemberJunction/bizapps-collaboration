@@ -5,7 +5,6 @@ import {
     type SourceReceiptKind,
     type SourceReceiptRankingMode,
     type SourceReceiptReachContext,
-    type SpaceAgentSourceReceiptEntry,
     stripCitationMarkdown,
     stripRecordKeyPrefix,
 } from '@mj-biz-apps/collaboration-core';
@@ -107,6 +106,34 @@ export function filterAndMapSourceReceipts(
     return out;
 }
 
+interface RawJsonReceiptCandidate {
+    spaceId?: string | number | boolean | null;
+    band?: string | number | boolean | null;
+    sourceKind?: string | number | boolean | null;
+    spaceItemId?: string | number | boolean | null;
+    contentSourceId?: string | number | boolean | null;
+    targetEntityId?: string | number | boolean | null;
+    targetRecordId?: string | number | boolean | null;
+    sourceTitle?: string | number | boolean | null;
+    wasSupplied?: string | number | boolean | null;
+    wasCited?: string | number | boolean | null;
+    retrievalRank?: string | number | boolean | null;
+    relevanceScore?: string | number | boolean | null;
+    rankingMode?: string | number | boolean | null;
+    citationOrdinal?: string | number | boolean | null;
+    estimatedTokens?: string | number | boolean | null;
+    wasTruncated?: string | number | boolean | null;
+    sequence?: string | number | boolean | null;
+}
+
+type JsonParsedPayload =
+    | string
+    | number
+    | boolean
+    | null
+    | Array<RawJsonReceiptCandidate | string | number | boolean | null>
+    | RawJsonReceiptCandidate;
+
 /**
  * Parses `SourceReceiptsJSON` returned by `ExecuteSpaceChatTurn` and enforces fail-closed reach filtering.
  */
@@ -116,9 +143,9 @@ export function parseTurnSourceReceiptsPayload(
     reach: SourceReceiptReachContext,
 ): SpaceChatAnswerSourceReceipt[] {
     if (!rawJson || !conversationDetailId) return [];
-    let parsed: unknown;
+    let parsed: JsonParsedPayload;
     try {
-        parsed = JSON.parse(rawJson);
+        parsed = JSON.parse(rawJson) as JsonParsedPayload;
     } catch {
         return [];
     }
@@ -127,32 +154,69 @@ export function parseTurnSourceReceiptsPayload(
     const out: SpaceChatAnswerSourceReceipt[] = [];
     for (const item of parsed) {
         if (!item || typeof item !== 'object') continue;
-        const entry = item as Partial<SpaceAgentSourceReceiptEntry>;
-        if (typeof entry.spaceId !== 'string' || (entry.band !== 'Shared' && entry.band !== 'Team')) continue;
-        if (!canReaderAccessSourceReceipt({ spaceId: entry.spaceId, band: entry.band }, reach)) {
+        const spaceId = typeof item.spaceId === 'string' ? normalizeReceiptUuid(item.spaceId) : null;
+        if (!spaceId || (item.band !== 'Shared' && item.band !== 'Team')) continue;
+        if (!canReaderAccessSourceReceipt({ spaceId, band: item.band }, reach)) {
             continue;
         }
-        const cleanTitle = stripCitationMarkdown(entry.sourceTitle) || 'Untitled source';
-        const seq = typeof entry.sequence === 'number' && Number.isFinite(entry.sequence) ? entry.sequence : out.length + 1;
+        const sourceKind: SourceReceiptKind | null =
+            item.sourceKind === 'SpaceItem' || item.sourceKind === 'KnowledgeSource' ? item.sourceKind : null;
+        if (!sourceKind) continue;
+
+        const spaceItemId = typeof item.spaceItemId === 'string' ? normalizeReceiptUuid(item.spaceItemId) : null;
+        const contentSourceId = typeof item.contentSourceId === 'string' ? normalizeReceiptUuid(item.contentSourceId) : null;
+        if (sourceKind === 'SpaceItem' && (!spaceItemId || item.contentSourceId != null)) continue;
+        if (sourceKind === 'KnowledgeSource' && (!contentSourceId || item.spaceItemId != null)) continue;
+
+        if (typeof item.sourceTitle !== 'string' || !item.sourceTitle.trim()) continue;
+        const cleanTitle = stripCitationMarkdown(item.sourceTitle) || 'Untitled source';
+
+        const seq =
+            typeof item.sequence === 'number' && Number.isInteger(item.sequence) && item.sequence >= 1
+                ? item.sequence
+                : out.length + 1;
+        const estimatedTokens =
+            typeof item.estimatedTokens === 'number' && Number.isFinite(item.estimatedTokens) && item.estimatedTokens >= 0
+                ? item.estimatedTokens
+                : 0;
+        const retrievalRank =
+            typeof item.retrievalRank === 'number' && Number.isFinite(item.retrievalRank) && item.retrievalRank >= 1
+                ? item.retrievalRank
+                : null;
+        const relevanceScore =
+            typeof item.relevanceScore === 'number' && Number.isFinite(item.relevanceScore)
+                ? item.relevanceScore
+                : null;
+        const wasCited = item.wasCited === true;
+        const citationOrdinal =
+            wasCited &&
+            typeof item.citationOrdinal === 'number' &&
+            Number.isFinite(item.citationOrdinal) &&
+            item.citationOrdinal >= 1
+                ? item.citationOrdinal
+                : null;
+        const targetEntityId = typeof item.targetEntityId === 'string' ? normalizeReceiptUuid(item.targetEntityId) : null;
+        const targetRecordId = typeof item.targetRecordId === 'string' ? item.targetRecordId.trim() || null : null;
+
         out.push({
-            id: `${conversationDetailId}:${entry.sourceKind ?? 'SpaceItem'}:${entry.spaceItemId ?? entry.contentSourceId ?? seq}`,
+            id: `${conversationDetailId}:${sourceKind}:${spaceItemId ?? contentSourceId ?? seq}`,
             conversationDetailId,
-            spaceId: entry.spaceId,
-            sourceKind: entry.sourceKind === 'KnowledgeSource' ? 'KnowledgeSource' : 'SpaceItem',
-            spaceItemId: entry.spaceItemId ?? null,
-            contentSourceId: entry.contentSourceId ?? null,
-            targetEntityId: entry.targetEntityId ?? null,
-            targetRecordId: entry.targetRecordId ?? null,
+            spaceId,
+            sourceKind,
+            spaceItemId,
+            contentSourceId,
+            targetEntityId,
+            targetRecordId,
             sourceTitle: cleanTitle,
-            band: entry.band,
-            wasSupplied: entry.wasSupplied !== false,
-            wasCited: entry.wasCited === true,
-            retrievalRank: typeof entry.retrievalRank === 'number' ? entry.retrievalRank : null,
-            relevanceScore: typeof entry.relevanceScore === 'number' ? entry.relevanceScore : null,
-            rankingMode: normalizeRankingMode(typeof entry.rankingMode === 'string' ? entry.rankingMode : 'none'),
-            citationOrdinal: typeof entry.citationOrdinal === 'number' ? entry.citationOrdinal : null,
-            estimatedTokens: typeof entry.estimatedTokens === 'number' ? entry.estimatedTokens : 0,
-            wasTruncated: entry.wasTruncated === true,
+            band: item.band,
+            wasSupplied: item.wasSupplied !== false,
+            wasCited,
+            retrievalRank,
+            relevanceScore,
+            rankingMode: normalizeRankingMode(typeof item.rankingMode === 'string' ? item.rankingMode : 'none'),
+            citationOrdinal,
+            estimatedTokens,
+            wasTruncated: item.wasTruncated === true,
             sequence: seq,
         });
     }

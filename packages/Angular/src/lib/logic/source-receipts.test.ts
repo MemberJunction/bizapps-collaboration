@@ -249,4 +249,67 @@ describe('Space chat source receipts client logic (CT-2)', () => {
             recordId: CONTENT_SRC,
         });
     });
+
+    it('rejects malformed or cross-kind-inconsistent entries in parseTurnSourceReceiptsPayload (CR-9)', () => {
+        const reach = buildClientReceiptReachContext({
+            chatAudience: 'Shared',
+            activeSpaceId: SPACE_A,
+            canSeeTeamOnActiveSpace: false,
+        });
+
+        const payload = JSON.stringify([
+            {
+                sourceKind: 'SpaceItem',
+                spaceId: 'not-a-uuid',
+                spaceItemId: ITEM_SHARED,
+                contentSourceId: null,
+                sourceTitle: 'Bad SpaceID',
+                band: 'Shared',
+            },
+            {
+                sourceKind: 'SpaceItem',
+                spaceId: SPACE_A,
+                spaceItemId: null,
+                contentSourceId: null,
+                sourceTitle: 'Missing SpaceItemID',
+                band: 'Shared',
+            },
+            {
+                sourceKind: 'KnowledgeSource',
+                spaceId: SPACE_A,
+                spaceItemId: ITEM_SHARED,
+                contentSourceId: CONTENT_SRC,
+                sourceTitle: 'Cross-Kind Collision',
+                band: 'Shared',
+            },
+            {
+                sourceKind: 'SpaceItem',
+                spaceId: SPACE_A,
+                spaceItemId: ITEM_SHARED,
+                contentSourceId: null,
+                sourceTitle: '   ',
+                band: 'Shared',
+            },
+            {
+                sourceKind: 'KnowledgeSource',
+                spaceId: SPACE_A,
+                spaceItemId: null,
+                contentSourceId: CONTENT_SRC,
+                sourceTitle: 'Valid External Guide',
+                band: 'Shared',
+                wasSupplied: true,
+                wasCited: true,
+                citationOrdinal: 1,
+                rankingMode: 'grant',
+                estimatedTokens: 0,
+                wasTruncated: false,
+                sequence: 1,
+            },
+        ]);
+
+        const parsed = parseTurnSourceReceiptsPayload(payload, DETAIL_1, reach);
+        assert.equal(parsed.length, 1);
+        assert.equal(parsed[0].sourceKind, 'KnowledgeSource');
+        assert.equal(parsed[0].contentSourceId, CONTENT_SRC);
+    });
 });
