@@ -153,6 +153,7 @@ export interface SpaceAgentRetrievalResult {
     callerCanSeeTeam: boolean;
     audienceUserIds: string[];
     searchedSpaceIds: string[];
+    allowedBandsBySpace?: Readonly<Record<string, Band>>;
     candidateItems: SpaceAgentCandidateItem[];
     quotedItems: SpaceAgentCandidateItem[];
     decisions: SpaceAgentRetrievalDecision[];
@@ -1136,12 +1137,18 @@ export async function resolveSpaceAgentRetrieval(
         durationMs: Date.now() - startMs,
     };
 
+    const allowedBandsBySpace: Record<string, Band> = {};
+    for (const entry of allowedSpaces) {
+        allowedBandsBySpace[entry.spaceId.toLowerCase()] = entry.maxBand;
+    }
+
     return {
         spaceId: cleanSpaceId,
         askingUserId: cleanUserId,
         callerCanSeeTeam,
         audienceUserIds: principalIds,
         searchedSpaceIds,
+        allowedBandsBySpace,
         candidateItems,
         quotedItems,
         decisions,

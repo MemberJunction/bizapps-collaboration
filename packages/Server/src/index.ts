@@ -9,6 +9,7 @@ import '@mj-biz-apps/collaboration-actions';
 import {
     LoadItemUseEntityServer,
     LoadShareNoticeEntityServer,
+    LoadSpaceAgentSourceReceiptEntityServer,
     LoadSpaceEntityServer,
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
@@ -51,6 +52,7 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceSubtypeResolver();
     LoadItemUseEntityServer();
     LoadShareNoticeEntityServer();
+    LoadSpaceAgentSourceReceiptEntityServer();
     LoadSpaceEntityServer();
     LoadSpaceItemEntityServer();
     LoadSpaceMemberEntityServer();

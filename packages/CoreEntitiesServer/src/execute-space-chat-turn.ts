@@ -13,7 +13,15 @@ import {
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { AgentExecutionProgressCallback, AgentExecutionStreamingCallback, ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParser } from '@memberjunction/conversations-runtime';
-import { audienceOfConversationKind, spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
+import {
+    audienceOfConversationKind,
+    extractAndValidateSourceReceipts,
+    membershipReaches,
+    normalizeReceiptUuid,
+    type SpaceAgentSourceReceiptEntry,
+    type ValidatedSuppliedSourceCandidate,
+    spaceIsReadOnly,
+} from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { loadSpaceConfiguration } from './space-configuration.js';
 import { COLLABORATION_SPACE_SCOPE_ID, resolveTurnTools, type SpaceTurnContext } from './turn-tools.js';
@@ -34,6 +42,11 @@ import { resolveTurnAgentViaDecision, type ResolveTurnAgentViaDecisionParams, ty
 import { parseUuid } from './uuid.js';
 import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 import { runWithCollaborationAgentTurnAuthority } from './ai-run-lockdown.js';
+import {
+    buildSourceReceiptReachContext,
+    persistSpaceAgentSourceReceipts,
+    resolveSuppliedKnowledgeSources,
+} from './space-agent-source-receipts.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
@@ -126,6 +139,8 @@ export type ExecuteSpaceChatTurnResult =
           quotedCount?: number;
           allowedItemNames?: string[];
           citations?: SpaceAgentCitation[];
+          sourceReceipts?: SpaceAgentSourceReceiptEntry[];
+          rejectedCitationCount?: number;
           suppliedSources?: SpaceAgentSuppliedSource[];
           retrievalStats?: SpaceAgentRetrievalStats;
           tools?: TurnToolsGiven;
@@ -709,6 +724,99 @@ async function runClaimedTurn(
             return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
         }
 
+        // Validate & persist source receipts BEFORE marking assistant reply Complete (fail-closed CT-2 commit boundary)
+        const suppliedItemCandidates: ValidatedSuppliedSourceCandidate[] =
+            retrieval.suppliedSources && retrieval.suppliedSources.length > 0
+                ? retrieval.suppliedSources.map((src) => ({
+                      sourceKind: 'SpaceItem',
+                      spaceId: src.spaceId,
+                      spaceItemId: src.spaceItemId,
+                      contentSourceId: null,
+                      targetEntityId: src.entityId || null,
+                      targetRecordId: src.recordId || null,
+                      sourceTitle: src.name,
+                      band: src.band,
+                      retrievalRank: src.rank,
+                      relevanceScore: src.score,
+                      rankingMode: src.rankingMode,
+                      estimatedTokens: src.estimatedTokens,
+                      wasTruncated: src.truncated,
+                  }))
+                : audienceQuoted.map((item) => ({
+                      sourceKind: 'SpaceItem',
+                      spaceId: item.SpaceID,
+                      spaceItemId: item.ID,
+                      contentSourceId: null,
+                      targetEntityId: item.EntityID || null,
+                      targetRecordId: item.RecordID || null,
+                      sourceTitle: item.Name,
+                      band: item.Band,
+                      retrievalRank: null,
+                      relevanceScore: null,
+                      rankingMode: 'none',
+                      estimatedTokens: 0,
+                      wasTruncated: false,
+                  }));
+
+        const suppliedKnowledgeCandidates = await resolveSuppliedKnowledgeSources(
+            provider,
+            system,
+            spaceId,
+            loaded.configuration.Grants.KnowledgeSource,
+            toolsGiven.knowledgeSourceIds,
+            audience,
+        );
+
+        const receiptReachContext = buildSourceReceiptReachContext(
+            audience,
+            spaceId,
+            retrieval.allowedBandsBySpace,
+            retrieval.searchedSpaceIds,
+        );
+        const receiptExtraction = extractAndValidateSourceReceipts(
+            [...suppliedItemCandidates, ...suppliedKnowledgeCandidates],
+            agentReplyText,
+            receiptReachContext,
+        );
+        if (receiptExtraction.rejectedCandidates.length > 0 || receiptExtraction.rejectedCitations.length > 0) {
+            LogError(
+                `executeSpaceChatTurn: filtered ${receiptExtraction.rejectedCandidates.length} out-of-scope candidate(s) and ` +
+                `${receiptExtraction.rejectedCitations.length} unverified citation marker(s) for conversationDetail ${assistantDetail.ID}.`,
+            );
+        }
+
+        const persistReceiptsResult = await persistSpaceAgentSourceReceipts({
+            provider,
+            systemUser: system,
+            turnUserId: user.ID,
+            spaceChatId: foundChat.ID,
+            conversationId,
+            conversationDetailId: assistantDetail.ID,
+            agentRunId,
+            receipts: receiptExtraction.receipts,
+        });
+        if (persistReceiptsResult.ok === false) {
+            const receiptErrMsg = `Failed to persist source receipts: ${persistReceiptsResult.errorMessage}`;
+            LogError(`executeSpaceChatTurn: ${receiptErrMsg}`);
+            assistantDetail.Status = 'Error';
+            assistantDetail.Message = ASSISTANT_FAILED_MESSAGE;
+            if (!(await assistantDetail.Save())) {
+                LogError(`executeSpaceChatTurn: failed to mark the reply Error after receipt persistence failure: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
+            }
+            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, result: finishedResult, errorMessage: receiptErrMsg });
+            return { ok: false, message: receiptErrMsg };
+        }
+
+        const persistedItemIdSet = new Set(
+            receiptExtraction.receipts
+                .filter((r) => r.sourceKind === 'SpaceItem' && r.spaceItemId)
+                .map((r) => normalizeReceiptUuid(r.spaceItemId)),
+        );
+        const validatedCitations =
+            receiptExtraction.receipts.length > 0
+                ? citations.filter((c) => persistedItemIdSet.has(normalizeReceiptUuid(c.SpaceItemID)))
+                : citations;
+
         // Save final assistant reply as system user
         assistantDetail.Status = 'Complete';
         assistantDetail.Message = agentReplyText;
@@ -732,7 +840,9 @@ async function runClaimedTurn(
             agentRunId,
             quotedCount: audienceQuoted.length,
             allowedItemNames: audienceQuoted.map((item) => item.Name),
-            citations,
+            citations: validatedCitations,
+            sourceReceipts: receiptExtraction.receipts,
+            rejectedCitationCount: receiptExtraction.rejectedCitations.length,
             suppliedSources: retrieval.suppliedSources,
             retrievalStats: retrieval.stats,
             tools: toolsGiven,

@@ -33,6 +33,7 @@ import {
     COLLABORATION_SETTINGS_NAME,
 } from '@mj-biz-apps/collaboration-engine-base';
 import type {
+    mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
     mjBizAppsCollaborationSpaceGrantEntity,
     mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
@@ -244,6 +245,15 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
     /** Whether a user holds the 'Close and Reopen Spaces' authorization. The owner seat is checked apart, by the space write rules. */
     public UserHoldsLifecycleAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
         return this.Base.UserHoldsLifecycleAuthorization(user, provider);
+    }
+
+    /** Loads validated source receipts for a conversation under the caller's RLS reach (delegated to EngineBase). */
+    public async LoadSpaceAgentSourceReceiptsForConversation(
+        conversationId: string,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[]> {
+        return this.Base.LoadSpaceAgentSourceReceiptsForConversation(conversationId, user, provider);
     }
 
     /**

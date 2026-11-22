@@ -436,6 +436,28 @@ function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
                 };
                 return run as Partial<T> as T;
             }
+            if (entityName === 'MJ_BizApps_Collaboration: Space Agent Source Receipts') {
+                let seq = 0;
+                const receipt: Record<string, string | number | boolean | null | (() => boolean) | (() => Promise<boolean>)> = {
+                    ID: '',
+                    NewRecord() {
+                        seq += 1;
+                        receipt['ID'] = `receipt-scale-${seq}`;
+                        return true;
+                    },
+                    async Load() {
+                        return true;
+                    },
+                    async Save() {
+                        if (!receipt['ID']) {
+                            seq += 1;
+                            receipt['ID'] = `receipt-scale-${seq}`;
+                        }
+                        return true;
+                    },
+                };
+                return receipt as Partial<T> as T;
+            }
             return {
                 RunViewProviderToUse: providerImpl as IRunViewProvider,
                 ProviderToUse: providerImpl as IEntityDataProvider,
@@ -685,6 +707,7 @@ describe('space-agent-retrieval scale & ranked relevance (CT-4)', () => {
         assert.equal(turnResult.quotedCount, 8);
         assert.equal(turnResult.allowedItemNames?.length, 8);
         assert.equal(turnResult.citations?.length, 8);
+        assert.equal(turnResult.sourceReceipts?.length, 8);
         assert.equal(turnResult.suppliedSources?.length, 8);
         assert.ok(turnResult.retrievalStats);
         assert.ok(turnResult.retrievalStats.totalInScopeCount >= 39_999);

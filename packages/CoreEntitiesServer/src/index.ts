@@ -175,14 +175,30 @@ export {
 } from './mint-space-link.js';
 export {
     COLLABORATION_AGENT_TURN_OPERATION,
+    COLLABORATION_SOURCE_RECEIPT_ENTITY,
     COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES,
     type CollaborationAIRunEntityName,
     runWithCollaborationAgentTurnAuthority,
     evaluateParticipantAIRunWriteAccess,
+    evaluateParticipantSourceReceiptWriteAccess,
     syncPromptRunBasePrototype,
     CollaborationAIAgentRunEntityServer,
     CollaborationAIAgentRunStepEntityServer,
     CollaborationAIPromptRunEntityServer,
     LoadCollaborationAIRunLockdown,
 } from './ai-run-lockdown.js';
+export {
+    SpaceAgentSourceReceiptEntityServer,
+    LoadSpaceAgentSourceReceiptEntityServer,
+} from './SpaceAgentSourceReceiptEntityServer.js';
+export {
+    buildSourceReceiptReachContext,
+    persistSpaceAgentSourceReceipts,
+    querySpaceAgentSourceReceipts,
+    resolveSuppliedKnowledgeSources,
+    type PersistSpaceAgentSourceReceiptsParams,
+    type PersistSpaceAgentSourceReceiptsResult,
+    type QuerySpaceAgentSourceReceiptsParams,
+    type QuerySpaceAgentSourceReceiptsResult,
+} from './space-agent-source-receipts.js';
 

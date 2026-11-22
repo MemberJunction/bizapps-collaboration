@@ -8,6 +8,7 @@ import {
     SPACE_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_CHAT_ENTITY,
+    SPACE_AGENT_SOURCE_RECEIPT_ENTITY,
     SPACE_ANCHOR_ENTITY,
     SPACE_GRANT_ENTITY,
     SPACE_NOTE_ENTITY,
@@ -197,6 +198,7 @@ async function cleanupConversationUnguarded(
             }
         }
         const steps: Array<{ entityName: string; filter: string; what: string }> = [
+            { entityName: SPACE_AGENT_SOURCE_RECEIPT_ENTITY, filter: byConversation, what: 'Space Agent Source Receipt' },
             { entityName: 'MJ: AI Agent Runs', filter: byConversation, what: 'AI Agent Run' },
             { entityName: SPACE_CHAT_ENTITY, filter: byConversation, what: 'Space Chat' },
             { entityName: CONVERSATION_DETAIL_ENTITY, filter: byConversation, what: 'Conversation Detail' },
@@ -237,8 +239,9 @@ async function cleanupSpaceUnguarded(
         await cleanupConversationUnguarded(provider, user, chat.ConversationID, chat.ID);
     }
 
-    // Stage 1 child rows go first: a pin hangs on an item and a seat, the rest on the space alone
+    // Stage 1 child rows go first: receipts hang on items/chats, pins on items/seats, the rest on the space alone
     for (const [entityName, what] of [
+        [SPACE_AGENT_SOURCE_RECEIPT_ENTITY, 'Space Agent Source Receipt'],
         [SPACE_MEMBER_PIN_ENTITY, 'Space Member Pin'],
         [SPACE_NOTE_ENTITY, 'Space Note'],
         [SPACE_GRANT_ENTITY, 'Space Grant'],
