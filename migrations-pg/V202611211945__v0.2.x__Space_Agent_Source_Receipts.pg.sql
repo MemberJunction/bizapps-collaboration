@@ -811,54 +811,204 @@ $$
       AND "Band" IN ('Shared', 'Team');
 $$ LANGUAGE sql STABLE;
 
+CREATE OR REPLACE FUNCTION __mj_bizappscollaboration."fnTryParseUuid"(p_text TEXT)
+RETURNS UUID AS
+$$
+DECLARE
+    v_trimmed TEXT;
+BEGIN
+    IF p_text IS NULL THEN
+        RETURN NULL;
+    END IF;
+    v_trimmed := NULLIF(BTRIM(p_text, ' %'), '');
+    IF v_trimmed IS NULL OR v_trimmed !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        RETURN NULL;
+    END IF;
+    RETURN v_trimmed::UUID;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION __mj_bizappscollaboration."fnIsPrivilegedReceiptSession"()
+RETURNS BOOLEAN AS
+$$
+    SELECT current_user <> 'cdp_UI'
+       AND (
+           LOWER(COALESCE(NULLIF(BTRIM(current_setting('app.bypass_rls', true)), ''), 'false')) = 'true'
+           OR (
+               (
+                   current_user IN ('cdp_Integration', 'cdp_Developer')
+                   OR CASE
+                       WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cdp_Integration')
+                       THEN pg_has_role(current_user, 'cdp_Integration', 'MEMBER')
+                       ELSE FALSE
+                   END
+                   OR CASE
+                       WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cdp_Developer')
+                       THEN pg_has_role(current_user, 'cdp_Developer', 'MEMBER')
+                       ELSE FALSE
+                   END
+               )
+               AND NULLIF(BTRIM(current_setting('app.current_user_id', true)), '') IS NULL
+               AND NULLIF(BTRIM(current_setting('mj.current_user_id', true)), '') IS NULL
+           )
+       );
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION __mj_bizappscollaboration."fnCanReadSpaceAgentSourceReceiptRow"(
+    p_user_id UUID,
+    p_space_id UUID,
+    p_conversation_id UUID,
+    p_source_kind VARCHAR,
+    p_space_item_id UUID,
+    p_content_source_id UUID,
+    p_band VARCHAR
+)
+RETURNS BOOLEAN AS
+$$
+    SELECT CASE
+        WHEN p_user_id IS NULL THEN FALSE
+        ELSE EXISTS (
+            SELECT 1
+            FROM __mj_bizappscollaboration."fnCollaborationAccess"(p_user_id) AS sa
+            INNER JOIN __mj_bizappscollaboration."SpaceChat" AS sc
+                ON sc."ConversationID" = p_conversation_id
+            INNER JOIN __mj_bizappscollaboration."fnCollaborationAccess"(p_user_id) AS ca
+                ON ca."SpaceID" = sc."SpaceID"
+            WHERE sa."SpaceID" = p_space_id
+              AND (sa."CanSeeTeam" = TRUE OR p_band = 'Shared')
+              AND (
+                  (sc."Kind" IN ('General', 'Topic') AND p_band = 'Shared')
+                  OR (sc."Kind" = 'Private' AND ca."CanSeeTeam" = TRUE)
+                  OR (sc."Kind" = 'Assistant' AND sc."OwnerUserID" = p_user_id)
+              )
+              AND (
+                  (
+                      p_source_kind = 'SpaceItem'
+                      AND p_space_item_id IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1
+                          FROM __mj_bizappscollaboration."SpaceItem" AS si
+                          WHERE si."ID" = p_space_item_id
+                            AND si."SpaceID" = p_space_id
+                            AND ((p_band = 'Shared' AND si."Band" = 'Shared') OR p_band = 'Team')
+                      )
+                  )
+                  OR (
+                      p_source_kind = 'KnowledgeSource'
+                      AND p_content_source_id IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1
+                          FROM __mj_bizappscollaboration."fnEffectiveKnowledgeSourceGrants"() AS eks
+                          WHERE eks."SpaceID" = p_space_id
+                            AND eks."ContentSourceID" = p_content_source_id
+                            AND ((p_band = 'Shared' AND eks."Band" = 'Shared') OR (p_band = 'Team' AND eks."Band" IN ('Shared', 'Team')))
+                      )
+                  )
+              )
+        )
+    END;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = __mj_bizappscollaboration, pg_temp;
+
+CREATE OR REPLACE FUNCTION __mj_bizappscollaboration."fnIsSpaceAgentSourceReceiptRowVisible"(
+    p_space_id UUID,
+    p_conversation_id UUID,
+    p_source_kind VARCHAR,
+    p_space_item_id UUID,
+    p_content_source_id UUID,
+    p_band VARCHAR
+)
+RETURNS BOOLEAN AS
+$$
+    SELECT CASE
+        WHEN current_user <> 'cdp_UI'
+         AND LOWER(COALESCE(NULLIF(BTRIM(current_setting('app.bypass_rls', true)), ''), 'false')) = 'true'
+        THEN TRUE
+        WHEN current_user = 'cdp_UI'
+          OR NULLIF(BTRIM(current_setting('app.current_user_id', true)), '') IS NOT NULL
+          OR NULLIF(BTRIM(current_setting('mj.current_user_id', true)), '') IS NOT NULL
+        THEN __mj_bizappscollaboration."fnCanReadSpaceAgentSourceReceiptRow"(
+            COALESCE(
+                __mj_bizappscollaboration."fnTryParseUuid"(current_setting('app.current_user_id', true)),
+                __mj_bizappscollaboration."fnTryParseUuid"(current_setting('mj.current_user_id', true))
+            ),
+            p_space_id,
+            p_conversation_id,
+            p_source_kind,
+            p_space_item_id,
+            p_content_source_id,
+            p_band
+        )
+        WHEN __mj_bizappscollaboration."fnIsPrivilegedReceiptSession"()
+        THEN TRUE
+        ELSE FALSE
+    END;
+$$ LANGUAGE sql STABLE;
+
 CREATE OR REPLACE FUNCTION __mj_bizappscollaboration."fnCanReadSpaceAgentSourceReceipt"(
     p_user_id UUID,
     p_receipt_id UUID
 )
 RETURNS BOOLEAN AS
 $$
-    SELECT EXISTS (
-        SELECT 1
-        FROM __mj_bizappscollaboration."SpaceAgentSourceReceipt" AS r
-        INNER JOIN __mj_bizappscollaboration."fnCollaborationAccess"(p_user_id) AS sa
-            ON sa."SpaceID" = r."SpaceID"
-        INNER JOIN __mj_bizappscollaboration."SpaceChat" AS sc
-            ON sc."ConversationID" = r."ConversationID"
-        INNER JOIN __mj_bizappscollaboration."fnCollaborationAccess"(p_user_id) AS ca
-            ON ca."SpaceID" = sc."SpaceID"
-        WHERE r."ID" = p_receipt_id
-          AND (sa."CanSeeTeam" = TRUE OR r."Band" = 'Shared')
-          AND (
-              (sc."Kind" IN ('General', 'Topic') AND r."Band" = 'Shared')
-              OR (sc."Kind" = 'Private' AND ca."CanSeeTeam" = TRUE)
-              OR (sc."Kind" = 'Assistant' AND sc."OwnerUserID" = p_user_id)
-          )
-          AND (
-              (
-                  r."SourceKind" = 'SpaceItem'
-                  AND r."SpaceItemID" IS NOT NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM __mj_bizappscollaboration."SpaceItem" AS si
-                      WHERE si."ID" = r."SpaceItemID"
-                        AND si."SpaceID" = r."SpaceID"
-                        AND ((r."Band" = 'Shared' AND si."Band" = 'Shared') OR r."Band" = 'Team')
-                  )
-              )
-              OR (
-                  r."SourceKind" = 'KnowledgeSource'
-                  AND r."ContentSourceID" IS NOT NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM __mj_bizappscollaboration."fnEffectiveKnowledgeSourceGrants"() AS eks
-                      WHERE eks."SpaceID" = r."SpaceID"
-                        AND eks."ContentSourceID" = r."ContentSourceID"
-                        AND ((r."Band" = 'Shared' AND eks."Band" = 'Shared') OR (r."Band" = 'Team' AND eks."Band" IN ('Shared', 'Team')))
-                  )
-              )
-          )
-    );
+    SELECT CASE
+        WHEN p_user_id IS NULL OR p_receipt_id IS NULL THEN FALSE
+        ELSE COALESCE(
+            (
+                SELECT __mj_bizappscollaboration."fnCanReadSpaceAgentSourceReceiptRow"(
+                    p_user_id,
+                    r."SpaceID",
+                    r."ConversationID",
+                    r."SourceKind",
+                    r."SpaceItemID",
+                    r."ContentSourceID",
+                    r."Band"
+                )
+                FROM __mj_bizappscollaboration."SpaceAgentSourceReceipt" AS r
+                WHERE r."ID" = p_receipt_id
+                LIMIT 1
+            ),
+            FALSE
+        )
+    END;
 $$ LANGUAGE sql STABLE;
+
+-- 4. Native PostgreSQL Row-Level Security on SpaceAgentSourceReceipt
+ALTER TABLE __mj_bizappscollaboration."SpaceAgentSourceReceipt" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE __mj_bizappscollaboration."SpaceAgentSourceReceipt" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "p_space_agent_source_receipt_read_in_reach" ON __mj_bizappscollaboration."SpaceAgentSourceReceipt";
+CREATE POLICY "p_space_agent_source_receipt_read_in_reach"
+    ON __mj_bizappscollaboration."SpaceAgentSourceReceipt"
+    FOR SELECT
+    USING (
+        __mj_bizappscollaboration."fnIsSpaceAgentSourceReceiptRowVisible"(
+            "SpaceID",
+            "ConversationID",
+            "SourceKind",
+            "SpaceItemID",
+            "ContentSourceID",
+            "Band"
+        ) = TRUE
+    );
+
+DROP POLICY IF EXISTS "p_space_agent_source_receipt_insert_server" ON __mj_bizappscollaboration."SpaceAgentSourceReceipt";
+CREATE POLICY "p_space_agent_source_receipt_insert_server"
+    ON __mj_bizappscollaboration."SpaceAgentSourceReceipt"
+    FOR INSERT
+    WITH CHECK (__mj_bizappscollaboration."fnIsPrivilegedReceiptSession"() = TRUE);
+
+DROP POLICY IF EXISTS "p_space_agent_source_receipt_update_server" ON __mj_bizappscollaboration."SpaceAgentSourceReceipt";
+CREATE POLICY "p_space_agent_source_receipt_update_server"
+    ON __mj_bizappscollaboration."SpaceAgentSourceReceipt"
+    FOR UPDATE
+    USING (__mj_bizappscollaboration."fnIsPrivilegedReceiptSession"() = TRUE)
+    WITH CHECK (__mj_bizappscollaboration."fnIsPrivilegedReceiptSession"() = TRUE);
+
+DROP POLICY IF EXISTS "p_space_agent_source_receipt_delete_server" ON __mj_bizappscollaboration."SpaceAgentSourceReceipt";
+CREATE POLICY "p_space_agent_source_receipt_delete_server"
+    ON __mj_bizappscollaboration."SpaceAgentSourceReceipt"
+    FOR DELETE
+    USING (__mj_bizappscollaboration."fnIsPrivilegedReceiptSession"() = TRUE);
 
 
 
@@ -927,6 +1077,7 @@ DECLARE
   v_target_schema CONSTANT TEXT := '__mj_bizappscollaboration';
   v_target_name CONSTANT TEXT := 'vwSpaceAgentSourceReceipts';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj_bizappscollaboration."vwSpaceAgentSourceReceipts"
+WITH (security_invoker = true)
 AS SELECT
     s.*,
     "mjBizAppsCollaborationSpace_SpaceID"."Name" AS "Space",
@@ -955,7 +1106,16 @@ LEFT OUTER JOIN
 LEFT OUTER JOIN
     ${mjSchema}."Entity" AS "MJEntity_TargetEntityID"
   ON
-    s."TargetEntityID" = "MJEntity_TargetEntityID"."ID"$vsql$;
+    s."TargetEntityID" = "MJEntity_TargetEntityID"."ID"
+WHERE
+    __mj_bizappscollaboration."fnIsSpaceAgentSourceReceiptRowVisible"(
+        s."SpaceID",
+        s."ConversationID",
+        s."SourceKind",
+        s."SpaceItemID",
+        s."ContentSourceID",
+        s."Band"
+    ) = TRUE$vsql$;
   v_target_oid OID;
   v_dep RECORD;
   v_captured JSONB[] := ARRAY[]::JSONB[];
@@ -1000,7 +1160,7 @@ EXCEPTION WHEN invalid_table_definition THEN
   IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
     FOR v_n IN 1..array_length(v_captured, 1) LOOP
       BEGIN
-        EXECUTE format('CREATE VIEW %I.%I AS %s',
+        EXECUTE format('CREATE VIEW %I.%I WITH (security_invoker = true) AS %s',
           v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
       EXCEPTION WHEN others THEN
         RAISE WARNING 'Could not restore dependent view %.%: %',
@@ -1012,12 +1172,9 @@ END;
 $do$;
 
 CREATE OR REPLACE VIEW __mj_bizappscollaboration."vwSpaceAgentSourceReceiptsAuthorized"
+WITH (security_invoker = true)
 AS SELECT v.*
-FROM __mj_bizappscollaboration."vwSpaceAgentSourceReceipts" AS v
-WHERE __mj_bizappscollaboration."fnCanReadSpaceAgentSourceReceipt"(
-    NULLIF(current_setting('app.current_user_id', true), '')::UUID,
-    v."ID"
-) = TRUE;
+FROM __mj_bizappscollaboration."vwSpaceAgentSourceReceipts" AS v;
 
 
 -- ===================== Stored Procedures (sp*) =====================
@@ -1414,6 +1571,100 @@ WHERE NOT EXISTS (
       AND "RoleID" = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS UUID)
       AND "Type" = 'Allow'
 );
+
+/* PostgreSQL-native RowLevelSecurityFilter predicate for Collaboration: Source Receipts In Reach */
+DO $$
+DECLARE
+    v_pg_filter_text CONSTANT TEXT := '__mj_bizappscollaboration."fnCanReadSpaceAgentSourceReceipt"(__mj_bizappscollaboration."fnTryParseUuid"(''{{UserID}}''), "ID")';
+    v_rls_id UUID;
+    v_has_platform_variants BOOLEAN;
+    v_pv_json TEXT;
+    v_participant_role_id UUID;
+BEGIN
+    SELECT "ID" INTO v_rls_id
+    FROM ${mjSchema}."RowLevelSecurityFilter"
+    WHERE "ID" IN ('E7333FCB-1001-459A-AF25-2B0C499A681A'::UUID, '238922F8-7E04-4E81-A82E-257B27A21853'::UUID)
+       OR "Name" = 'Collaboration: Source Receipts In Reach'
+    LIMIT 1;
+
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE LOWER(table_schema) = LOWER(REPLACE('${mjSchema}', '"', ''))
+          AND table_name = 'RowLevelSecurityFilter'
+          AND column_name = 'PlatformVariants'
+    ) INTO v_has_platform_variants;
+
+    IF v_rls_id IS NULL THEN
+        v_rls_id := 'E7333FCB-1001-459A-AF25-2B0C499A681A'::UUID;
+        INSERT INTO ${mjSchema}."RowLevelSecurityFilter"
+            ("ID", "Name", "Description", "FilterText", "__mj_CreatedAt", "__mj_UpdatedAt")
+        VALUES (
+            v_rls_id,
+            'Collaboration: Source Receipts In Reach',
+            'Source receipts on space agent turns where the caller reaches the conversation, the receipt''s (SpaceID, Band) visibility, and the underlying SpaceItem or effective KnowledgeSource grant currently authorizes that space and band.',
+            v_pg_filter_text,
+            NOW(),
+            NOW()
+        );
+    ELSE
+        UPDATE ${mjSchema}."RowLevelSecurityFilter"
+        SET "FilterText" = v_pg_filter_text,
+            "__mj_UpdatedAt" = NOW()
+        WHERE "ID" = v_rls_id;
+    END IF;
+
+    IF v_has_platform_variants THEN
+        v_pv_json := jsonb_build_object(
+            'FilterText', jsonb_build_object('postgresql', v_pg_filter_text),
+            '_meta', jsonb_build_object('translatedBy', 'manual', 'sourceDialect', 'sqlserver', 'verified', true)
+        )::TEXT;
+        EXECUTE format(
+            'UPDATE %I."RowLevelSecurityFilter" SET "PlatformVariants" = $1, "__mj_UpdatedAt" = NOW() WHERE "ID" = $2',
+            REPLACE('${mjSchema}', '"', '')
+        ) USING v_pv_json, v_rls_id;
+    END IF;
+
+    SELECT "ID" INTO v_participant_role_id
+    FROM ${mjSchema}."Role"
+    WHERE "ID" = 'AAF434FD-EF58-4857-854E-2607ACAF763B'::UUID
+       OR LOWER("Name") = 'space participant'
+    LIMIT 1;
+
+    IF v_participant_role_id IS NOT NULL THEN
+        INSERT INTO ${mjSchema}."EntityPermission"
+            ("ID", "EntityID", "RoleID", "Type", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "ReadRLSFilterID", "__mj_CreatedAt", "__mj_UpdatedAt")
+        SELECT
+            'E7333FCB-1002-459A-AF25-2B0C499A681A'::UUID,
+            'A9B4C2E1-7D3F-4E8A-9B12-4C6D8E0F2A31'::UUID,
+            v_participant_role_id,
+            'Allow',
+            TRUE,
+            FALSE,
+            FALSE,
+            FALSE,
+            v_rls_id,
+            NOW(),
+            NOW()
+        WHERE NOT EXISTS (
+            SELECT 1 FROM ${mjSchema}."EntityPermission"
+            WHERE "EntityID" = 'A9B4C2E1-7D3F-4E8A-9B12-4C6D8E0F2A31'::UUID
+              AND "RoleID" = v_participant_role_id
+              AND "Type" = 'Allow'
+        );
+
+        UPDATE ${mjSchema}."EntityPermission"
+        SET "CanRead" = TRUE,
+            "CanCreate" = FALSE,
+            "CanUpdate" = FALSE,
+            "CanDelete" = FALSE,
+            "ReadRLSFilterID" = v_rls_id,
+            "__mj_UpdatedAt" = NOW()
+        WHERE "EntityID" = 'A9B4C2E1-7D3F-4E8A-9B12-4C6D8E0F2A31'::UUID
+          AND "RoleID" = v_participant_role_id
+          AND "Type" = 'Allow';
+    END IF;
+END $$;
 
 /* SQL text to update existing entities from schema */
 
@@ -1886,11 +2137,24 @@ END $$;
 
 -- ===================== Grants =====================
 
+DO $$ BEGIN GRANT USAGE ON SCHEMA __mj_bizappscollaboration TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT USAGE ON SCHEMA ${mjSchema} TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT SELECT ON __mj_bizappscollaboration."SpaceAgentSourceReceipt" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT INSERT, UPDATE, DELETE ON __mj_bizappscollaboration."SpaceAgentSourceReceipt" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT SELECT ON __mj_bizappscollaboration."Space" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT SELECT ON __mj_bizappscollaboration."SpaceChat" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT SELECT ON ${mjSchema}."Conversation" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT SELECT ON ${mjSchema}."ContentSource" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT SELECT ON ${mjSchema}."Entity" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 DO $$ BEGIN GRANT SELECT ON __mj_bizappscollaboration."vwSpaceAgentSourceReceipts" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 DO $$ BEGIN GRANT SELECT ON __mj_bizappscollaboration."vwSpaceAgentSourceReceiptsAuthorized" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."fnTryParseUuid"(TEXT) TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."fnIsPrivilegedReceiptSession"() TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."fnCollaborationSpaceStatuses"() TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."fnCollaborationAccess"(UUID) TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."fnEffectiveKnowledgeSourceGrants"() TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."fnCanReadSpaceAgentSourceReceiptRow"(UUID, UUID, UUID, VARCHAR, UUID, UUID, VARCHAR) TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."fnIsSpaceAgentSourceReceiptRowVisible"(UUID, UUID, VARCHAR, UUID, UUID, VARCHAR) TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."fnCanReadSpaceAgentSourceReceipt"(UUID, UUID) TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."spCreateSpaceAgentSourceReceipt" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj_bizappscollaboration."spUpdateSpaceAgentSourceReceipt" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
