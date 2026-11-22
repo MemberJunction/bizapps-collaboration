@@ -1,5 +1,5 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { RunView, type UserInfo } from '@memberjunction/core';
+import { RunView, type BaseEntity, type UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentEntity,
     MJAIAgentRunEntity,
@@ -166,10 +166,34 @@ async function assertFieldAccessDeniedOrOmitted(
     }
 }
 
+interface PersistedTurnRunIds {
+    runId: string;
+    stepId: string;
+    promptRunId: string;
+}
+
+function assertAIRunTurnRefusalOverWire(entity: BaseEntity, entityName: string, label: string): void {
+    const msg = entity.LatestResult?.CompleteMessage ?? entity.LatestResult?.Message ?? '';
+    Assert(
+        msg.includes(`Direct client CRUD on ${entityName} is forbidden for Space Participant`) ||
+            msg.includes(`Space Participant cannot create or mutate ${entityName} outside an active space chat turn`),
+        `${label}: expected turn-authority/client-CRUD refusal for ${entityName} over wire, got: "${msg}"`,
+    );
+}
+
+function assertAIRunDeleteRefusalOverWire(entity: BaseEntity, entityName: string, label: string): void {
+    const msg = (entity.LatestResult?.CompleteMessage ?? entity.LatestResult?.Message ?? '').toLowerCase();
+    Assert(
+        msg.includes('cannot delete') || msg.includes('permission') || msg.includes('denied') || msg.includes('forbidden') || msg.includes('delete'),
+        `${label}: expected delete/permission denial for ${entityName} over wire, got: "${msg}"`,
+    );
+}
+
 async function assertDirectAIRunLockdownOverWire(
     ctx: IntegrationCheckContext,
     actor: UserInfo,
     seed: { agentId: string; promptId: string; modelId: string; vendorId: string },
+    validAgentRunId: string,
     label: string,
 ): Promise<void> {
     const runAttempt = await ctx.Provider.GetEntityObject<MJAIAgentRunEntity>(AGENT_RUN_ENTITY, actor);
@@ -179,17 +203,18 @@ async function assertDirectAIRunLockdownOverWire(
     runAttempt.Status = 'Running';
     runAttempt.StartedAt = new Date();
     Assert(!(await runAttempt.Save()), `${label}: direct create on ${AGENT_RUN_ENTITY} over wire must be refused`);
+    assertAIRunTurnRefusalOverWire(runAttempt, AGENT_RUN_ENTITY, `${label} run create`);
 
-    const fakeRunId = '00000000-0000-4000-8000-000000000099';
     const stepAttempt = await ctx.Provider.GetEntityObject<MJAIAgentRunStepEntity>(AGENT_RUN_STEP_ENTITY, actor);
     stepAttempt.NewRecord();
-    stepAttempt.AgentRunID = fakeRunId;
-    stepAttempt.StepNumber = 1;
+    stepAttempt.AgentRunID = validAgentRunId;
+    stepAttempt.StepNumber = 99;
     stepAttempt.StepType = 'Prompt';
     stepAttempt.StepName = 'AP wire forged step';
     stepAttempt.Status = 'Running';
     stepAttempt.StartedAt = new Date();
     Assert(!(await stepAttempt.Save()), `${label}: direct create on ${AGENT_RUN_STEP_ENTITY} over wire must be refused`);
+    assertAIRunTurnRefusalOverWire(stepAttempt, AGENT_RUN_STEP_ENTITY, `${label} step create`);
 
     const promptAttempt = await ctx.Provider.GetEntityObject<MJAIPromptRunEntity>(PROMPT_RUN_ENTITY, actor);
     promptAttempt.NewRecord();
@@ -198,7 +223,112 @@ async function assertDirectAIRunLockdownOverWire(
     promptAttempt.VendorID = seed.vendorId;
     promptAttempt.RunAt = new Date();
     promptAttempt.Success = true;
+    promptAttempt.RunType = 'Single';
     Assert(!(await promptAttempt.Save()), `${label}: direct create on ${PROMPT_RUN_ENTITY} over wire must be refused`);
+    assertAIRunTurnRefusalOverWire(promptAttempt, PROMPT_RUN_ENTITY, `${label} prompt create`);
+}
+
+async function assertTurnPersistedAllThreeEntitiesOverWire(
+    ctx: IntegrationCheckContext,
+    ownerCtx: IntegrationCheckContext,
+    conversationId: string,
+    label: string,
+): Promise<PersistedTurnRunIds> {
+    const persistedRuns = await FindRows<{ ID: string; UserID: string | null }>(
+        ctx,
+        AGENT_RUN_ENTITY,
+        `ConversationID = '${conversationId}'`,
+        ['ID', 'UserID'],
+        undefined,
+        { BypassCache: true },
+    );
+    Assert(persistedRuns.length >= 1, `${label}: server persisted AI Agent Run row during wire turn`);
+    const runId = persistedRuns[0].ID;
+    Assert(SameID(persistedRuns[0].UserID, ownerCtx.User.ID), `${label}: persisted AI Agent Run is owned by caller`);
+
+    const persistedSteps = await FindRows<{ ID: string; StepType: string; Status: string; TargetLogID: string | null }>(
+        ctx,
+        AGENT_RUN_STEP_ENTITY,
+        `AgentRunID = '${runId}'`,
+        ['ID', 'StepType', 'Status', 'TargetLogID'],
+        undefined,
+        { BypassCache: true },
+    );
+    const promptStep = persistedSteps.find((s) => s.StepType === 'Prompt' && !!s.TargetLogID);
+    Assert(!!promptStep && promptStep.Status === 'Completed', `${label}: server persisted completed AI Agent Run Step during wire turn`);
+    const stepId = promptStep!.ID;
+    const promptRunId = promptStep!.TargetLogID!;
+
+    const persistedPrompts = await FindRows<{ ID: string; Success: boolean }>(
+        ctx,
+        PROMPT_RUN_ENTITY,
+        `ID = '${promptRunId}'`,
+        ['ID', 'Success'],
+        undefined,
+        { BypassCache: true },
+    );
+    Assert(persistedPrompts.length === 1 && persistedPrompts[0].Success === true, `${label}: server persisted AI Prompt Run during wire turn`);
+
+    const ownerRuns = await FindRows<{ ID: string }>(ownerCtx, AGENT_RUN_ENTITY, `ID = '${runId}'`, ['ID'], ownerCtx.User, { BypassCache: true });
+    const ownerSteps = await FindRows<{ ID: string }>(ownerCtx, AGENT_RUN_STEP_ENTITY, `ID = '${stepId}'`, ['ID'], ownerCtx.User, { BypassCache: true });
+    const ownerPrompts = await FindRows<{ ID: string }>(ownerCtx, PROMPT_RUN_ENTITY, `ID = '${promptRunId}'`, ['ID'], ownerCtx.User, { BypassCache: true });
+    Assert(
+        ownerRuns.length === 1 && ownerSteps.length === 1 && ownerPrompts.length === 1,
+        `${label}: owner reads persisted AgentRun, AgentRunStep, and PromptRun over wire`,
+    );
+
+    return { runId, stepId, promptRunId };
+}
+
+async function assertPostTurnOwnerLockdownOverWire(
+    ownerCtx: IntegrationCheckContext,
+    ids: PersistedTurnRunIds,
+    label: string,
+): Promise<void> {
+    const postTurnRun = await ownerCtx.Provider.GetEntityObject<MJAIAgentRunEntity>(AGENT_RUN_ENTITY, ownerCtx.User);
+    Assert(await postTurnRun.Load(ids.runId), `${label}: owner MUST Load persisted AI Agent Run ${ids.runId} over wire`);
+    postTurnRun.Result = 'post-turn-wire-tamper';
+    Assert(!(await postTurnRun.Save()), `${label}: owner MUST NOT mutate AI Agent Run over wire after turn ends`);
+    assertAIRunTurnRefusalOverWire(postTurnRun, AGENT_RUN_ENTITY, `${label} run update`);
+    Assert(!(await postTurnRun.Delete()), `${label}: owner MUST NOT delete AI Agent Run over wire after turn ends`);
+    assertAIRunDeleteRefusalOverWire(postTurnRun, AGENT_RUN_ENTITY, `${label} run delete`);
+
+    const postTurnStep = await ownerCtx.Provider.GetEntityObject<MJAIAgentRunStepEntity>(AGENT_RUN_STEP_ENTITY, ownerCtx.User);
+    Assert(await postTurnStep.Load(ids.stepId), `${label}: owner MUST Load persisted AI Agent Run Step ${ids.stepId} over wire`);
+    postTurnStep.StepName = 'post-turn-wire-step-tamper';
+    Assert(!(await postTurnStep.Save()), `${label}: owner MUST NOT mutate AI Agent Run Step over wire after turn ends`);
+    assertAIRunTurnRefusalOverWire(postTurnStep, AGENT_RUN_STEP_ENTITY, `${label} step update`);
+    Assert(!(await postTurnStep.Delete()), `${label}: owner MUST NOT delete AI Agent Run Step over wire after turn ends`);
+    assertAIRunDeleteRefusalOverWire(postTurnStep, AGENT_RUN_STEP_ENTITY, `${label} step delete`);
+
+    const postTurnPrompt = await ownerCtx.Provider.GetEntityObject<MJAIPromptRunEntity>(PROMPT_RUN_ENTITY, ownerCtx.User);
+    Assert(await postTurnPrompt.Load(ids.promptRunId), `${label}: owner MUST Load persisted AI Prompt Run ${ids.promptRunId} over wire`);
+    postTurnPrompt.Result = 'post-turn-wire-prompt-tamper';
+    Assert(!(await postTurnPrompt.Save()), `${label}: owner MUST NOT mutate AI Prompt Run over wire after turn ends`);
+    assertAIRunTurnRefusalOverWire(postTurnPrompt, PROMPT_RUN_ENTITY, `${label} prompt update`);
+    Assert(!(await postTurnPrompt.Delete()), `${label}: owner MUST NOT delete AI Prompt Run over wire after turn ends`);
+    assertAIRunDeleteRefusalOverWire(postTurnPrompt, PROMPT_RUN_ENTITY, `${label} prompt delete`);
+}
+
+async function assertCrossUserRunIsolationOverWire(
+    otherCtx: IntegrationCheckContext,
+    ids: PersistedTurnRunIds,
+    label: string,
+): Promise<void> {
+    const runs = await FindRows<{ ID: string }>(otherCtx, AGENT_RUN_ENTITY, `ID = '${ids.runId}'`, ['ID'], otherCtx.User, { BypassCache: true });
+    const steps = await FindRows<{ ID: string }>(otherCtx, AGENT_RUN_STEP_ENTITY, `ID = '${ids.stepId}'`, ['ID'], otherCtx.User, { BypassCache: true });
+    const prompts = await FindRows<{ ID: string }>(otherCtx, PROMPT_RUN_ENTITY, `ID = '${ids.promptRunId}'`, ['ID'], otherCtx.User, { BypassCache: true });
+    Assert(
+        runs.length === 0 && steps.length === 0 && prompts.length === 0,
+        `${label}: cross-user MUST NOT read AgentRun, AgentRunStep, or PromptRun over wire`,
+    );
+
+    const runObj = await otherCtx.Provider.GetEntityObject<MJAIAgentRunEntity>(AGENT_RUN_ENTITY, otherCtx.User);
+    const stepObj = await otherCtx.Provider.GetEntityObject<MJAIAgentRunStepEntity>(AGENT_RUN_STEP_ENTITY, otherCtx.User);
+    const promptObj = await otherCtx.Provider.GetEntityObject<MJAIPromptRunEntity>(PROMPT_RUN_ENTITY, otherCtx.User);
+    Assert(!(await runObj.Load(ids.runId)), `${label}: cross-user Load(AgentRun) over wire must fail`);
+    Assert(!(await stepObj.Load(ids.stepId)), `${label}: cross-user Load(AgentRunStep) over wire must fail`);
+    Assert(!(await promptObj.Load(ids.promptRunId)), `${label}: cross-user Load(PromptRun) over wire must fail`);
 }
 
 async function cleanupTaskRows(ctx: IntegrationCheckContext, taskId: string | null, itemId: string | null): Promise<void> {
@@ -579,7 +709,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'adversarial-persona.AP5',
-        Name: 'AP5 — over the wire: CT-7 AI run-row lockdown (off-turn refusal + positive wire turn + post-turn mutation denial) and CT-8 owner omission',
+        Name: 'AP5 — over the wire: CT-7 AI run-row lockdown (positive wire turn + off-turn refusal + post-turn mutation denial) and CT-8 owner omission',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await getPersonaClientContext(ctx, 'ada');
@@ -591,12 +721,11 @@ const checks: NamedCheck[] = [
             let genConvId: string | null = null;
             let genChatId: string | null = null;
             let adaRunId: string | null = null;
+            let adaPromptRunId: string | null = null;
             let previousOwnerUserId: string | null = null;
 
             try {
-                await assertDirectAIRunLockdownOverWire(asPersona(ctx, bea), bea.User, promptSeed, 'Bea wire');
-                await assertDirectAIRunLockdownOverWire(asPersona(ctx, harper), harper.User, promptSeed, 'Harper wire');
-
+                // 1. Positive authorized participant turn over wire -> persists AgentRun, AgentRunStep, and PromptRun
                 const started = await clientOf(ada).CreateSpaceConversation({
                     SpaceID: DISCOVERY_SPACE_ID,
                     Name: `ap5-wire-ct7-${stamp}`,
@@ -633,35 +762,32 @@ const checks: NamedCheck[] = [
                     'Bea reads permitted Shared reply over wire without leaking Team brief',
                 );
 
-                const persistedRuns = await FindRows<{ ID: string }>(
-                    ctx,
-                    AGENT_RUN_ENTITY,
-                    `ConversationID = '${genConvId}'`,
-                    ['ID'],
-                    undefined,
-                    { BypassCache: true },
-                );
-                Assert(persistedRuns.length >= 1, 'Server persisted AI Agent Run row during wire turn');
-                const beaRunId = persistedRuns[0].ID;
+                const beaTurnIds = await assertTurnPersistedAllThreeEntitiesOverWire(ctx, asPersona(ctx, bea), genConvId, 'AP5 Bea wire turn');
 
-                const harperReadsBeaRun = await FindRows<{ ID: string }>(
-                    asPersona(ctx, harper),
-                    AGENT_RUN_ENTITY,
-                    `ID = '${beaRunId}'`,
-                    ['ID'],
-                    harper.User,
-                    { BypassCache: true },
-                );
-                Assert(harperReadsBeaRun.length === 0, 'Harper MUST NOT read Bea AI Agent Run over wire');
+                // 2. Off-turn direct Create CT-7 lockdown over wire using the real persisted beaTurnIds.runId
+                await assertDirectAIRunLockdownOverWire(asPersona(ctx, bea), bea.User, promptSeed, beaTurnIds.runId, 'Bea wire');
+                await assertDirectAIRunLockdownOverWire(asPersona(ctx, harper), harper.User, promptSeed, beaTurnIds.runId, 'Harper wire');
 
-                const postTurnRun = await bea.Provider.GetEntityObject<MJAIAgentRunEntity>(AGENT_RUN_ENTITY, bea.User);
-                if (await postTurnRun.Load(beaRunId)) {
-                    postTurnRun.Result = 'post-turn-wire-tamper';
-                    Assert(!(await postTurnRun.Save()), 'Bea MUST NOT mutate her AI Agent Run over wire after turn ends');
-                    Assert(!(await postTurnRun.Delete()), 'Bea MUST NOT delete her AI Agent Run over wire after turn ends');
-                }
+                // 3. Post-turn unconditional Load + Save() + Delete() refusal for Bea over wire on all three CT-7 entities
+                await assertPostTurnOwnerLockdownOverWire(asPersona(ctx, bea), beaTurnIds, 'AP5 Bea wire post-turn');
 
-                // Staff control run isolation
+                // 4. Cross-user isolation & load denial for Harper over wire on Bea's AgentRun, AgentRunStep, and PromptRun
+                await assertCrossUserRunIsolationOverWire(asPersona(ctx, harper), beaTurnIds, 'AP5 Harper vs Bea wire runs');
+
+                // 5. Staff control run isolation (Ada AgentRun + AgentRunStep + PromptRun)
+                const adaPromptRun = await ada.Provider.GetEntityObject<MJAIPromptRunEntity>(PROMPT_RUN_ENTITY, ada.User);
+                adaPromptRun.NewRecord();
+                adaPromptRun.PromptID = promptSeed.promptId;
+                adaPromptRun.ModelID = promptSeed.modelId;
+                adaPromptRun.VendorID = promptSeed.vendorId;
+                adaPromptRun.AgentID = COLLABORATION_TEST_AGENT_ID;
+                adaPromptRun.RunAt = new Date();
+                adaPromptRun.CompletedAt = new Date();
+                adaPromptRun.Success = true;
+                adaPromptRun.RunType = 'Single';
+                Assert(await adaPromptRun.Save(), 'Staff Ada saves own AI Prompt Run over wire');
+                adaPromptRunId = adaPromptRun.ID;
+
                 const adaRun = await ada.Provider.GetEntityObject<MJAIAgentRunEntity>(AGENT_RUN_ENTITY, ada.User);
                 adaRun.NewRecord();
                 adaRun.AgentID = COLLABORATION_TEST_AGENT_ID;
@@ -673,17 +799,27 @@ const checks: NamedCheck[] = [
                 Assert(await adaRun.Save(), 'Staff Ada saves own AI Agent Run over wire');
                 adaRunId = adaRun.ID;
 
-                const beaReadsAdaRun = await FindRows<{ ID: string }>(
-                    asPersona(ctx, bea),
-                    AGENT_RUN_ENTITY,
-                    `ID = '${adaRunId}'`,
-                    ['ID'],
-                    bea.User,
-                    { BypassCache: true },
-                );
-                Assert(beaReadsAdaRun.length === 0, 'Bea MUST NOT read Ada AI Agent Run over wire');
+                const adaStep = await ada.Provider.GetEntityObject<MJAIAgentRunStepEntity>(AGENT_RUN_STEP_ENTITY, ada.User);
+                adaStep.NewRecord();
+                adaStep.AgentRunID = adaRunId;
+                adaStep.StepNumber = 1;
+                adaStep.StepType = 'Prompt';
+                adaStep.StepName = 'AP5 Ada wire control step';
+                adaStep.TargetID = promptSeed.promptId;
+                adaStep.TargetLogID = adaPromptRunId;
+                adaStep.Status = 'Completed';
+                adaStep.StartedAt = new Date();
+                adaStep.CompletedAt = new Date();
+                adaStep.Success = true;
+                Assert(await adaStep.Save(), 'Staff Ada saves own AI Agent Run Step over wire');
 
-                // CT-8 MJ: AI Agents OwnerUser/OwnerUserID omission
+                await assertCrossUserRunIsolationOverWire(
+                    asPersona(ctx, bea),
+                    { runId: adaRunId, stepId: adaStep.ID, promptRunId: adaPromptRunId },
+                    'AP5 Bea vs Ada staff wire runs',
+                );
+
+                // 6. CT-8 MJ: AI Agents OwnerUser/OwnerUserID omission + Harper outsider RLS isolation
                 const agentEnt = await ctx.Provider.GetEntityObject<MJAIAgentEntity>(AI_AGENT_ENTITY, ctx.User);
                 Assert(await agentEnt.Load(COLLABORATION_TEST_AGENT_ID), 'Load test agent');
                 previousOwnerUserId = agentEnt.OwnerUserID;
@@ -703,7 +839,16 @@ const checks: NamedCheck[] = [
                 Assert(SameID(adaAgentRow?.OwnerUserID, ada.User.ID) && !!adaAgentRow?.OwnerUser, 'Staff Ada reads OwnerUser/OwnerUserID over wire');
 
                 await assertFieldAccessDeniedOrOmitted(asPersona(ctx, bea), bea.User, COLLABORATION_TEST_AGENT_ID, 'Bea wire CT-8');
-                await assertFieldAccessDeniedOrOmitted(asPersona(ctx, harper), harper.User, COLLABORATION_TEST_AGENT_ID, 'Harper wire CT-8');
+
+                const harperAgentRows = await FindRows<{ ID: string }>(
+                    asPersona(ctx, harper),
+                    AI_AGENT_ENTITY,
+                    `ID = '${COLLABORATION_TEST_AGENT_ID}'`,
+                    ['ID'],
+                    harper.User,
+                    { BypassCache: true },
+                );
+                Assert(harperAgentRows.length === 0, 'Harper (Harbor outsider) MUST NOT read ungranted test agent over wire');
             } finally {
                 if (previousOwnerUserId) {
                     const restoreAgent = await ctx.Provider.GetEntityObject<MJAIAgentEntity>(AI_AGENT_ENTITY, ctx.User);
@@ -714,6 +859,9 @@ const checks: NamedCheck[] = [
                 }
                 if (adaRunId) {
                     await deleteRowAndConfirm(ctx.Provider, ctx.User, AGENT_RUN_ENTITY, adaRunId, 'AP5 wire Ada run');
+                }
+                if (adaPromptRunId) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, PROMPT_RUN_ENTITY, adaPromptRunId, 'AP5 wire Ada prompt run');
                 }
                 if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
             }
@@ -739,6 +887,10 @@ const checks: NamedCheck[] = [
             let mintedScopeRuleId: string | null = null;
             let teamUploadItemId: string | null = null;
             let teamUploadFileId: string | null = null;
+            let genConvId: string | null = null;
+            let genChatId: string | null = null;
+            let adaRunId: string | null = null;
+            let adaPromptRunId: string | null = null;
 
             try {
                 const role = await ctx.Provider.GetEntityObject<MJRoleEntity>(ROLE_ENTITY, ctx.User);
@@ -864,7 +1016,78 @@ const checks: NamedCheck[] = [
                 scopeAttempt.Name = `${MARK} AP6 Scope ${stamp}`;
                 Assert(!(await scopeAttempt.Save()), 'Multi-role user MUST NOT write Search Scopes over wire');
 
-                await assertDirectAIRunLockdownOverWire(multiCtx, multiUser!, promptSeed, 'Multi-role wire CT-7');
+                const started = await clientOf(ada).CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `ap6-wire-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(started.Success === true && !!started.ConversationID, `Ada starts AP6 General chat over wire: ${started.ErrorMessage ?? ''}`);
+                genConvId = started.ConversationID!;
+                genChatId = started.SpaceChatID!;
+
+                const multiPost = await multiClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} what shared materials exist?`,
+                });
+                Assert(multiPost.Success === true && !!multiPost.DetailID, `Multi-role posts over wire: ${multiPost.ErrorMessage ?? ''}`);
+
+                const multiTurn = await multiClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: multiPost.DetailID!,
+                });
+                Assert(multiTurn.Success === true, `Multi-role authorized turn succeeds over wire: ${multiTurn.ErrorMessage ?? ''}`);
+
+                const multiTurnIds = await assertTurnPersistedAllThreeEntitiesOverWire(ctx, multiCtx, genConvId, 'AP6 Multi-role wire turn');
+                await assertDirectAIRunLockdownOverWire(multiCtx, multiUser!, promptSeed, multiTurnIds.runId, 'Multi-role wire CT-7');
+                await assertPostTurnOwnerLockdownOverWire(multiCtx, multiTurnIds, 'AP6 Multi-role wire post-turn');
+
+                // Cross-user isolation against Ada staff control run/step/promptRun
+                const adaPromptRun = await ada.Provider.GetEntityObject<MJAIPromptRunEntity>(PROMPT_RUN_ENTITY, ada.User);
+                adaPromptRun.NewRecord();
+                adaPromptRun.PromptID = promptSeed.promptId;
+                adaPromptRun.ModelID = promptSeed.modelId;
+                adaPromptRun.VendorID = promptSeed.vendorId;
+                adaPromptRun.AgentID = COLLABORATION_TEST_AGENT_ID;
+                adaPromptRun.RunAt = new Date();
+                adaPromptRun.CompletedAt = new Date();
+                adaPromptRun.Success = true;
+                adaPromptRun.RunType = 'Single';
+                Assert(await adaPromptRun.Save(), 'AP6 Ada saves control PromptRun over wire');
+                adaPromptRunId = adaPromptRun.ID;
+
+                const adaRun = await ada.Provider.GetEntityObject<MJAIAgentRunEntity>(AGENT_RUN_ENTITY, ada.User);
+                adaRun.NewRecord();
+                adaRun.AgentID = COLLABORATION_TEST_AGENT_ID;
+                adaRun.UserID = ada.User.ID;
+                adaRun.Status = 'Completed';
+                adaRun.StartedAt = new Date();
+                adaRun.CompletedAt = new Date();
+                adaRun.Success = true;
+                Assert(await adaRun.Save(), 'AP6 Ada saves control AgentRun over wire');
+                adaRunId = adaRun.ID;
+
+                const adaStep = await ada.Provider.GetEntityObject<MJAIAgentRunStepEntity>(AGENT_RUN_STEP_ENTITY, ada.User);
+                adaStep.NewRecord();
+                adaStep.AgentRunID = adaRunId;
+                adaStep.StepNumber = 1;
+                adaStep.StepType = 'Prompt';
+                adaStep.StepName = 'AP6 Ada wire control step';
+                adaStep.TargetID = promptSeed.promptId;
+                adaStep.TargetLogID = adaPromptRunId;
+                adaStep.Status = 'Completed';
+                adaStep.StartedAt = new Date();
+                adaStep.CompletedAt = new Date();
+                adaStep.Success = true;
+                Assert(await adaStep.Save(), 'AP6 Ada saves control AgentRunStep over wire');
+
+                await assertCrossUserRunIsolationOverWire(
+                    multiCtx,
+                    { runId: adaRunId, stepId: adaStep.ID, promptRunId: adaPromptRunId },
+                    'AP6 Multi-role vs Ada wire control runs',
+                );
+
                 await assertFieldAccessDeniedOrOmitted(multiCtx, multiUser!, COLLABORATION_TEST_AGENT_ID, 'Multi-role wire CT-8');
 
                 const inviteAttempt = await multiClient.MintSpaceLink({
@@ -874,6 +1097,9 @@ const checks: NamedCheck[] = [
                 });
                 Assert(!inviteAttempt.Success, 'Multi-role non-staff user MUST NOT mint space invite links over wire (CT-5)');
             } finally {
+                if (adaRunId) await deleteRowAndConfirm(ctx.Provider, ctx.User, AGENT_RUN_ENTITY, adaRunId, 'AP6 wire Ada control run');
+                if (adaPromptRunId) await deleteRowAndConfirm(ctx.Provider, ctx.User, PROMPT_RUN_ENTITY, adaPromptRunId, 'AP6 wire Ada control prompt run');
+                if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
                 if (mintedScopeRuleId) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: API Key Scopes', mintedScopeRuleId, 'AP6 wire key scope');
                 if (mintedKeyId) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: API Keys', mintedKeyId, 'AP6 wire api key');
                 if (teamUploadItemId) {
