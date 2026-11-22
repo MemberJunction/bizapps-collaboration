@@ -394,5 +394,29 @@
         }
       ]
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Agent Source Receipts"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Agent Source Receipts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Agent Source Receipts&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "CanRead": 1,
+            "CanCreate": 0,
+            "CanUpdate": 0,
+            "CanDelete": 0,
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Source Receipts In Reach"
+          }
+        }
+      ]
+    }
   }
 ]
