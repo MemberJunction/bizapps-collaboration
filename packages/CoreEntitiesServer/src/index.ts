@@ -36,9 +36,11 @@ export {
     estimateCandidateItemTokens,
     estimateTokenCount,
     getHostVectorSearchAdapter,
+    HostSearchEngineVectorAdapter,
     MAX_CONTEXT_TOKENS_CEILING,
     MAX_RETRIEVAL_TOP_K,
     MAX_TOKENS_PER_SOURCE_CEILING,
+    renderCandidateItemPromptLine,
     resolveSpaceAgentRetrieval,
     scoreItemsLexically,
     setHostVectorSearchAdapter,
@@ -76,6 +78,8 @@ export { EnsureSpaceForRecord } from './ensure-space-for-record.js';
 export type { EnsureSpaceForRecordParams } from './ensure-space-for-record.js';
 export type {
     RetrievalRankingMode,
+    SearchEngineLike,
+    SearchEngineSearchParams,
     SpaceAgentCandidateItem,
     SpaceAgentRetrievalDecision,
     SpaceAgentRetrievalOptions,
@@ -140,9 +144,9 @@ export {
     SCOPED_SEARCH_ACTION_ID,
     COLLABORATION_SPACE_SCOPE_ID,
 } from './turn-tools.js';
-export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant } from './turn-tools.js';
+export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant, TurnToolSourceHit } from './turn-tools.js';
 export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction.js';
-export { CollaborationScopedSearchAction, LoadCollaborationScopedSearchAction, unquoteSpaceSearch, unwrapPhraseQuotes } from './CollaborationScopedSearchAction.js';
+export { CollaborationScopedSearchAction, LoadCollaborationScopedSearchAction, recordScopedSearchHitsOnContext, unquoteSpaceSearch, unwrapPhraseQuotes } from './CollaborationScopedSearchAction.js';
 export type { TurnToolsGiven } from './execute-space-chat-turn.js';
 export { IsPeopleEntity, PEOPLE_ENTITY, ResolvePersonIDForUser, ResolveUserIDForPerson, ResolveUserIDsForPeople } from '@mj-biz-apps/common-entities';
 export {
@@ -178,6 +182,8 @@ export {
     COLLABORATION_SOURCE_RECEIPT_ENTITY,
     COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES,
     type CollaborationAIRunEntityName,
+    type CollaborationTurnAuthorityContext,
+    getCollaborationTurnAuthorityContext,
     runWithCollaborationAgentTurnAuthority,
     evaluateParticipantAIRunWriteAccess,
     evaluateParticipantSourceReceiptWriteAccess,
@@ -196,9 +202,12 @@ export {
     persistSpaceAgentSourceReceipts,
     querySpaceAgentSourceReceipts,
     resolveSuppliedKnowledgeSources,
+    resolveToolSuppliedSourceCandidates,
     type PersistSpaceAgentSourceReceiptsParams,
     type PersistSpaceAgentSourceReceiptsResult,
     type QuerySpaceAgentSourceReceiptsParams,
     type QuerySpaceAgentSourceReceiptsResult,
+    type ResolveToolSuppliedSourcesParams,
+    type ResolveToolSuppliedSourcesResult,
 } from './space-agent-source-receipts.js';
 

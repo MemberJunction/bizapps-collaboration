@@ -54,10 +54,22 @@ export interface SpaceAgentItemShape {
 
 export interface SpaceAgentVectorSearchQuery {
     queryText: string;
+    /** Authoritative SpaceChat ID when retrieval runs inside a space chat turn. */
+    spaceChatId?: string;
+    /** Anchor SpaceID from which retrieval was requested. */
+    anchorSpaceId?: string;
+    /** Effective chat audience ceiling ('Shared' or 'Team'). */
+    chatAudience?: Band;
     /** Strictly pre-filtered `(spaceId, maxBand)` scopes for the current audience. */
     allowedSpaces: ReadonlyArray<{ spaceId: string; maxBand: Band }>;
+    /** Per-space maximum allowed visibility band keyed by lowercase SpaceID. */
+    allowedBandsBySpaceId?: Readonly<Record<string, Band>>;
     /** Strictly pre-filtered lowercase `SpaceItem.ID` set; out-of-scope items never enter. */
     allowedSpaceItemIds: ReadonlySet<string>;
+    /** Audience user IDs in reach intersection. */
+    audienceUserIds?: readonly string[];
+    /** Optional hydrated audience readers for SearchEngine audience intersection. */
+    audienceUsers?: readonly UserInfo[];
     topK: number;
     user: UserInfo;
     provider: IMetadataProvider;
@@ -184,21 +196,33 @@ export function tokenizeForSearch(text: string): string[] {
     return raw.filter((tok) => tok.length >= 2);
 }
 
-/** Estimates total prompt tokens consumed when an item is rendered into the Ask template. */
-export function estimateCandidateItemTokens(item: SpaceAgentItemShape): number {
-    const parts: string[] = [item.Name];
-    if (item.Description) parts.push(item.Description);
-    if (item.ChunkTexts && item.ChunkTexts.length > 0) {
-        parts.push(item.ChunkTexts.join(' | '));
-    }
+/**
+ * Renders an item into the exact single-line representation used by the Collaboration Ask prompt template.
+ */
+export function renderCandidateItemPromptLine(item: SpaceAgentItemShape): string {
     if (item.EntityName === 'MJ_BizApps_Tasks: Tasks') {
-        parts.push(`Status: ${item.Status ?? 'Open'}`);
-        if (item.Priority) parts.push(`Priority: ${item.Priority}`);
-        if (item.Assignees && item.Assignees.length > 0) parts.push(item.Assignees.join(', '));
-        if (item.DueAt) parts.push(item.DueAt);
-        if (typeof item.PercentComplete === 'number') parts.push(`${item.PercentComplete}%`);
+        const statusPart = `Status: ${item.Status ?? 'Open'}`;
+        const priorityPart = item.Priority ? ` | Priority: ${item.Priority}` : '';
+        const ownerPart = ` | Owner: ${item.Assignees && item.Assignees.length > 0 ? item.Assignees.join(', ') : 'Unassigned'}`;
+        const duePart = item.DueAt ? ` | Due: ${item.DueAt}` : '';
+        const progressPart = typeof item.PercentComplete === 'number' ? ` | Progress: ${item.PercentComplete}%` : '';
+        const descPart = item.Description ? ` (${item.Description})` : '';
+        const chunkPart = item.ChunkTexts && item.ChunkTexts.length > 0 ? `: ${item.ChunkTexts.join(' | ')}` : '';
+        return `- [Task] ${item.Name} [${statusPart}${priorityPart}${ownerPart}${duePart}${progressPart}]${descPart}${chunkPart}`;
     }
-    return estimateTokenCount(parts.join(' ')) + 4;
+    const descPart = item.Description ? ` (${item.Description})` : '';
+    const chunkPart = item.ChunkTexts && item.ChunkTexts.length > 0 ? `: ${item.ChunkTexts.join(' | ')}` : '';
+    return `- ${item.Name}${descPart}${chunkPart}`;
+}
+
+/**
+ * Estimates total prompt tokens consumed when an item is rendered into the Ask template
+ * (including its trailing line break so per-item totals strictly upper-bound the joined prompt block).
+ */
+export function estimateCandidateItemTokens(item: SpaceAgentItemShape): number {
+    const line = renderCandidateItemPromptLine(item).trim();
+    if (!line) return 0;
+    return Math.ceil((line.length + 1) / CHARS_PER_TOKEN);
 }
 
 interface TermFrequencies {
@@ -320,14 +344,47 @@ function truncateTextToTokens(text: string, maxTokens: number): { text: string; 
     if (maxTokens <= 0) return { text: '', truncated: text.length > 0 };
     const maxChars = maxTokens * CHARS_PER_TOKEN;
     if (text.length <= maxChars) return { text, truncated: false };
-    if (maxChars <= 3) return { text: text.slice(0, maxChars), truncated: true };
-    return { text: `${text.slice(0, maxChars - 1).trimEnd()}…`, truncated: true };
+    if (maxChars <= 1) return { text: text.slice(0, maxChars), truncated: true };
+    const slice = text.slice(0, maxChars - 1).trimEnd();
+    return { text: slice ? `${slice}…` : text.slice(0, maxChars), truncated: true };
+}
+
+function budgetAssigneesToFit<TItem extends SpaceAgentItemShape>(
+    item: TItem,
+    tokenCeiling: number,
+): { item: TItem; truncated: boolean } {
+    if (!item.Assignees || item.Assignees.length === 0) {
+        return { item, truncated: false };
+    }
+    if (estimateCandidateItemTokens(item) <= tokenCeiling) {
+        return { item, truncated: false };
+    }
+
+    const total = item.Assignees.length;
+    for (let keep = Math.min(total - 1, 10); keep >= 1; keep--) {
+        const suffix = `+${total - keep} more`;
+        const candidateList = [...item.Assignees.slice(0, keep).map((a) => truncateTextToTokens(a, 10).text), suffix];
+        const candidate: TItem = { ...item, Assignees: candidateList };
+        if (estimateCandidateItemTokens(candidate) <= tokenCeiling) {
+            return { item: candidate, truncated: true };
+        }
+    }
+
+    for (let keep = Math.min(total, 3); keep >= 1; keep--) {
+        const candidateList = item.Assignees.slice(0, keep).map((a) => truncateTextToTokens(a, 8).text);
+        const candidate: TItem = { ...item, Assignees: candidateList };
+        if (estimateCandidateItemTokens(candidate) <= tokenCeiling) {
+            return { item: candidate, truncated: true };
+        }
+    }
+
+    return { item: { ...item, Assignees: [] }, truncated: true };
 }
 
 function budgetSingleItem<TItem extends SpaceAgentItemShape>(
     item: TItem,
     tokenCeiling: number,
-): { item: TItem; estimatedTokens: number; truncated: boolean } {
+): { item: TItem; estimatedTokens: number; truncated: boolean; fits: boolean } {
     let truncated = false;
     let working: TItem = { ...item };
 
@@ -336,17 +393,21 @@ function budgetSingleItem<TItem extends SpaceAgentItemShape>(
         truncated = true;
     }
 
-    const baseOverhead = estimateCandidateItemTokens({
+    if (estimateCandidateItemTokens(working) <= tokenCeiling) {
+        return { item: working, estimatedTokens: estimateCandidateItemTokens(working), truncated, fits: true };
+    }
+
+    // Reserve base overhead without Description or ChunkTexts so text budget is realistic.
+    const baseWithoutText = estimateCandidateItemTokens({
         ...working,
         Description: null,
         ChunkTexts: undefined,
     });
-    // Reserve 2 tokens for separator spaces/delimiters when Description and ChunkTexts are joined.
-    let remainingForText = Math.max(0, tokenCeiling - baseOverhead - 2);
+    let remainingForText = Math.max(0, tokenCeiling - baseWithoutText);
 
     if (working.Description) {
         const descCap = working.ChunkTexts && working.ChunkTexts.length > 0
-            ? Math.max(24, Math.floor(remainingForText * 0.4))
+            ? Math.min(remainingForText, Math.max(16, Math.floor(remainingForText * 0.4)))
             : remainingForText;
         const descRes = truncateTextToTokens(working.Description, descCap);
         working.Description = descRes.text || null;
@@ -377,28 +438,73 @@ function budgetSingleItem<TItem extends SpaceAgentItemShape>(
         };
     }
 
-    let estimatedTokens = estimateCandidateItemTokens(working);
-    if (estimatedTokens > tokenCeiling && working.ChunkTexts && working.ChunkTexts.length > 0) {
-        const excessChars = (estimatedTokens - tokenCeiling) * CHARS_PER_TOKEN + 4;
+    // Enforce strict ceiling across every remaining rendered field:
+    // 1. Trim or drop ChunkTexts if still over ceiling
+    while (estimateCandidateItemTokens(working) > tokenCeiling && working.ChunkTexts && working.ChunkTexts.length > 0) {
+        const overTokens = estimateCandidateItemTokens(working) - tokenCeiling;
         const lastIdx = working.ChunkTexts.length - 1;
+        const excessChars = overTokens * CHARS_PER_TOKEN + 2;
         const trimmed = working.ChunkTexts[lastIdx].slice(0, Math.max(0, working.ChunkTexts[lastIdx].length - excessChars)).trimEnd();
-        const nextChunks = trimmed ? [...working.ChunkTexts.slice(0, lastIdx), `${trimmed}…`] : working.ChunkTexts.slice(0, lastIdx);
+        const nextChunks = trimmed.length >= 4 ? [...working.ChunkTexts.slice(0, lastIdx), `${trimmed}…`] : working.ChunkTexts.slice(0, lastIdx);
         working = { ...working, ChunkTexts: nextChunks.length > 0 ? nextChunks : undefined };
         truncated = true;
-        estimatedTokens = estimateCandidateItemTokens(working);
-    }
-    if (estimatedTokens > tokenCeiling && working.Description) {
-        const excessChars = (estimatedTokens - tokenCeiling) * CHARS_PER_TOKEN + 4;
-        const trimmed = working.Description.slice(0, Math.max(0, working.Description.length - excessChars)).trimEnd();
-        working = { ...working, Description: trimmed ? `${trimmed}…` : null };
-        truncated = true;
-        estimatedTokens = estimateCandidateItemTokens(working);
     }
 
+    // 2. Trim or drop Description if still over ceiling
+    if (estimateCandidateItemTokens(working) > tokenCeiling && working.Description) {
+        const overTokens = estimateCandidateItemTokens(working) - tokenCeiling;
+        const excessChars = overTokens * CHARS_PER_TOKEN + 3;
+        const trimmed = working.Description.slice(0, Math.max(0, working.Description.length - excessChars)).trimEnd();
+        working = { ...working, Description: trimmed.length >= 4 ? `${trimmed}…` : null };
+        truncated = true;
+    }
+
+    // 3. Trim or drop oversized Assignees list if still over ceiling
+    if (estimateCandidateItemTokens(working) > tokenCeiling && working.Assignees && working.Assignees.length > 0) {
+        const assigneeRes = budgetAssigneesToFit(working, tokenCeiling);
+        working = assigneeRes.item;
+        if (assigneeRes.truncated) truncated = true;
+    }
+
+    // 4. Drop optional Task metadata fields if still over ceiling
+    if (estimateCandidateItemTokens(working) > tokenCeiling && working.EntityName === 'MJ_BizApps_Tasks: Tasks') {
+        if (typeof working.PercentComplete === 'number') {
+            working = { ...working, PercentComplete: null };
+            truncated = true;
+        }
+        if (estimateCandidateItemTokens(working) > tokenCeiling && working.DueAt) {
+            working = { ...working, DueAt: null };
+            truncated = true;
+        }
+        if (estimateCandidateItemTokens(working) > tokenCeiling && working.Priority) {
+            working = { ...working, Priority: null };
+            truncated = true;
+        }
+    }
+
+    // 5. Trim Name until rendered prompt line strictly satisfies tokenCeiling
+    if (estimateCandidateItemTokens(working) > tokenCeiling && working.Name.length > 1) {
+        const emptyNameTokens = estimateCandidateItemTokens({ ...working, Name: '' });
+        const maxNameChars = Math.max(1, (tokenCeiling - emptyNameTokens) * CHARS_PER_TOKEN);
+        if (working.Name.length > maxNameChars) {
+            const prefix = working.Name.slice(0, Math.max(1, maxNameChars - 1)).trimEnd();
+            working = { ...working, Name: maxNameChars >= 3 && prefix ? `${prefix}…` : working.Name.slice(0, maxNameChars) };
+            truncated = true;
+        }
+        while (estimateCandidateItemTokens(working) > tokenCeiling && working.Name.length > 1) {
+            const nextLen = Math.max(1, working.Name.length - 4);
+            const prefix = working.Name.slice(0, Math.max(1, nextLen - 1)).trimEnd();
+            working = { ...working, Name: nextLen >= 3 && prefix ? `${prefix}…` : working.Name.slice(0, nextLen) };
+            truncated = true;
+        }
+    }
+
+    const estimatedTokens = estimateCandidateItemTokens(working);
     return {
         item: working,
         estimatedTokens,
         truncated,
+        fits: estimatedTokens <= tokenCeiling,
     };
 }
 
@@ -421,12 +527,12 @@ export function applyContextTokenBudget<TItem extends SpaceAgentItemShape>(
     for (const entry of ranked) {
         if (items.length >= options.topK) break;
         const remainingContext = options.maxContextTokens - totalEstimatedTokens;
-        if (remainingContext < 12) break;
+        if (remainingContext < 4) break;
 
         const itemBudget = Math.min(options.maxTokensPerSource, remainingContext);
         const budgeted = budgetSingleItem(entry.item, itemBudget);
-        if (totalEstimatedTokens + budgeted.estimatedTokens > options.maxContextTokens && items.length > 0) {
-            break;
+        if (!budgeted.fits || budgeted.estimatedTokens > itemBudget || totalEstimatedTokens + budgeted.estimatedTokens > options.maxContextTokens) {
+            continue;
         }
 
         totalEstimatedTokens += budgeted.estimatedTokens;
@@ -450,16 +556,29 @@ export function applyContextTokenBudget<TItem extends SpaceAgentItemShape>(
     return { items, suppliedSources, totalEstimatedTokens };
 }
 
-interface SearchEngineLike {
+export interface SearchEngineSearchParams {
+    Query: string;
+    MaxResults?: number;
+    ScopeIDs?: string[];
+    Filters?: {
+        SourceTypes?: string[];
+        EntityNames?: string[];
+        AllowedSpaceItemIDs?: string[];
+        AllowedBandsBySpaceID?: Readonly<Record<string, Band>>;
+    };
+    SearchContext?: {
+        PrimaryScopeRecordID?: string;
+        SecondaryScopes?: Record<string, string[]>;
+    };
+    Audience?: {
+        Readers: UserInfo[];
+    };
+}
+
+export interface SearchEngineLike {
     Config(config: Record<string, never>, contextUser: UserInfo): Promise<void>;
     Search(
-        params: {
-            Query: string;
-            MaxResults?: number;
-            ScopeIDs?: string[];
-            Filters?: { SourceTypes?: string[]; EntityNames?: string[] };
-            SearchContext?: { PrimaryScopeRecordID?: string };
-        },
+        params: SearchEngineSearchParams,
         contextUser: UserInfo,
     ): Promise<{
         Success: boolean;
@@ -490,8 +609,34 @@ function tryLoadHostSearchEngine(): SearchEngineLike | null {
     }
 }
 
-class HostSearchEngineVectorAdapter implements SpaceAgentVectorSearchAdapter {
+function buildAllowedBandsMap(query: SpaceAgentVectorSearchQuery): Record<string, Band> {
+    const out: Record<string, Band> = {};
+    if (query.allowedBandsBySpaceId) {
+        for (const [spaceId, band] of Object.entries(query.allowedBandsBySpaceId)) {
+            const clean = parseUuid(spaceId)?.toLowerCase();
+            if (!clean) continue;
+            out[clean] = query.chatAudience === 'Shared' ? 'Shared' : band;
+        }
+    }
+    for (const space of query.allowedSpaces) {
+        const clean = parseUuid(space.spaceId)?.toLowerCase();
+        if (!clean) continue;
+        const effectiveBand: Band = query.chatAudience === 'Shared' ? 'Shared' : space.maxBand;
+        if (!out[clean] || effectiveBand === 'Shared') {
+            out[clean] = effectiveBand;
+        }
+    }
+    return out;
+}
+
+export class HostSearchEngineVectorAdapter implements SpaceAgentVectorSearchAdapter {
     public readonly name = 'mj-host-vector-search';
+
+    public constructor(private readonly engineOverride?: SearchEngineLike | null) {}
+
+    private resolveEngine(): SearchEngineLike | null {
+        return this.engineOverride !== undefined ? this.engineOverride : tryLoadHostSearchEngine();
+    }
 
     public async isConfigured(provider: IMetadataProvider, user: UserInfo): Promise<boolean> {
         if (typeof provider.EntityByName !== 'function') return false;
@@ -523,7 +668,7 @@ class HostSearchEngineVectorAdapter implements SpaceAgentVectorSearchAdapter {
             return false;
         }
 
-        const engine = tryLoadHostSearchEngine();
+        const engine = this.resolveEngine();
         if (!engine) return false;
         try {
             await engine.Config({}, user);
@@ -535,34 +680,89 @@ class HostSearchEngineVectorAdapter implements SpaceAgentVectorSearchAdapter {
     }
 
     public async search(query: SpaceAgentVectorSearchQuery): Promise<readonly SpaceAgentVectorHit[]> {
-        const engine = tryLoadHostSearchEngine();
+        const engine = this.resolveEngine();
         if (!engine || query.allowedSpaces.length === 0 || query.allowedSpaceItemIds.size === 0) {
             return [];
         }
 
+        const allowedBandsBySpaceId = buildAllowedBandsMap(query);
+        const allowedSpaceIds = Object.keys(allowedBandsBySpaceId);
+        if (allowedSpaceIds.length === 0) {
+            return [];
+        }
+
+        const allowsAnyTeam =
+            query.chatAudience !== 'Shared' &&
+            Object.values(allowedBandsBySpaceId).some((band) => band === 'Team');
+        const allowedAudiences: Band[] = allowsAnyTeam ? ['Shared', 'Team'] : ['Shared'];
+        const primaryScopeRecordId =
+            parseUuid(query.spaceChatId) ??
+            parseUuid(query.anchorSpaceId) ??
+            allowedSpaceIds[0];
+
         const overfetchTopK = Math.min(query.topK * 3, MAX_RETRIEVAL_TOP_K * 3);
-        const hits: SpaceAgentVectorHit[] = [];
+        const bestScoreById = new Map<string, number>();
         try {
             const result = await engine.Search({
                 Query: query.queryText,
                 MaxResults: overfetchTopK,
                 ScopeIDs: [COLLABORATION_SPACE_SCOPE_ID],
-                Filters: { SourceTypes: ['vector'], EntityNames: [SPACE_ITEMS_ENTITY_NAME] },
-                SearchContext: { PrimaryScopeRecordID: query.allowedSpaces[0].spaceId },
+                Filters: {
+                    SourceTypes: ['vector'],
+                    EntityNames: [SPACE_ITEMS_ENTITY_NAME],
+                    AllowedSpaceItemIDs: Array.from(query.allowedSpaceItemIds),
+                    AllowedBandsBySpaceID: allowedBandsBySpaceId,
+                },
+                SearchContext: {
+                    PrimaryScopeRecordID: primaryScopeRecordId,
+                    SecondaryScopes: {
+                        SpaceID: allowedSpaceIds,
+                        Audience: allowedAudiences,
+                    },
+                },
+                ...(query.audienceUsers && query.audienceUsers.length > 0
+                    ? { Audience: { Readers: [...query.audienceUsers] } }
+                    : {}),
             }, query.user);
             if (!result.Success) return [];
 
             for (const row of result.Results) {
+                if (row.EntityName && row.EntityName !== SPACE_ITEMS_ENTITY_NAME) {
+                    continue;
+                }
                 const candidateId = parseUuid(row.RecordID)?.toLowerCase();
-                if (candidateId && query.allowedSpaceItemIds.has(candidateId)) {
-                    hits.push({ spaceItemId: candidateId, score: row.Score });
+                if (!candidateId || !query.allowedSpaceItemIds.has(candidateId)) {
+                    continue;
+                }
+                if (row.RawMetadata) {
+                    const metaSpaceRaw = row.RawMetadata['SpaceID'];
+                    if (typeof metaSpaceRaw === 'string') {
+                        const metaSpace = parseUuid(metaSpaceRaw)?.toLowerCase();
+                        if (!metaSpace || !allowedBandsBySpaceId[metaSpace]) {
+                            continue;
+                        }
+                        const metaBand = row.RawMetadata['Band'];
+                        if (metaBand === 'Team' && allowedBandsBySpaceId[metaSpace] !== 'Team') {
+                            continue;
+                        }
+                    } else if (row.RawMetadata['Band'] === 'Team' && !allowsAnyTeam) {
+                        continue;
+                    }
+                }
+                const prev = bestScoreById.get(candidateId);
+                if (prev === undefined || row.Score > prev) {
+                    bestScoreById.set(candidateId, row.Score);
                 }
             }
         } catch (err) {
             LogError(`HostSearchEngineVectorAdapter failed; falling back to lexical ranking: ${err instanceof Error ? err.message : String(err)}`);
             return [];
         }
-        return hits;
+
+        return Array.from(bestScoreById.entries())
+            .map(([spaceItemId, score]) => ({ spaceItemId, score }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, query.topK);
     }
 }
 

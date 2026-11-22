@@ -20,12 +20,18 @@ import {
     DEFAULT_MAX_CONTEXT_TOKENS,
     DEFAULT_MAX_TOKENS_PER_SOURCE,
     DEFAULT_RETRIEVAL_TOP_K,
+    HostSearchEngineVectorAdapter,
     MAX_CONTEXT_TOKENS_CEILING,
     MAX_RETRIEVAL_TOP_K,
     MAX_TOKENS_PER_SOURCE_CEILING,
+    applyContextTokenBudget,
     estimateCandidateItemTokens,
+    estimateTokenCount,
+    renderCandidateItemPromptLine,
     resolveSpaceAgentRetrieval,
     setHostVectorSearchAdapter,
+    type SearchEngineLike,
+    type SearchEngineSearchParams,
     type SpaceAgentVectorHit,
     type SpaceAgentVectorSearchAdapter,
     type SpaceAgentVectorSearchQuery,
@@ -46,9 +52,14 @@ const ADA_ID = 'CC000000-3333-4000-8000-000000000001';
 const BEA_ID = 'CC000000-3333-4000-8000-000000000002';
 
 const FILES_ENTITY_ID = 'DD000000-4444-4000-8000-000000000001';
+const TASKS_ENTITY_ID = 'DD000000-4444-4000-8000-000000000002';
+const PEOPLE_ENTITY_ID = 'DD000000-4444-4000-8000-000000000003';
 const SPACE_TYPE_ID = 'EE000000-4444-4000-8000-000000000001';
 const CONVERSATION_ID = 'FF000000-4444-4000-8000-000000000001';
+const SPACE_CHAT_ID = 'FF000000-4444-4000-8000-000000000002';
 const USER_MESSAGE_ID = 'FF000000-5555-4000-8000-000000000001';
+const REPLY_DETAIL_ID = 'FF000000-5555-4000-8000-000000000002';
+const AGENT_RUN_ID = 'FF000000-6666-4000-8000-000000000001';
 const ALLOWED_AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 
 /** Reproducible latency ceiling for scoring and budgeting 50,000+ items on Node.js. */
@@ -71,9 +82,39 @@ interface SyntheticFileRow {
     ContentType: string;
 }
 
+interface SyntheticTaskRow {
+    [key: string]: string | number | boolean | null | Date;
+    ID: string;
+    Name: string;
+    Description: string | null;
+    Status: string | null;
+    Priority: string | null;
+    DueAt: string | null;
+    PercentComplete: number | null;
+}
+
+interface SyntheticTaskAssignmentRow {
+    [key: string]: string | number | boolean | null | Date;
+    ID: string;
+    TaskID: string;
+    AssigneeEntityID: string;
+    AssigneeRecordID: string;
+    Status: string;
+    AssignedAt: string;
+}
+
+interface SyntheticPersonRow {
+    [key: string]: string | number | boolean | null | Date;
+    ID: string;
+    DisplayName: string;
+}
+
 interface SyntheticWorld {
     items: SyntheticSpaceItem[];
     filesById: Map<string, SyntheticFileRow>;
+    tasksById: Map<string, SyntheticTaskRow>;
+    taskAssignments: SyntheticTaskAssignmentRow[];
+    peopleById: Map<string, SyntheticPersonRow>;
     chunksByItemId: Map<string, string[]>;
     messageText?: string;
 }
@@ -93,13 +134,28 @@ function parseQuotedIds(clause: string): Set<string> {
     return ids;
 }
 
-function createScaleWorld(totalInScopeCount: number, options?: { oversizedItemIndex?: number; targetNeedleIndex?: number }): SyntheticWorld {
+function createScaleWorld(
+    totalInScopeCount: number,
+    options?: {
+        oversizedItemIndex?: number;
+        targetNeedleIndex?: number;
+        targetMode?: 'file' | 'chunk-only' | 'assignee-only';
+        needleToken?: string;
+        assigneeDisplayName?: string;
+    },
+): SyntheticWorld {
     const items: SyntheticSpaceItem[] = [];
     const filesById = new Map<string, SyntheticFileRow>();
+    const tasksById = new Map<string, SyntheticTaskRow>();
+    const taskAssignments: SyntheticTaskAssignmentRow[] = [];
+    const peopleById = new Map<string, SyntheticPersonRow>();
     const chunksByItemId = new Map<string, string[]>();
 
     const needleIndex = options?.targetNeedleIndex ?? Math.floor(totalInScopeCount * 0.72);
     const oversizedIndex = options?.oversizedItemIndex ?? -1;
+    const targetMode = options?.targetMode ?? 'file';
+    const needleToken = options?.needleToken ?? 'quantum telemetry calibration';
+    const assigneeName = options?.assigneeDisplayName ?? 'Zephyr Nightwing';
 
     // Add out-of-scope items across Team band, sibling ExcludedFromParentScope, ExcludedEntirely, and unrelated space
     const outOfScopeSpecs: Array<{ spaceId: string; band: 'Shared' | 'Team'; name: string; desc: string }> = [
@@ -150,16 +206,54 @@ function createScaleWorld(totalInScopeCount: number, options?: { oversizedItemIn
         chunksByItemId.set(itemId.toLowerCase(), [`Chunk text for ${spec.name}: ${spec.desc}`]);
     }
 
+    const assigneePersonId = makeUuid('A5519E00', 1);
+    if (targetMode === 'assignee-only') {
+        peopleById.set(assigneePersonId.toLowerCase(), {
+            ID: assigneePersonId,
+            DisplayName: assigneeName,
+        });
+    }
+
     for (let i = 0; i < totalInScopeCount; i++) {
         seq += 1;
         const itemId = makeUuid('E2000000', seq);
-        const fileId = makeUuid('F2000000', seq);
+        const recId = makeUuid('F2000000', seq);
         const isNeedle = i === needleIndex;
-        const isSecondaryNeedle = i === needleIndex + 1 || i === needleIndex + 2;
+        const isSecondaryNeedle = targetMode === 'file' && (i === needleIndex + 1 || i === needleIndex + 2);
         const isOversized = i === oversizedIndex;
 
+        if (isNeedle && targetMode === 'assignee-only') {
+            items.push({
+                ID: itemId,
+                SpaceID: i % 5 === 0 ? ROOT_SPACE_ID : CHILD_SPACE_ID,
+                EntityID: TASKS_ENTITY_ID,
+                RecordID: recId,
+                Band: 'Shared',
+            });
+            tasksById.set(recId.toLowerCase(), {
+                ID: recId,
+                Name: `late-index-followup-workitem-${i}`,
+                Description: `Generic checklist verification step #${i} without searchable name tokens.`,
+                Status: 'Open',
+                Priority: 'Normal',
+                DueAt: '2026-12-15',
+                PercentComplete: 25,
+            });
+            taskAssignments.push({
+                ID: makeUuid('A5519A00', seq),
+                TaskID: recId,
+                AssigneeEntityID: PEOPLE_ENTITY_ID,
+                AssigneeRecordID: assigneePersonId,
+                Status: 'Active',
+                AssignedAt: '2026-11-01T00:00:00Z',
+            });
+            continue;
+        }
+
         const name = isNeedle
-            ? 'quantum-telemetry-calibration-handbook.pdf'
+            ? targetMode === 'chunk-only'
+                ? `late-index-generic-record-${i}.pdf`
+                : 'quantum-telemetry-calibration-handbook.pdf'
             : isSecondaryNeedle
                 ? `quantum-telemetry-appendix-${i}.md`
                 : `operations-log-batch-${String(i).padStart(6, '0')}.txt`;
@@ -167,7 +261,10 @@ function createScaleWorld(totalInScopeCount: number, options?: { oversizedItemIn
         if (isOversized) {
             description = 'quantum telemetry calibration '.repeat(3500);
         } else if (isNeedle) {
-            description = 'Primary reference for quantum telemetry bay calibration and sensor drift tolerances';
+            description =
+                targetMode === 'chunk-only'
+                    ? `Routine operations attachment #${i} with no needle keywords in title or description.`
+                    : 'Primary reference for quantum telemetry bay calibration and sensor drift tolerances';
         } else if (isSecondaryNeedle) {
             description = 'Supporting telemetry calibration notes for dock sensor verification';
         } else {
@@ -178,17 +275,21 @@ function createScaleWorld(totalInScopeCount: number, options?: { oversizedItemIn
             ID: itemId,
             SpaceID: i % 5 === 0 ? ROOT_SPACE_ID : CHILD_SPACE_ID,
             EntityID: FILES_ENTITY_ID,
-            RecordID: fileId,
+            RecordID: recId,
             Band: 'Shared',
         });
-        filesById.set(fileId.toLowerCase(), {
-            ID: fileId,
+        filesById.set(recId.toLowerCase(), {
+            ID: recId,
             Name: name,
             Description: description,
             ContentType: 'text/plain',
         });
 
-        if (isOversized) {
+        if (isNeedle && targetMode === 'chunk-only') {
+            chunksByItemId.set(itemId.toLowerCase(), [
+                `Deep archival chunk at index ${i}: ${needleToken} anomaly mitigation protocol.`,
+            ]);
+        } else if (isOversized) {
             chunksByItemId.set(
                 itemId.toLowerCase(),
                 Array.from({ length: 40 }, (_, chunkIdx) => `Oversized chunk ${chunkIdx} quantum telemetry `.repeat(80)),
@@ -199,7 +300,7 @@ function createScaleWorld(totalInScopeCount: number, options?: { oversizedItemIn
     // Sort items by ID ascending once so AfterKey keyset paging is O(log N) / slice-fast in the mock
     items.sort((a, b) => a.ID.localeCompare(b.ID));
 
-    return { items, filesById, chunksByItemId };
+    return { items, filesById, tasksById, taskAssignments, peopleById, chunksByItemId };
 }
 
 function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
@@ -280,6 +381,32 @@ function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
             }
             return { Success: true, Results: rows, ErrorMessage: '', RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0 };
         }
+        if (entity === 'MJ: Tasks' || entity === 'MJ_BizApps_Tasks: Tasks') {
+            const idClause = /ID IN \(([^)]+)\)/i.exec(filter)?.[1] ?? '';
+            const requestedIds = parseQuotedIds(idClause);
+            const rows: SyntheticTaskRow[] = [];
+            for (const id of requestedIds) {
+                const task = world.tasksById.get(id);
+                if (task) rows.push(task);
+            }
+            return { Success: true, Results: rows, ErrorMessage: '', RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0 };
+        }
+        if (entity === 'MJ_BizApps_Tasks: Task Assignments') {
+            const taskClause = /TaskID IN \(([^)]+)\)/i.exec(filter)?.[1] ?? '';
+            const requestedTaskIds = parseQuotedIds(taskClause);
+            const rows = world.taskAssignments.filter((a) => requestedTaskIds.has(a.TaskID.toLowerCase()));
+            return { Success: true, Results: rows, ErrorMessage: '', RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0 };
+        }
+        if (entity === 'MJ_BizApps_Common: People') {
+            const idClause = /ID IN \(([^)]+)\)/i.exec(filter)?.[1] ?? '';
+            const requestedIds = parseQuotedIds(idClause);
+            const rows: SyntheticPersonRow[] = [];
+            for (const id of requestedIds) {
+                const person = world.peopleById.get(id);
+                if (person) rows.push(person);
+            }
+            return { Success: true, Results: rows, ErrorMessage: '', RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0 };
+        }
         if (entity === 'MJ: Entity Record Documents') {
             const recIds = parseQuotedIds(filter);
             const rows: Array<{ ID: string; RecordID: string }> = [];
@@ -297,10 +424,14 @@ function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
         }
         if (entity === 'MJ: Content Item Chunks') {
             const ciIds = parseQuotedIds(filter);
+            const likeTokens = Array.from(filter.matchAll(/Text LIKE N'%([^%']+)%'/gi), (m) => m[1].toLowerCase());
             const rows: Array<{ ID: string; ContentItemID: string; Text: string; Sequence: number }> = [];
             for (const ciId of ciIds) {
                 const chunks = world.chunksByItemId.get(ciId) ?? [];
                 chunks.forEach((text, idx) => {
+                    if (likeTokens.length > 0 && !likeTokens.some((tok) => text.toLowerCase().includes(tok))) {
+                        return;
+                    }
                     rows.push({ ID: `${ciId}-c-${idx}`, ContentItemID: ciId, Text: text, Sequence: idx });
                 });
             }
@@ -327,13 +458,13 @@ function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
             };
         }
         if (entity === 'MJ_BizApps_Collaboration: Space Chats') {
-            return { Success: true, Results: [{ ID: 'chat-scale-1', ConversationID: CONVERSATION_ID, Kind: 'General', Status: 'Active' }], ErrorMessage: '', RowCount: 1, TotalRowCount: 1, ExecutionTime: 0 };
+            return { Success: true, Results: [{ ID: SPACE_CHAT_ID, ConversationID: CONVERSATION_ID, Kind: 'General', Status: 'Active' }], ErrorMessage: '', RowCount: 1, TotalRowCount: 1, ExecutionTime: 0 };
         }
         if (entity === 'MJ_BizApps_Collaboration: Space Grants') {
             return {
                 Success: true,
                 Results: [{
-                    ID: 'grant-agent-1',
+                    ID: '10000000-0000-4000-8000-000000000099',
                     Kind: 'Agent',
                     Mode: 'Extend',
                     Band: 'Shared',
@@ -369,16 +500,28 @@ function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
 
     const providerImpl: Partial<IMetadataProvider & IRunViewProvider & IEntityDataProvider> = {
         EntityByID(id: string): EntityInfo | undefined {
-            if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) {
+            const norm = id.toLowerCase();
+            if (norm === FILES_ENTITY_ID.toLowerCase()) {
                 return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as Partial<EntityInfo> as EntityInfo;
+            }
+            if (norm === TASKS_ENTITY_ID.toLowerCase()) {
+                return { ID: TASKS_ENTITY_ID, Name: 'MJ_BizApps_Tasks: Tasks' } as Partial<EntityInfo> as EntityInfo;
+            }
+            if (norm === PEOPLE_ENTITY_ID.toLowerCase()) {
+                return { ID: PEOPLE_ENTITY_ID, Name: 'MJ_BizApps_Common: People' } as Partial<EntityInfo> as EntityInfo;
             }
             return undefined;
         },
         EntityByName(name: string): EntityInfo | undefined {
-            if (name === 'MJ: Content Item Chunks') {
-                return { Name: 'MJ: Content Item Chunks' } as Partial<EntityInfo> as EntityInfo;
-            }
-            if (name === 'MJ: AI Agents' || name === 'MJ: Conversation Details') {
+            if (
+                name === 'MJ: Content Item Chunks' ||
+                name === 'MJ_BizApps_Tasks: Tasks' ||
+                name === 'MJ_BizApps_Tasks: Task Assignments' ||
+                name === 'MJ_BizApps_Common: People' ||
+                name === 'MJ: Users' ||
+                name === 'MJ: AI Agents' ||
+                name === 'MJ: Conversation Details'
+            ) {
                 return { Name: name } as Partial<EntityInfo> as EntityInfo;
             }
             return undefined;
@@ -399,7 +542,7 @@ function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
                     OriginalMessageChanged: false,
                     LatestResult: { CompleteMessage: '' },
                     NewRecord() {
-                        detail['ID'] = 'reply-scale-1';
+                        detail['ID'] = REPLY_DETAIL_ID;
                     },
                     MarkServerAuthoredReply() {
                         return undefined;
@@ -425,7 +568,7 @@ function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
             }
             if (entityName === 'MJ: AI Agent Runs') {
                 const run: Record<string, string | null | (() => Promise<boolean>)> = {
-                    ID: 'run-scale-1',
+                    ID: AGENT_RUN_ID,
                     ExternalReferenceID: null,
                     async Load() {
                         return true;
@@ -442,7 +585,7 @@ function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
                     ID: '',
                     NewRecord() {
                         seq += 1;
-                        receipt['ID'] = `receipt-scale-${seq}`;
+                        receipt['ID'] = makeUuid('A1000000', seq);
                         return true;
                     },
                     async Load() {
@@ -451,7 +594,7 @@ function createScaleProvider(world: SyntheticWorld): IMetadataProvider {
                     async Save() {
                         if (!receipt['ID']) {
                             seq += 1;
-                            receipt['ID'] = `receipt-scale-${seq}`;
+                            receipt['ID'] = makeUuid('A1000000', seq);
                         }
                         return true;
                     },
@@ -685,11 +828,11 @@ describe('space-agent-retrieval scale & ranked relevance (CT-4)', () => {
         AgentRunner.prototype.RunAgent = async <C, R>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> => {
             capturedData = params.data as typeof capturedData;
             if (typeof params.onAgentRunCreated === 'function') {
-                await params.onAgentRunCreated('run-scale-1');
+                await params.onAgentRunCreated(AGENT_RUN_ID);
             }
             return {
                 success: true,
-                agentRun: { ID: 'run-scale-1', Message: 'Calibrated from handbook.' } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended,
+                agentRun: { ID: AGENT_RUN_ID, Message: 'Calibrated from handbook.' } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended,
             };
         };
 
@@ -719,5 +862,221 @@ describe('space-agent-retrieval scale & ranked relevance (CT-4)', () => {
         assert.equal(capturedData.suppliedSources?.length, 8, 'Prompt data.suppliedSources tracks exact top-k items');
         assert.equal(capturedData.allowedItems?.[0]?.Name, 'quantum-telemetry-calibration-handbook.pdf', 'Mention markup stripped so exact handbook ranks #1');
         assert.equal(DEFAULT_RETRIEVAL_TOP_K, 30);
+    });
+
+    it('HostSearchEngineVectorAdapter passes SpaceChat scope, AllowedSpaceItemIDs, AllowedBandsBySpaceID, and SecondaryScopes pre-search across multi-space and Shared audience cases (CR-2)', async () => {
+        const capturedCalls: SearchEngineSearchParams[] = [];
+        const IN_REACH_ROOT_ID = makeUuid('E2000000', 10);
+        const IN_REACH_CHILD_ID = makeUuid('E2000000', 11);
+        const OUT_OF_REACH_TEAM_ID = makeUuid('E1000000', 99);
+
+        const mockEngine: SearchEngineLike = {
+            async Config() {
+                return undefined;
+            },
+            GetAvailableProviders() {
+                return [{ SourceType: 'vector', IsAvailable: true }];
+            },
+            async Search(params: SearchEngineSearchParams) {
+                capturedCalls.push(params);
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                            RecordID: OUT_OF_REACH_TEAM_ID,
+                            Score: 0.99,
+                            SourceType: 'vector',
+                        },
+                        {
+                            EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                            RecordID: IN_REACH_CHILD_ID,
+                            Score: 0.91,
+                            SourceType: 'vector',
+                        },
+                        {
+                            EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                            RecordID: IN_REACH_ROOT_ID,
+                            Score: 0.85,
+                            SourceType: 'vector',
+                        },
+                    ],
+                };
+            },
+        };
+
+        const adapter = new HostSearchEngineVectorAdapter(mockEngine);
+        const allowedSpaceItemIds = new Set([IN_REACH_ROOT_ID.toLowerCase(), IN_REACH_CHILD_ID.toLowerCase()]);
+        const minimalProvider = {} as IMetadataProvider;
+
+        // Multi-space Team audience: per-space band ceilings preserved, SpaceChat used as PrimaryScopeRecordID
+        const teamHits = await adapter.search({
+            provider: minimalProvider,
+            queryText: 'quantum telemetry',
+            spaceChatId: SPACE_CHAT_ID,
+            anchorSpaceId: ROOT_SPACE_ID,
+            chatAudience: 'Team',
+            allowedSpaces: [
+                { spaceId: ROOT_SPACE_ID, maxBand: 'Team' },
+                { spaceId: CHILD_SPACE_ID, maxBand: 'Shared' },
+            ],
+            allowedBandsBySpaceId: {
+                [ROOT_SPACE_ID.toLowerCase()]: 'Team',
+                [CHILD_SPACE_ID.toLowerCase()]: 'Shared',
+            },
+            allowedSpaceItemIds,
+            audienceUserIds: [ADA_ID, BEA_ID],
+            topK: 5,
+            user: { ID: ADA_ID, Name: 'Ada' } as UserInfo,
+        });
+
+        assert.equal(capturedCalls.length, 1);
+        const teamCall = capturedCalls[0];
+        assert.equal(teamCall.SearchContext?.PrimaryScopeRecordID?.toLowerCase(), SPACE_CHAT_ID.toLowerCase());
+        assert.deepEqual(
+            teamCall.SearchContext?.SecondaryScopes?.SpaceID?.map((s) => s.toLowerCase()).sort(),
+            [ROOT_SPACE_ID.toLowerCase(), CHILD_SPACE_ID.toLowerCase()].sort(),
+        );
+        assert.deepEqual(teamCall.SearchContext?.SecondaryScopes?.Audience, ['Shared', 'Team']);
+        assert.deepEqual(teamCall.Filters?.AllowedBandsBySpaceID, {
+            [ROOT_SPACE_ID.toLowerCase()]: 'Team',
+            [CHILD_SPACE_ID.toLowerCase()]: 'Shared',
+        });
+        assert.equal(teamCall.Filters?.AllowedSpaceItemIDs?.length, 2);
+        assert.deepEqual(
+            teamHits.map((h) => h.spaceItemId),
+            [IN_REACH_CHILD_ID.toLowerCase(), IN_REACH_ROOT_ID.toLowerCase()],
+            'Out-of-reach hit excluded by defense-in-depth post-filter even if provider leaks it',
+        );
+
+        // Shared audience clamp: all per-space ceilings must clamp strictly to Shared pre-search
+        await adapter.search({
+            provider: minimalProvider,
+            queryText: 'quantum telemetry',
+            spaceChatId: SPACE_CHAT_ID,
+            anchorSpaceId: ROOT_SPACE_ID,
+            chatAudience: 'Shared',
+            allowedSpaces: [
+                { spaceId: ROOT_SPACE_ID, maxBand: 'Team' },
+                { spaceId: CHILD_SPACE_ID, maxBand: 'Team' },
+            ],
+            allowedBandsBySpaceId: {
+                [ROOT_SPACE_ID.toLowerCase()]: 'Team',
+                [CHILD_SPACE_ID.toLowerCase()]: 'Team',
+            },
+            allowedSpaceItemIds,
+            audienceUserIds: [ADA_ID, BEA_ID],
+            topK: 5,
+            user: { ID: ADA_ID, Name: 'Ada' } as UserInfo,
+        });
+        assert.equal(capturedCalls.length, 2);
+        const sharedCall = capturedCalls[1];
+        assert.deepEqual(sharedCall.SearchContext?.SecondaryScopes?.Audience, ['Shared']);
+        assert.deepEqual(sharedCall.Filters?.AllowedBandsBySpaceID, {
+            [ROOT_SPACE_ID.toLowerCase()]: 'Shared',
+            [CHILD_SPACE_ID.toLowerCase()]: 'Shared',
+        });
+    });
+
+    it('discovers chunk-only needle at index > 40,000 across a 50,000-item library under both rankingQuery and explicit query (CR-3)', async () => {
+        const needleToken = 'obsidian-chronometer-calibration';
+        const world = createScaleWorld(50_000, {
+            targetNeedleIndex: 43_781,
+            targetMode: 'chunk-only',
+            needleToken,
+        });
+        const provider = createScaleProvider(world);
+        const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+
+        const rankedRes = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
+            conversationKind: 'General',
+            rankingQuery: needleToken,
+            topK: 5,
+            itemsPageSize: 2000,
+        });
+        assert.equal(rankedRes.quotedItems[0]?.Name, 'late-index-generic-record-43781.pdf');
+        assert.ok(
+            rankedRes.quotedItems[0]?.ChunkTexts?.some((t) => t.includes(needleToken)),
+            'Chunk-only needle at index > 40,000 must be discovered and enriched',
+        );
+
+        const explicitRes = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
+            conversationKind: 'General',
+            query: needleToken,
+            topK: 5,
+            itemsPageSize: 2000,
+        });
+        assert.equal(explicitRes.quotedItems.length, 1);
+        assert.equal(explicitRes.quotedItems[0]?.Name, 'late-index-generic-record-43781.pdf');
+    });
+
+    it('discovers assignee-only task needle at index > 40,000 across a 50,000-item library under both rankingQuery and explicit query (CR-3)', async () => {
+        const world = createScaleWorld(50_000, {
+            targetNeedleIndex: 44_219,
+            targetMode: 'assignee-only',
+            assigneeDisplayName: 'Zephyr Nightwing',
+        });
+        const provider = createScaleProvider(world);
+        const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+
+        const rankedRes = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
+            conversationKind: 'General',
+            rankingQuery: 'Zephyr Nightwing',
+            topK: 5,
+            itemsPageSize: 2000,
+        });
+        assert.equal(rankedRes.quotedItems[0]?.Name, 'late-index-followup-workitem-44219');
+        assert.deepEqual(rankedRes.quotedItems[0]?.Assignees, ['Zephyr Nightwing']);
+
+        const explicitRes = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
+            conversationKind: 'General',
+            query: 'Zephyr Nightwing',
+            topK: 5,
+            itemsPageSize: 2000,
+        });
+        assert.equal(explicitRes.quotedItems.length, 1);
+        assert.equal(explicitRes.quotedItems[0]?.Name, 'late-index-followup-workitem-44219');
+    });
+
+    it('strictly enforces per-source and aggregate prompt token ceilings on first item, long titles, and oversized assignee lists (CR-4)', () => {
+        const longNameTask = {
+            ID: makeUuid('D0000001', 1),
+            SpaceID: ROOT_SPACE_ID,
+            EntityID: TASKS_ENTITY_ID,
+            RecordID: makeUuid('F0000001', 1),
+            EntityName: 'MJ_BizApps_Tasks: Tasks',
+            Name: 'Extremely-Long-Task-Title-'.repeat(12),
+            Description: 'Detailed description '.repeat(20),
+            Band: 'Shared' as const,
+            StoredContentType: null,
+            Status: 'InProgress',
+            Priority: 'Urgent',
+            DueAt: '2026-12-31',
+            PercentComplete: 85,
+            Assignees: Array.from({ length: 100 }, (_, i) => `Assignee Member Number ${i + 1}`),
+            ChunkTexts: ['Extensive chunk content '.repeat(30)],
+        };
+
+        const perSourceResult = applyContextTokenBudget(
+            [{ item: longNameTask, score: 1.0, rankingMode: 'lexical', originalIndex: 0 }],
+            { topK: 5, maxTokensPerSource: 32, maxContextTokens: 120 },
+        );
+        assert.equal(perSourceResult.items.length, 1);
+        const renderedFirstLine = renderCandidateItemPromptLine(perSourceResult.items[0]);
+        const renderedTokens = estimateTokenCount(renderedFirstLine);
+        assert.ok(
+            renderedTokens <= 32,
+            `Rendered prompt line (${renderedTokens} tokens) must not exceed 32 tokens: ${renderedFirstLine}`,
+        );
+        assert.ok(perSourceResult.totalEstimatedTokens <= 120);
+        assert.equal(perSourceResult.suppliedSources[0]?.truncated, true);
+
+        // Even when the very first item exceeds maxContextTokens (below minimum viable rendered line), it must NOT be emitted
+        const impossibleBudget = applyContextTokenBudget(
+            [{ item: longNameTask, score: 1.0, rankingMode: 'lexical', originalIndex: 0 }],
+            { topK: 5, maxTokensPerSource: 64, maxContextTokens: 8 },
+        );
+        assert.equal(impossibleBudget.items.length, 0, 'First item cannot bypass maxContextTokens ceiling');
+        assert.equal(impossibleBudget.totalEstimatedTokens, 0);
     });
 });
