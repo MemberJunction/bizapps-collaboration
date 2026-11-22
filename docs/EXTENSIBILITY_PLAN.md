@@ -1,10 +1,10 @@
 # Collaboration extensibility: space types as plug-ins
 
-This plan makes Collaboration a base that other apps build on without Collaboration knowing about them. A downstream app adds a **space type**. The type names server and browser plug-in classes, and optionally a table of its own that extends `Space` through MJ's IsA. The first app to be built this way is Committees (bizapps-committees), rebuilt on it (the plan's C4).
+This plan makes Collaboration a base that other apps build on without Collaboration knowing about them. A downstream app adds a **space type**. The type names server and browser plug-in classes, and optionally a table of its own that extends `Space` through MJ's IsA. Downstream apps (for example, governance boards, deal/opportunity rooms, or member portals) build on this model without Collaboration referencing them directly.
 
 It replaces [the UX plan's § 9](ux/IMPLEMENTATION_PLAN.md#9-extension-points-for-apps-on-top), and it settles the rules for chats and agents ([§ 8](#8-chats-history-and-agents)).
 
-**Status:** agreed on 2026-09-26, and amended by the decisions in [the plan](../plans/plan.md): its D1, D2 and D8 to D11 the same day, D16 to D25 on 2026-09-27, D26 to D35 later that day (the plan's v0.5: anchors, grants, data reach, notes and meetings), and D40 to D48 on 2026-09-29. PR #7 built the base of this model and PR #8 the chat; both have merged. PR 9 finishes the chat and builds subtypes end to end (D42). D26 to D35's changes come in the stages after it, from [PR 9's plan](../plans/pr9-plan.md) ([§ 13](#13-order-of-work)). What isn't built yet is marked where it's described. Where this document and the plan disagree, the plan wins.
+**Status:** agreed on 2026-09-26, and amended by the decisions in [the plan](../plans/plan.md): its D1, D2 and D8 to D11 the same day, D16 to D25 on 2026-09-27, D26 to D35 later that day (the plan's v0.5: anchors, grants, data reach, notes and meetings), and D40 to D48 on 2026-09-29. PR #7 built the base of this model and PR #8 the chat; both have merged. PR 9 finished the chat and built subtypes end to end (D42). Subsequent waves added `SpaceAnchor`, `SpaceGrant`, unified `ResolveSpaceConfiguration`, `SyncSeats`, `SpaceTypeStatus` (`Active`, `Paused`, `Closed`, `Archived`), `SpaceType.TargetApplicationID`, external IdP invites, and structural chat scope (`Collaboration Space Scope`). What isn't built yet is marked where it's described. Where this document and the plan disagree, the plan wins.
 
 ## Contents
 
@@ -28,7 +28,7 @@ It replaces [the UX plan's § 9](ux/IMPLEMENTATION_PLAN.md#9-extension-points-fo
 | # | Decision | Section |
 |---|---|---|
 | 1 | A space type names a server plug-in class and a browser plug-in class: `SpaceType.ServerDriverClass` and `SpaceType.UIDriverClass`. Only types name them in v1. A space that needs different code is a different type, and a driver can branch on the space's configuration. | [3](#3-data), [5](#5-server-drivers), [6](#6-ui-drivers-and-contributions) |
-| 2 | A type's own data is a table that extends `Space` through MJ's IsA (disjoint), named by `SpaceType.SpaceExtensionEntity`, the way bizapps-orders' `ProductType.ProductExtensionEntity` names a product's extension. No `EmbeddedRecord`. `RelatedRecordCollection` only where the native model has an aggregate; with a chat's people in MJ core, none is planned. | [3](#3-data), [7](#7-isa-subtypes-and-their-forms) |
+| 2 | A type's own data is a table that extends `Space` through MJ's IsA (disjoint), named by `SpaceType.SpaceExtensionEntity` (following MJ's standard IsA subtype-extension pattern). No `EmbeddedRecord`. `RelatedRecordCollection` only where the native model has an aggregate; with a chat's people in MJ core, none is planned. | [3](#3-data), [7](#7-isa-subtypes-and-their-forms) |
 | 3 | Rules and settings live in a JSON configuration bag (an MJ JSONType column) on `SpaceType` and `Space`. The type sets defaults and names the keys a space may override. Anything SQL reads stays a column. | [4](#4-configuration-one-bag-per-type-and-per-space) |
 | 4 | The types allowed under a type live in its configuration, by type code, not in a join table. | [4](#4-configuration-one-bag-per-type-and-per-space) |
 | 5 | Plug-ins follow MJ's forms pattern: base classes with hooks to override, resolved through ClassFactory, and contributions registered with metadata. | [5](#5-server-drivers), [6](#6-ui-drivers-and-contributions) |
@@ -38,7 +38,7 @@ It replaces [the UX plan's § 9](ux/IMPLEMENTATION_PLAN.md#9-extension-points-fo
 | 9 | The audience of an answer decides what the agent may use (the plan's D2). In a chat with two or more people, the agent sees only what every person in it can see now. In a private chat, it uses the caller's union of reach, narrowed by a scope control. | [8](#8-chats-history-and-agents) |
 | 10 | Allowed agents resolve top-down: the app's default, the space's type, the root space, down to the space. Each level extends or replaces the list above, and a level without its own rows inherits it. MJ's agent Run permission stays the security boundary. An app supplies its own agent the same way, through its type's rows, with `IsDefault`. **Amended by 28:** the chain restarts where the type changes, and the rows are grants. | [8](#8-chats-history-and-agents) |
 | 11 | The chat stays MJ's `mj-conversation-chat-area`. Collaboration never forks it. `ng-conversations` gained the inputs, the reworked event and the slot these rules need in MemberJunction/MJ#4788, merged into MJ `next` on 2026-09-27. | [9](#9-mj-changes) |
-| 12 | Committees keeps its membership records, and its server driver keeps the seats in step. | [10](#10-examples) |
+| 12 | A downstream app (such as a governance or roster-backed workspace) keeps its own membership records, and its server driver keeps the seats in step. Decisions, sign-offs, and approvals across spaces use `bizapps-tasks` (`TaskDecision` / `MJ_BizApps_Tasks: Task Decisions`). | [10](#10-examples) |
 | 13 | Settings rights are an MJ Authorization tree rooted at *Collaboration*. Collaboration grants *Configure Space Types* and *Configure Spaces* to the Developer role by default, and an app grants them to its own admin roles (the plan's D23). Closing and reopening a space take their own authorization, *Close and Reopen Spaces*, with an owner seat (D40). No right is decided by a role's name (D41). | [4](#4-configuration-one-bag-per-type-and-per-space) |
 | 14 | A chat's people are MJ core's conversation participants (the plan's A5 and D10), and core's row-level security enforces each one's `HistoryFrom` for everyone, staff included. Inside that window, an AI message whose sources the newcomer can't read is sealed for them (the plan's D4 and A7). The chat area needs no cutoff of its own. | [8](#8-chats-history-and-agents) |
 | 15 | A space can be anchored to a record in another app (`Space.AnchorEntityID` and `AnchorRecordID`), and one call finds or creates it. So an app can open a space for its own record, such as a room for a deal, from its own screens. **Amended by 25:** a space can have several anchors. | [3](#3-data), [5](#5-server-drivers), [10](#10-examples) |
@@ -103,11 +103,12 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 |---|---|---|
 | `ServerDriverClass` | `NVARCHAR(255) NULL` | The ClassFactory key under `BaseSpaceTypeServerDriver`. Empty means Collaboration's base driver. |
 | `UIDriverClass` | `NVARCHAR(255) NULL` | The ClassFactory key under `BaseSpaceTypeUIDriver`. Empty means the base driver. |
-| `SpaceExtensionEntity` | `NVARCHAR(255) NULL` | The MJ entity name of the IsA child that every space of this type has, for example `Committees: Committees`. Empty means a plain space. The server checks on save that it names an existing entity that is an IsA child of Spaces, and that every role that reads it does so under the same row filter as Spaces ([§ 7](#7-isa-subtypes-and-their-forms)). |
+| `SpaceExtensionEntity` | `NVARCHAR(255) NULL` | The MJ entity name of the IsA child that every space of this type has, for example `Domain: ExtensionRecords`. Empty means a plain space. The server checks on save that it names an existing entity that is an IsA child of Spaces, and that every role that reads it does so under the same row filter as Spaces ([§ 7](#7-isa-subtypes-and-their-forms)). |
+| `TargetApplicationID` | `UNIQUEIDENTIFIER NULL`, FK to `__mj.Application` | Optional target MJ Application that invited users land in for spaces of this type. `NULL` falls back gracefully to the Collaboration application. |
 | `Configuration` | `NVARCHAR(MAX) NULL` | The type's rules and defaults, as `ISpaceTypeConfiguration` ([§ 4](#4-configuration-one-bag-per-type-and-per-space)). |
 
-- **Removed:** the `committee` seed row, in PR #3 (the plan's B0.11); Committees ships its own type. **Still to remove:** the `GovernancePanel` column.
-- **Settings, not columns** (the plan's D20 to D22): where files are stored and access after close are keys of the settings shape ([§ 4](#4-configuration-one-bag-per-type-and-per-space)), and there's no type-level inheritance default, since every new sub-space is sealed unless its creator asks. The schema doesn't match yet: `SpaceType` still has `DefaultInheritsMembership` (default 1), which `EnsureSpaceForRecord` applies, and `PostCloseAccess` (default `None`) and `PostCloseAccessDays`, which `fnCollaborationAccess` reads when a closed space has no value of its own.
+- **Removed:** the legacy governance seed row, in PR #3 (the plan's B0.11); each downstream app ships its own type. **Still to remove:** the `GovernancePanel` column.
+- **Settings, not columns** (the plan's D20 to D22): where files are stored is a key of the settings shape ([§ 4](#4-configuration-one-bag-per-type-and-per-space)), and there's no type-level inheritance default, since every new sub-space is sealed unless its creator asks. Access after close has since moved from `PostCloseAccess` / `PostCloseAccessDays` to `SpaceTypeStatus` rows (`Active`, `Paused`, `Closed`, `Archived`), where each status declares `ReadOnly`, `Visible`, `AgentRetrieval`, `CanChangeAfter`, `NotifyMembersOnEnter`, and `IsTerminal`.
 - **Replaced:** `PostCloseAccess` and `PostCloseAccessDays` replace what `DefaultRetention` and `Space.Retention` meant. Nothing enforces those. They're still columns, and Settings still shows and saves a Retention Policy that has no effect; the columns and the control are to go.
 - **Kept as they are:** the other columns. SQL reads `Discoverability`, `JoinMode`, `DefaultAgentRetrieval`, `DefaultBand`, `DefaultAllowParentAssignees`, `InviteApproval` and `MemberCap`. The panel flags become the base UI driver's defaults.
 
@@ -129,8 +130,8 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 - `StorageAccountID UNIQUEIDENTIFIER NULL`, FK to `MJ: File Storage Accounts`: for an item that is a stored file, the account the file went to. Reads and deletes use it, so a later change to the setting applies to new uploads only (the plan's D17). Today an upload doesn't use the setting, and MJ stores the file in the host's active account.
 
 **`SpaceMember`**, added:
-- `SyncSource NVARCHAR(100) NULL`. Empty means a person invited this seat. A value names the roster that manages it, for example `committees:membership`, and only that roster's sync changes or removes it.
-- `PersonID UNIQUEIDENTIFIER NULL`: the seat's person in bizapps-common, filled when the seat's user is linked to a Person (the plan's B9). Apps keyed on People, such as Committees, project their rosters onto seats through it.
+- `SyncSource NVARCHAR(100) NULL`. Empty means a person invited this seat. A value names the roster that manages it, for example `governance:membership`, and only that roster's sync changes or removes it.
+- `PersonID UNIQUEIDENTIFIER NULL`: the seat's person in `bizapps-common`, filled when the seat's user is linked to a Person (the plan's B9). Apps keyed on People project their rosters onto seats through it.
 - Both columns exist, and nothing fills or guards them yet: `SyncSeats` isn't built ([§ 5](#5-server-drivers)), and `PersonID` is filled with B9.
 
 **New tables:**
@@ -146,21 +147,21 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 - **`SpaceNote`** (the plan's B21) and **`SpaceMemberPin`** (B22).
 - **`DataReach`** joins the type's configuration ([§ 4](#4-configuration-one-bag-per-type-and-per-space)).
 
-**How this follows bizapps-orders.** Orders extends products the same way, and Collaboration copies its shape:
+**How this follows MJ subtype-extension metadata.** Collaboration adopts the standard MJ IsA subtype-extension pattern:
 
-| bizapps-orders | Collaboration |
+| Standard MJ extension pattern | Collaboration |
 |---|---|
-| `ProductType.ProductExtensionEntity` and `OrderLineExtensionEntity` hold the IsA child's entity name | `SpaceType.SpaceExtensionEntity` |
-| `Entity.SubtypeSelector` on Products: `ProductTypeID.ProductExtensionEntity` | on Spaces: `SpaceTypeID.SpaceExtensionEntity` ([§ 7](#7-isa-subtypes-and-their-forms)) |
-| `ProductType.Configuration`, a JSON bag | `SpaceType.Configuration` and `Space.Configuration`, registered as JSONTypes |
-| `DriverClass` on `SubscriptionType` and `RevenueRecognitionType`, optional, subclassing a working base | `ServerDriverClass` and `UIDriverClass` on `SpaceType` |
-| `mj-entity-form-host` shows an order line's extension | the same host shows a space's extension |
+| `ExtensionEntity` column naming the IsA child's entity name | `SpaceType.SpaceExtensionEntity` |
+| `Entity.SubtypeSelector` pointing at the extension column | on Spaces: `SpaceTypeID.SpaceExtensionEntity` ([§ 7](#7-isa-subtypes-and-their-forms)) |
+| `Configuration`, a JSON bag | `SpaceType.Configuration` and `Space.Configuration`, registered as JSONTypes |
+| `DriverClass`, optional, subclassing a working base | `ServerDriverClass` and `UIDriverClass` on `SpaceType` |
+| `mj-entity-form-host` shows a record's extension | the same host shows a space's extension |
 
-Collaboration adds four things orders doesn't have:
-- **Behavior per type.** Orders' type row names no code: event products' rules are written against their entity, so a new product type can't add rules of its own. A space type names its drivers.
-- **Checked values.** Orders doesn't check the extension's name, and reads its configuration as an untyped string. Collaboration validates both on save.
+Collaboration adds four safeguards on top of the base pattern:
+- **Behavior per type.** A space type names both its server and UI drivers so new types add rules without modifying Collaboration.
+- **Checked values.** Collaboration validates both the extension entity name and configuration JSON on save.
 - **A missing driver is caught.** For an unregistered key, MJ's `ClassFactory.CreateInstance` returns the base class rather than null, so a null check never fires. Collaboration uses `TryCreateInstance` ([§ 5](#5-server-drivers)).
-- **The selector reaches hosts.** Orders' `SubtypeSelector` rows aren't in its migrations yet, so a host installed from migrations falls back to "the only child". Collaboration declares no selector yet: a resolver in code covers it ([§ 7](#7-isa-subtypes-and-their-forms)).
+- **The selector reaches hosts.** A registered `SpaceSubtypeResolver` covers create and load paths even where offline `SubtypeSelector` metadata isn't present ([§ 7](#7-isa-subtypes-and-their-forms)).
 
 **Where a setting goes:**
 
@@ -276,8 +277,8 @@ Validation refuses any key a space sets that its type doesn't allow, so nothing 
 `BaseSpaceTypeServerDriver` lives in `collaboration-core-entities-server`, next to the entity server classes that call it. A downstream app subclasses it and registers the subclass under the key its type row names:
 
 ```ts
-@RegisterClass(BaseSpaceTypeServerDriver, 'CommitteeSpaceServerDriver')
-export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … }
+@RegisterClass(BaseSpaceTypeServerDriver, 'GovernanceSpaceServerDriver')
+export class GovernanceSpaceServerDriver extends BaseSpaceTypeServerDriver { … }
 ```
 
 **The hooks.** Every method has a working default, so a subclass overrides only what it needs. Each receives a context holding:
@@ -320,7 +321,7 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 **Seats from an app's roster.** The base driver declares a helper, `SyncSeats(space, source, people, actingUser, provider)`. It isn't built yet: the base changes nothing and returns an error. Once built, it adds, updates and removes the seats marked with that `SyncSource`, and leaves every other seat alone.
 - **People without an MJ user,** such as an Employee or a Person with no linked user, get an email invite through Collaboration's pending invites.
 - **A sync is a write like any other,** so the type's `ValidateMemberChange` can still refuse a seat.
-- **Committees** syncs from its memberships, and a deal room from a deal's team and its buyer contacts ([§ 10](#10-examples)).
+- **A governance app** syncs from its memberships, and a deal room from a deal's team and its buyer contacts ([§ 10](#10-examples)).
 
 **Spaces another app opens for its own record.** `EnsureSpaceForRecord({ typeCode, entityName, recordId, spaceName, contextUser, provider })` is a Collaboration function on the server; it has no GraphQL operation or client call yet. It returns the space anchored to that record, creating it the first time. Today it matches `Space.AnchorEntityID` and `AnchorRecordID` alone, whatever the type, and nothing stops two concurrent calls from creating two spaces. Under the plan's D26 it will work on the space's primary `SpaceAnchor`, and a space can hold other anchors beside it, each with a role.
 - **Who may open it:** anyone who can update the record, by MJ's own permissions and row-level security, unless the type's `ValidateAnchor` refuses. Collaboration creates the space on the server, with the caller as its owner. Not built yet: today only `ValidateAnchor` is asked, and nothing checks the caller's rights on the record. The new space's `InheritsMembership` comes from the type's `DefaultInheritsMembership` (default 1), against decision 18.
@@ -335,7 +336,7 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 
 **Rules for driver authors.**
 - **Drivers never grant reads.** Reach stays in `fnCollaborationAccess` and row-level security ([§ 11](#11-security-rules-for-plug-ins)).
-- **IsA saves the parent first.** Saving a Committee saves its Space first: MJ passes `IsParentEntitySave` and `ISAActiveChildEntityName`. So the space hooks run before the Committee row exists. A save that changes only the Committee's own columns reaches `ValidateSpaceChange` as an `Update`, told the subtype and the columns' old values, and raises no reaction, since the space's own row doesn't change. Rules on one column's own values belong in the subtype entity's server class.
+- **IsA saves the parent first.** Saving a subtype record saves its `Space` row first: MJ passes `IsParentEntitySave` and `ISAActiveChildEntityName`. So the space hooks run before the subtype row exists. A save that changes only the subtype's own columns reaches `ValidateSpaceChange` as an `Update`, told the subtype and the columns' old values, and raises no reaction, since the space's own row doesn't change. Rules on one column's own values belong in the subtype entity's server class.
 - **Use the driver, not a second `SpaceEntityServer`.** Only one class can hold an entity's ClassFactory key: the last one loaded wins, and the other gets only a console warning.
 - **Use the context's provider.** It owns the open transaction; `new Metadata()` doesn't.
 
@@ -369,10 +370,10 @@ They register the way MJ's `BaseFormPanel` does:
 
 ```ts
 @RegisterClassEx(BaseSpaceTab, {
-    key: 'committees:meetings',
-    metadata: { spaceTypes: ['committee'], slot: 'tab', sortKey: 40, contributionKey: 'meetings' },
+    key: 'governance:meetings',
+    metadata: { spaceTypes: ['governance-board'], slot: 'tab', sortKey: 40, contributionKey: 'meetings' },
 })
-export class CommitteeMeetingsTab extends BaseSpaceTab { … }
+export class GovernanceMeetingsTab extends BaseSpaceTab { … }
 ```
 
 **How the host assembles a space's parts:**
@@ -392,16 +393,16 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 
 **Status:** built in PR 9 (the plan's D42): the resolver, the pairing rules, the checks on a type's subtype, the rules for a change to only a subtype's columns, the example tables and forms, `CreateSpace`, and the three screens (New space, Settings → Details, About). Not built: the `SubtypeSelector` metadata, creating a sub-space through the same dialog, and a form that shows only the subtype's own columns (below).
 
-**Declaring.** A downstream app declares its table as an IsA child of `Space` in its own `codegen-schema-info.json`, disjoint (MJ's default). Collaboration changes nothing to allow it; bizapps-sales already subtypes bizapps-common's entities across schemas the same way.
+**Declaring.** A downstream app declares its table as an IsA child of `Space` in its own `codegen-schema-info.json`, disjoint (MJ's default). Collaboration changes nothing to allow it; other MJ Open Apps subtype `bizapps-common` entities across schemas the same way.
 
 **Creating.**
 - Collaboration registers an `EntitySubtypeResolver` for Spaces in `collaboration-entities`, so the server and the browser both load it. It reads the type's `SpaceExtensionEntity` from Collaboration's cached types, and answers MJ's two questions with its two methods ([§ 9.2](#92-mj-core-knowing-a-subtype-on-load)):
   - `Resolve()`, for a new space, reads the type itself when the types aren't loaded yet, since its answer has to be right.
   - `ResolveLoadHint()`, for a loaded space, reads the cached type only once that engine is loaded, and returns `null` (no hint) until then. It never queries.
 - **The resolver** is `SpaceSubtypeResolver` in `collaboration-entities`. It answers from `SpaceSubtypeDirectory`, which the engine fills with the types' `SpaceExtensionEntity` whenever it loads, and falls back to reading the type when the directory is empty. The rule lives in code because it depends on a row of another table.
-- **Not built:** declaring `SubtypeSelector` = `{"Path": "SpaceTypeID.SpaceExtensionEntity"}` on the Spaces entity as metadata, so offline tools such as MetadataSync and Loom see the same rule. The path's last step has to be a column holding the entity's name, which is why the type stores a name rather than an ID, as orders does. Where Collaboration's packages are loaded, MJ follows the registered resolver on create and on load and doesn't need it.
+- **Not built:** declaring `SubtypeSelector` = `{"Path": "SpaceTypeID.SpaceExtensionEntity"}` on the Spaces entity as metadata, so offline tools such as MetadataSync and Loom see the same rule. The path's last step has to be a column holding the entity's name, which is why the type stores a name rather than an ID, following standard MJ subtype metadata. Where Collaboration's packages are loaded, MJ follows the registered resolver on create and on load and doesn't need it.
 - **The New space dialog** makes a draft (`NewSpaceDraft`): a `SpaceEntity` with the type, the owner and the type's default for inheriting membership, and `EnsureISAChild()` called on it, so the screen can draw the subtype's own fields and read what was typed. Nothing is saved from the browser. Create sends the type, the name, the description and those values to `CreateSpace`, which builds the space and its subtype on the server, saves them and the person's owner seat (an active seat on the Team band) in one transaction, and rolls all of it back when any part is refused, so a failed seat leaves no space nobody is seated on. A value is accepted only for a column the subtype adds. It is offered from the rail's + to a person who holds `Administer Spaces` and may create Space rows; a sub-space is not made through it yet.
-- The resolver answers "none" for plain types. Without it, `EnsureISAChild()` falls back to "the only subtype", so once Committee were Space's only subtype, every new space would become a committee.
+- The resolver answers "none" for plain types. Without it, `EnsureISAChild()` falls back to "the only subtype", so if a single subtype were Space's only child, every new space would become that subtype.
 
 **Showing.** Where a space has a subtype, one component (`SpaceDetailsViewComponent`) draws its details on all three screens, and it draws them, in order of preference:
 1. **a component the type's UI driver gave**, through `GetDetailsForm(ctx, { entityName })` returning `component` (mounted with `Record` and `EditMode` inputs);
@@ -427,8 +428,8 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 - **Space's column names are shared** with every subtype. If a subtype has a column with the same name as a Space column, CodeGen logs a field collision and skips the subtype's inherited fields altogether. So:
   - a subtype never reuses a Space column's name: `Name`, `Description`, `ParentID`, `StartedAt`, `ClosedAt` and the rest, as the Space table defines them;
   - a new `Space` column needs a changeset note, since it can collide with a column a downstream subtype already has;
-  - Committees drops `Committee.Name`, `Description` and `ParentCommitteeID`, and `Term.Name`, as part of its move.
-- **Deletes cascade up.** Deleting a Committee deletes its Space, and there is no way to remove a subtype but keep the space. A space that has its subtype attached is deleted through the subtype, which deletes its own row, then the space's, in one transaction: MJ routes a plain `Delete()` that way ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850), fixed in MJ#4891), and the type's driver is asked once, when the delete reaches the space's row.
+  - a downstream subtype (such as a governance board or term extension) drops redundant `Name`, `Description`, or `ParentID` columns and inherits them from `Space`.
+- **Deletes cascade up.** Deleting a subtype record deletes its `Space`, and there is no way to remove a subtype but keep the space. A space that has its subtype attached is deleted through the subtype, which deletes its own row, then the space's, in one transaction: MJ routes a plain `Delete()` that way ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850), fixed in MJ#4891), and the type's driver is asked once, when the delete reaches the space's row.
 - **Converting** an existing plain space into a subtype from the browser (IsA promotion) needs MJ `next`. In 6.1.3 only the server can do it.
 
 ## 8. Chats, history and agents
@@ -458,7 +459,7 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 - **A space's conversations** are started on request, and none is created with the space (the plan's D25). Their participants are derived from the space's roster for room-wide channels: everyone who reaches the space for General and Topic, and only those who see Team for Internal Only. A 1-to-1 Assistant chat (`Kind = 'Assistant'`) belongs solely to its `OwnerUserID`, enforced in row-level security, `Resource Permissions` grant synchronization, and the server operations. Collaboration keeps grants in step as seats change (the plan's B3). Each sees all of it, from its first message, like a Teams channel, except the AI messages sealed for them. Until A5, multi-person subset chats wait for MJ core's `MJ: Conversation Participants`, while room-wide channels and 1-to-1 Assistant chats apply through Collaboration's row-level security and Edit grant sync, and sealing waits for A4 and A7.
 - **A multi-person chat with its own subset of people** is B3's, and waits for A5. Only its participants will see it.
 - **Nothing else in a space is time-limited.** A seat opens everything its band allows, from the space's first day: the library, the tasks, the space's conversations and every chat the person is in.
-- **Sub-spaces keep their own membership** when `InheritsMembership` is off, as today. A compensation sub-committee under a board, for example, isn't open to the whole board. A type's server driver can set the switch for the sub-spaces it allows ([§ 5](#5-server-drivers)).
+- **Sub-spaces keep their own membership** when `InheritsMembership` is off, as today. A sealed working group under a board, for example, isn't open to the whole board. A type's server driver can set the switch for the sub-spaces it allows ([§ 5](#5-server-drivers)).
 - **Reads are enforced in SQL:** row-level security on `SpaceChat`, as Collaboration's metadata, and core's row-level security on Conversations and Conversation Details, keyed on participants and their `HistoryFrom` (the plan's A5). Core applies it to everyone, staff included, so the chat area needs no cutoff of its own. That's decision 14. Until A5, reads by the Space Participant role go through Collaboration's own filters on Conversations and Conversation Details, keyed on the space's roster and the conversation's kind.
 - **Sealing.** A newcomer to a conversation or a chat, or a new seat on a space, sees an AI message inside their window only if they can read every source it recorded. Otherwise it's sealed for them: they see who wrote it and when, and can request access (the plan's D4 and A7). People's own messages aren't sealed.
 
@@ -485,7 +486,7 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
   - for a chat with one person and one agent under `MentionOrOneToOne`, `Always`, with that agent as the default and the only allowed agent;
   - for any other chat, `MentionOnly`, unless the space's mode is `Always`.
   - `EnableDecisionRouting` defaults to `false` on `mj-collab-space-chat` until a decision model and labelled evaluation corpus are configured; the server never trusts a client `route: 'DecisionRouted'` string to bypass `MentionOnly`.
-- **An explicit ask is the one client route the server honors** (Ian's decision, 2026-10-31). When a message tags no agent, the chat offers "Ask <Agent> to answer?"; pressing "Ask <Agent>" sends the turn with `Route: 'Redirect'`, and the server takes it as the author's intent for that message, in place of a tag, so the mention, person-only and thread rules don't refuse it. Nothing else is relaxed: the caller must be the message's author, the agent must be one the space allows, a message gets one turn, and the turn is bounded by the chat's kind and audience like any other. The reply records the ask: its row is inserted with `ExternalID` = `collab:explicit-ask`, in the same write that starts the turn, so a reply that came from an ask can be told from one that came from a tag. Harness check AG14 holds each of these, and that the marker is there after an ask and absent after a tagged turn.
+- **An explicit ask is the one client route the server honors** (decided 2026-10-31). When a message tags no agent, the chat offers "Ask <Agent> to answer?"; pressing "Ask <Agent>" sends the turn with `Route: 'Redirect'`, and the server takes it as the author's intent for that message, in place of a tag, so the mention, person-only and thread rules don't refuse it. Nothing else is relaxed: the caller must be the message's author, the agent must be one the space allows, a message gets one turn, and the turn is bounded by the chat's kind and audience like any other. The reply records the ask: its row is inserted with `ExternalID` = `collab:explicit-ask`, in the same write that starts the turn, so a reply that came from an ask can be told from one that came from a tag. Harness check AG14 holds each of these, and that the marker is there after an ask and absent after a tagged turn.
 
 ### Every agent turn goes through Collaboration's server
 
@@ -503,17 +504,18 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
   - Collaboration's server passes that floor when it runs the agent, and MJ's server loads the conversation from it ([§ 9](#9-mj-changes), `AgentHistoryFrom`), assembling the context window with `speakerAttribution: 'always'` and `speakerLabels` so each message is prefixed with `[Speaker]:` or `[Speaker -> replying to Target]:`.
   - Under a floor, MJ skips its summary of earlier messages, since the summary covers messages before the floor. The agent then sees the last 20 messages after the floor.
   - Until A5, the floor is the asker's own: the start of their seat, unless `Chats.HistoryOnAdd` is `All`.
-- **Search: the audience of the answer decides it** (the plan's D2). This extends the subtree bound this plan first set:
-  - **In a private chat,** one person plus agents, the agent uses the caller's union of reach: everything their seats reach, anywhere in the tree. A scope control narrows it to *this space*, *this space and its sub-spaces*, or *everything I can reach*. The default is *this space and its sub-spaces* when the chat is opened from a space, and *everything* from Home.
-  - **In a chat with two or more people,** a space's conversations included, the agent uses the intersection of what every current participant can read, with each participant's band: a chat with anyone who can't see Team uses Shared material only. Nobody can change it, the asker included.
-  - In both, the space's `AgentRetrieval` still applies, and the bound is recomputed on every turn.
-  - An earlier reply stands when someone joins later, but it's sealed for them if they can't read its sources.
-  - **Today** (the plan's D25), the agent may use this space's items that the asker can read and the conversation's audience can see: Shared items in a General or Topic conversation, and Shared and Team items in an Internal Only one. The scope control, the union and the intersection wait for A5 and A6.
-- **Knowledge beyond the space's items** comes only from the Content Sources bound to the type or the space ([§ 3](#3-data)), under their classification. No turn uses bound Content Sources yet: `resolveSpaceKnowledgeSources` exists, and nothing calls it.
+- **Search and structural chat scope: the audience of the answer decides it** (the plan's D2). This extends the subtree bound this plan first set:
+  - **Structural chat scope (`Collaboration Space Scope`):** Every space chat turn passes the **Collaboration Space Scope** (`metadata/search-scopes/.collaboration-search-scopes.json`) as a host-assigned search scope via `ExecuteAgentParams.SearchScopeIDs` alongside `ExecuteAgentParams.Audience: { Mode: 'Intersection', UserIDs }`. Its `SearchContextConfig` declares `Trust: 'ServerDerived'` dimensions (`SpaceID` and `Audience`) with `strictValidation: true` and SQL `ExtraFilter` predicates over `vwSpaceItems`, `MJ_BizApps_Tasks: Tasks`, and `MJ: Content Item Chunks` (paired with `fnCollaborationCommonAccess`). Because the server derives `SpaceID` and `Audience` directly from the conversation and its seats, neither the client nor the model can widen the space subtree or band.
+  - **In a private / 1-to-1 Assistant chat,** one person plus agents, `effectiveRetrievalScope` (`packages/Core/src/retrieval.ts`) uses the caller's union of reach: everything their seats reach, anywhere in the tree. A scope control narrows it to *this space* (`ThisSpace`), *this space and its sub-spaces* (`ThisSpaceAndSubspaces`, default when anchored to a space), or *everything I can reach* (`Everything`, default from Home).
+  - **In a chat with two or more people,** a space's conversations included (`General`, `Topic`, `Private`), the agent uses the intersection of what every current participant can read, with each participant's band: a chat with anyone who can't see Team uses Shared material only. Nobody can change it, the asker included.
+  - In both, the space's `AgentRetrieval` (`ExcludedEntirely`, `ExcludedFromParentScope`) and `SpaceTypeStatus.AgentRetrieval` still apply, and the bound is recomputed on every turn.
+  - An earlier reply stands when someone joins later, and source receipts (`SpaceAgentSourceReceipt`) record the resources each answer drew from so citations stay bounded by the reader's live access.
+- **Post-close root chat pattern:** A perpetual **root space** (`ParentID IS NULL`, e.g., an ongoing client or board relationship) stays in `Active` status while time-bounded workstreams, engagements, or terms live as child sub-spaces under it. When a child sub-space moves to `Paused` or terminal `Closed` (`SpaceTypeStatus`), writes and new agent turns inside that closed child sub-space are refused (`spaceIsReadOnly` / `ExecuteSpaceChatTurn`), while members who keep active seats on the perpetual root space continue chatting in the root space (`Assistant`, `General`, or `Topic`). Root-space agent turns continue to read across eligible open and `AgentRetrieval`-enabled spaces in the subtree while honoring `ExcludedEntirely`, `ExcludedFromParentScope`, and each child status's `AgentRetrieval` flag.
+- **Knowledge beyond the space's items** comes only from the Content Sources bound to the type or the space (`SpaceGrant` of kind `KnowledgeSource`), under their classification and live reach checks.
 - **Memory:** in a chat with two or more people, the agent doesn't inject the asker's personal notes.
-- **Sources:** every answer records the resources it drew from (the plan's A4), which the chat area shows as citations and sealing reads (waits for A4; nothing is recorded yet).
+- **Sources:** every answer records the resources it drew from (`SpaceAgentSourceReceipt`), which the chat area renders as bounded citation chips and receipt rows.
 - **The asker** must reach the space with a seat that can post; with A5, they'll need to be a participant. The agent runs as the asker, never as a service account, and its reply is written as the system user with the agent's ID.
-- **Type-specific context** comes from the server driver's `BuildAgentContext`: Committees gives the roster and the next meeting, for example. Not called yet.
+- **Type-specific context** comes from the server driver's `BuildAgentContext`: for example, a governance driver gives the roster and the next meeting.
 
 ### Which agents a space allows
 
@@ -590,63 +592,54 @@ Collaboration keeps MJ's `mj-conversation-chat-area` and never forks it (decisio
 - **Changeset:** minor, since the flag is a field on a JSON type under MJ's `metadata/`.
 - **Where it is:** [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787), merged into MJ's `next` on 2026-09-27. Collaboration's Spaces resolver overrides `ResolveLoadHint` (PR 9, the plan's D42), so a space of a known type loads its subtype row without the probe.
 
-### 9.3 On the MJ list, outside these pull requests
+### 9.3 MJ#4789 and the remaining MJ platform list
 
-These are in the plan's workstream A:
-- Subtype discovery over GraphQL isn't permission-checked, so any signed-in user can learn which subtype a record has (A13.3).
-- A parent's read filter doesn't reach its subtypes' views ([§ 11](#11-security-rules-for-plug-ins); A13.3).
-- A loaded record never looks for its subtype again when it's reloaded (A13.3).
-- Conversation participants, and agent runs bounded by an audience, so that every agent in a chat, not only the Assistant, is bounded by everyone in it (A5 and A6).
-- Chats with several people:
-  - editing, deleting and answering forms are allowed to the conversation's owner rather than to a message's author (A5);
-  - there's no live feed of other people's messages (A12.6).
-- Who a conversation message is from (A19, in [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789), open). Until it ships, a type's message hooks aren't enforced (the plan's D44).
-- Bound view and dashboard properties, hidden action parameters and locked query parameters (A14 to A17, in MJ#4789), which grants and a granted query need ([§ 11](#11-security-rules-for-plug-ins)).
-- A read-only chat area, for a closed space and for someone who can read a space without a seat that can post ([MJ#4838](https://github.com/MemberJunction/MJ/issues/4838), fixed in the MemberJunction pull request of the plan's D48, [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891), merged into MJ's `next` on 2026-09-30). PR 10 hands the chat area its `ReadOnly` input instead of hiding the composer from outside.
-- An IsA parent's `Delete()` that never returns when its subtype is attached ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850), fixed in the same pull request). PR 10 deletes a space with a plain `Delete()`.
-- `EnsureISAChild()` on a new record reads a child row that can't exist yet and logs a load error ([MJ#4859](https://github.com/MemberJunction/MJ/issues/4859), fixed in the same pull request). PR 10's `ST6` checks that creating a space with its subtype logs no load error.
-- Over GraphQL, a subtype's `Delete()` returns false although both rows are deleted: the server deletes the space along with the subtype, and the client then sends the space's delete too ([MJ#4864](https://github.com/MemberJunction/MJ/issues/4864), fixed in the same pull request). The integration checks trust `Delete()`'s answer and read the rows back only to confirm it (PR 10).
-- An IsA parent that its child builds has no link back to the child, so the parent's save can't see a change to the child's own columns ([MJ#4870](https://github.com/MemberJunction/MJ/issues/4870), fixed in the same pull request). Every save of a subtype from a client takes that path. With the fix, the space sees the subtype, and PR 10's `SC4` checks it over the wire ([§ 7](#7-isa-subtypes-and-their-forms)).
-- A host's agent turn has no supported way to publish its live status, because `RunAIAgentResolver`'s publishing is private ([MJ#4884](https://github.com/MemberJunction/MJ/issues/4884), fixed in the same pull request). PR 10 hands the turn MJ's publisher, `AgentRunStatusPublisher`, so nothing in Collaboration builds MJ's messages.
-- A host turn that finishes before its reply row is shown stays in progress on screen until a reload ([MJ#4885](https://github.com/MemberJunction/MJ/issues/4885), fixed in the same pull request).
+[MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) (A14 to A19) **has landed** in MemberJunction 6.3 (`>=6.3.0-edge.1`), delivering properties on user views (A14), dashboard properties (A15), bound action parameters (A16), server-set query parameters with `Context` and `RequireApproved` fingerprint approvals (A17), calendar views (A18), and message author attribution (A19). Collaboration now targets MJ `>=6.3.0-edge.1 <7.0.0`. Note that Collaboration's `SpaceGrantEntityServer` and `grant-operations.ts` retain their pre-adoption fail-closed checks on participant view/dashboard/query bindings until the grant-binding enablement follow-up wires those landed MJ 6.3 primitives.
+
+Remaining items tracked across MJ and Collaboration:
+- Subtype discovery over GraphQL permission checks and parent read-filter propagation to subtype views (A13.3).
+- Full `MJ: Conversation Participants` (`HistoryFrom` windowing and message sealing for late-joining participants, A5 / A7).
+- Live pub/sub fan-out for multi-party chat messages scoped to the space's audience (A12.6).
+- Wiring `ConversationDetailEntityServer` message author attribution (landed in MJ#4789 / A19) to enforce `ValidateMessage` and `OnMessagePosted` on direct entity saves, and lifting the pre-MJ#4789 grant guards in `SpaceGrantEntityServer` / `grant-operations.ts`.
+- Already landed in MJ `next` / 6.3 (`MJ#4891`): read-only chat area (`ReadOnly` input, MJ#4838), IsA parent `Delete()` with attached subtype (MJ#4850), `EnsureISAChild()` on unsaved records (MJ#4859), GraphQL subtype `Delete()` return parity (MJ#4864), IsA parent-to-child link on client saves (MJ#4870), `AgentRunStatusPublisher` (MJ#4884), and live reply status completion (MJ#4885).
 
 ## 10. Examples
 
 A framework built around one example tends to carry that example's assumptions. So the plan is tested against three.
 
-### 10.1 Committees: the record is the space
+### 10.1 Governance boards and terms: the record is the space
 
-- A committee and a term are each a space: `Committee` and `Term` extend `Space` through IsA, disjoint, with `Committee.ID = Space.ID`.
-- Seats come from Committees' memberships, through `SyncSeats`, matched on `SpaceMember.PersonID`.
-- Meetings, motions, votes and minutes stay in Committees, filtered through `fnCollaborationAccess`. **Amended by the plan's D33:** meetings, agenda items, attendance and video providers move to bizapps-tasks, and Committees keeps motions, votes, ballots, quorum and the approval of minutes, re-pointed at Tasks' meetings (the plan's C4).
-- After its fixes, Committees is rebuilt in one step, C4, in a major version, with no data carried over, since it has no production users yet (the plan's D35).
-- Its plan is [Committees' rebuild plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md). The staging is the plan's ([§ 13](#13-order-of-work)).
+- A board and a term are each a space: their extension entities extend `Space` through IsA, disjoint, with `<Extension>.ID = Space.ID`.
+- Seats come from the downstream app's memberships, through `SyncSeats`, matched on `SpaceMember.PersonID`.
+- Meetings and agendas live in `bizapps-tasks` (the plan's D33), and a space links to its meetings through `bizapps-tasks`.
+- Decisions, sign-offs, and formal approvals across governance and project workspaces use `bizapps-tasks`' `TaskDecision` entity (`MJ_BizApps_Tasks: Task Decisions`), rather than inventing a separate decision table per space type. Collaboration's `TaskDecisionEntityServer` (registered at priority 100 in `packages/CoreEntitiesServer/src/task-attribution.ts`) extends `bizapps-tasks`' `TaskDecisionEntityServer` and stamps `DecidedByPersonID` from the authenticated caller's linked `Person` record for `Space Participant` saves.
+- Downstream governance apps rebuild on `Space` in a major version using these extension points, keeping only their domain-specific records filtered through `fnCollaborationAccess`.
 
-### 10.2 A deal room: the space belongs to another app's record
+### 10.2 A deal or engagement room: the space belongs to another app's record
 
-The bizapps catalog's best second example is a room for a deal in bizapps-sales, because it breaks Committees' assumptions:
+A second canonical pattern is a room anchored to a record owned by an external opportunity or engagement app:
 
-| Committees | A deal room |
+| Record-is-space (e.g., governance board) | Anchored room (e.g., deal or engagement room) |
 |---|---|
-| The record is the space | The deal exists first, in Sales, with its own lifecycle and lock. The room is anchored to it. |
-| Created in Collaboration's New space flow | Opened from Sales' deal form or a stage change, through `EnsureSpaceForRecord` |
-| One roster | Two rosters, the deal team and the buyer's contacts, plus partner reps from a third company |
-| Members may read the governance records | Buyers must never read the deal itself, which holds loss notes and forecasts |
+| The record is the space | The parent record exists first, in the owning app, with its own lifecycle and lock. The room is anchored to it via `SpaceAnchor`. |
+| Created in Collaboration's New space flow | Opened from the owning app's form or a stage change, through `EnsureSpaceForRecord` |
+| One roster | Two rosters: the internal team (`Team` band) and external contacts (`Shared` band) |
+| Members may read domain records | External contacts must never read internal-only records such as margin forecasts or loss notes |
 
 **Its shape:**
-- **The room** is a `DealRoom` subtype, IsA Space, with a unique `DealID`. It sits under a space for the account, which `ResolveAnchorParent` finds or opens.
-- **Seats** come through `SyncSeats`: the deal team on the Team band, the buyer's contacts on the Shared band. Contacts who opted out of outreach are refused.
-- **What buyers see of the deal,** such as the stage and the close date, is copied into `DealRoom`'s own columns by its driver. It's never read from the deal (decision 17).
-- **Its lifecycle follows the deal:**
-  - a lost deal closes the room;
-  - a won deal closes it, opens an onboarding space beside it and moves the Shared items there;
-  - reopening the deal reopens the room.
-- **In a chat with a buyer,** its `BuildAgentContext` leaves out Team-only data such as the win probability.
+- **The room** is a `DealRoom` (or engagement room) subtype, IsA `Space`, anchored to the owning record via `SpaceAnchor` (`IsPrimary = true`). It sits under a perpetual root space for the organization/account, which `ResolveAnchorParent` finds or opens.
+- **Seats** come through `SyncSeats`: the internal team on the Team band, external contacts on the Shared band. Contacts who opted out of outreach are refused.
+- **What external participants see of the owning record,** such as the stage and the target date, is copied into the subtype's own columns by its driver (or exposed through Canon-approved `DataReach` allow-lists). It's never read directly from internal tables (decision 17).
+- **Its lifecycle follows the owning record (post-close root chat pattern):**
+  - a closed-lost or completed engagement moves the child room to `Closed` (or `Paused`), refusing new writes and child-room chat turns while keeping the perpetual root space `Active`;
+  - a won engagement opens an onboarding child space beside it and promotes Shared items there;
+  - a `Paused` child room can be resumed to `Active` via Reopen, whereas `Closed` is terminal.
+- **In a chat with external participants,** its `BuildAgentContext` and structural chat scope leave out Team-only data such as internal margins or win probability.
 
-**Open questions,** settled when it's built, after Committees:
-- **Packaging.** An Open App can't declare an optional dependency. Either Sales depends on Collaboration, or a small bridge app ships the room. A bridge app is likely right, since not every Sales customer runs Collaboration.
-- **Partner reps** sell with the firm but aren't part of it. They need a role on the Shared band, or a third band.
-- **IsA or an anchor.** Now that a space can have several anchors (the plan's D26), a deal room could be a plain space anchored to the deal, and to the account, rather than a subtype. The plan's § 11 lists it as open decision 16.
+**Packaging note:**
+- An Open App can't declare an optional dependency. Either the owning app depends on Collaboration, or a bridge Open App ships the room type and drivers.
+- Multiple rosters (internal, external, partner) map cleanly onto `SpaceRoleType` flags (`CanSeeTeamBand`, `CanContribute`, `CanInvite`, `CanPromoteBand`).
+- Because a space can hold multiple `SpaceAnchor` rows (decision 25), a room can be a plain `Space` anchored to both the engagement record and the account record, or a subtype when extra typed columns are needed.
 
 ### 10.3 Examples in Collaboration itself
 
@@ -663,9 +656,9 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
   | Cohort | A learning cohort or peer group | `RequestToJoin` | `Listed` | `Shared` | none |
 
   Each is a type row with a `Configuration`: which types it allows under it, generic labels, chat rules and the keys a space may override. None sets any other setting, so the app's defaults apply, and none names a driver. The sample world keeps its own copies of any type its checks need.
-- **Two example plug-ins,** in three private packages under `packages/ExampleSpaceTypes` that ship nowhere, split by tier as § 2 says a type ships, are to use every hook between them:
-  - `example-board`, shaped like Committees: its own subtype table, rules for sub-spaces, a synced roster, tabs, cards and chips. It draws frame 08 in the gallery.
-  - `example-room`, shaped like the deal room: a space opened for a record through `EnsureSpaceForRecord`, two synced rosters and a copied card.
+- **Two example plug-ins,** in three private packages under `packages/ExampleSpaceTypes` that ship nowhere, split by tier as § 2 says a type ships, exercise the extension hooks:
+  - `example-board`, shaped like a governance board: its own subtype table, rules for sub-spaces, a synced roster, tabs, cards and chips. It draws frame 08 in the gallery.
+  - `example-room`, shaped like an anchored engagement/deal room: a space opened for a record through `EnsureSpaceForRecord`, two synced rosters and a copied card.
   - `example-chapter` (the plan's B24, in stage 2 of [PR 10's plan](../plans/pr10-plan.md)): a Chapter entity with Members, a primary anchor, a data reach on Members, a granted view and dashboard with bound properties, a granted aggregate query, a granted action with a bound parameter, and sub-spaces of the same type and of another.
 - **Where they stand:** today they override every server hook and most UI hooks. `example-board` and `example-room` name their tables as subtypes (D42), so both are created through them. The room's `SyncSeats` passes through to the base, which isn't built, and nothing calls `EnsureSpaceForRecord` for it, so its roster sync and its record opening aren't exercised; its deal card is static. A third test type, `example-vault`, has no plug-ins. The type rows are in `metadata-tests/`, pushed with `pnpm run mj:push:tests`.
 - **Their tables** are in a test-only migration folder beside those packages (`migrations/`, schema `__mj_BizAppsCollabExamples`, each with its primary key as a foreign key to `Space`), and no host ever gets it. The folder has its own CodeGen config with the IsA relationships in `codegen-schema-info.json`; the migration carries CodeGen's output, which writes the entity classes into the entities package, the GraphQL resolvers into the server package (named by its `RESOLVER_PATHS`, so a host that shows the example types must load that package) and the forms into the client package. Their entity permissions are in `metadata-tests/entity-permissions/`, pushed first by `pnpm run mj:push:tests`.
@@ -674,7 +667,7 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
 ## 11. Security rules for plug-ins
 
 - **Reads are SQL's.** Who sees a space, a seat, an item or a message is decided by `fnCollaborationAccess` and the row-level security filters. No driver, contribution or configuration key widens it. A driver can refuse a write, narrow the rules, and react.
-- **`fnCollaborationAccess` becomes a published contract:** its name, its arguments and its columns (`SpaceID`, `CanSeeTeam`, `CanInvite`, `CanContribute`). A downstream app filters its subtype tables and its other space-scoped tables with it, for example `CommitteeID IN (SELECT SpaceID FROM fnCollaborationAccess(…))`. Changing it is a breaking change under the publish-then-no-breaking-changes policy.
+- **`fnCollaborationAccess` becomes a published contract:** its name, its arguments and its columns (`SpaceID`, `CanSeeTeam`, `CanInvite`, `CanContribute`). A downstream app filters its subtype tables and its other space-scoped tables with it, for example `<ExtensionID> IN (SELECT SpaceID FROM fnCollaborationAccess(…))`. Changing it is a breaking change under the publish-then-no-breaking-changes policy.
 - **Subtypes get the space's filter.** MJ doesn't carry Space's read filter onto a subtype's view, and CodeGen gives a new entity unfiltered read for MJ's UI role by default. So:
   - Collaboration ships its space-access filter as a reusable row-level security filter;
   - each app attaches it to every role's read permission on its subtype, as metadata;
@@ -685,7 +678,7 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
 - **Agent lists narrow, never grant.** An allowed-agent list only filters what's offered and what the server runs. A person still needs MJ's Run permission on the agent.
 - **Known MJ gaps**, in the plan's A13.3: subtype discovery over GraphQL isn't permission-checked (it reveals only a record's subtype entity name), and a parent's read filter doesn't reach its subtypes' views.
 - **Data reach stays in SQL** (the plan's D28). A type's declared reach becomes a generated, reviewed row-level security filter on the participant role, one per entity, with a field allow-list. No driver reads another app's rows on a participant's behalf.
-- **A granted query is a door, not a grant of rights** (the plan's D29). A participant runs one only through `RunSpaceQuery`, which checks reach and band, binds and locks the scope parameters, and logs the run. It needs A17's locked query parameters, in MemberJunction/MJ#4789 (open).
+- **A granted query is a door, not a grant of rights** (the plan's D29). A participant runs one only through `RunSpaceQuery`, which checks reach and band, binds and locks the scope parameters, and logs the run. It builds on A17's server-set/locked query parameters, which landed in [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) (MJ 6.3).
 - **What a type that seats outsiders is granted is Canon-approved** (the plan's D34), and a grant's bound values are the server's: hidden from the model, refused from a client, and refused when they don't resolve.
 
 ## 12. Tests
@@ -718,17 +711,11 @@ Not yet tested, because not yet built: `SyncSeats`, audience-bounded turns and s
 
 ## 13. Order of work
 
-1. **The two MJ pull requests of [§ 9](#9-mj-changes)** merged into MJ's `next` on 2026-09-27 (MJ#4788 and MJ#4787). For now Collaboration builds against MJ's `next` with no pin (D39); stage 5 of [PR 9's plan](../plans/pr9-plan.md) pins a release that carries them.
-2. **PR #7 built this order** after PR #3 merged, and PR #8 built the chat. What each step left is marked in its section: the providers in step 3 aren't called yet, the scaffold's three provider classes are still exported, and step 4 still needs A5 to A7. The order was: Each step came with its tests ([the plan's § 9](../plans/plan.md#9-sequencing)). The screens come last (the plan's D16): steps 4 and 6 build their server side here, and slices G and I wait for the UI stage with the other slices:
-   1. the schema: the `SpaceType` and `Space` columns, `SpaceMember.SyncSource` and `PersonID`, the chat, agent and knowledge-binding tables, the JSONType wiring and the type rows;
-   2. the server drivers, the registry and the calls in every entity server class and operation, with the lifecycle subscribers and signal providers;
-   3. the UI drivers and contributions, replacing the scaffold's `BaseSpaceTab`, `BaseSpaceOverviewCard` and three provider classes, with slice D's needs-you and agenda rows moved onto the providers;
-   4. chats, history and agents, rewritten from [§ 8](#8-chats-history-and-agents), with slice G (frame 09). It needs MJ core's conversation participants (A5), audience-bounded agent runs (A6) and sealing (A7), and the chat area needs the `ng-conversations` change, each in a released MJ. Where one isn't out yet, build the parts that don't need it first, and wire the rest when it lands;
-   5. the seven generic types' configuration ([§ 10](#103-examples-in-collaboration-itself), the plan's D18);
-   6. the example plug-ins, and slice I (frame 08) through `example-board`.
-3. **Committees moves** in bizapps-committees: its fixes first, then C4 in one step, after bizapps-tasks gains meetings (the plan's D35 and workstream T; [the plan's § 8](../plans/plan.md#8-workstream-c-committees-on-collaboration)).
-4. **Then the deal room** ([§ 10](#102-a-deal-room-the-space-belongs-to-another-apps-record)), in Sales or a bridge app.
-5. **PR 10's stages build the plan's v0.5:** anchors, grants, the configuration resolver, bindings and the grant operations, data reach, agent turns on the effective configuration, notes, pins, the data surface and `example-chapter`. PR 10 carries all of it, and the rest of the plan, until it's done (the plan's D51); the order is in [PR 10's plan](../plans/pr10-plan.md), from [#8's plan](../plans/pr8-plan.md). PR 9 finished the chat and built subtypes end to end (the plan's D42).
+1. **The two MJ pull requests of [§ 9](#9-mj-changes)** merged into MJ's `next` on 2026-09-27 (MJ#4788 and MJ#4787), and **[MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)** (A14–A19) has also landed in MJ 6.3 (`6.3.0-edge.1`). Collaboration pins MJ `>=6.3.0-edge.1 <7.0.0`.
+2. **PR #7 built the extensibility base** after PR #3 merged, PR #8 built the chat, and PR #9 / PR #10 / subsequent waves added `SpaceAnchor`, `SpaceGrant`, `ResolveSpaceConfiguration`, `SyncSeats`, `SpaceTypeStatus`, structural chat scope (`Collaboration Space Scope`), per-answer source receipts (`SpaceAgentSourceReceipt`), `SpaceType.TargetApplicationID`, external IdP invites, and wired UI extension points (`NeedsYouProvider`, `BaseSpaceHeaderChipProvider`, `GetHeaderChips`, `GetHeaderActions`, `GetSettingsSections`).
+3. **Downstream governance apps** rebuild on `Space` using `SyncSeats`, `SpaceType` drivers, `fnCollaborationAccess`, `bizapps-tasks` meetings/agendas, and `bizapps-tasks` `TaskDecision` records.
+4. **Anchored engagement/deal rooms** ([§ 10.2](#102-a-deal-or-engagement-room-the-space-belongs-to-another-apps-record)) build in their owning app or a bridge app using `EnsureSpaceForRecord`, `SpaceAnchor`, and the post-close root chat pattern.
+5. **Follow-up grant enablement:** lift the pre-MJ#4789 participant grant guards in `SpaceGrantEntityServer` and `grant-operations.ts` to activate bound views, dashboards, and locked query parameters now that MJ#4789 is present in MJ 6.3.
 
 ## 14. Changes to the UX plan
 
@@ -738,5 +725,5 @@ Not yet tested, because not yet built: `SyncSeats`, audience-bounded turns and s
 - **§ 11, slice D** builds frame 01 from Collaboration's own data. Its needs-you and agenda rows move onto the providers of [§ 6](#6-ui-drivers-and-contributions) in step 3 of [§ 13](#13-order-of-work). Not done yet: nothing calls the providers.
 - **§ 11, slice G** (frame 09) is built with [§ 8](#8-chats-history-and-agents), in step 4.
 - **§ 11, slice I** draws frame 08 through `example-board`, in step 6.
-- **§ 8, gap 10, the committee specifics,** is the plan's B0.11: PR #3 took the `committee` row out, and `GovernancePanel` goes with slice I.
+- **§ 8, gap 10, the legacy governance specifics,** is the plan's B0.11: PR #3 took the legacy seed row out, and `GovernancePanel` goes with slice I.
 - **§ 11, slices B to I** are the plan's B13, built after stage 5 of [PR 10's plan](../plans/pr10-plan.md), except slice H's subtype screens, which PR 9 built (D42). Slice B also takes the scope control, sealed messages and answer receipts.
