@@ -1010,4 +1010,60 @@ describe('External IdP invite flow when magicLink.enabled = false (CX-7 & CX-6)'
         assert.equal(sentNotifications.length, 1);
         assert.equal(sentNotifications[0]?.applicationId, VENDOR_PORTAL_APP_ID);
     });
+
+    it('refuses provisioning with role-not-grantable when magicLink.enabled = false and grantableRoleNames is empty (CR-1)', async () => {
+        const state = createStatefulIdpProvider();
+        const sentNotifications: IdpSignInNotification[] = [];
+        const caller = new UserInfo(state.provider, {
+            ID: OWNER_USER_ID,
+            Type: 'User',
+            UserRoles: [{ UserID: OWNER_USER_ID, RoleID: STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+        });
+
+        const emptyAllowlistRes = await mintSpaceLink({
+            provider: state.provider,
+            user: caller,
+            spaceId: SPACE_ALPHA_ID,
+            email: 'blocked.empty@vendor.test',
+            roleId: GUEST_SPACE_ROLE_ID,
+            host: {
+                ...buildIdpHost(sentNotifications),
+                enabled: false,
+                grantableRoleNames: [],
+            },
+        });
+
+        assert.equal(emptyAllowlistRes.ok, false);
+        assert.equal(emptyAllowlistRes.kind, 'refused');
+        assert.equal(emptyAllowlistRes.reason, 'role-not-grantable');
+        assert.match(emptyAllowlistRes.message ?? '', /grantableRoleNames/i);
+        assert.equal(state.users.length, 0);
+        assert.equal(state.userRoles.length, 0);
+        assert.equal(state.userApps.length, 0);
+        assert.equal(state.seats.length, 2); // Only the 2 pre-seeded owner seats
+        assert.equal(state.magicLinkInvites.length, 0);
+        assert.equal(sentNotifications.length, 0);
+
+        const missingParticipantRes = await mintSpaceLink({
+            provider: state.provider,
+            user: caller,
+            spaceId: SPACE_ALPHA_ID,
+            email: 'blocked.other@vendor.test',
+            roleId: GUEST_SPACE_ROLE_ID,
+            host: {
+                ...buildIdpHost(sentNotifications),
+                enabled: false,
+                grantableRoleNames: ['Other Role'],
+            },
+        });
+
+        assert.equal(missingParticipantRes.ok, false);
+        assert.equal(missingParticipantRes.kind, 'refused');
+        assert.equal(missingParticipantRes.reason, 'role-not-grantable');
+        assert.equal(state.users.length, 0);
+        assert.equal(state.userRoles.length, 0);
+        assert.equal(state.userApps.length, 0);
+        assert.equal(state.seats.length, 2);
+        assert.equal(sentNotifications.length, 0);
+    });
 });

@@ -100,6 +100,8 @@ export interface MagicLinkHost {
 
 export interface MintSpaceLinkResult {
     ok: boolean;
+    kind?: 'refused';
+    reason?: 'role-not-grantable';
     sent?: boolean;
     redemptionUrl?: string;
     message?: string;
@@ -209,8 +211,13 @@ export async function mintSpaceLink(input: {
 
     const system = await requireSystemUserForInvite(input.provider, space);
     const participantRole = await resolveParticipantRole(input.provider, system);
-    if (host.enabled && !roleGrantable(participantRole.name, host.restrictedRoleName, host.grantableRoleNames)) {
-        return { ok: false, message: `Invite refused: this host has not opted in to granting ${participantRole.name}. Add it to magicLink.grantableRoleNames.` };
+    if (!roleGrantable(participantRole.name, host.restrictedRoleName, host.grantableRoleNames)) {
+        return {
+            ok: false,
+            kind: 'refused',
+            reason: 'role-not-grantable',
+            message: `Invite refused: this host has not opted in to granting ${participantRole.name}. Add it to magicLink.grantableRoleNames.`,
+        };
     }
 
     const found = await findUserId(input.provider, email, system);
@@ -825,9 +832,7 @@ async function deliverLink(
 }
 
 async function resolveParticipantRole(provider: IMetadataProvider, system: UserInfo): Promise<ResolvedParticipantRole> {
-    const providerRoles = provider.Roles ?? [];
-    const metadataRoles = Metadata.Provider?.Roles ?? [];
-    const candidates = providerRoles.length > 0 ? providerRoles : metadataRoles;
+    const candidates = provider.Roles ?? [];
     const matched =
         candidates.find((role) => role.ID?.toLowerCase() === DEFAULT_PARTICIPANT_ROLE_ID.toLowerCase()) ??
         candidates.find((role) => (role.Name ?? '').trim().toLowerCase() === DEFAULT_PARTICIPANT_ROLE_NAME.toLowerCase());
@@ -852,7 +857,8 @@ async function resolveParticipantRole(provider: IMetadataProvider, system: UserI
         );
         if (rows.Success && rows.Results?.length) {
             const byId = rows.Results.find((r) => r.ID?.toLowerCase() === DEFAULT_PARTICIPANT_ROLE_ID.toLowerCase());
-            const chosen = byId ?? rows.Results[0];
+            const byName = rows.Results.find((r) => (r.Name ?? '').trim().toLowerCase() === DEFAULT_PARTICIPANT_ROLE_NAME.toLowerCase());
+            const chosen = byId ?? byName ?? rows.Results[0];
             if (chosen?.ID && parseUuid(chosen.ID)) {
                 return {
                     id: chosen.ID,
@@ -880,45 +886,103 @@ async function resolveTargetApplication(
         hostDefaultApplicationId?: string | null;
     },
 ): Promise<ResolvedTargetApplication> {
-    const engineType = params.typeId ? CollaborationEngine.Instance.SpaceTypeById(params.typeId) : undefined;
-    const typeTargetId = parseUuid(params.typeTargetApplicationId ?? '') ?? parseUuid(engineType?.TargetApplicationID ?? '');
-    const hostDefaultId = parseUuid(params.hostDefaultApplicationId ?? '');
+    let typeTargetId = parseUuid(params.typeTargetApplicationId ?? '');
+    let typeTargetName = params.typeTargetApplicationName?.trim() || '';
 
-    const providerApps = provider.Applications ?? [];
-    const metadataApps = Metadata.Provider?.Applications ?? [];
-    const knownApps = providerApps.length > 0 ? providerApps : metadataApps;
-    const collabApp =
-        knownApps.find((app) => app.ID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase()) ??
-        knownApps.find((app) => (app.Name ?? '').trim().toLowerCase() === 'collaboration');
-    const fallbackAppId = hostDefaultId ?? (collabApp?.ID ? parseUuid(collabApp.ID) : null) ?? COLLABORATION_APP_ID;
-
-    const appId = resolveTargetApplicationId(typeTargetId, fallbackAppId);
-    const matchedApp = knownApps.find((app) => app.ID?.toLowerCase() === appId.toLowerCase());
-
-    let appName =
-        (typeTargetId && params.typeTargetApplicationName?.trim()) ||
-        (typeTargetId && engineType?.TargetApplication?.trim()) ||
-        matchedApp?.Name?.trim() ||
-        '';
-    let appPath: string | null = matchedApp?.Path?.trim() || null;
-
-    if (!appName || appPath === null) {
+    // When SpaceType target was not supplied by the caller, query SpaceType exclusively from the supplied provider.
+    if (params.typeTargetApplicationId === undefined && params.typeId && parseUuid(params.typeId)) {
         try {
             const view = RunView.FromMetadataProvider(provider);
-            const rows = await view.RunView<{ ID: string; Name?: string | null; Path?: string | null }>(
+            const typeRows = await view.RunView<{ ID: string; TargetApplicationID?: string | null; TargetApplication?: string | null }>(
                 {
-                    EntityName: APPLICATIONS,
-                    ExtraFilter: `ID = '${appId}'`,
-                    Fields: ['ID', 'Name', 'Path'],
+                    EntityName: SPACE_TYPES,
+                    ExtraFilter: `ID = '${parseUuid(params.typeId)}'`,
+                    Fields: ['ID', 'TargetApplicationID', 'TargetApplication'],
                     MaxRows: 1,
                     ResultType: 'simple',
                 },
                 system,
             );
-            if (rows.Success && rows.Results?.[0]) {
-                const row = rows.Results[0];
-                if (!appName && row.Name?.trim()) appName = row.Name.trim();
-                if (appPath === null && row.Path?.trim()) appPath = row.Path.trim();
+            if (typeRows.Success && typeRows.Results?.length) {
+                const typeRow =
+                    typeRows.Results.find((r) => r.ID?.toLowerCase() === params.typeId!.toLowerCase()) ??
+                    typeRows.Results[0];
+                typeTargetId = parseUuid(typeRow?.TargetApplicationID ?? '');
+                if (!typeTargetName && typeRow?.TargetApplication?.trim()) {
+                    typeTargetName = typeRow.TargetApplication.trim();
+                }
+            }
+        } catch {
+            // Mock providers without MJ_BizApps_Collaboration: Space Types fall back gracefully below
+        }
+    }
+
+    const hostDefaultId = parseUuid(params.hostDefaultApplicationId ?? '');
+    const knownApps = provider.Applications ?? [];
+    let collabApp: { ID?: string; Name?: string | null; Path?: string | null } | undefined =
+        knownApps.find((app) => app.ID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase()) ??
+        knownApps.find((app) => (app.Name ?? '').trim().toLowerCase() === 'collaboration');
+
+    let loadedAppRows: Array<{ ID: string; Name?: string | null; Path?: string | null }> | null = null;
+    if (!typeTargetId && !hostDefaultId && !collabApp) {
+        try {
+            const view = RunView.FromMetadataProvider(provider);
+            const rows = await view.RunView<{ ID: string; Name?: string | null; Path?: string | null }>(
+                {
+                    EntityName: APPLICATIONS,
+                    ExtraFilter: `ID = '${COLLABORATION_APP_ID}' OR Name = 'Collaboration'`,
+                    Fields: ['ID', 'Name', 'Path'],
+                    MaxRows: 2, // row-cap-ok: bounded lookup for Collaboration app by ID or unique name
+                    ResultType: 'simple',
+                },
+                system,
+            );
+            if (rows.Success && rows.Results?.length) {
+                loadedAppRows = rows.Results;
+                const matchedCollab =
+                    rows.Results.find((r) => r.ID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase()) ??
+                    rows.Results.find((r) => (r.Name ?? '').trim().toLowerCase() === 'collaboration');
+                if (matchedCollab?.ID && parseUuid(matchedCollab.ID)) {
+                    collabApp = matchedCollab;
+                }
+            }
+        } catch {
+            // Mock providers without MJ: Applications fall back gracefully below
+        }
+    }
+
+    const fallbackAppId = hostDefaultId ?? (collabApp?.ID ? parseUuid(collabApp.ID) : null) ?? COLLABORATION_APP_ID;
+    const appId = resolveTargetApplicationId(typeTargetId, fallbackAppId);
+    const matchedApp =
+        knownApps.find((app) => app.ID?.toLowerCase() === appId.toLowerCase()) ??
+        (collabApp && collabApp.ID?.toLowerCase() === appId.toLowerCase() ? collabApp : undefined);
+
+    let appName = (typeTargetId && typeTargetName) || matchedApp?.Name?.trim() || '';
+    let appPath: string | null = matchedApp?.Path?.trim() || null;
+
+    if (!appName || appPath === null) {
+        try {
+            let candidateRows = loadedAppRows;
+            if (!candidateRows) {
+                const view = RunView.FromMetadataProvider(provider);
+                const rows = await view.RunView<{ ID: string; Name?: string | null; Path?: string | null }>(
+                    {
+                        EntityName: APPLICATIONS,
+                        ExtraFilter: `ID = '${appId}'`,
+                        Fields: ['ID', 'Name', 'Path'],
+                        MaxRows: 1,
+                        ResultType: 'simple',
+                    },
+                    system,
+                );
+                candidateRows = rows.Success ? rows.Results ?? [] : [];
+            }
+            if (candidateRows.length > 0) {
+                const row = candidateRows.find((r) => r.ID?.toLowerCase() === appId.toLowerCase()) ?? candidateRows[0];
+                if (row) {
+                    if (!appName && row.Name?.trim()) appName = row.Name.trim();
+                    if (appPath === null && row.Path?.trim()) appPath = row.Path.trim();
+                }
             }
         } catch {
             // Mock providers without MJ: Applications fall back gracefully below
@@ -1084,7 +1148,7 @@ async function createAccount(
 }
 
 function resolveAuthProvider(provider: IMetadataProvider): IMetadataProvider | undefined {
-    return provider.Authorizations !== undefined ? provider : Metadata.Provider;
+    return provider.Authorizations !== undefined ? provider : undefined;
 }
 
 async function ensureAccess(

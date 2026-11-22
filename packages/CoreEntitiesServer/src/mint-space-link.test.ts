@@ -7,12 +7,14 @@ import {
     type EntityInfo,
     EntityUserPermissionInfo,
     type IMetadataProvider,
+    Metadata,
     RoleInfo,
     UserInfo,
     type UserRoleInfo,
     WellKnownUserSource,
 } from '@memberjunction/core';
-import { mintSpaceLink } from '../dist/mint-space-link.js';
+import { CollaborationEngine } from '../dist/CollaborationEngine.js';
+import { mintSpaceLink, type IdpSignInNotification } from '../dist/mint-space-link.js';
 
 const SYSTEM_USER_ID = '11111111-1111-4111-8111-111111111111';
 const OWNER_USER_ID = '22222222-2222-4222-8222-222222222222';
@@ -553,5 +555,139 @@ describe('mintSpaceLink declarative MJ Authorization (CT-5)', () => {
         assert.equal(res.targetApplicationName, 'Collaboration');
         assert.equal(savedInvites[0]?.ApplicationID, COLLABORATION_APP_ID);
         assert.deepEqual(savedInviteApps, [{ InviteID: 'invite-1', ApplicationID: COLLABORATION_APP_ID }]);
+    });
+
+    it('resolves roles, applications, and SpaceTypes exclusively from input.provider without leaking Metadata.Provider or CollaborationEngine.Instance (CR-5)', async () => {
+        const isolatedParticipantRoleId = 'eeeeeeee-1111-4111-8111-111111111111';
+        const conflictingGlobalRoleId = '99999999-aaaa-4aaa-8aaa-999999999999';
+        const conflictingGlobalAppId = 'bbbbbbbb-aaaa-4aaa-8aaa-bbbbbbbbbbbb';
+        const isolatedCustomAppId = 'cccccccc-2222-4222-8222-222222222222';
+
+        const prevProviderDescriptor = Object.getOwnPropertyDescriptor(Metadata, 'Provider');
+        const conflictingGlobalProvider = {
+            Roles: [new RoleInfo({ ID: conflictingGlobalRoleId, Name: 'Space Participant' })],
+            Applications: [] as ApplicationInfo[],
+            Authorizations: [],
+            AuthorizationRoles: [],
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+        (conflictingGlobalProvider.Applications as ApplicationInfo[]).push(
+            new ApplicationInfo({ ID: COLLABORATION_APP_ID, Name: 'Global Conflicting Collab', Path: 'global-wrong' }, conflictingGlobalProvider),
+            new ApplicationInfo({ ID: conflictingGlobalAppId, Name: 'Global Conflicting Portal', Path: 'global-portal-wrong' }, conflictingGlobalProvider),
+        );
+        Object.defineProperty(Metadata, 'Provider', {
+            configurable: true,
+            get: () => conflictingGlobalProvider,
+        });
+
+        const origSpaceTypeById = CollaborationEngine.Instance.SpaceTypeById.bind(CollaborationEngine.Instance);
+        CollaborationEngine.Instance.SpaceTypeById = () => ({
+            ID: SPACE_TYPE_ID,
+            TargetApplicationID: conflictingGlobalAppId,
+            TargetApplication: 'Global Conflicting Portal',
+        } as Partial<ReturnType<typeof origSpaceTypeById> & object> as ReturnType<typeof origSpaceTypeById>);
+
+        try {
+            // Case A: input.provider has empty Roles/Applications caches and SpaceType.TargetApplicationID = null in RunView
+            const isolatedNullTarget = createMintMockProvider({
+                inviteeRoleIds: [],
+                authGrants: { issueLinksRoleIds: [CUSTOM_STAFF_ROLE_ID] },
+                targetApplicationId: null,
+                targetApplicationName: null,
+                applications: [
+                    { ID: COLLABORATION_APP_ID, Name: 'Isolated Collaboration', Path: 'isolated-collab' },
+                    { ID: isolatedCustomAppId, Name: 'Isolated Portal', Path: 'isolated-portal' },
+                ],
+                roles: [
+                    { ID: isolatedParticipantRoleId, Name: 'Space Participant' },
+                ],
+            });
+            // Clear in-memory caches on input.provider so only input.provider's RunView supplies Roles/Applications
+            (isolatedNullTarget.provider as { Roles: RoleInfo[] }).Roles = [];
+            (isolatedNullTarget.provider as { Applications: ApplicationInfo[] }).Applications = [];
+
+            const caller = new UserInfo(isolatedNullTarget.provider, {
+                ID: OWNER_USER_ID,
+                Type: 'User',
+                UserRoles: [{ UserID: OWNER_USER_ID, RoleID: CUSTOM_STAFF_ROLE_ID, Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo],
+            });
+
+            const sentEmails: Array<{ subject: string; body: string }> = [];
+            const resDefault = await mintSpaceLink({
+                provider: isolatedNullTarget.provider,
+                user: caller,
+                spaceId: SPACE_ID,
+                email: 'isolated.default@example.test',
+                roleId: GUEST_SPACE_ROLE_ID,
+                host: {
+                    ...hostConfig,
+                    communicationProvider: 'smtp',
+                    fromAddress: 'noreply@isolated.test',
+                    sendInviteEmail: async (_system, _providerName, email) => {
+                        sentEmails.push({ subject: email.subject, body: email.body });
+                        return true;
+                    },
+                },
+            });
+
+            assert.equal(resDefault.ok, true);
+            assert.equal(resDefault.targetApplicationId, COLLABORATION_APP_ID);
+            assert.equal(resDefault.targetApplicationName, 'Isolated Collaboration');
+            assert.deepEqual(isolatedNullTarget.grantedUserRoles, [{ UserID: INVITEE_USER_ID, RoleID: isolatedParticipantRoleId }]);
+            assert.deepEqual(isolatedNullTarget.savedInviteApps, [{ InviteID: 'invite-1', ApplicationID: COLLABORATION_APP_ID }]);
+            assert.equal(isolatedNullTarget.savedInvites[0]?.RoleID, isolatedParticipantRoleId);
+            assert.equal(isolatedNullTarget.savedInvites[0]?.ApplicationID, COLLABORATION_APP_ID);
+            assert.match(sentEmails[0]?.subject ?? '', /Isolated Collaboration/);
+            assert.doesNotMatch(sentEmails[0]?.subject ?? '', /Global Conflicting/);
+
+            // Case B: input.provider has empty Roles/Applications caches and SpaceType.TargetApplicationID = isolatedCustomAppId under IdP mode
+            const isolatedCustomTarget = createMintMockProvider({
+                inviteeRoleIds: [],
+                authGrants: { issueLinksRoleIds: [CUSTOM_STAFF_ROLE_ID] },
+                targetApplicationId: isolatedCustomAppId,
+                targetApplicationName: 'Isolated Portal',
+                applications: [
+                    { ID: COLLABORATION_APP_ID, Name: 'Isolated Collaboration', Path: 'isolated-collab' },
+                    { ID: isolatedCustomAppId, Name: 'Isolated Portal', Path: 'isolated-portal' },
+                ],
+                roles: [
+                    { ID: isolatedParticipantRoleId, Name: 'Space Participant' },
+                ],
+            });
+            (isolatedCustomTarget.provider as { Roles: RoleInfo[] }).Roles = [];
+            (isolatedCustomTarget.provider as { Applications: ApplicationInfo[] }).Applications = [];
+
+            const notifications: IdpSignInNotification[] = [];
+            const resCustom = await mintSpaceLink({
+                provider: isolatedCustomTarget.provider,
+                user: caller,
+                spaceId: SPACE_ID,
+                email: 'isolated.custom@example.test',
+                roleId: GUEST_SPACE_ROLE_ID,
+                host: {
+                    ...hostConfig,
+                    enabled: false,
+                    publicUrl: 'https://portal.isolated.test',
+                    sendSignInNotification: async (_system, notification) => {
+                        notifications.push(notification);
+                        return true;
+                    },
+                },
+            });
+
+            assert.equal(resCustom.ok, true);
+            assert.equal(resCustom.sent, true);
+            assert.equal(resCustom.targetApplicationId, isolatedCustomAppId);
+            assert.equal(resCustom.targetApplicationName, 'Isolated Portal');
+            assert.deepEqual(isolatedCustomTarget.grantedUserRoles, [{ UserID: INVITEE_USER_ID, RoleID: isolatedParticipantRoleId }]);
+            assert.deepEqual(isolatedCustomTarget.grantedUserApps, [{ UserID: INVITEE_USER_ID, ApplicationID: isolatedCustomAppId }]);
+            assert.equal(notifications.length, 1);
+            assert.equal(notifications[0]?.signInUrl, 'https://portal.isolated.test/app/isolated-portal');
+            assert.equal(notifications[0]?.applicationName, 'Isolated Portal');
+        } finally {
+            CollaborationEngine.Instance.SpaceTypeById = origSpaceTypeById;
+            if (prevProviderDescriptor) {
+                Object.defineProperty(Metadata, 'Provider', prevProviderDescriptor);
+            }
+        }
     });
 });
