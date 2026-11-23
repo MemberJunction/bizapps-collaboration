@@ -68,6 +68,18 @@ export const S9_STRICT_TYPE_FILES = [
     'packages/CoreEntitiesServer/src/__tests__/space-notices-server.spec.ts',
     'packages/Server/src/schema-entity-parity.test.ts',
     'packages/IntegrationTests/src/__tests__/s10-slice1-world-data-model.integration.spec.ts',
+    // Sub-Epic S10 Slice 2 strict-typed modules and tests
+    'packages/Core/src/notifications.ts',
+    'packages/Core/src/notifications.test.ts',
+    'packages/EngineBase/src/notifications.ts',
+    'packages/EngineBase/src/CollaborationEngineBase.ts',
+    'packages/EngineBase/src/__tests__/notifications.spec.ts',
+    'packages/CoreEntitiesServer/src/comms-v2-notifications.ts',
+    'packages/CoreEntitiesServer/src/CollaborationEngine.ts',
+    'packages/CoreEntitiesServer/src/__tests__/comms-v2-notifications.spec.ts',
+    'packages/Server/src/comms-v2-bridge.ts',
+    'packages/Server/src/bootstrap-security-audits.test.ts',
+    'packages/IntegrationTests/src/__tests__/s10-slice2-comms-v2-notifications.integration.spec.ts',
 ];
 
 const STRICT_RULES = [
