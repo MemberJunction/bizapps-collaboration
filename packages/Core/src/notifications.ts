@@ -6,7 +6,13 @@
  * construction run identically in the browser, server, and `node:test`.
  */
 
-import { isSpaceNoticeBand, normalizeNoticeUuid, type SpaceNoticeBand } from './space-notices.ts';
+import {
+    isSpaceDigestCadence,
+    isSpaceNoticeBand,
+    normalizeNoticeUuid,
+    type SpaceDigestCadence,
+    type SpaceNoticeBand,
+} from './space-notices.ts';
 
 export const NT1_NOTIFICATION_EVENT_TYPES = [
     'Mention',
@@ -26,6 +32,8 @@ export type CollaborationNotificationChannel = (typeof COLLABORATION_NOTIFICATIO
 export const COLLABORATION_NOTIFICATION_PREFERENCES_SETTING_KEY = 'Collaboration.NotificationPreferences';
 
 export const COLLABORATION_SPACE_RESOURCE_TYPE_ID = '33642155-617E-4825-A2CC-F071A60F3739';
+
+export const COLLABORATION_DIGEST_NOTIFICATION_TYPE_NAME = 'Collaboration: Digest';
 
 export const NT1_NOTIFICATION_TYPE_NAMES: Readonly<Record<CollaborationNotificationEventType, string>> = {
     Mention: 'Collaboration: Mention',
@@ -76,6 +84,22 @@ export interface CollaborationScopeMuteOverride {
     Channels?: CollaborationChannelPreferences;
 }
 
+export type CollaborationDigestSpaceCadenceSetting = SpaceDigestCadence | 'Off';
+
+export interface CollaborationDigestPreferences {
+    Enabled: boolean;
+    Cadence: SpaceDigestCadence;
+    Channels?: CollaborationChannelPreferences;
+    SpaceCadences?: Readonly<Record<string, CollaborationDigestSpaceCadenceSetting>>;
+}
+
+export interface CollaborationDigestPreferencesPatch {
+    Enabled?: boolean;
+    Cadence?: SpaceDigestCadence;
+    Channels?: CollaborationChannelPreferences;
+    SpaceCadences?: Readonly<Record<string, CollaborationDigestSpaceCadenceSetting | null>>;
+}
+
 export interface CollaborationUserNotificationPreferences {
     Enabled: boolean;
     Channels: {
@@ -90,6 +114,7 @@ export interface CollaborationUserNotificationPreferences {
     MutedItemKeys: readonly string[];
     SpaceOverrides: Readonly<Record<string, CollaborationScopeMuteOverride>>;
     PreferredTimezone: string | null;
+    Digest?: CollaborationDigestPreferences;
 }
 
 export interface CollaborationUserNotificationPreferencesPatch {
@@ -105,11 +130,12 @@ export interface CollaborationUserNotificationPreferencesPatch {
     MuteItemKeysToRemove?: readonly string[];
     SpaceOverrides?: Readonly<Record<string, CollaborationScopeMuteOverride | null>>;
     PreferredTimezone?: string | null;
+    Digest?: CollaborationDigestPreferencesPatch | null;
 }
 
 export interface CollaborationNotificationResourceConfig {
     SpaceID?: string;
-    EventType?: CollaborationNotificationEventType;
+    EventType?: CollaborationNotificationEventType | 'Digest';
     ConversationID?: string | null;
     ConversationDetailID?: string | null;
     TaskID?: string | null;
@@ -185,7 +211,7 @@ export type CommsV2TemplateScalar = string | number | boolean | null;
 export type CommsV2TemplateData = Record<string, CommsV2TemplateScalar>;
 
 export interface CommsV2NotificationPayload {
-    EventType: CollaborationNotificationEventType;
+    EventType: CollaborationNotificationEventType | 'Digest';
     NotificationTypeName: string;
     RecipientUserID: string;
     RecipientEmail: string | null;
@@ -368,6 +394,59 @@ function normalizeQuietHours(input: CollaborationQuietHoursPreference | null | u
     };
 }
 
+function normalizeDigestSpaceCadence(
+    value: string | null | undefined,
+): CollaborationDigestSpaceCadenceSetting | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (trimmed === 'Off') return 'Off';
+    return isSpaceDigestCadence(trimmed) ? trimmed : null;
+}
+
+function normalizeDigestPreferences(
+    input: Partial<CollaborationDigestPreferences> | null | undefined,
+): CollaborationDigestPreferences | undefined {
+    if (!input) return undefined;
+    const channels = normalizeSparseChannelPrefs(input.Channels);
+    const spaceCadences: Record<string, CollaborationDigestSpaceCadenceSetting> = {};
+    if (input.SpaceCadences) {
+        for (const [rawSpaceId, rawSetting] of Object.entries(input.SpaceCadences)) {
+            const cleanId = normalizeNoticeUuid(rawSpaceId);
+            const cleanSetting = normalizeDigestSpaceCadence(rawSetting);
+            if (cleanId && cleanSetting) {
+                spaceCadences[cleanId] = cleanSetting;
+            }
+        }
+    }
+    const cadence = isSpaceDigestCadence(input.Cadence) ? input.Cadence : 'Daily';
+    return {
+        Enabled: input.Enabled !== false,
+        Cadence: cadence,
+        ...(channels ? { Channels: channels } : {}),
+        ...(Object.keys(spaceCadences).length > 0 ? { SpaceCadences: spaceCadences } : {}),
+    };
+}
+
+export function resolveEffectiveDigestPreferences(
+    preferences: CollaborationUserNotificationPreferences | null | undefined,
+): CollaborationDigestPreferences {
+    const base = preferences
+        ? normalizeCollaborationNotificationPreferences(preferences)
+        : createDefaultCollaborationNotificationPreferences();
+    if (base.Digest) {
+        return {
+            Enabled: base.Enabled !== false && base.Digest.Enabled !== false,
+            Cadence: base.Digest.Cadence,
+            ...(base.Digest.Channels ? { Channels: base.Digest.Channels } : {}),
+            ...(base.Digest.SpaceCadences ? { SpaceCadences: base.Digest.SpaceCadences } : {}),
+        };
+    }
+    return {
+        Enabled: base.Enabled !== false,
+        Cadence: 'Daily',
+    };
+}
+
 export function normalizeCollaborationNotificationPreferences(
     input: Partial<CollaborationUserNotificationPreferences> | null | undefined,
 ): CollaborationUserNotificationPreferences {
@@ -425,6 +504,7 @@ export function normalizeCollaborationNotificationPreferences(
     const tz = typeof input.PreferredTimezone === 'string' && input.PreferredTimezone.trim()
         ? input.PreferredTimezone.trim()
         : null;
+    const digest = normalizeDigestPreferences(input.Digest);
 
     return {
         Enabled: input.Enabled !== false,
@@ -435,6 +515,7 @@ export function normalizeCollaborationNotificationPreferences(
         MutedItemKeys: [...mutedItemsSet],
         SpaceOverrides: spaceOverrides,
         PreferredTimezone: tz,
+        ...(digest ? { Digest: digest } : {}),
     };
 }
 
@@ -547,6 +628,29 @@ export function parseCollaborationNotificationPreferences(
         }
     }
 
+    let digest: CollaborationDigestPreferences | undefined;
+    const digestObj = asJsonObject(root['Digest']);
+    if (digestObj) {
+        const digestChannels = parseJsonChannelPrefs(asJsonObject(digestObj['Channels']));
+        const spaceCadencesObj = asJsonObject(digestObj['SpaceCadences']);
+        const spaceCadences: Record<string, CollaborationDigestSpaceCadenceSetting> = {};
+        if (spaceCadencesObj) {
+            for (const [sid, val] of Object.entries(spaceCadencesObj)) {
+                if (typeof val === 'string') {
+                    const cleanSetting = normalizeDigestSpaceCadence(val);
+                    if (cleanSetting) spaceCadences[sid] = cleanSetting;
+                }
+            }
+        }
+        const rawCadence = typeof digestObj['Cadence'] === 'string' ? digestObj['Cadence'] : 'Daily';
+        digest = normalizeDigestPreferences({
+            Enabled: digestObj['Enabled'] !== false,
+            Cadence: isSpaceDigestCadence(rawCadence) ? rawCadence : 'Daily',
+            ...(digestChannels ? { Channels: digestChannels } : {}),
+            ...(Object.keys(spaceCadences).length > 0 ? { SpaceCadences: spaceCadences } : {}),
+        });
+    }
+
     return normalizeCollaborationNotificationPreferences({
         Enabled: root['Enabled'] !== false,
         Channels: channels,
@@ -556,6 +660,7 @@ export function parseCollaborationNotificationPreferences(
         MutedItemKeys: mutedItems,
         SpaceOverrides: spaceOverrides,
         PreferredTimezone: typeof root['PreferredTimezone'] === 'string' ? root['PreferredTimezone'] : null,
+        ...(digest ? { Digest: digest } : {}),
     });
 }
 
@@ -633,6 +738,37 @@ export function mergeCollaborationNotificationPreferences(
         }
     }
 
+    let nextDigest: CollaborationDigestPreferences | undefined = base.Digest;
+    if (patch.Digest === null) {
+        nextDigest = undefined;
+    } else if (patch.Digest !== undefined) {
+        const baseDigest = base.Digest ?? { Enabled: true, Cadence: 'Daily' as SpaceDigestCadence };
+        const mergedDigestChannels: CollaborationChannelPreferences | undefined =
+            patch.Digest.Channels !== undefined
+                ? { ...(baseDigest.Channels ?? {}), ...patch.Digest.Channels }
+                : baseDigest.Channels;
+        const mergedSpaceCadences: Record<string, CollaborationDigestSpaceCadenceSetting> = {
+            ...(baseDigest.SpaceCadences ?? {}),
+        };
+        if (patch.Digest.SpaceCadences) {
+            for (const [rawSid, val] of Object.entries(patch.Digest.SpaceCadences)) {
+                const cleanSid = normalizeNoticeUuid(rawSid);
+                if (!cleanSid) continue;
+                if (val === null) {
+                    delete mergedSpaceCadences[cleanSid];
+                } else {
+                    mergedSpaceCadences[cleanSid] = val;
+                }
+            }
+        }
+        nextDigest = normalizeDigestPreferences({
+            Enabled: patch.Digest.Enabled !== undefined ? patch.Digest.Enabled : baseDigest.Enabled,
+            Cadence: patch.Digest.Cadence !== undefined ? patch.Digest.Cadence : baseDigest.Cadence,
+            ...(mergedDigestChannels ? { Channels: mergedDigestChannels } : {}),
+            ...(Object.keys(mergedSpaceCadences).length > 0 ? { SpaceCadences: mergedSpaceCadences } : {}),
+        });
+    }
+
     return normalizeCollaborationNotificationPreferences({
         Enabled: patch.Enabled !== undefined ? patch.Enabled : base.Enabled,
         Channels: nextChannels,
@@ -643,6 +779,7 @@ export function mergeCollaborationNotificationPreferences(
         SpaceOverrides: nextSpaceOverrides,
         PreferredTimezone:
             patch.PreferredTimezone !== undefined ? patch.PreferredTimezone : base.PreferredTimezone,
+        ...(nextDigest ? { Digest: nextDigest } : {}),
     });
 }
 
@@ -859,7 +996,7 @@ function buildAllSuppressedResult(
     };
 }
 
-function matchesMutedItem(event: CollaborationNotificationEvent, mutedKeys: readonly string[]): boolean {
+export function matchesMutedItem(event: Pick<CollaborationNotificationEvent, 'TargetEntityID' | 'TargetRecordID' | 'ResourceRecordID' | 'ResourceConfiguration'>, mutedKeys: readonly string[]): boolean {
     if (mutedKeys.length === 0) return false;
     const mutedSet = new Set(mutedKeys.map((k) => normalizeMutedItemKey(k)).filter((k): k is string => k !== null));
     const candidates: Array<string | null> = [
@@ -873,7 +1010,7 @@ function matchesMutedItem(event: CollaborationNotificationEvent, mutedKeys: read
     return candidates.some((c) => c !== null && mutedSet.has(c));
 }
 
-function resolveBaseChannelEnabled(
+export function resolveBaseChannelEnabled(
     channel: CollaborationNotificationChannel,
     mjType: MJNotificationTypeDefaultSnapshot | null | undefined,
 ): boolean {
@@ -892,7 +1029,7 @@ function resolveBaseChannelEnabled(
     }
 }
 
-function readMJPreferenceChannel(
+export function readMJPreferenceChannel(
     channel: CollaborationNotificationChannel,
     mjPref: MJUserNotificationPreferenceSnapshot | null | undefined,
 ): boolean | null {
@@ -909,9 +1046,9 @@ function readMJPreferenceChannel(
     }
 }
 
-function hasContactForChannel(
+export function hasContactForChannel(
     channel: CollaborationNotificationChannel,
-    recipient: CollaborationRecipientCandidate,
+    recipient: Pick<CollaborationRecipientCandidate, 'Email' | 'Phone' | 'ChatHandle'>,
 ): boolean {
     switch (channel) {
         case 'InApp':

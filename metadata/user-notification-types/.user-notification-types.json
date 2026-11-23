@@ -110,5 +110,21 @@
       "DefaultSMS": 0,
       "AllowUserPreference": 1
     }
+  },
+  {
+    "_comments": [
+      "NT-2 scheduled scoped digest summarizing reach-verified space activity for a member."
+    ],
+    "primaryKey": {
+      "ID": "4A6D8B1E-2C3F-4E5A-9B7C-1D2E3F4A5B05"
+    },
+    "fields": {
+      "Name": "Collaboration: Digest",
+      "Description": "Scheduled scoped digest of reach-verified notices and updates across spaces.",
+      "DefaultInApp": 1,
+      "DefaultEmail": 1,
+      "DefaultSMS": 0,
+      "AllowUserPreference": 1
+    }
   }
 ]

@@ -94,6 +94,18 @@ import {
     type UpdateUserNotificationPreferencesResult,
     writeCollaborationPreferencesToUserInfoEngine,
 } from './notifications.js';
+import {
+    invokeCollaborationDigestOperation,
+    PREVIEW_SCOPED_SPACE_DIGEST_OPERATION_KEY,
+    type PreviewScopedSpaceDigestInput,
+    type PreviewScopedSpaceDigestResult,
+    RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+    type RunScopedSpaceDigestsInput,
+    type RunScopedSpaceDigestsResult,
+    UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY,
+    type UpdateSpaceDigestCheckpointInput,
+    type UpdateSpaceDigestCheckpointResult,
+} from './space-digests.js';
 import type {
     CollaborationUserNotificationPreferences,
     CollaborationUserNotificationPreferencesPatch,
@@ -1110,6 +1122,55 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             RouteCollaborationNotificationsInput,
             RouteCollaborationNotificationsResult
         >(ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+    }
+
+    // ─── NT-2 Reach-Verified Scoped Digests ────────────────────────────────────
+
+    /**
+     * Executes scheduled NT-2 scoped digests using deterministic composite `(EventTimestamp, ID)`
+     * keyset pagination, fail-closed assembly-time reach verification, and empty-digest suppression.
+     */
+    public async RunScopedSpaceDigests(
+        input: RunScopedSpaceDigestsInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<RunScopedSpaceDigestsResult> {
+        return invokeCollaborationDigestOperation<RunScopedSpaceDigestsInput, RunScopedSpaceDigestsResult>(
+            RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Previews a single member's reach-verified scoped digest without dispatching or advancing checkpoints.
+     */
+    public async PreviewScopedSpaceDigest(
+        input: PreviewScopedSpaceDigestInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PreviewScopedSpaceDigestResult> {
+        return invokeCollaborationDigestOperation<PreviewScopedSpaceDigestInput, PreviewScopedSpaceDigestResult>(
+            PREVIEW_SCOPED_SPACE_DIGEST_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Updates or pauses/resumes the authenticated caller's `SpaceDigestCheckpoint`.
+     */
+    public async UpdateSpaceDigestCheckpoint(
+        input: UpdateSpaceDigestCheckpointInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<UpdateSpaceDigestCheckpointResult> {
+        return invokeCollaborationDigestOperation<
+            UpdateSpaceDigestCheckpointInput,
+            UpdateSpaceDigestCheckpointResult
+        >(UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
     }
 }
 
