@@ -1,6 +1,7 @@
 import { CompositeKey, DatabaseProviderBase, RunView, type UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
+import { LoadScopedSearchAction } from '@memberjunction/core-actions';
 import { SearchEngine } from '@memberjunction/search-engine';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import type { MJContentSourceEntity, MJSearchScopeEntity, MJSearchScopePermissionEntity } from '@memberjunction/core-entities';
@@ -2093,6 +2094,7 @@ const checks: NamedCheck[] = [
             }
 
             // 2. The real action as Research Agent, under each chat's run scope as BaseAgent stamps it for a space turn
+            LoadScopedSearchAction();
             const engine = ActionEngineServer.Instance;
             await engine.Config(false, ada, ctx.Provider);
             const action = engine.Actions.find((a) => SameID(a.ID, SCOPED_SEARCH_ACTION_ID));
@@ -2754,7 +2756,7 @@ const checks: NamedCheck[] = [
             const revokedScopeName = `AG17 Revoked Inherited Scope ${stamp}`;
 
             try {
-                // Discover required FK lookup IDs from seeded Content Types/Source Types/File Types + Discovery seat members
+                // Discover required FK lookup IDs from seeded Content Types/Source Types/File Types + Discovery effective audience (direct + inherited Northwind active seats)
                 const [contentTypes, sourceTypes, fileTypes, discoveryMembers] = await Promise.all([
                     FindRows<{ ID: string }>(ctx, CONTENT_TYPES_ENTITY, '1=1', ['ID']),
                     FindRows<{ ID: string }>(ctx, CONTENT_SOURCE_TYPES_ENTITY, '1=1', ['ID']),
@@ -2762,7 +2764,7 @@ const checks: NamedCheck[] = [
                     FindRows<{ UserID: string | null }>(
                         ctx,
                         SPACE_MEMBER_ENTITY,
-                        `SpaceID = '${DISCOVERY_SPACE_ID}' AND UserID IS NOT NULL`,
+                        `SpaceID IN ('${DISCOVERY_SPACE_ID}', '${NORTHWIND_SPACE_ID}') AND Status = 'Active' AND UserID IS NOT NULL`,
                         ['UserID'],
                     ),
                 ]);
@@ -3148,6 +3150,20 @@ const checks: NamedCheck[] = [
                 }
                 for (const permId of [...createdPermIds].reverse()) {
                     await deleteRowAndConfirm(ctx.Provider, ctx.User, SEARCH_SCOPE_PERMISSION_ENTITY, permId, 'AG17 SearchScopePermission');
+                }
+                if (createdScopeIds.length > 0) {
+                    const scopeInClause = createdScopeIds.map((id) => `'${id}'`).join(',');
+                    const leftoverPerms = await FindRows<{ ID: string }>(
+                        ctx,
+                        SEARCH_SCOPE_PERMISSION_ENTITY,
+                        `SearchScopeID IN (${scopeInClause})`,
+                        ['ID'],
+                        ctx.User,
+                        { BypassCache: true },
+                    );
+                    for (const perm of leftoverPerms) {
+                        await deleteRowAndConfirm(ctx.Provider, ctx.User, SEARCH_SCOPE_PERMISSION_ENTITY, perm.ID, 'AG17 leftover SearchScopePermission');
+                    }
                 }
                 for (const scopeId of [...createdScopeIds].reverse()) {
                     await deleteRowAndConfirm(ctx.Provider, ctx.User, SEARCH_SCOPE_ENTITY, scopeId, 'AG17 SearchScope');

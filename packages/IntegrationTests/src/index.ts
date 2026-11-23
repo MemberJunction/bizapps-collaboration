@@ -1,3 +1,4 @@
+import { LoadScopedSearchAction } from '@memberjunction/core-actions';
 import { LoadGeneratedEntities as LoadCommonEntities } from '@mj-biz-apps/common-entities';
 import { LoadGeneratedEntities as LoadTaskEntities } from '@mj-biz-apps/tasks-entities';
 import { loadModule as LoadCollabEntities, LoadCollaborationPermissionProvider } from '@mj-biz-apps/collaboration-entities';
@@ -11,6 +12,7 @@ import {
     LoadCollaborationAIRunLockdown,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 
+LoadScopedSearchAction();
 LoadCommonEntities();
 LoadTaskEntities();
 LoadCollabEntities();

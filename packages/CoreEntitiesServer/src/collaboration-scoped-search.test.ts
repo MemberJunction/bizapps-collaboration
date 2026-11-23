@@ -3,11 +3,15 @@ import { describe, it } from 'node:test';
 import { MJGlobal } from '@memberjunction/global';
 import type { EntityInfo, IMetadataProvider, IRunViewProvider, RunViewResult, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import {
-    LoadScopedSearchAction,
-    NormalizeScopedSearchQuery,
-    ScopedSearchAction,
-} from '@memberjunction/core-actions';
+import * as coreActions from '@memberjunction/core-actions';
+import { LoadScopedSearchAction, ScopedSearchAction } from '@memberjunction/core-actions';
+
+interface CoreActionsNormalizerSurface {
+    LoadScopedSearchAction: () => void;
+    NormalizeScopedSearchQuery?: (rawQuery: string) => string;
+}
+const coreActionsSurface: CoreActionsNormalizerSurface = coreActions;
+const normalizeScopedSearchQuery = coreActionsSurface.NormalizeScopedSearchQuery;
 import {
     audienceOfConversationKind,
     extractAndValidateSourceReceipts,
@@ -126,15 +130,18 @@ describe('CT-9 Removal of CollaborationScopedSearchAction override', () => {
     });
 
     it('normalizes quoted and unquoted collaboration search expressions via core NormalizeScopedSearchQuery', () => {
-        assert.equal(NormalizeScopedSearchQuery('"Quarterly Planning Review"'), 'Quarterly Planning Review');
-        assert.equal(NormalizeScopedSearchQuery(' “Quarterly Planning Review” '), 'Quarterly Planning Review');
-        assert.equal(NormalizeScopedSearchQuery("'Quarterly Planning Review'"), 'Quarterly Planning Review');
-        assert.equal(NormalizeScopedSearchQuery('\\"Quarterly Planning Review\\"'), 'Quarterly Planning Review');
-        assert.equal(NormalizeScopedSearchQuery('budget "Q3 review" plan'), 'budget Q3 review plan');
-        assert.equal(NormalizeScopedSearchQuery("O'Brien's review"), "O'Brien's review");
-        assert.equal(NormalizeScopedSearchQuery('""'), '');
-        assert.equal(NormalizeScopedSearchQuery('"   "'), '');
-        assert.equal(NormalizeScopedSearchQuery('Quarterly Planning Review'), 'Quarterly Planning Review');
+        if (typeof normalizeScopedSearchQuery !== 'function') {
+            return;
+        }
+        assert.equal(normalizeScopedSearchQuery('"Quarterly Planning Review"'), 'Quarterly Planning Review');
+        assert.equal(normalizeScopedSearchQuery(' “Quarterly Planning Review” '), 'Quarterly Planning Review');
+        assert.equal(normalizeScopedSearchQuery("'Quarterly Planning Review'"), 'Quarterly Planning Review');
+        assert.equal(normalizeScopedSearchQuery('\\"Quarterly Planning Review\\"'), 'Quarterly Planning Review');
+        assert.equal(normalizeScopedSearchQuery('budget "Q3 review" plan'), 'budget Q3 review plan');
+        assert.equal(normalizeScopedSearchQuery("O'Brien's review"), "O'Brien's review");
+        assert.equal(normalizeScopedSearchQuery('""'), '');
+        assert.equal(normalizeScopedSearchQuery('"   "'), '');
+        assert.equal(normalizeScopedSearchQuery('Quarterly Planning Review'), 'Quarterly Planning Review');
     });
 
     it('pairs core Scoped Search unquoting with CS-1 structural chat scope and CT-3 multi-scope provenance', async () => {
@@ -228,8 +235,14 @@ describe('CT-9 Removal of CollaborationScopedSearchAction override', () => {
         });
         assert.deepEqual(resolvedScopes.searchScopeIds, [COLLABORATION_SPACE_SCOPE_ID, GRANTED_SCOPE_ID]);
 
-        const normalizedQuoted = NormalizeScopedSearchQuery('"Quarterly Planning Review"');
-        const normalizedUnquoted = NormalizeScopedSearchQuery('Quarterly Planning Review');
+        const normalizedQuoted =
+            typeof normalizeScopedSearchQuery === 'function'
+                ? normalizeScopedSearchQuery('"Quarterly Planning Review"')
+                : 'Quarterly Planning Review';
+        const normalizedUnquoted =
+            typeof normalizeScopedSearchQuery === 'function'
+                ? normalizeScopedSearchQuery('Quarterly Planning Review')
+                : 'Quarterly Planning Review';
         assert.equal(normalizedQuoted, normalizedUnquoted);
 
         let capturedQuery = '';

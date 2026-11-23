@@ -26,6 +26,7 @@
     "@memberjunction/ai-engine-base": "^6.3.0-edge.1",
     "@memberjunction/api-keys": "^6.3.0-edge.1",
     "@memberjunction/core": "^6.3.0-edge.1",
+    "@memberjunction/core-actions": "^6.3.0-edge.1",
     "@memberjunction/core-entities": "^6.3.0-edge.1",
     "@memberjunction/generic-database-provider": "^6.3.0-edge.1",
     "@memberjunction/global": "^6.3.0-edge.1",
