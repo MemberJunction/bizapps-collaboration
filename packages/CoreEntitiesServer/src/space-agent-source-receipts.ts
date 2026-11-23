@@ -1576,6 +1576,7 @@ export async function querySpaceAgentSourceReceipts(
                     'TargetEntityID', 'TargetRecordID', 'SourceTitle', 'Band',
                     'WasSupplied', 'WasCited', 'RetrievalRank', 'RelevanceScore',
                     'RankingMode', 'CitationOrdinal', 'EstimatedTokens', 'WasTruncated', 'Sequence',
+                    'OriginatingScopeID', 'OriginatingScopeName',
                     '__mj_CreatedAt',
                 ],
             },
