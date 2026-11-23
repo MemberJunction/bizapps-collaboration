@@ -152,7 +152,7 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
     ): Promise<SpaceParticipantRoleAuditResult> {
         const md = provider ?? Metadata.Provider;
         const user = contextUser ?? md.CurrentUser;
-        const auth = authorizeSecurityAuditCaller(user, md, input.ParticipantRoleID);
+        const auth = authorizeSecurityAuditCaller(user, md);
         if (!auth.authorized) {
             throw new Error(auth.reason);
         }
@@ -167,7 +167,7 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
     ): Promise<StaffRoleAuditResult> {
         const md = provider ?? Metadata.Provider;
         const user = contextUser ?? md.CurrentUser;
-        const auth = authorizeSecurityAuditCaller(user, md, input.ParticipantRoleID);
+        const auth = authorizeSecurityAuditCaller(user, md);
         if (!auth.authorized) {
             throw new Error(auth.reason);
         }
@@ -182,7 +182,7 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
     ): Promise<BootEntityGrantInventoryResult> {
         const md = provider ?? Metadata.Provider;
         const user = contextUser ?? md.CurrentUser;
-        const auth = authorizeSecurityAuditCaller(user, md, input.ParticipantRoleID);
+        const auth = authorizeSecurityAuditCaller(user, md);
         if (!auth.authorized) {
             throw new Error(auth.reason);
         }
@@ -197,7 +197,7 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
     ): Promise<PersonaSecurityProbeResult> {
         const md = provider ?? Metadata.Provider;
         const user = contextUser ?? md.CurrentUser;
-        const auth = authorizeSecurityAuditCaller(user, md, input.ParticipantRoleID);
+        const auth = authorizeSecurityAuditCaller(user, md);
         if (!auth.authorized) {
             throw new Error(auth.reason);
         }

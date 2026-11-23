@@ -25,7 +25,7 @@ Before running any audit or probe:
 3. Rejects users holding the external `Space Participant` role (`PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B'`, checked strictly by `RoleID`, never by role name).
 4. Verifies the caller holds either `Administer Spaces` or `Configure Space Types` under the `Collaboration` root authorization (`CollaborationEngineBase.Instance.UserMayAdministerSpaces` / `UserCanConfigureSpaceTypes`).
 
-Unauthorized callers receive a deterministic `RemoteOperationError` (`AUTHORIZATION_DENIED`) before any audit or probe query runs.
+Unauthorized callers receive a deterministic `RemoteOperationError` (`FORBIDDEN`) before any audit or probe query runs.
 
 ---
 
@@ -74,7 +74,7 @@ Enumerates `COLLABORATION_BOOT_ENTITY_REGISTRY` (100% of boot-loaded `Collaborat
 
 Implemented by `CollaborationPersonaSecurityProbe` (`@RegisterClass(BaseHealthProbe, 'BIZAPPS.COLLAB.LIVE.PERSONA_SECURITY_PROBE')`) and `CollaborationPersonaSecurityVerifier` (`@RegisterClass(BaseLiveCrudVerifier, 'BIZAPPS.COLLAB.LIVE.PERSONA_SECURITY_VERIFIER')`):
 
-- **Rolled-Back Isolation**: Executes inside `WithRolledBackTransaction` (`provider.BeginEntityTransaction()` -> `try { ... } finally { await tx.Rollback() }`), guaranteeing zero persistent synthetic test data on pass, failure, or timeout. Supports both `transactional-synthetic` and `world-provided` fixture modes.
+- **Rolled-Back Isolation**: Executes inside `WithRolledBackTransaction` (`provider.BeginEntityTransaction()` -> `try { ... } finally { await tx.Rollback() }`), guaranteeing zero persistent synthetic test data on pass, failure, or timeout. Supports both `synthetic` and `world-provided` fixture modes.
 - **Bounded Execution**: Enforces `MaxRows` caps (`DEFAULT_PROBE_MAX_ROWS = 10`, `MAX_PROBE_ROW_CAP = 50`) and per-persona timeout budgets (`DEFAULT_PROBE_TIMEOUT_MS = 15000`).
 - **Five Disclosure Surfaces Verified (`DISCLOSURE_SURFACES`)**:
   1. `all-views`: `RunView` sweeps with `ResultType: 'simple'` across Collaboration entities and `All...` catalog views.

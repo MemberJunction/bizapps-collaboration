@@ -730,4 +730,58 @@ describe('XS-3 Automated Cross-Surface Persona Security Probe', () => {
         expect(opAllowed.Success).toBe(true);
         expect(opAllowed.Output?.Passed).toBe(true);
     });
+
+    it('rejects dual-role or canonical external participant callers even when a dummy ParticipantRoleID is supplied in input (CR-1)', async () => {
+        const harness = createTransactionalProbeHarness();
+        const dualRoleParticipant = makeUserInfo({
+            ID: USER_DEV_ID,
+            Type: 'User',
+            RoleIDs: [ROLE_DEVELOPER_ID, PARTICIPANT_ROLE_ID],
+        });
+        const dummyParticipantRoleId = '99999999-9999-4999-8999-999999999999';
+
+        const op = MJGlobal.Instance.ClassFactory.CreateInstance<
+            BaseRemotableOperation<PersonaSecurityProbeInput, PersonaSecurityProbeResult>
+        >(BaseRemotableOperation, PERSONA_SECURITY_PROBE_OPERATION_KEY);
+        expect(op).toBeDefined();
+
+        const opBypassAttempt = await op!.ExecuteServer(
+            { ParticipantRoleID: dummyParticipantRoleId },
+            { provider: harness.Provider, user: dualRoleParticipant, emitProgress: () => {} },
+        );
+        expect(opBypassAttempt.Success).toBe(false);
+        expect(opBypassAttempt.ResultCode).toBe('FORBIDDEN');
+
+        await expect(
+            CollaborationAdminEngineBase.Instance.RunSpaceParticipantRoleAudit(
+                { ParticipantRoleID: dummyParticipantRoleId },
+                dualRoleParticipant,
+                harness.Provider,
+            ),
+        ).rejects.toThrow(/External Space Participant accounts cannot invoke/);
+
+        await expect(
+            CollaborationAdminEngineBase.Instance.RunStaffRoleAudit(
+                { ParticipantRoleID: dummyParticipantRoleId },
+                dualRoleParticipant,
+                harness.Provider,
+            ),
+        ).rejects.toThrow(/External Space Participant accounts cannot invoke/);
+
+        await expect(
+            CollaborationAdminEngineBase.Instance.RunBootEntityGrantInventory(
+                { ParticipantRoleID: dummyParticipantRoleId },
+                dualRoleParticipant,
+                harness.Provider,
+            ),
+        ).rejects.toThrow(/External Space Participant accounts cannot invoke/);
+
+        await expect(
+            CollaborationAdminEngineBase.Instance.RunPersonaSecurityProbe(
+                { ParticipantRoleID: dummyParticipantRoleId },
+                dualRoleParticipant,
+                harness.Provider,
+            ),
+        ).rejects.toThrow(/External Space Participant accounts cannot invoke/);
+    });
 });

@@ -2026,11 +2026,11 @@ export class PersonaSecurityProbeOperation extends BaseRemotableOperation<
     }
 
     protected override async Authorize(
-        input: PersonaSecurityProbeInput,
+        _input: PersonaSecurityProbeInput,
         user: UserInfo,
         context?: RemoteOpServerContext,
     ): Promise<boolean> {
-        const auth = authorizeSecurityAuditCaller(user, context?.provider, input?.ParticipantRoleID);
+        const auth = authorizeSecurityAuditCaller(user, context?.provider);
         if (!auth.authorized) {
             throw new RemoteOperationError('FORBIDDEN', auth.reason);
         }

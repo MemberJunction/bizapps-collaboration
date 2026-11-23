@@ -159,8 +159,9 @@ interface SimplePolymorphicRow {
 }
 
 interface SimpleTargetRow {
-    ID: string;
+    ID?: string | null;
     SpaceID?: string | null;
+    [field: string]: string | number | boolean | null | undefined;
 }
 
 function parseSpaceTypeAudience(configuration: string | null | undefined): 'StaffOnly' | 'StaffAndParticipants' {
@@ -185,7 +186,10 @@ function resolvePrimaryKeyFieldName(entity: EntityInfo): string {
     return pk?.Name ?? 'ID';
 }
 
-function readRowStringField(row: SimplePolymorphicRow, fieldName: string): string | null {
+function readRowStringField(
+    row: Record<string, string | number | boolean | null | undefined>,
+    fieldName: string,
+): string | null {
     const raw = row[fieldName];
     if (typeof raw !== 'string') {
         return null;
@@ -954,7 +958,7 @@ export async function runSpaceParticipantRoleAudit(
                     throw new Error(`XS-1 failed verifying polymorphic targets on ${targetEntityName}: ${res.ErrorMessage ?? 'unknown error'}`);
                 }
                 for (const tRow of res.Results ?? []) {
-                    const tid = normalizeAuditUuid(tRow.ID);
+                    const tid = normalizeAuditUuid(readRowStringField(tRow, targetPkField) ?? tRow.ID);
                     if (tid) {
                         foundTargets.set(tid, tRow);
                     }

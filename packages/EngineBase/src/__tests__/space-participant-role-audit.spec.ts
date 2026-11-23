@@ -298,4 +298,71 @@ describe('XS-1 Space Participant Role Audit', () => {
         expect(result.Passed).toBe(false);
         expect(result.Findings.some((f) => f.Code === 'ELEVATED_EXTERNAL_ROLE')).toBe(true);
     });
+
+    it('resolves polymorphic target primary keys dynamically when target entity PK is not ID (CR-2)', async () => {
+        const world = buildCompliantWorldFixture();
+        const customTargetEntityId = 'CE000002-0000-4000-8000-000000000002';
+        const validTargetKey = 'CA000001-0000-4000-8000-000000000001';
+        const crossSpaceTargetKey = 'CA000001-0000-4000-8000-000000000002';
+        const orphanedTargetKey = 'CA000001-0000-4000-8000-000000000099';
+
+        world.Entities.push(
+            makeEntityInfo({
+                ID: customTargetEntityId,
+                Name: 'Custom Target Records',
+                SchemaName: 'dbo',
+                Fields: [
+                    makeEntityField({ Name: 'CustomKeyID', IsPrimaryKey: true }),
+                    makeEntityField({ Name: 'SpaceID' }),
+                ],
+                Permissions: [],
+            }),
+        );
+        world.CustomPolymorphicRows = {
+            'Custom Target Records': [
+                { CustomKeyID: validTargetKey, SpaceID: SPACE_DISCOVERY_ID },
+                { CustomKeyID: crossSpaceTargetKey, SpaceID: SPACE_HARBOR_ID },
+            ],
+        };
+
+        const validAnchorId = '2A000001-0000-4000-8000-000000000011';
+        const crossAnchorId = '2A000001-0000-4000-8000-000000000012';
+        const orphanAnchorId = '2A000001-0000-4000-8000-000000000013';
+        world.SpaceAnchors.push(
+            {
+                ID: validAnchorId,
+                SpaceID: SPACE_DISCOVERY_ID,
+                EntityID: customTargetEntityId,
+                RecordID: validTargetKey,
+            },
+            {
+                ID: crossAnchorId,
+                SpaceID: SPACE_DISCOVERY_ID,
+                EntityID: customTargetEntityId,
+                RecordID: crossSpaceTargetKey,
+            },
+            {
+                ID: orphanAnchorId,
+                SpaceID: SPACE_DISCOVERY_ID,
+                EntityID: customTargetEntityId,
+                RecordID: orphanedTargetKey,
+            },
+        );
+
+        const provider = createWorldAuditProvider(world);
+        const result = await runSpaceParticipantRoleAudit(provider, adminUser);
+
+        expect(result.Passed).toBe(false);
+        expect(result.Findings.some((f) => f.RecordID === validAnchorId)).toBe(false);
+        expect(
+            result.Findings.some(
+                (f) => f.Code === 'CROSS_SPACE_POLYMORPHIC_LINK' && f.RecordID === crossAnchorId,
+            ),
+        ).toBe(true);
+        expect(
+            result.Findings.some(
+                (f) => f.Code === 'ORPHANED_POLYMORPHIC_LINK' && f.RecordID === orphanAnchorId,
+            ),
+        ).toBe(true);
+    });
 });
