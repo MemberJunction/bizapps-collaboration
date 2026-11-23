@@ -80,6 +80,24 @@ import {
     type PublishSpaceNoticeEventInput,
     type PublishSpaceNoticeEventResult,
 } from './space-notices.js';
+import {
+    GET_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY,
+    type GetUserNotificationPreferencesInput,
+    type GetUserNotificationPreferencesResult,
+    invokeCollaborationNotificationOperation,
+    readCollaborationPreferencesFromUserInfoEngine,
+    ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY,
+    type RouteCollaborationNotificationsInput,
+    type RouteCollaborationNotificationsResult,
+    UPDATE_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY,
+    type UpdateUserNotificationPreferencesInput,
+    type UpdateUserNotificationPreferencesResult,
+    writeCollaborationPreferencesToUserInfoEngine,
+} from './notifications.js';
+import type {
+    CollaborationUserNotificationPreferences,
+    CollaborationUserNotificationPreferencesPatch,
+} from '@mj-biz-apps/collaboration-core';
 
 const normalizeKey = (key: string | null | undefined): string => (key ?? '').trim().toLowerCase();
 
@@ -1026,6 +1044,72 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             provider ?? Metadata.Provider,
             user,
         );
+    }
+
+    // ─── NT-1 Comms v2 Notifications & User Preferences ────────────────────────
+
+    /**
+     * Reads the current user's Collaboration notification preferences synchronously via `UserInfoEngine`
+     * (never browser localStorage/sessionStorage).
+     */
+    public GetCurrentUserNotificationPreferences(): CollaborationUserNotificationPreferences {
+        return readCollaborationPreferencesFromUserInfoEngine();
+    }
+
+    /**
+     * Persists a preference update for the current user via `UserInfoEngine.SetSettingDebounced`
+     * (and optional immediate flush).
+     */
+    public async SetCurrentUserNotificationPreferences(
+        patch: CollaborationUserNotificationPreferencesPatch,
+        options?: { contextUser?: UserInfo; flush?: boolean },
+    ): Promise<CollaborationUserNotificationPreferences> {
+        return writeCollaborationPreferencesToUserInfoEngine(patch, options);
+    }
+
+    /**
+     * Resolves the authenticated caller's notification preferences via the registered
+     * `Collaboration.GetNotificationPreferences` `BaseRemotableOperation`.
+     */
+    public async GetUserNotificationPreferences(
+        user: UserInfo,
+        input: GetUserNotificationPreferencesInput = {},
+        provider?: IMetadataProvider,
+    ): Promise<GetUserNotificationPreferencesResult> {
+        return invokeCollaborationNotificationOperation<
+            GetUserNotificationPreferencesInput,
+            GetUserNotificationPreferencesResult
+        >(GET_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+    }
+
+    /**
+     * Updates the authenticated caller's notification preferences via the registered
+     * `Collaboration.UpdateNotificationPreferences` `BaseRemotableOperation`.
+     */
+    public async UpdateUserNotificationPreferences(
+        input: UpdateUserNotificationPreferencesInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<UpdateUserNotificationPreferencesResult> {
+        return invokeCollaborationNotificationOperation<
+            UpdateUserNotificationPreferencesInput,
+            UpdateUserNotificationPreferencesResult
+        >(UPDATE_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+    }
+
+    /**
+     * Routes an NT-1 collaboration notification (mention, reply, share, status change, task, approval)
+     * through MJ Comms v2 after batched preference resolution via `Collaboration.RouteNotifications`.
+     */
+    public async RouteCollaborationNotifications(
+        input: RouteCollaborationNotificationsInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<RouteCollaborationNotificationsResult> {
+        return invokeCollaborationNotificationOperation<
+            RouteCollaborationNotificationsInput,
+            RouteCollaborationNotificationsResult
+        >(ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
     }
 }
 
