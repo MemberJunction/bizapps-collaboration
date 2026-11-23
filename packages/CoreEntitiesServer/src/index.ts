@@ -17,6 +17,9 @@ export { LoadSpaceGrantEntityServer, SpaceGrantEntityServer, grantRuleRefusal } 
 export { LoadSpaceNoteEntityServer, SpaceNoteEntityServer } from './SpaceNoteEntityServer.js';
 export { LoadSpaceMemberPinEntityServer, SpaceMemberPinEntityServer } from './SpaceMemberPinEntityServer.js';
 export { LoadSpaceTypeStatusEntityServer, SpaceTypeStatusEntityServer } from './SpaceTypeStatusEntityServer.js';
+export { LoadSpaceNoticeEventEntityServer, SpaceNoticeEventEntityServer } from './SpaceNoticeEventEntityServer.js';
+export { LoadSpaceNoticeWatermarkEntityServer, SpaceNoticeWatermarkEntityServer } from './SpaceNoticeWatermarkEntityServer.js';
+export { LoadSpaceDigestCheckpointEntityServer, SpaceDigestCheckpointEntityServer } from './SpaceDigestCheckpointEntityServer.js';
 export { notifySpaceStatusChange, SPACE_STATUS_NOTIFICATION_TYPE } from './space-status-notices.js';
 export type { SpaceStatusNoticeInput } from './space-status-notices.js';
 export { loadWriteContext, requireSystemUser } from './load-graph.js';
@@ -407,5 +410,35 @@ export {
     type StaffRoleAuditInput,
     type StaffRoleAuditResult,
     type StaffRoleAuditStats,
+    ADVANCE_SPACE_NOTICE_WATERMARK_OPERATION_KEY,
+    type AdvanceSpaceNoticeWatermarkInput,
+    AdvanceSpaceNoticeWatermarkOperation,
+    type AdvanceSpaceNoticeWatermarkResult,
+    GET_SPACE_NOTICES_OPERATION_KEY,
+    GET_SPACE_UNREAD_NOTICE_COUNTS_OPERATION_KEY,
+    type GetSpaceNoticesInput,
+    GetSpaceNoticesOperation,
+    type GetSpaceNoticesResult,
+    type GetSpaceUnreadNoticeCountsInput,
+    GetSpaceUnreadNoticeCountsOperation,
+    type GetSpaceUnreadNoticeCountsResult,
+    invokeCollaborationRemoteOperation,
+    LoadCollaborationSpaceNoticeOperations,
+    PUBLISH_SPACE_NOTICE_EVENT_OPERATION_KEY,
+    type PublishSpaceNoticeEventInput,
+    PublishSpaceNoticeEventOperation,
+    type PublishSpaceNoticeEventResult,
+    runAdvanceSpaceNoticeWatermark,
+    runGetSpaceNotices,
+    runGetSpaceUnreadNoticeCounts,
+    runPublishSpaceNoticeEvent,
+    SPACE_DIGEST_CHECKPOINT_ENTITY,
+    SPACE_NOTICE_EVENT_ENTITY,
+    SPACE_NOTICE_WATERMARK_ENTITY,
+    type SpaceNoticeEventDTO,
+    type SpaceNoticeEventScalarBand,
+    type SpaceNoticeEventScalarKind,
+    type SpaceNoticeWatermarkDTO,
+    type SpaceUnreadNoticeCountSummary,
 } from '@mj-biz-apps/collaboration-engine-base';
 

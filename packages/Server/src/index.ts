@@ -17,11 +17,15 @@ import {
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
     LoadSpaceNoteEntityServer,
+    LoadSpaceNoticeEventEntityServer,
+    LoadSpaceNoticeWatermarkEntityServer,
+    LoadSpaceDigestCheckpointEntityServer,
     LoadCollaborationTaskEntityServer,
     LoadTaskAttributionEntityServer,
     LoadSpaceMeetingsAgendaProvider,
     LoadCollaborationAIRunLockdown,
     LoadCollaborationSecurityAuditOperations,
+    LoadCollaborationSpaceNoticeOperations,
     LoadCollaborationChatWritePermissionProvider,
     LoadCollaborationPromptComponentResolver,
     LoadCollaborationSpaceItemArtifactPermissionDelegate,
@@ -104,6 +108,10 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceMeetingsAgendaProvider();
     LoadCollaborationAIRunLockdown();
     LoadCollaborationSecurityAuditOperations();
+    LoadCollaborationSpaceNoticeOperations();
+    LoadSpaceNoticeEventEntityServer();
+    LoadSpaceNoticeWatermarkEntityServer();
+    LoadSpaceDigestCheckpointEntityServer();
     LoadCollaborationChatWritePermissionProvider();
     LoadCollaborationPromptComponentResolver();
     LoadCollaborationSpaceItemArtifactPermissionDelegate();

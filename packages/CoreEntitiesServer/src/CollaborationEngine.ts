@@ -27,14 +27,22 @@ import {
     type SpaceStatusReach,
 } from '@mj-biz-apps/collaboration-core';
 import {
+    type AdvanceSpaceNoticeWatermarkInput,
+    type AdvanceSpaceNoticeWatermarkResult,
     type BootEntityGrantInventoryInput,
     type BootEntityGrantInventoryResult,
     CollaborationAdminEngineBase,
     CollaborationEngineBase,
     COLLABORATION_APP_ID,
     COLLABORATION_SETTINGS_NAME,
+    type GetSpaceNoticesInput,
+    type GetSpaceNoticesResult,
+    type GetSpaceUnreadNoticeCountsInput,
+    type GetSpaceUnreadNoticeCountsResult,
     type PersonaSecurityProbeInput,
     type PersonaSecurityProbeResult,
+    type PublishSpaceNoticeEventInput,
+    type PublishSpaceNoticeEventResult,
     type SpaceParticipantRoleAuditInput,
     type SpaceParticipantRoleAuditResult,
     type StaffRoleAuditInput,
@@ -322,5 +330,49 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         provider?: IMetadataProvider,
     ): Promise<PersonaSecurityProbeResult> {
         return this.Admin.RunPersonaSecurityProbe(input, contextUser, provider);
+    }
+
+    private resolveNoticeActingUser(contextUser?: UserInfo, provider?: IMetadataProvider): UserInfo {
+        const user = contextUser ?? this.Base.ContextUser ?? (provider ?? Metadata.Provider).CurrentUser;
+        if (!user) {
+            throw new Error('Space notice operation requires an authenticated ContextUser.');
+        }
+        return user;
+    }
+
+    /** Publishes a single fan-out-on-read Space Notice Event row (`O(1)` write) via CollaborationEngineBase. */
+    public async PublishSpaceNoticeEvent(
+        input: PublishSpaceNoticeEventInput,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PublishSpaceNoticeEventResult> {
+        return this.Base.PublishSpaceNoticeEvent(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Queries fan-out-on-read Space Notices and resolved per-member unread status via CollaborationEngineBase. */
+    public async GetSpaceNotices(
+        input: GetSpaceNoticesInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetSpaceNoticesResult> {
+        return this.Base.GetSpaceNotices(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Computes per-space unread notice counts for the acting member via CollaborationEngineBase. */
+    public async GetSpaceUnreadNoticeCounts(
+        input: GetSpaceUnreadNoticeCountsInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetSpaceUnreadNoticeCountsResult> {
+        return this.Base.GetSpaceUnreadNoticeCounts(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Monotonically advances the acting member's per-space notice watermark via CollaborationEngineBase. */
+    public async AdvanceSpaceNoticeWatermark(
+        input: AdvanceSpaceNoticeWatermarkInput,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<AdvanceSpaceNoticeWatermarkResult> {
+        return this.Base.AdvanceSpaceNoticeWatermark(input, this.resolveNoticeActingUser(contextUser, provider), provider);
     }
 }

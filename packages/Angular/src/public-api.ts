@@ -8,6 +8,9 @@ export { CollaborationSectionResource, CollaborationNoAccessComponent };
 // The generated forms: exported so Explorer's class-registration manifest keeps them, and their @RegisterClass runs (as common-ng does)
 export { GeneratedFormsModule } from './lib/generated/generated-forms.module';
 export { mjBizAppsCollaborationSpaceAgentSourceReceiptFormComponent } from './lib/generated/Entities/mjBizAppsCollaborationSpaceAgentSourceReceipt/mjbizappscollaborationspaceagentsourcereceipt.form.component';
+export { mjBizAppsCollaborationSpaceNoticeEventFormComponent } from './lib/generated/Entities/mjBizAppsCollaborationSpaceNoticeEvent/mjbizappscollaborationspacenoticeevent.form.component';
+export { mjBizAppsCollaborationSpaceNoticeWatermarkFormComponent } from './lib/generated/Entities/mjBizAppsCollaborationSpaceNoticeWatermark/mjbizappscollaborationspacenoticewatermark.form.component';
+export { mjBizAppsCollaborationSpaceDigestCheckpointFormComponent } from './lib/generated/Entities/mjBizAppsCollaborationSpaceDigestCheckpoint/mjbizappscollaborationspacedigestcheckpoint.form.component';
 
 /** Startup export for MJExplorer. Referencing the classes keeps them in the bundle. */
 export function LoadBizAppsCollaborationClient(): void {
