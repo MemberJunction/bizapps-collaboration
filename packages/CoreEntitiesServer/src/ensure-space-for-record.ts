@@ -1,20 +1,33 @@
 /**
- * EnsureSpaceForRecord
+ * EnsureSpaceForRecord (CX-1):
  * Returns the space of a given type anchored to an external app's record,
- * creating it on the first call. Safe to call multiple times.
- * Follows extensibility plan § 5. Stage 1: the anchor is a `Space Anchors` row (B14, D26), the space's primary one; the
- * space is found by it (one primary anchor per type for a record), and created with it in one go.
+ * creating it atomically on the first call with:
+ *  - full IsA subtype resolution (`EnsureISAChild()` + `Details` validation),
+ *  - owner seat assignment (`SpaceMember` with `owner` role on `Team` band),
+ *  - sealed posture by default (`InheritsMembership = false`, honoring explicit overrides), and
+ *  - deterministic distributed race-winner idempotency backed by database uniqueness
+ *    (`UQ_SpaceAnchor_PrimaryPerType`) + conflict-read recovery (no in-memory mutex).
  */
 
-import { type IMetadataProvider, RunView, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { type BaseEntity, type IMetadataProvider, RunView, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import type { SpaceDetailsMap } from '@mj-biz-apps/collaboration-core';
 import {
     type mjBizAppsCollaborationSpaceAnchorEntity,
     type mjBizAppsCollaborationSpaceEntity,
+    type mjBizAppsCollaborationSpaceMemberEntity,
     type mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationEngine } from './CollaborationEngine.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { canonicalAnchorRecordId, releaseAnchorWrite, vouchAnchorWrite } from './SpaceAnchorEntityServer.js';
-import { asMetadata } from './uuid.js';
+import { applySubtypeDetails } from './subtype-details.js';
+import { asMetadata, parseUuid } from './uuid.js';
+
+const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
+const SPACE_MEMBERS_ENTITY = 'MJ_BizApps_Collaboration: Space Members';
+const SPACE_ANCHORS_ENTITY = 'MJ_BizApps_Collaboration: Space Anchors';
+const SPACE_ROLE_TYPES_ENTITY = 'MJ_BizApps_Collaboration: Space Role Types';
+const SPACE_TYPES_ENTITY = 'MJ_BizApps_Collaboration: Space Types';
 
 export interface EnsureSpaceForRecordParams {
     typeCode: string;
@@ -23,14 +36,110 @@ export interface EnsureSpaceForRecordParams {
     spaceName?: string;
     /** The anchor's role, for a type whose spaces anchor to more than one record. Default 'primary'. */
     anchorRole?: string;
-    /** Whether the space inherits its parent's membership (D22: the creator chooses). Default true. */
+    /** Whether the space inherits its parent's membership. Defaults to `false` (sealed posture). */
     inheritsMembership?: boolean;
+    /** Optional subtype-specific column values when SpaceType names a subtype entity. */
+    details?: SpaceDetailsMap | null;
+    /** Optional parent space ID override when driver does not specify one. */
+    parentSpaceId?: string | null;
     contextUser: UserInfo;
     provider: IMetadataProvider;
 }
 
+interface TransactionCapableProvider {
+    BeginTransaction(): Promise<void>;
+    CommitTransaction(): Promise<void>;
+    RollbackTransaction(): Promise<void>;
+}
+
+function asTransactionProvider(provider: IMetadataProvider): TransactionCapableProvider | null {
+    const candidate = provider as IMetadataProvider & Partial<TransactionCapableProvider>;
+    if (
+        typeof candidate.BeginTransaction === 'function' &&
+        typeof candidate.CommitTransaction === 'function' &&
+        typeof candidate.RollbackTransaction === 'function'
+    ) {
+        return candidate as TransactionCapableProvider;
+    }
+    return null;
+}
+
+async function resolveOwnerRoleId(
+    rv: RunView,
+    system: UserInfo,
+    provider: IMetadataProvider,
+): Promise<string> {
+    try {
+        await CollaborationEngine.Instance.EnsureLoaded(system, provider);
+        const cached = CollaborationEngine.Instance.SpaceRoleTypeByCode('owner');
+        if (cached?.ID) {
+            return cached.ID;
+        }
+    } catch {
+        // Fallback to direct RunView lookup below when engine cache is unpopulated
+    }
+
+    const roleResult = await rv.RunView<{ ID: string }>({
+        EntityName: SPACE_ROLE_TYPES_ENTITY,
+        ExtraFilter: "Code = 'owner'",
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, system);
+    if (!roleResult.Success || !roleResult.Results?.[0]?.ID) {
+        throw new Error("The owner role isn't set up, so the space can't be created.");
+    }
+    return roleResult.Results[0].ID;
+}
+
+async function findExistingPrimaryAnchorSpaceId(
+    rv: RunView,
+    system: UserInfo,
+    spaceTypeId: string,
+    entityId: string,
+    canonicalRecordId: string,
+): Promise<string | null> {
+    const existingResult = await rv.RunView<{ SpaceID: string }>({
+        EntityName: SPACE_ANCHORS_ENTITY,
+        ExtraFilter: `SpaceTypeID = '${spaceTypeId}' AND EntityID = '${entityId}' AND RecordID = '${canonicalRecordId.replace(/'/g, "''")}' AND IsPrimary = 1`,
+        Fields: ['SpaceID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, system);
+    if (!existingResult.Success) {
+        throw new Error(existingResult.ErrorMessage || 'Failed to query existing space anchors.');
+    }
+    return existingResult.Results?.[0]?.SpaceID ?? null;
+}
+
+async function loadAnchoredSpaceForCaller(
+    metadata: NonNullable<ReturnType<typeof asMetadata>>,
+    contextUser: UserInfo,
+    spaceId: string,
+): Promise<mjBizAppsCollaborationSpaceEntity> {
+    const space = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACES_ENTITY, contextUser);
+    if (await space.Load(spaceId)) {
+        return space;
+    }
+    throw new Error('Anchored space already exists for this record, but the current user cannot access it.');
+}
+
+function isLikelyUniqueOrAnchorConflict(message: string): boolean {
+    const lower = message.toLowerCase();
+    return (
+        lower.includes('uq_spaceanchor') ||
+        lower.includes('already anchored') ||
+        lower.includes('duplicate key') ||
+        lower.includes('unique constraint') ||
+        lower.includes('unique index') ||
+        lower.includes('2601') ||
+        lower.includes('2627') ||
+        lower.includes('23505')
+    );
+}
+
 export async function EnsureSpaceForRecord(
-    params: EnsureSpaceForRecordParams
+    params: EnsureSpaceForRecordParams,
 ): Promise<mjBizAppsCollaborationSpaceEntity> {
     const metadata = asMetadata(params.provider);
     if (!metadata) {
@@ -58,13 +167,14 @@ export async function EnsureSpaceForRecord(
     }
     const entityId = entityResult.Results[0].ID;
     const entityInfo = metadata.EntityByID(entityId);
-    if (!entityInfo) throw new Error(`Entity "${params.entityName}" is not in this provider's metadata.`);
-    // The anchor's record id in the one spelling the anchors use, so the lookup and the row agree
+    if (!entityInfo) {
+        throw new Error(`Entity "${params.entityName}" is not in this provider's metadata.`);
+    }
     const recordId = canonicalAnchorRecordId(entityInfo, params.recordId);
 
-    // 2. Load Space Type: the anchor is looked up within the type, since one record may anchor a space of each type
+    // 2. Load Space Type
     const typeResult = await rv.RunView<mjBizAppsCollaborationSpaceTypeEntity>({
-        EntityName: 'MJ_BizApps_Collaboration: Space Types',
+        EntityName: SPACE_TYPES_ENTITY,
         ExtraFilter: `Code = '${params.typeCode.replace(/'/g, "''")}'`,
         ResultType: 'entity_object',
         MaxRows: 1,
@@ -75,26 +185,14 @@ export async function EnsureSpaceForRecord(
     }
     const spaceType = typeResult.Results[0];
 
-    // 3. Check if an anchored space already exists: the primary anchor of a space of this type on this record
-    const existingResult = await rv.RunView<{ SpaceID: string }>({
-        EntityName: 'MJ_BizApps_Collaboration: Space Anchors',
-        ExtraFilter: `SpaceTypeID = '${spaceType.ID}' AND EntityID = '${entityId}' AND RecordID = '${recordId.replace(/'/g, "''")}' AND IsPrimary = 1`,
-        Fields: ['SpaceID'],
-        MaxRows: 1,
-        ResultType: 'simple',
-    }, system);
-
-    if (existingResult.Success && existingResult.Results?.[0]?.SpaceID) {
-        const space = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(
-            'MJ_BizApps_Collaboration: Spaces',
-            params.contextUser
-        );
-        if (await space.Load(existingResult.Results[0].SpaceID)) {
-            return space;
-        }
+    // 3. Check if an anchored space already exists
+    const existingSpaceId = await findExistingPrimaryAnchorSpaceId(rv, system, spaceType.ID, entityId, recordId);
+    if (existingSpaceId) {
+        return loadAnchoredSpaceForCaller(metadata, params.contextUser, existingSpaceId);
     }
 
-    // 4. Resolve Driver and validate anchor
+    // 4. Resolve Driver, owner role, and validate anchor
+    const ownerRoleId = await resolveOwnerRoleId(rv, system, params.provider);
     const driver = ServerDriverRegistry.Instance.GetDriverForType(spaceType);
     const anchorCtx = {
         actingUser: params.contextUser,
@@ -109,50 +207,130 @@ export async function EnsureSpaceForRecord(
         throw new Error(validation.message || 'Anchor validation refused creation of space for record.');
     }
 
-    const parentId = await driver.ResolveAnchorParent(anchorCtx);
+    const driverParentId = await driver.ResolveAnchorParent(anchorCtx);
+    const explicitParentId = params.parentSpaceId ? parseUuid(params.parentSpaceId) : null;
+    if (params.parentSpaceId && !explicitParentId) {
+        throw new Error('The parent space id is not valid.');
+    }
+    const parentId = driverParentId ?? explicitParentId;
 
-    // 5. Create Space, then its primary anchor. The anchor's own gate asks for Configure Spaces; this path is the type's driver's,
-    // so the row is vouched for in process (as an upload vouches for its file), and the two writes go together or not at all.
-    const newSpace = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(
-        'MJ_BizApps_Collaboration: Spaces',
-        params.contextUser
-    );
+    // 5. Prepare subtyped space (default sealed: InheritsMembership = false)
+    const newSpace = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACES_ENTITY, params.contextUser);
     newSpace.NewRecord();
-    newSpace.Name = params.spaceName || `${spaceType.Name}: ${params.recordId}`;
+    newSpace.Name = params.spaceName?.trim() || `${spaceType.Name}: ${params.recordId}`;
     newSpace.SpaceTypeID = spaceType.ID;
     newSpace.OwnerID = params.contextUser.ID;
     newSpace.ParentID = parentId;
-    newSpace.InheritsMembership = params.inheritsMembership ?? true;
+    newSpace.InheritsMembership = params.inheritsMembership ?? false;
 
-    const saved = await newSpace.Save();
-    if (!saved) {
-        throw new Error(
-            newSpace.LatestResult?.CompleteMessage || 'Failed to save new anchored space.'
-        );
+    const attached = typeof newSpace.EnsureISAChild === 'function' ? await newSpace.EnsureISAChild() : null;
+    const expectedExtension = spaceType.SpaceExtensionEntity?.trim();
+    if (expectedExtension && !attached) {
+        throw new Error(`Space type "${spaceType.Name}" requires subtype "${expectedExtension}", which could not be attached.`);
+    }
+    const leaf: BaseEntity = attached ? newSpace.LeafEntity : newSpace;
+
+    const detailRefusal = applySubtypeDetails(leaf, attached, spaceType.Name, params.details);
+    if (detailRefusal) {
+        throw new Error(detailRefusal);
     }
 
-    const anchor = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceAnchorEntity>('MJ_BizApps_Collaboration: Space Anchors', params.contextUser);
-    anchor.NewRecord();
-    anchor.SpaceID = newSpace.ID;
-    anchor.SpaceTypeID = spaceType.ID;
-    anchor.EntityID = entityId;
-    anchor.RecordID = recordId;
-    anchor.Role = params.anchorRole?.trim() || 'primary';
-    anchor.IsPrimary = true;
-    anchor.Sequence = 0;
-    vouchAnchorWrite(anchor);
-    let anchored = false;
+    // 6. Atomically save Space (via subtype leaf), Owner Seat, and Primary Anchor with conflict-read recovery
+    const txProvider = asTransactionProvider(params.provider);
+    let createdSeat: mjBizAppsCollaborationSpaceMemberEntity | null = null;
+    let spaceSaved = false;
+
+    if (txProvider) {
+        await txProvider.BeginTransaction();
+    }
+
     try {
-        anchored = await anchor.Save();
-    } finally {
-        releaseAnchorWrite(anchor);
-    }
-    if (!anchored) {
-        const message = anchor.LatestResult?.CompleteMessage || 'Failed to anchor the new space to its record.';
-        // The space without its anchor would be found by nobody: take it back out
-        await newSpace.Delete();
-        throw new Error(message);
-    }
+        const saved = await leaf.Save();
+        if (!saved) {
+            throw new Error(leaf.LatestResult?.CompleteMessage || 'Failed to save new anchored space.');
+        }
+        spaceSaved = true;
 
-    return newSpace;
+        const ownerSeat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(
+            SPACE_MEMBERS_ENTITY,
+            params.contextUser,
+        );
+        ownerSeat.NewRecord();
+        ownerSeat.SpaceID = newSpace.ID;
+        ownerSeat.UserID = params.contextUser.ID;
+        ownerSeat.SpaceRoleTypeID = ownerRoleId;
+        ownerSeat.Band = 'Team';
+        ownerSeat.Status = 'Active';
+        if (!(await ownerSeat.Save())) {
+            throw new Error(ownerSeat.LatestResult?.CompleteMessage || 'Failed to assign owner seat for anchored space.');
+        }
+        createdSeat = ownerSeat;
+
+        const anchor = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceAnchorEntity>(
+            SPACE_ANCHORS_ENTITY,
+            params.contextUser,
+        );
+        anchor.NewRecord();
+        anchor.SpaceID = newSpace.ID;
+        anchor.SpaceTypeID = spaceType.ID;
+        anchor.EntityID = entityId;
+        anchor.RecordID = recordId;
+        anchor.Role = params.anchorRole?.trim() || 'primary';
+        anchor.IsPrimary = true;
+        anchor.Sequence = 0;
+
+        vouchAnchorWrite(anchor);
+        let anchored = false;
+        try {
+            anchored = await anchor.Save();
+        } finally {
+            releaseAnchorWrite(anchor);
+        }
+        if (!anchored) {
+            throw new Error(anchor.LatestResult?.CompleteMessage || 'Failed to anchor the new space to its record.');
+        }
+
+        if (txProvider) {
+            await txProvider.CommitTransaction();
+        }
+        return newSpace;
+    } catch (error) {
+        if (txProvider) {
+            try {
+                await txProvider.RollbackTransaction();
+            } catch {
+                // Rollback best effort before conflict recovery
+            }
+        } else {
+            if (createdSeat) {
+                try {
+                    await createdSeat.Delete();
+                } catch {
+                    // Compensating cleanup best effort
+                }
+            }
+            if (spaceSaved) {
+                try {
+                    await newSpace.Delete();
+                } catch {
+                    // Compensating cleanup best effort
+                }
+            }
+        }
+
+        const errMessage = error instanceof Error ? error.message : String(error);
+        const winnerSpaceId = await findExistingPrimaryAnchorSpaceId(rv, system, spaceType.ID, entityId, recordId);
+        if (winnerSpaceId) {
+            return loadAnchoredSpaceForCaller(metadata, params.contextUser, winnerSpaceId);
+        }
+
+        if (isLikelyUniqueOrAnchorConflict(errMessage)) {
+            const retriedWinnerId = await findExistingPrimaryAnchorSpaceId(rv, system, spaceType.ID, entityId, recordId);
+            if (retriedWinnerId) {
+                return loadAnchoredSpaceForCaller(metadata, params.contextUser, retriedWinnerId);
+            }
+        }
+
+        throw error instanceof Error ? error : new Error(errMessage);
+    }
 }

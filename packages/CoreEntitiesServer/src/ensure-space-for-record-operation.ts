@@ -5,6 +5,7 @@
  * refuses, which `EnsureSpaceForRecord` asks on the way.
  */
 import { type IMetadataProvider, LogError, RunView, type UserInfo } from '@memberjunction/core';
+import type { SpaceDetailsMap } from '@mj-biz-apps/collaboration-core';
 import { EnsureSpaceForRecord } from './ensure-space-for-record.js';
 import { asMetadata } from './uuid.js';
 
@@ -15,6 +16,7 @@ export interface EnsureSpaceForRecordInput {
     SpaceName?: string | null;
     AnchorRole?: string | null;
     InheritsMembership?: boolean | null;
+    Details?: SpaceDetailsMap | null;
 }
 
 export interface EnsureSpaceForRecordOutcome {
@@ -57,6 +59,7 @@ export async function ensureSpaceForRecordForUser(provider: IMetadataProvider, u
             spaceName: input.SpaceName?.trim() || undefined,
             anchorRole: input.AnchorRole?.trim() || undefined,
             inheritsMembership: input.InheritsMembership ?? undefined,
+            details: input.Details ?? undefined,
             contextUser: user,
             provider,
         });

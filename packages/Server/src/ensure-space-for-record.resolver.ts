@@ -1,6 +1,6 @@
 import { LogError } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Resolver, ResolverBase, AppContext, GetReadWriteProvider } from '@memberjunction/server';
-import { ensureSpaceForRecordForUser } from '@mj-biz-apps/collaboration-core-entities-server';
+import { ensureSpaceForRecordForUser, parseSpaceDetailsJson } from '@mj-biz-apps/collaboration-core-entities-server';
 
 @InputType()
 export class EnsureSpaceForRecordInput {
@@ -23,9 +23,13 @@ export class EnsureSpaceForRecordInput {
     @Field({ nullable: true })
     AnchorRole?: string;
 
-    /** D22: whether the new space's members come from its parent. Default true. */
+    /** Whether the new space's members come from its parent. Default false (sealed posture). */
     @Field({ nullable: true })
     InheritsMembership?: boolean;
+
+    /** Optional subtype-specific columns as a JSON object string. */
+    @Field({ nullable: true })
+    Details?: string;
 }
 
 @ObjectType()
@@ -48,8 +52,20 @@ export class EnsureSpaceForRecordResolver extends ResolverBase {
         const provider = GetReadWriteProvider(context.providers);
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) return { Success: false, ErrorMessage: 'Opening a space for a record requires a signed-in person.' };
+        const parsedDetails = parseSpaceDetailsJson(input.Details);
+        if (!parsedDetails.ok) {
+            return { Success: false, ErrorMessage: parsedDetails.message };
+        }
         try {
-            const outcome = await ensureSpaceForRecordForUser(provider, user, input);
+            const outcome = await ensureSpaceForRecordForUser(provider, user, {
+                TypeCode: input.TypeCode,
+                EntityName: input.EntityName,
+                RecordID: input.RecordID,
+                SpaceName: input.SpaceName,
+                AnchorRole: input.AnchorRole,
+                InheritsMembership: input.InheritsMembership,
+                Details: parsedDetails.details,
+            });
             return outcome.ok ? { Success: true, SpaceID: outcome.spaceId } : { Success: false, ErrorMessage: outcome.message ?? 'Space refused.' };
         } catch (error) {
             LogError(`EnsureSpaceForRecord failed: ${error instanceof Error ? error.message : String(error)}`);

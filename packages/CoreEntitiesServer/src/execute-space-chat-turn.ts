@@ -57,6 +57,7 @@ import {
     type MultiScopeTurnSearchDispatcher,
     resolveTurnKnowledgeScopes,
 } from './turn-knowledge-scopes.js';
+import { resolveSpaceScopedPromptParts } from './scoped-prompt-parts.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
@@ -541,8 +542,21 @@ async function runClaimedTurn(
         }
         const built = await driver.call.driver.BuildAgentContext({ ...driver.call.base, chatId: foundChat.ID, viewerBands });
         const meetingsContext = await buildSpaceMeetingsAgentContext(provider, spaceId, viewerBands, user);
+        let scopedInstructions: readonly string[] = [];
+        try {
+            const scopedPromptResult = await resolveSpaceScopedPromptParts({
+                provider,
+                systemUser: system,
+                spaceId,
+                audience,
+                loadedConfiguration: loaded,
+            });
+            scopedInstructions = scopedPromptResult.instructions;
+        } catch (scopedPromptErr) {
+            LogError(`executeSpaceChatTurn: scoped prompt parts resolution failed for space ${spaceId}: ${scopedPromptErr instanceof Error ? scopedPromptErr.message : String(scopedPromptErr)}`);
+        }
         typeContext = {
-            instructions: [...(built?.instructions ?? []), ...(meetingsContext.instructions ?? [])],
+            instructions: [...scopedInstructions, ...(built?.instructions ?? []), ...(meetingsContext.instructions ?? [])],
             contextData: { ...(built?.contextData ?? {}), ...(meetingsContext.contextData ?? {}) },
         };
     } catch (contextError) {

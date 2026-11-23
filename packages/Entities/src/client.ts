@@ -163,7 +163,7 @@ export interface SpaceDashboardGraphQLPayload {
     PropertiesJSON?: string;
 }
 
-/** `EnsureSpaceForRecord` (item 85): the space of a type anchored to a record, created the first time. Needs update rights on the record. */
+/** `EnsureSpaceForRecord`: the space of a type anchored to a record, created the first time (sealed by default). Needs update rights on the record. */
 export interface EnsureSpaceForRecordGraphQLInput {
     TypeCode: string;
     EntityName: string;
@@ -171,6 +171,7 @@ export interface EnsureSpaceForRecordGraphQLInput {
     SpaceName?: string | null;
     AnchorRole?: string | null;
     InheritsMembership?: boolean | null;
+    Details?: string | null;
 }
 
 export interface EnsureSpaceForRecordGraphQLPayload {

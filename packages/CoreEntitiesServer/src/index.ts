@@ -76,6 +76,25 @@ export { BaseSpaceSignalProvider } from './space-signal-provider.js';
 export type { SpaceSignalObservation } from './space-signal-provider.js';
 export { EnsureSpaceForRecord } from './ensure-space-for-record.js';
 export type { EnsureSpaceForRecordParams } from './ensure-space-for-record.js';
+export { applySubtypeDetails, parseSpaceDetailsJson, type ParseSpaceDetailsResult } from './subtype-details.js';
+export {
+    CollaborationChatWritePermissionProvider,
+    LoadCollaborationChatWritePermissionProvider,
+    RegisterCollaborationChatWritePermissionProvider,
+    ResetCollaborationChatWritePermissionRegistrationForTests,
+    type ChatWriteDetailSnapshot,
+    type ChatWritePermissionContext,
+} from './chat-write-permission-provider.js';
+export {
+    CollaborationPromptComponentResolver,
+    LoadCollaborationPromptComponentResolver,
+    resolveSpaceScopedPromptParts,
+    type ResolveSpaceScopedPromptPartsParams,
+} from './scoped-prompt-parts.js';
+export {
+    createCollaborationServerSubstrate,
+    type CollaborationServerSubstrateOptions,
+} from './substrate-adapter.js';
 export type {
     RetrievalRankingMode,
     SearchEngineLike,
