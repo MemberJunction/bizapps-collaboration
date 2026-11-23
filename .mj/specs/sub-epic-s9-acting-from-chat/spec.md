@@ -1,43 +1,47 @@
-# Sub-Epic S9 (Slice 1): Subtyped EnsureSpaceForRecord, Rule-Based Chat Writes, Scoped Prompt Parts & Substrate Contract
+# Sub-Epic S9: Acting From Chat
 
-- **Epic Task**: `72E226FD-A642-4F4F-A9DF-FC94F6088EC2`
-- **Slice 1 Plan**: `7A13A451-BD4F-4221-AB0B-1BDA13B61805`
-- **License**: BUSL-1.1 (100% domain-neutral collaboration substrate: `Space`, `SpaceType`, `Root`, `Seat`, `Band`, `PromptPart`, `Rule`)
+Unified engineering specification for Sub-Epic S9 in `MemberJunction/bizapps-collaboration` across Slice 1 and Slice 2.
 
-## Scope Implemented in Slice 1
+## Scope & Architecture
 
-1. **CX-1 — Unified Subtyped `EnsureSpaceForRecord`** (`packages/CoreEntitiesServer/src/ensure-space-for-record.ts`, `packages/CoreEntitiesServer/src/subtype-details.ts`, `packages/Server/src/ensure-space-for-record.resolver.ts`, `packages/Entities/src/client.ts`):
-   - Supports IsA subtype creation (`EnsureISAChild()` + typed `Details` validation/coercion onto the subtype leaf entity).
-   - Assigns the caller an active `owner` `SpaceMember` seat on the `'Team'` band.
-   - Defaults newly created spaces to sealed membership (`InheritsMembership = false`) while preserving explicit `inheritsMembership` and `anchorRole` (`'primary'`) overrides for backward compatibility.
-   - Guarantees distributed concurrent race-winner idempotency backed by database uniqueness (`UQ_SpaceAnchor_PrimaryPerType` on `Space Anchors`), transaction rollback / compensating orphan cleanup, and deterministic conflict-read recovery (`findExistingPrimaryAnchorSpaceId`). No in-memory mutex is used.
+### Slice 1 — Subtyped Space Substrate, Rule-Based Chat Writes & Scoped Prompt Parts
+1. **CX-1 — Subtyped `EnsureSpaceForRecord` & Space Subtype `Details` Substrate**:
+   - Unified subtype property discovery (`discoverSubtypeProperties`), IsA child validation & application (`buildIsaDetailsPayload`, `subtype-details.ts`), atomic `EnsureSpaceForRecord` creation with sealed default (`InheritsMembership = false`), owner seat provisioning (`SpaceMember`), and race-winner idempotency backed by `UQ_SpaceAnchor_PrimaryPerType`.
+   - GraphQL resolver exports (`EnsureSpaceForRecord`, `CreateSpace`) in `@mj-biz-apps/collaboration-server`.
+2. **CS-3 — Rule-Based Chat Write Permission Provider**:
+   - Pure evaluation rules (`evaluateSpaceChatWriteRules`) and server provider (`CollaborationChatWritePermissionProvider`) enforcing SpaceChat status/kind, space visibility/read-only state, seat role/band reach, and non-loosening `Chats.WhoCanWrite` rules across `App -> SpaceType -> SameTypeRun -> Space`.
+   - Uses batched `RunView` (`ResultType: 'simple'` + `IN` clauses, zero N+1 hydration) and integrates with `@memberjunction/core-entities-server`'s `ConversationDetailWritePermissionRegistry`.
+3. **CX-4 — Scoped Prompt Parts Resolution**:
+   - Pure resolution (`resolveScopedPromptParts`) and server resolver (`resolveSpaceScopedPromptParts`, `CollaborationPromptComponentResolver`) along `SpaceType -> Root -> Space` with deterministic override specificity and zero cross-scope leakage.
+4. **CX-10 — Exported Substrate Contract Bundle**:
+   - Runnable test harness exported from `@mj-biz-apps/collaboration-core` and exercised by `@mj-biz-apps/collaboration-core-entities-server` against live server adapters (`createCollaborationServerSubstrate`).
 
-2. **CS-3 — Rule-Based Chat Write Permission Provider** (`packages/Core/src/chat-write-rules.ts`, `packages/CoreEntitiesServer/src/chat-write-permission-provider.ts`):
-   - Implements `CollaborationChatWritePermissionProvider` with fail-closed evaluation across:
-     - `Space Chats` lookup (`General` / `Topic` / `Private` / `Assistant`),
-     - Space & ancestor chain status/read-only checks and sealed boundary halt (`InheritsMembership = false`),
-     - Seat role capabilities (`CanContribute`, `CanSeeTeamBand`, `IsOwnerRole`) and bands (`Team` | `Shared`),
-     - Non-loosening `Chats.WhoCanWrite` policy rules across `App -> SpaceType -> SameTypeRun -> Space` (`Owners > TeamOnly > Contributors`),
-     - Author/owner enforcement for `update`/`delete`, plus `Abstain` for system user or non-collaboration conversations, and fail-closed `Deny` on malformed JSON, unregistered server drivers, or failed queries.
-   - Uses `RunView.RunView(...)` with `ResultType: 'simple'` and batched `ExtraFilter` `IN` clauses (zero N+1 entity hydration).
-   - Dynamically registers into `@memberjunction/core-entities-server`'s `ConversationDetailWritePermissionRegistry` when present in the host runtime.
+### Slice 2 — Bound Space Agent Actions, `SupportsAudience` Actions, Approval Promotion & Team/Shared Docs
+5. **CX-3 — Server-Bound Action Grants for Space Agents (Hidden Bound Parameters)**:
+   - Pure schema redaction & anti-spoof parameter injection (`redactBoundActionParamsForAgent`, `enforceBoundActionParameters`, `buildBoundActionGrantBindings`) in `@mj-biz-apps/collaboration-core`.
+   - Server registry & invocation wrapper (`CollaborationBoundActionGrantRegistry`, `ResolveForTurn`, `InvokeBoundAction`) wired into `executeSpaceChatTurn` (via `enableBoundActionGrants` / `Agents.EnableBoundActionGrants`) passing `ExecuteAgentParams.boundActionParams`.
+   - Strips server-bound parameters (`SpaceID`, `RootSpaceID`, `RootEntityID`, `RootRecordID`, `Band`, `DeliveryPrincipalID`, and explicit grant `Bindings`) from agent-visible schemas/prompts and rejects/audits caller spoofing (`BOUND_PARAM_SPOOF_REJECTED`).
+6. **CA-1 — Standard `SupportsAudience` Space Actions**:
+   - Strongly typed `@RegisterClass(BaseAction, ...)` subclasses in `packages/CoreEntitiesServer/src/space-audience-actions.ts` and `metadata/actions/.actions.json`:
+     - `Collaboration: Propose Audience Output` (`ProposeSpaceAudienceOutputAction`)
+     - `Collaboration: Promote Draft To Shared` (`PromoteSpaceDraftToSharedAction`)
+     - `Collaboration: Publish Shared Space Update` (`PublishSpaceSharedUpdateAction`)
+     - `Collaboration: Manage Space Document` (`ManageSpaceDocAction`)
+   - All actions declare `SupportsAudience = true`, expose an explicit `SupportsAudienceContract`, validate audience/band rules fail-closed, and reject hidden bound-parameter spoofing.
+7. **CA-2 & CA-3 — Promotion via Approval Task (`@mj-biz-apps/tasks-entities`) & Team-Band Privacy**:
+   - Reuses `@mj-biz-apps/tasks-entities` (`MJ_BizApps_Tasks: Tasks` with `ParentID`, `Task Links`, `Task Decisions`, `Task Activities`) instead of creating bespoke approval tables (`approval-promotion.ts`).
+   - Enforces strict Team-band privacy (`assertApprovalDraftReadable`) on unapproved draft payloads and linked approval tasks so Shared-band users and outsiders cannot enumerate or inspect unapproved drafts prior to approval, then atomically promotes the draft (`Band = 'Shared'`) upon `Approved` outcome.
+8. **CA-4 — Per-Root Delivery Principal**:
+   - Configured per SpaceType / Space (`DeliveryPrincipal.UserID`, `AllowedPrincipalUserIDs`, `AllowFallbackToCaller?: false`) with non-loosening validation (`mergeDeliveryPrincipalConfigs`, `resolveEffectiveDeliveryPrincipal`, `resolvePerRootDeliveryPrincipal`).
+   - Outbound `SupportsAudience` and Shared-band promotion actions execute attributed to the configured per-root delivery principal and never silently fall back to the approving user's personal identity.
+9. **CX-13 — MJ Docs Integration on Team & Shared Bands**:
+   - Registers `CollaborationSpaceItemArtifactPermissionDelegate` (`BaseArtifactPermissionDelegate` for `'MJ_BizApps_Collaboration: Space Items'`) so MJ `ArtifactPermissionEngine` enforces Team (`Team + Shared`) vs. Shared (`Shared` only) visibility isolation.
+   - Provides fail-closed CRUD and delivery-principal-attributed promotion (`createSpaceDoc`, `listSpaceDocs`, `getSpaceDoc`, `updateSpaceDoc`, `promoteSpaceDocToShared`) backed by `MJ: Artifacts` (`Markdown Document`), `MJ: Artifact Versions`, and `SpaceItem.ArtifactVersionID`.
 
-3. **CX-4 — Scoped Prompt Parts Hierarchy** (`packages/Core/src/scoped-prompt-parts.ts`, `packages/CoreEntitiesServer/src/scoped-prompt-parts.ts`, `packages/CoreEntitiesServer/src/execute-space-chat-turn.ts`):
-   - Traverses `SpaceType -> Root -> Space` using both `MJ: Scoped Prompt Parts` (single batched `RunView` with `ResultType: 'simple'` and `PrimaryScopeRecordID IN (...)`) and `Configuration.PromptParts`.
-   - Enforces `Override` (most specific scope wins: `Space > Root > SpaceType`, then `Priority`, `Active > Provisional`) and `Append` (deterministic `SpaceType -> Root -> Space` ordering, then `Sort`, `Priority`, `ID`).
-   - Enforces zero cross-type, cross-root, cross-space, `Archived`, or `Team`-into-`Shared` leakage.
-   - Registers `@RegisterClass(PromptComponentResolver, 'CollaborationPromptComponentResolver')` and wires resolved instructions into `executeSpaceChatTurn`.
+## Schema & Migrations Note
+No additional SQL DDL migrations were needed for Slice 1 or Slice 2:
+- `IsA` space subtyping, `SpaceItem.ArtifactVersionID` (`MJ: Artifact Versions`), `SpaceGrant`, `SpaceType.Configuration` / `Space.Configuration` JSON columns, `MJ: Artifacts.DelegateEntityID` / `DelegateRecordID`, and `@mj-biz-apps/tasks-entities` (`fnCollaborationTasks`) already exist in the baseline schema (`B202610012101__v0.1.x__Baseline.sql`).
 
-4. **CX-10 — Substrate Contract & Reusable Contract-Test Bundle** (`packages/Core/src/substrate-contract.ts`, `packages/CoreEntitiesServer/src/substrate-adapter.ts`):
-   - Exports `SUBSTRATE_CONTRACT_VERSION` (`'1.0.0'`), `CollaborationSubstrateContract`, `COLLABORATION_SUBSTRATE_CONTRACT_SCENARIOS`, `runCollaborationSubstrateContractTests`, `assertSubstrateContractPassed`, `registerCollaborationSubstrateContractTests`, and `createCollaborationServerSubstrate`.
-   - Consumer applications can validate their substrate wiring by supplying a `SubstrateContractFactory` to `runCollaborationSubstrateContractTests` or `registerCollaborationSubstrateContractTests`.
-
-## Schema & Migrations
-
-- Existing baseline DDL in `migrations/B202610012101__v0.1.x__Baseline.sql` already defines `UQ_SpaceAnchor_PrimaryPerType` (`UNIQUE NONCLUSTERED ([SpaceTypeID], [EntityID], [RecordID]) WHERE ([IsPrimary] = 1)`), `Space.InheritsMembership` default `0`, and `Configuration` JSON columns on `Space Type` / `Space`; `MJ: Scoped Prompt Parts` is provided by MJ Core. No new schema DDL migrations are required for Slice 1.
-
-## Static & Verification Gates
-
-- `node scripts/check-strict-types.mjs`: zero explicit `any`, zero `unknown`, zero `BaseEntity.Get()/Set()`.
-- `pnpm run build`: builds all publishable & example packages cleanly.
-- `pnpm test`: executes all repo static checks, Core unit tests (`chat-write-rules.test.ts`, `scoped-prompt-parts.test.ts`, `substrate-contract.test.ts`), `CoreEntitiesServer` unit & CX-10 contract specs (`packages/CoreEntitiesServer/src/__tests__/*.spec.ts`), and downstream workspace tests.
+## Static Quality Gates
+- Strict zero-`any` / zero-`unknown` enforcement: `node scripts/check-strict-types.mjs --self-test && node scripts/check-strict-types.mjs`
+- Registered `@RegisterClass` exports, row caps, no role-name auth, downstream domain-neutral naming, and `--mj-*` CSS design tokens: all enforced in `pnpm test`.
