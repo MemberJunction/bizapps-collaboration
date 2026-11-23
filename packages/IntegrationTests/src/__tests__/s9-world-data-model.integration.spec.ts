@@ -3,8 +3,6 @@ import { BaseAction } from '@memberjunction/actions';
 import type {
     ActionResultSimple,
     RunActionParams,
-    ServerBoundScopeValue,
-    SupportsAudienceContract,
 } from '@memberjunction/actions-base';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
@@ -51,6 +49,9 @@ import {
     PROPOSE_SPACE_AUDIENCE_OUTPUT_ACTION,
     resolvePerRootDeliveryPrincipal,
     resolveSpaceScopedPromptParts,
+    type SpaceActionAudienceContract,
+    type SpaceRunActionParams,
+    type SpaceServerBoundScopeValue,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import type { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 
@@ -93,13 +94,13 @@ const WORLD_BOUND_DRIVER = 'Collaboration: World Integration Bound Action';
 
 @RegisterClass(BaseAction, WORLD_BOUND_DRIVER)
 class WorldIntegrationBoundAction extends BaseAction {
-    public static LastBoundScope: Record<string, ServerBoundScopeValue | undefined> = {};
+    public static LastBoundScope: Record<string, SpaceServerBoundScopeValue | undefined> = {};
 
-    public override get SupportsAudience(): boolean {
+    public get SupportsAudience(): boolean {
         return true;
     }
 
-    public override get AudienceContract(): SupportsAudienceContract {
+    public get AudienceContract(): SpaceActionAudienceContract {
         return {
             SupportsAudience: true,
             SupportedModes: ['Intersection', 'ScopeCommonReach'],
@@ -107,7 +108,7 @@ class WorldIntegrationBoundAction extends BaseAction {
     }
 
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        WorldIntegrationBoundAction.LastBoundScope = { ...(params.ServerBoundScopeParams ?? {}) };
+        WorldIntegrationBoundAction.LastBoundScope = { ...((params as SpaceRunActionParams).ServerBoundScopeParams ?? {}) };
         const note = params.Params.find((p) => p.Name === 'Summary')?.Value ?? '';
         const spaceId = params.Params.find((p) => p.Name === 'SpaceID')?.Value ?? '';
         return {
@@ -1239,7 +1240,7 @@ describe('S9 Full World-Data-Model End-to-End Integration (Slice 1 + Slice 2)', 
                 { Name: 'Content', Type: 'Input', Value: '# Internal Draft for Review' },
                 { Name: 'Folder', Type: 'Input', Value: '/shared-ready' },
             ],
-        });
+        } as SpaceRunActionParams);
         expect(proposalRes).toMatchObject({ Success: true });
 
         // Prior to approval: Shared participant is denied approval task enumeration & sees 0 docs (CA-3 fail-closed)
@@ -1288,7 +1289,7 @@ describe('S9 Full World-Data-Model End-to-End Integration (Slice 1 + Slice 2)', 
                 { Name: 'Decision', Type: 'Input', Value: 'Approved' },
                 { Name: 'DecisionNotes', Type: 'Input', Value: 'Approved for customer release' },
             ],
-        });
+        } as SpaceRunActionParams);
         expect(promoteRes).toMatchObject({ Success: true });
         expect(harness.items[0].Band).toBe('Shared');
         expect(harness.items[0].PromotedByUserID).toBe(DELIVERY_PRINCIPAL_ID);

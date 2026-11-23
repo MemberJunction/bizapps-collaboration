@@ -8,7 +8,7 @@
 import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import type { ActionChange, BoundActionParams } from '@memberjunction/ai-core-plus';
+import type { ActionChange } from '@memberjunction/ai-core-plus';
 import {
     agentGrantFor,
     agentRunSettingsFor,
@@ -20,7 +20,7 @@ import {
     turnToolsFor,
     type TurnTools,
 } from '@mj-biz-apps/collaboration-core';
-import { CollaborationBoundActionGrantRegistry } from './bound-agent-action-grants.js';
+import { type BoundActionParamsMap, CollaborationBoundActionGrantRegistry } from './bound-agent-action-grants.js';
 import type { LoadedSpaceConfiguration } from './space-configuration.js';
 import { parseUuid } from './uuid.js';
 
@@ -82,7 +82,7 @@ export interface ResolvedTurnTools {
     /** What was withheld and why, for the turn's result and the log. */
     withheld: string[];
     /** Server-bound action parameter map passed to ExecuteAgentParams.boundActionParams (CX-3). */
-    boundActionParams?: BoundActionParams;
+    boundActionParams?: BoundActionParamsMap;
     /** Redacted unbound parameter catalog exposed to space agents (CX-3). */
     boundActionCatalog?: BoundActionPromptCatalogItem[];
 }
@@ -131,7 +131,7 @@ export async function resolveTurnTools(
 
     const spaceData = await describeDataGrants(rv, system, tools.DataGrants);
 
-    let boundActionParams: BoundActionParams | undefined;
+    let boundActionParams: BoundActionParamsMap | undefined;
     let boundActionCatalog: BoundActionPromptCatalogItem[] | undefined;
     const given = new Set<string>();
 

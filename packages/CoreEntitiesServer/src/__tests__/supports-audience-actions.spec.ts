@@ -27,6 +27,7 @@ import {
     PUBLISH_SPACE_SHARED_UPDATE_ACTION,
     PublishSpaceSharedUpdateAction,
     resolvePerRootDeliveryPrincipal,
+    type SpaceRunActionParams,
 } from '../../dist/index.js';
 import { seedAppSettings } from '../app-settings.test-support.ts';
 
@@ -311,7 +312,7 @@ describe('CA-1 & CA-4: supports-audience-actions.spec.ts', () => {
                 { Name: 'Message', Type: 'Input', Value: 'Spoof attempt' },
             ],
             ServerBoundScopeParams: { SpaceID: ROOT_SPACE_ID },
-        });
+        } as SpaceRunActionParams);
         assert.equal(spoofed.Success, false);
         assert.equal(spoofed.ResultCode, 'SERVER_BOUND_SCOPE_SPOOFING');
 
@@ -327,7 +328,7 @@ describe('CA-1 & CA-4: supports-audience-actions.spec.ts', () => {
             ],
             ServerBoundScopeParams: { SpaceID: ROOT_SPACE_ID },
             Audience: { Readers: [approver, sharedReader] },
-        });
+        } as SpaceRunActionParams);
         assert.equal(clean.Success, true, clean.Message);
         assert.equal(savedMessages.length, 1);
         assert.equal(savedMessages[0].UserID, PRINCIPAL_ID);
@@ -343,7 +344,7 @@ describe('CA-1 & CA-4: supports-audience-actions.spec.ts', () => {
             Params: [{ Name: 'Message', Type: 'Input', Value: 'Should fail' }],
             ServerBoundScopeParams: { SpaceID: ROOT_SPACE_ID },
             Audience: { Readers: [approver, outsider] },
-        });
+        } as SpaceRunActionParams);
         assert.equal(badAudience.Success, false);
         assert.equal(badAudience.ResultCode, 'AUDIENCE_VALIDATION_FAILED');
     });

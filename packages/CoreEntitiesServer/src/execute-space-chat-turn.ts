@@ -58,6 +58,7 @@ import {
     resolveTurnKnowledgeScopes,
 } from './turn-knowledge-scopes.js';
 import { resolveSpaceScopedPromptParts } from './scoped-prompt-parts.js';
+import type { BoundActionParamsMap } from './bound-agent-action-grants.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
@@ -859,7 +860,11 @@ async function runClaimedTurn(
             const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
             if (agentEntity && (await agentEntity.Load(targetAgentId))) {
                 const runner = new AgentRunner(provider);
-                const runnerParams: ExecuteAgentParams & { Audience?: { Mode: 'Intersection'; UserIDs: string[] } } = {
+                type SpaceExecuteAgentParams = ExecuteAgentParams & {
+                    Audience?: { Mode: 'Intersection'; UserIDs: string[] };
+                    boundActionParams?: BoundActionParamsMap;
+                };
+                const runnerParams: SpaceExecuteAgentParams = {
                     agent: agentEntity,
                     contextUser: user,
                     userId: user.ID,

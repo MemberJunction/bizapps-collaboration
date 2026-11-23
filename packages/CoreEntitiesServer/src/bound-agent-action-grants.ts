@@ -8,7 +8,6 @@
  */
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import type { BoundActionParams } from '@memberjunction/ai-core-plus';
 import {
     type BaseEntity,
     type EntitySaveOptions,
@@ -40,7 +39,10 @@ import { resolvePerRootDeliveryPrincipal } from './delivery-principal.js';
 import { loadWriteContext } from './load-graph.js';
 import { type BoundValue, resolveBindings } from './resolve-bindings.js';
 import { loadSpaceConfiguration, type LoadedSpaceConfiguration } from './space-configuration.js';
+import type { SpaceRunActionParams, SpaceServerBoundScopeMap } from './space-audience-actions.js';
 import { parseUuid } from './uuid.js';
+
+export type BoundActionParamsMap = Record<string, Record<string, BoundParamValue>>;
 
 const ACTIONS_ENTITY = 'MJ: Actions';
 const ACTION_PARAMS_ENTITY = 'MJ: Action Params';
@@ -91,7 +93,7 @@ interface AuditWriterProvider {
 export interface ResolvedTurnBoundActions {
     exposures: BoundActionGrantExposure[];
     promptCatalog: BoundActionPromptCatalogItem[];
-    boundActionParams: BoundActionParams;
+    boundActionParams: BoundActionParamsMap;
     resolvedValuesByActionId: Record<string, BoundParamValuesMap>;
     paramDefsByActionId: Record<string, ActionParamDefinition[]>;
     grantByActionId: Record<string, EffectiveGrant>;
@@ -277,7 +279,7 @@ export class CollaborationBoundActionGrantRegistry extends BaseSingleton<Collabo
         const deliveryPrincipalUserId = principalOutcome.ok ? principalOutcome.principalUserId : null;
 
         const exposures: BoundActionGrantExposure[] = [];
-        const boundActionParams: BoundActionParams = {};
+        const boundActionParams: BoundActionParamsMap = {};
         const resolvedValuesByActionId: Record<string, BoundParamValuesMap> = {};
         const paramDefsByActionId: Record<string, ActionParamDefinition[]> = {};
         const grantByActionId: Record<string, EffectiveGrant> = {};
@@ -537,14 +539,14 @@ export class CollaborationBoundActionGrantRegistry extends BaseSingleton<Collabo
             });
         }
 
-        const serverBoundScopeParams: Record<string, string | number | boolean | null> = {};
+        const serverBoundScopeParams: SpaceServerBoundScopeMap = {};
         for (const [k, v] of Object.entries(serverBoundValues)) {
             if (v === null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
                 serverBoundScopeParams[k] = v;
             }
         }
 
-        const runParams: RunActionParams = {
+        const runParams: SpaceRunActionParams = {
             Action: { ID: exposure.ActionID, Name: exposure.ActionName, DriverClass: driverKey } as RunActionParams['Action'],
             ContextUser: params.callerUser,
             Provider: params.provider,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { BaseAction } from '@memberjunction/actions';
-import type { ActionParam, ActionResultSimple, RunActionParams, ServerBoundScopeValue, SupportsAudienceContract } from '@memberjunction/actions-base';
+import type { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import {
@@ -24,6 +24,9 @@ import {
     executeSpaceChatTurn,
     resolveTurnTools,
     SCOPED_SEARCH_ACTION_ID,
+    type SpaceActionAudienceContract,
+    type SpaceRunActionParams,
+    type SpaceServerBoundScopeValue,
 } from '../../dist/index.js';
 import { seedAppSettings } from '../app-settings.test-support.ts';
 
@@ -51,13 +54,13 @@ const TEST_DRIVER_NAME = 'Collaboration: Test Bound Echo Action';
 
 class TestBoundEchoAction extends BaseAction {
     public static LastCapturedParams: ActionParam[] = [];
-    public static LastServerBoundScope: Record<string, ServerBoundScopeValue | undefined> = {};
+    public static LastServerBoundScope: Record<string, SpaceServerBoundScopeValue | undefined> = {};
 
-    public override get SupportsAudience(): boolean {
+    public get SupportsAudience(): boolean {
         return true;
     }
 
-    public override get AudienceContract(): SupportsAudienceContract {
+    public get AudienceContract(): SpaceActionAudienceContract {
         return {
             SupportsAudience: true,
             SupportedModes: ['Intersection', 'ScopeCommonReach'],
@@ -66,7 +69,7 @@ class TestBoundEchoAction extends BaseAction {
 
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         TestBoundEchoAction.LastCapturedParams = [...params.Params];
-        TestBoundEchoAction.LastServerBoundScope = { ...(params.ServerBoundScopeParams ?? {}) };
+        TestBoundEchoAction.LastServerBoundScope = { ...((params as SpaceRunActionParams).ServerBoundScopeParams ?? {}) };
         const userNote = params.Params.find((p) => p.Name === 'UserNote')?.Value ?? '';
         const spaceId = params.Params.find((p) => p.Name === 'SpaceID')?.Value ?? '';
         return {

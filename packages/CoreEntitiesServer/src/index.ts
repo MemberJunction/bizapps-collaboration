@@ -135,6 +135,7 @@ export {
 } from './delivery-principal.js';
 export {
     CollaborationBoundActionGrantRegistry,
+    type BoundActionParamsMap,
     type InvokeBoundSpaceAgentActionParams,
     type ResolvedTurnBoundActions,
 } from './bound-agent-action-grants.js';
@@ -169,6 +170,12 @@ export {
     ProposeSpaceAudienceOutputAction,
     PUBLISH_SPACE_SHARED_UPDATE_ACTION,
     PublishSpaceSharedUpdateAction,
+    type SpaceActionAudienceContract,
+    type SpaceActionAudienceMode,
+    type SpaceHiddenScopeParamSpec,
+    type SpaceRunActionParams,
+    type SpaceServerBoundScopeMap,
+    type SpaceServerBoundScopeValue,
 } from './space-audience-actions.js';
 export { runSpaceView, runSpaceQuery, getSpaceDashboard, getSpaceComponent, GRANT_RUN_AUDIT_LOG_TYPE } from './grant-operations.js';
 export type { ClientValues, GrantRunRequest, RowsOutcome, DashboardOutcome, ComponentOutcome } from './grant-operations.js';

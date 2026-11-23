@@ -15,7 +15,6 @@ import {
     type ActionParam,
     type ActionResultSimple,
     type RunActionParams,
-    type SupportsAudienceContract,
 } from '@memberjunction/actions-base';
 import { type IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
@@ -49,6 +48,28 @@ export const PROMOTE_SPACE_DRAFT_TO_SHARED_ACTION = 'Collaboration: Promote Draf
 export const PUBLISH_SPACE_SHARED_UPDATE_ACTION = 'Collaboration: Publish Shared Space Update';
 export const MANAGE_SPACE_DOC_ACTION = 'Collaboration: Manage Space Document';
 
+/** Structural audience-contract types matching MJ's `SupportsAudienceContract` so compilation works against both 6.3.0-edge.1 and next. */
+export type SpaceActionAudienceMode = 'Caller' | 'Intersection' | 'ScopeCommonReach';
+
+export interface SpaceHiddenScopeParamSpec {
+    ParamName: string;
+    Source: 'RunScope.PrimaryScopeRecordID' | 'ExplicitServerBinding';
+    Required?: boolean;
+    OverridePolicy?: 'Reject' | 'StripAndInject';
+}
+
+export interface SpaceActionAudienceContract {
+    SupportsAudience: boolean;
+    SupportedModes?: SpaceActionAudienceMode[];
+    HiddenScopeParams?: SpaceHiddenScopeParamSpec[];
+}
+
+export type SpaceServerBoundScopeValue = string | number | boolean | null;
+export type SpaceServerBoundScopeMap = Record<string, SpaceServerBoundScopeValue>;
+export type SpaceRunActionParams = RunActionParams & {
+    ServerBoundScopeParams?: SpaceServerBoundScopeMap;
+};
+
 function extractParamString(params: ActionParam[], name: string): string | null {
     const raw = params.find((p) => p.Name.trim().toLowerCase() === name.trim().toLowerCase())?.Value;
     if (raw === null || raw === undefined) return null;
@@ -74,7 +95,7 @@ function validateBoundHiddenParamsForDirectCall(
     const serverBound: BoundParamValuesMap = {};
     const resolved: Record<string, string | null> = {};
 
-    const scopeMap = params.ServerBoundScopeParams ?? {};
+    const scopeMap = (params as SpaceRunActionParams).ServerBoundScopeParams ?? {};
     for (const hName of hiddenNames) {
         const scopeEntry = Object.entries(scopeMap).find(
             ([k]) => k.trim().toLowerCase() === hName.trim().toLowerCase(),
@@ -159,11 +180,11 @@ async function verifyAudienceReadersReach(
  */
 @RegisterClass(BaseAction, PROPOSE_SPACE_AUDIENCE_OUTPUT_ACTION)
 export class ProposeSpaceAudienceOutputAction extends BaseAction {
-    public override get SupportsAudience(): boolean {
+    public get SupportsAudience(): boolean {
         return true;
     }
 
-    public override get AudienceContract(): SupportsAudienceContract {
+    public get AudienceContract(): SpaceActionAudienceContract {
         return {
             SupportsAudience: true,
             SupportedModes: ['Intersection', 'ScopeCommonReach'],
@@ -269,11 +290,11 @@ export class ProposeSpaceAudienceOutputAction extends BaseAction {
  */
 @RegisterClass(BaseAction, PROMOTE_SPACE_DRAFT_TO_SHARED_ACTION)
 export class PromoteSpaceDraftToSharedAction extends BaseAction {
-    public override get SupportsAudience(): boolean {
+    public get SupportsAudience(): boolean {
         return true;
     }
 
-    public override get AudienceContract(): SupportsAudienceContract {
+    public get AudienceContract(): SpaceActionAudienceContract {
         return {
             SupportsAudience: true,
             SupportedModes: ['Intersection', 'ScopeCommonReach'],
@@ -350,11 +371,11 @@ export class PromoteSpaceDraftToSharedAction extends BaseAction {
  */
 @RegisterClass(BaseAction, PUBLISH_SPACE_SHARED_UPDATE_ACTION)
 export class PublishSpaceSharedUpdateAction extends BaseAction {
-    public override get SupportsAudience(): boolean {
+    public get SupportsAudience(): boolean {
         return true;
     }
 
-    public override get AudienceContract(): SupportsAudienceContract {
+    public get AudienceContract(): SpaceActionAudienceContract {
         return {
             SupportsAudience: true,
             SupportedModes: ['Intersection', 'ScopeCommonReach'],
@@ -499,11 +520,11 @@ export class PublishSpaceSharedUpdateAction extends BaseAction {
  */
 @RegisterClass(BaseAction, MANAGE_SPACE_DOC_ACTION)
 export class ManageSpaceDocAction extends BaseAction {
-    public override get SupportsAudience(): boolean {
+    public get SupportsAudience(): boolean {
         return true;
     }
 
-    public override get AudienceContract(): SupportsAudienceContract {
+    public get AudienceContract(): SpaceActionAudienceContract {
         return {
             SupportsAudience: true,
             SupportedModes: ['Intersection', 'ScopeCommonReach'],
