@@ -57,6 +57,17 @@ export const S9_STRICT_TYPE_FILES = [
     'packages/Server/src/create-space.resolver.ts',
     'packages/Server/src/ensure-space-for-record.resolver.ts',
     'packages/Server/src/index.ts',
+    // Sub-Epic S10 Slice 1 strict-typed modules and tests
+    'packages/Core/src/space-notices.ts',
+    'packages/Core/src/space-notices.test.ts',
+    'packages/EngineBase/src/space-notices.ts',
+    'packages/EngineBase/src/__tests__/space-notices.spec.ts',
+    'packages/CoreEntitiesServer/src/SpaceNoticeEventEntityServer.ts',
+    'packages/CoreEntitiesServer/src/SpaceNoticeWatermarkEntityServer.ts',
+    'packages/CoreEntitiesServer/src/SpaceDigestCheckpointEntityServer.ts',
+    'packages/CoreEntitiesServer/src/__tests__/space-notices-server.spec.ts',
+    'packages/Server/src/schema-entity-parity.test.ts',
+    'packages/IntegrationTests/src/__tests__/s10-slice1-world-data-model.integration.spec.ts',
 ];
 
 const STRICT_RULES = [

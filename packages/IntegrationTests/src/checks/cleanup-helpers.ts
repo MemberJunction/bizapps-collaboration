@@ -13,6 +13,9 @@ import {
     SPACE_GRANT_ENTITY,
     SPACE_NOTE_ENTITY,
     SPACE_MEMBER_PIN_ENTITY,
+    SPACE_NOTICE_EVENT_ENTITY,
+    SPACE_NOTICE_WATERMARK_ENTITY,
+    SPACE_DIGEST_CHECKPOINT_ENTITY,
     PERSON_ENTITY,
     SPACE_MEMBER_ENTITY,
     USER_ENTITY,
@@ -243,6 +246,9 @@ async function cleanupSpaceUnguarded(
 
     // Stage 1 child rows go first: receipts hang on items/chats, pins on items/seats, the rest on the space alone
     for (const [entityName, what] of [
+        [SPACE_NOTICE_WATERMARK_ENTITY, 'Space Notice Watermark'],
+        [SPACE_NOTICE_EVENT_ENTITY, 'Space Notice Event'],
+        [SPACE_DIGEST_CHECKPOINT_ENTITY, 'Space Digest Checkpoint'],
         [SPACE_AGENT_SOURCE_RECEIPT_ENTITY, 'Space Agent Source Receipt'],
         [SPACE_MEMBER_PIN_ENTITY, 'Space Member Pin'],
         [SPACE_NOTE_ENTITY, 'Space Note'],
