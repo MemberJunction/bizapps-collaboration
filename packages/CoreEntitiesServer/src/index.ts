@@ -45,6 +45,7 @@ export type {
     PersonSeatInput,
     SpaceChangeContext,
     SpaceChangeKind,
+    SyncSeatsOptions,
     SyncSeatsResult,
     TaskFiledContext,
 } from './base-space-type-server-driver.js';

@@ -42,6 +42,7 @@ function createMockProvider(options: {
     existingSeats?: SeatRecord[];
     refuseRemoveSeatIds?: Set<string>;
     refuseInviteSave?: boolean;
+    failPeopleLookup?: boolean;
     inviteApproval?: 'Approve' | 'AutoApprove';
 }) {
     const seats = new Map<string, SeatRecord>();
@@ -179,6 +180,9 @@ function createMockProvider(options: {
             return { Success: true, Results: [] };
         }
         if (params.EntityName === 'MJ_BizApps_Common: People') {
+            if (options.failPeopleLookup) {
+                return { Success: false, Results: [], ErrorMessage: 'transient people store error' };
+            }
             const results = [];
             if (filter.includes(PERSON_CAROL.toLowerCase())) {
                 const p = savedPeople.get(PERSON_CAROL);
@@ -502,6 +506,98 @@ describe('BaseSpaceTypeServerDriver.SyncSeats', () => {
         assert.equal(savedInvites[0]?.UseCount, 0);
     });
 
+    /** Alice holds a synced Member seat; the sync names her next role, and the role her seat ends on is the one the name resolved to. */
+    async function syncAliceAs(roleTypeName: string) {
+        const world = createMockProvider({
+            existingSeats: [
+                { ID: 'seat-alice', SpaceID: SPACE_ID, UserID: USER_ALICE, PersonID: PERSON_ALICE, SpaceRoleTypeID: ROLE_MEMBER, Band: 'Team', Status: 'Active', SyncSource: 'roster:main' },
+            ],
+        });
+        const result = await new BaseSpaceTypeServerDriver().SyncSeats(
+            world.space,
+            'roster:main',
+            [{ PersonID: PERSON_ALICE, RoleTypeName: roleTypeName }],
+            ACTING_USER,
+            world.provider,
+        );
+        return { result, seat: world.seats.get('seat-alice') };
+    }
+
+    it('keeps a person\'s existing synced seat when their roster entry fails to resolve', async () => {
+        const { result, seat } = await syncAliceAs('Typo');
+        assert.equal(result.removed, 0);
+        assert.equal(result.updated, 0);
+        assert.equal(result.errors.length, 1);
+        assert.match(result.errors[0], /Unknown space role type 'Typo'/);
+        assert.equal(seat?.Status, 'Active');
+        assert.equal(seat?.SpaceRoleTypeID, ROLE_MEMBER);
+    });
+
+    it('skips removals when a transient People lookup fails during roster resolution', async () => {
+        const { provider, space, seats } = createMockProvider({
+            existingSeats: [
+                {
+                    ID: 'seat-alice',
+                    SpaceID: SPACE_ID,
+                    UserID: USER_ALICE,
+                    PersonID: PERSON_ALICE,
+                    SpaceRoleTypeID: ROLE_MEMBER,
+                    Band: 'Team',
+                    Status: 'Active',
+                    SyncSource: 'roster:main',
+                },
+                {
+                    ID: 'seat-bob',
+                    SpaceID: SPACE_ID,
+                    UserID: USER_BOB,
+                    PersonID: PERSON_BOB,
+                    SpaceRoleTypeID: ROLE_GUEST,
+                    Band: 'Shared',
+                    Status: 'Active',
+                    SyncSource: 'roster:main',
+                },
+            ],
+            failPeopleLookup: true,
+        });
+        const driver = new BaseSpaceTypeServerDriver();
+        const result = await driver.SyncSeats(
+            space,
+            'roster:main',
+            [{ PersonID: PERSON_CAROL, RoleTypeName: 'Participant' }],
+            ACTING_USER,
+            provider
+        );
+
+        assert.equal(result.removed, 0);
+        assert.equal(result.errors.length, 1);
+        assert.match(result.errors[0], /transient people store error/);
+        assert.equal(seats.get('seat-alice')?.Status, 'Active');
+        assert.equal(seats.get('seat-bob')?.Status, 'Active');
+    });
+
+    it('passes a type-less, role-less caller unchanged to mintSpaceLink rather than promoting them to Owner', async () => {
+        const { provider, space, savedInvites } = createMockProvider({
+            existingSeats: [],
+        });
+        const bareCaller = {
+            ID: '11111111-1111-4111-8111-111111111199',
+            Name: 'Bare Caller',
+        } as unknown as UserInfo;
+
+        const driver = new BaseSpaceTypeServerDriver();
+        const result = await driver.SyncSeats(
+            space,
+            'roster:main',
+            [{ PersonID: PERSON_CAROL, RoleTypeName: 'Participant' }],
+            bareCaller,
+            provider
+        );
+
+        assert.equal(result.invited, 0);
+        assert.equal(result.redemptionUrls, undefined);
+        assert.equal(savedInvites.length, 0);
+        assert.equal(result.errors.length, 1);
+    });
     it('seats an invitee as Invited without issuing a link when a non-owner invites onto an approval-gated space', async () => {
         const { provider, space, savedSeats, savedInvites } = createMockProvider({
             existingSeats: [],

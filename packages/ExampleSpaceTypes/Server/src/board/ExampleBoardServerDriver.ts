@@ -17,6 +17,7 @@ import {
     type AgentContextParams,
     type AgentContextResult,
     type PersonSeatInput,
+    type SyncSeatsOptions,
     type SyncSeatsResult,
     type DriverBaseContext,
 } from '@mj-biz-apps/collaboration-core-entities-server';
@@ -240,8 +241,9 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
         source: string,
         people: PersonSeatInput[],
         actingUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        options?: SyncSeatsOptions
     ): Promise<SyncSeatsResult> {
-        return super.SyncSeats(space, source, people, actingUser, provider);
+        return super.SyncSeats(space, source, people, actingUser, provider, options);
     }
 }
