@@ -8,17 +8,20 @@
 import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import type { ActionChange } from '@memberjunction/ai-core-plus';
+import type { ActionChange, BoundActionParams } from '@memberjunction/ai-core-plus';
 import {
     agentGrantFor,
     agentRunSettingsFor,
     type AgentRunSettings,
+    type BoundActionPromptCatalogItem,
     type ChatAudience,
     type EffectiveGrant,
     type EffectiveSpaceConfiguration,
     turnToolsFor,
     type TurnTools,
 } from '@mj-biz-apps/collaboration-core';
+import { CollaborationBoundActionGrantRegistry } from './bound-agent-action-grants.js';
+import type { LoadedSpaceConfiguration } from './space-configuration.js';
 import { parseUuid } from './uuid.js';
 
 /** The shipped *Collaboration: Run Space Data* action, as `metadata/actions/` ships it. */
@@ -78,6 +81,17 @@ export interface ResolvedTurnTools {
     agentGrant: EffectiveGrant | null;
     /** What was withheld and why, for the turn's result and the log. */
     withheld: string[];
+    /** Server-bound action parameter map passed to ExecuteAgentParams.boundActionParams (CX-3). */
+    boundActionParams?: BoundActionParams;
+    /** Redacted unbound parameter catalog exposed to space agents (CX-3). */
+    boundActionCatalog?: BoundActionPromptCatalogItem[];
+}
+
+export interface ResolveTurnToolsOptions {
+    includeBoundActions?: boolean;
+    spaceId?: string;
+    callerUser?: UserInfo;
+    loadedConfiguration?: LoadedSpaceConfiguration;
 }
 
 const QUERIES = 'MJ: Queries';
@@ -98,8 +112,14 @@ export async function resolveTurnTools(
     configuration: EffectiveSpaceConfiguration,
     audience: ChatAudience,
     targetAgentId: string,
+    options?: ResolveTurnToolsOptions,
 ): Promise<ResolvedTurnTools> {
-    const tools = turnToolsFor(configuration, audience);
+    const includeBoundActions =
+        options?.includeBoundActions === true &&
+        Boolean(options?.spaceId) &&
+        Boolean(options?.callerUser) &&
+        Boolean(options?.loadedConfiguration);
+    const tools = turnToolsFor(configuration, audience, { includeBoundActions });
     const rv = RunView.FromMetadataProvider(provider);
     const withheld: string[] = [];
     for (const held of tools.WithheldActions) {
@@ -111,9 +131,35 @@ export async function resolveTurnTools(
 
     const spaceData = await describeDataGrants(rv, system, tools.DataGrants);
 
+    let boundActionParams: BoundActionParams | undefined;
+    let boundActionCatalog: BoundActionPromptCatalogItem[] | undefined;
+    const given = new Set<string>();
+
+    if (includeBoundActions && options?.spaceId && options?.callerUser && options?.loadedConfiguration) {
+        const resolvedBound = await CollaborationBoundActionGrantRegistry.Instance.ResolveForTurn({
+            provider,
+            systemUser: system,
+            spaceId: options.spaceId,
+            audience,
+            loadedConfiguration: options.loadedConfiguration,
+            callerUser: options.callerUser,
+        });
+        for (const id of resolvedBound.actionIds) {
+            given.add(id.trim().toUpperCase());
+        }
+        boundActionParams = resolvedBound.boundActionParams;
+        boundActionCatalog = resolvedBound.promptCatalog;
+        for (const reason of resolvedBound.withheldReasons) {
+            withheld.push(reason);
+        }
+    } else {
+        for (const grant of tools.Actions) {
+            given.add(grant.TargetRecordID.trim().toUpperCase());
+        }
+    }
+
     // The agent's own configured actions: anything not granted here is removed for this run, so the agent holds only
     // Collaboration's action and the granted ones (B20, step 2)
-    const given = new Set<string>(tools.Actions.map((grant) => grant.TargetRecordID.trim().toUpperCase()));
     if (spaceData.length) given.add(RUN_SPACE_DATA_ACTION_ID);
     // The space's own search is Collaboration's too: the turn hands every agent the space scope (SearchScopeIDs), which
     // derives the space and the audience from the run's chat, so the model cannot widen it
@@ -123,7 +169,7 @@ export async function resolveTurnTools(
         ExtraFilter: `AgentID = '${esc(targetAgentId)}' AND Status = 'Active'`,
         Fields: ['ActionID'],
         ResultType: 'simple',
-        MaxRows: 500,
+        MaxRows: 500, // row-cap-ok: agent action assignments per agent
     }, system);
     if (!own.Success) LogError(`resolveTurnTools: the agent's own actions could not be read, so none is removed: ${own.ErrorMessage ?? 'unknown error'}`);
     const ownIds = new Set<string>((own.Results ?? []).map((row) => row.ActionID.trim().toUpperCase()));
@@ -139,7 +185,17 @@ export async function resolveTurnTools(
     for (const name of runSettings.closed) withheld.push(`agent grant ${agentGrant?.GrantID ?? ''} sets ${name}, which MJ's run takes no parameter for yet`);
     if (withheld.length) LogStatus(`resolveTurnTools: withheld this turn: ${withheld.join('; ')}`);
 
-    return { tools, spaceData, actionIds: [...given], actionChanges, runSettings, agentGrant, withheld };
+    return {
+        tools,
+        spaceData,
+        actionIds: [...given],
+        actionChanges,
+        runSettings,
+        agentGrant,
+        withheld,
+        ...(boundActionParams ? { boundActionParams } : {}),
+        ...(boundActionCatalog ? { boundActionCatalog } : {}),
+    };
 }
 
 

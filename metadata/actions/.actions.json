@@ -72,5 +72,141 @@
         }
       ]
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "A4F2C819-3D10-4E85-9B44-110203040501"
+    },
+    "fields": {
+      "Name": "Collaboration: Propose Audience Output",
+      "Description": "Creates a Team-band draft document and links a Team-private approval Task via TaskLink before any Shared-band publication.",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "Collaboration: Propose Audience Output",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-file-signature"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040511" },
+          "fields": { "ActionID": "@parent:ID", "Name": "SpaceID", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": true, "Description": "Server-bound space identifier (hidden from space agents)." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040512" },
+          "fields": { "ActionID": "@parent:ID", "Name": "Title", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": true, "Description": "Title for the proposed audience output draft." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040513" },
+          "fields": { "ActionID": "@parent:ID", "Name": "Content", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": true, "Description": "Markdown body of the proposed audience output." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040514" },
+          "fields": { "ActionID": "@parent:ID", "Name": "TaskID", "Type": "Output", "ValueType": "Scalar", "IsArray": false, "IsRequired": false, "Description": "Created approval Task ID." }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A4F2C819-3D10-4E85-9B44-110203040502"
+    },
+    "fields": {
+      "Name": "Collaboration: Promote Draft To Shared",
+      "Description": "Verifies an approving TaskDecision on a Team-private approval Task and promotes the linked draft to the Shared band under the per-root delivery principal.",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "Collaboration: Promote Draft To Shared",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-share-nodes"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040521" },
+          "fields": { "ActionID": "@parent:ID", "Name": "SpaceID", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": true, "Description": "Server-bound space identifier (hidden from space agents)." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040522" },
+          "fields": { "ActionID": "@parent:ID", "Name": "DeliveryPrincipalID", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": false, "Description": "Server-bound per-root delivery principal user ID (hidden from space agents)." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040523" },
+          "fields": { "ActionID": "@parent:ID", "Name": "TaskID", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": true, "Description": "Approval Task ID to approve or reject." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040524" },
+          "fields": { "ActionID": "@parent:ID", "Name": "Decision", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": false, "Description": "Approved or Rejected." }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A4F2C819-3D10-4E85-9B44-110203040503"
+    },
+    "fields": {
+      "Name": "Collaboration: Publish Shared Space Update",
+      "Description": "Publishes an authorized Shared-band update into a space conversation attributed to the configured per-root delivery principal.",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "Collaboration: Publish Shared Space Update",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-bullhorn"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040531" },
+          "fields": { "ActionID": "@parent:ID", "Name": "SpaceID", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": true, "Description": "Server-bound space identifier (hidden from space agents)." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040532" },
+          "fields": { "ActionID": "@parent:ID", "Name": "DeliveryPrincipalID", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": false, "Description": "Server-bound per-root delivery principal user ID (hidden from space agents)." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040533" },
+          "fields": { "ActionID": "@parent:ID", "Name": "Message", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": true, "Description": "Shared update message content." }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A4F2C819-3D10-4E85-9B44-110203040504"
+    },
+    "fields": {
+      "Name": "Collaboration: Manage Space Document",
+      "Description": "Creates, reads, updates, lists, or promotes MJ Docs Markdown Documents across Team and Shared bands with strict band isolation.",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "Collaboration: Manage Space Document",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-file-lines"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040541" },
+          "fields": { "ActionID": "@parent:ID", "Name": "SpaceID", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": true, "Description": "Server-bound space identifier (hidden from space agents)." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040542" },
+          "fields": { "ActionID": "@parent:ID", "Name": "Band", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": false, "Description": "Server-bound document band (Team or Shared, hidden from space agents)." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040543" },
+          "fields": { "ActionID": "@parent:ID", "Name": "Operation", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": true, "Description": "Document operation: create, list, get, update, or promote." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040544" },
+          "fields": { "ActionID": "@parent:ID", "Name": "Title", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": false, "Description": "Document title." }
+        },
+        {
+          "primaryKey": { "ID": "A4F2C819-3D10-4E85-9B44-110203040545" },
+          "fields": { "ActionID": "@parent:ID", "Name": "Content", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "IsRequired": false, "Description": "Markdown document body." }
+        }
+      ]
+    }
   }
 ]

@@ -118,6 +118,8 @@ export interface ExecuteSpaceChatTurnInput {
     multiScopeSearch?: MultiScopeTurnSearchDispatcher;
     /** Optional page size for keyset-paged `Space Items` reads. */
     itemsPageSize?: number;
+    /** Optional CX-3 override enabling server-bound action grants on this turn even if space config omits Agents.EnableBoundActionGrants. */
+    enableBoundActionGrants?: boolean;
 }
 
 /** Candidate item in retrieval scope for the turn (sources-in-scope chip). */
@@ -485,13 +487,21 @@ async function runClaimedTurn(
         return { ok: false, message: `The agent ${targetAgentId} is not allowed in this space.` };
     }
 
-    // 7b. The turn's tools (B20) and authorized knowledge scopes (CT-3):
+    // 7b. The turn's tools (B20 / CX-3) and authorized knowledge scopes (CT-3):
     const audience = isOneToOneAssistant
         ? (reach.role.canSeeTeamBand ? 'Team' : 'Shared')
         : audienceOfConversationKind(foundChat.Kind);
+    const enableBoundActions =
+        input.enableBoundActionGrants === true ||
+        loaded.configuration.Settings.Agents?.EnableBoundActionGrants === true;
     let turnTools: Awaited<ReturnType<typeof resolveTurnTools>>;
     try {
-        turnTools = await resolveTurnTools(provider, system, loaded.configuration, audience, targetAgentId);
+        turnTools = await resolveTurnTools(provider, system, loaded.configuration, audience, targetAgentId, {
+            includeBoundActions: enableBoundActions,
+            spaceId,
+            callerUser: user,
+            loadedConfiguration: loaded,
+        });
     } catch (toolsError) {
         return { ok: false, message: `The turn's tools could not be resolved: ${toolsError instanceof Error ? toolsError.message : String(toolsError)}` };
     }
@@ -871,8 +881,9 @@ async function runClaimedTurn(
                         allowedItems: audienceQuoted,
                         suppliedSources: retrieval.suppliedSources ?? [],
                         retrievalStats: retrieval.stats,
-                        // B20 / CT-3: what the model is told it may run, and the knowledge scopes + hits in force
+                        // B20 / CT-3 / CX-3: what the model is told it may run, and the knowledge scopes + hits in force
                         spaceData: turnTools.spaceData,
+                        ...(turnTools.boundActionCatalog ? { boundActions: turnTools.boundActionCatalog } : {}),
                         knowledgeSourceIds: turnTools.tools.KnowledgeSourceIDs,
                         grantedKnowledgeScopes: audienceAuthorizedScopes.grantedScopes.map((s) => ({
                             scopeId: s.scopeId,
@@ -885,6 +896,9 @@ async function runClaimedTurn(
                         typeContextData: typeContext.contextData ?? {},
                     },
                     context: turnContext,
+                    ...(turnTools.boundActionParams && Object.keys(turnTools.boundActionParams).length > 0
+                        ? { boundActionParams: turnTools.boundActionParams }
+                        : {}),
                     ...(turnTools.actionChanges.length ? { actionChanges: turnTools.actionChanges } : {}),
                     ...(turnTools.runSettings.planMode !== undefined ? { planMode: turnTools.runSettings.planMode } : {}),
                     ...(turnTools.runSettings.effortLevel !== undefined ? { effortLevel: turnTools.runSettings.effortLevel } : {}),

@@ -17,6 +17,7 @@ import {
     SPACE_BINDING_FIELDS,
 } from '@mj-biz-apps/collaboration-core';
 import { parseUuid } from './uuid.js';
+import type { Band } from '@mj-biz-apps/collaboration-core';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const ANCHORS = 'MJ_BizApps_Collaboration: Space Anchors';
@@ -24,16 +25,37 @@ const PEOPLE = 'MJ_BizApps_Common: People';
 
 export type BoundValue = string | number | boolean | null;
 
+export interface ResolveBindingsExtraContext {
+    band?: Band;
+    rootSpaceId?: string | null;
+    rootEntityId?: string | null;
+    rootRecordId?: string | null;
+    deliveryPrincipalUserId?: string | null;
+}
+
 export type ResolveBindingsOutcome =
     | { ok: true; values: Record<string, BoundValue>; sources: Record<string, string> }
     | { ok: false; message: string };
 
 interface AnchorRow { ID: string; EntityID: string; RecordID: string; Role: string }
+type RawBindingFieldValue = string | number | boolean | Date | null | undefined;
+type RawBindingRow = Record<string, RawBindingFieldValue>;
+interface UserLinkedRecordInfo {
+    LinkedEntityID?: string | null;
+    LinkedEntityRecordID?: string | null;
+}
 
 const refuse = (message: string): ResolveBindingsOutcome => ({ ok: false, message: `Run refused: ${message}` });
 
 /** Resolves every binding of a grant for a run in `spaceId` by `user`. */
-export async function resolveBindings(provider: IMetadataProvider, user: UserInfo, spaceId: string, grant: Pick<EffectiveGrant, 'GrantID' | 'Bindings'>, configuration: EffectiveSpaceConfiguration): Promise<ResolveBindingsOutcome> {
+export async function resolveBindings(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    spaceId: string,
+    grant: Pick<EffectiveGrant, 'GrantID' | 'Bindings'>,
+    configuration: EffectiveSpaceConfiguration,
+    extraContext?: ResolveBindingsExtraContext,
+): Promise<ResolveBindingsOutcome> {
     const space = parseUuid(spaceId);
     if (!space) return refuse('the space id is not valid.');
     const read = bindingSources(grant.Bindings);
@@ -64,9 +86,9 @@ export async function resolveBindings(provider: IMetadataProvider, user: UserInf
     }
 
     // The space's own row, read once when a binding names it
-    let spaceRow: Record<string, unknown> | null = null;
+    let spaceRow: RawBindingRow | null = null;
     if ([...read.sources.values()].some((source) => source.kind === 'space')) {
-        const rows = await rv.RunView<Record<string, unknown>>({ EntityName: SPACES, ExtraFilter: `ID = '${space}'`, Fields: [...SPACE_BINDING_FIELDS], ResultType: 'simple', MaxRows: 1 }, system);
+        const rows = await rv.RunView<RawBindingRow>({ EntityName: SPACES, ExtraFilter: `ID = '${space}'`, Fields: [...SPACE_BINDING_FIELDS], ResultType: 'simple', MaxRows: 1 }, system);
         if (!rows.Success || !rows.Results?.[0]) return refuse(`the space could not be read: ${rows.ErrorMessage ?? 'not found'}`);
         spaceRow = rows.Results[0];
     }
@@ -88,7 +110,7 @@ export async function resolveBindings(provider: IMetadataProvider, user: UserInf
     const values: Record<string, BoundValue> = {};
     const sources: Record<string, string> = {};
     for (const [name, source] of read.sources) {
-        const resolved = await valueOf(provider, system, source, { anchors, spaceRow, personId, user, configuration });
+        const resolved = await valueOf(provider, system, source, { anchors, spaceRow, personId, user, configuration, spaceId: space, extraContext });
         if (!resolved.ok) return refuse(`binding "${name}": ${resolved.message}`);
         values[name] = resolved.value;
         sources[name] = describe(source);
@@ -103,16 +125,49 @@ function describe(source: BindingSource): string {
         case 'space': return `Space.${source.field}`;
         case 'config': return `Config:${source.path}`;
         case 'user': return `User.${source.field}`;
+        case 'root': return `Root.${source.field}`;
+        case 'band': return 'Space.Band';
+        case 'deliveryPrincipal': return 'DeliveryPrincipal.ID';
         case 'value': return 'Value';
     }
 }
 
-interface Materials { anchors: Map<string, AnchorRow>; spaceRow: Record<string, unknown> | null; personId: string | null; user: UserInfo; configuration: EffectiveSpaceConfiguration }
+interface Materials {
+    anchors: Map<string, AnchorRow>;
+    spaceRow: RawBindingRow | null;
+    personId: string | null;
+    user: UserInfo;
+    configuration: EffectiveSpaceConfiguration;
+    spaceId: string;
+    extraContext?: ResolveBindingsExtraContext;
+}
 
 async function valueOf(provider: IMetadataProvider, system: UserInfo, source: BindingSource, materials: Materials): Promise<{ ok: true; value: BoundValue } | { ok: false; message: string }> {
     switch (source.kind) {
         case 'value':
             return { ok: true, value: source.value };
+        case 'band':
+            return materials.extraContext?.band
+                ? { ok: true, value: materials.extraContext.band }
+                : { ok: false, message: 'space band is not set for this invocation.' };
+        case 'deliveryPrincipal': {
+            const principalId = materials.extraContext?.deliveryPrincipalUserId ?? materials.configuration.Settings.DeliveryPrincipal?.UserID ?? null;
+            return principalId
+                ? { ok: true, value: principalId }
+                : { ok: false, message: 'per-root delivery principal is not configured for this space.' };
+        }
+        case 'root': {
+            if (source.field === 'ID') {
+                const rootId = materials.extraContext?.rootSpaceId ?? materials.spaceId;
+                return { ok: true, value: rootId };
+            }
+            if (source.field === 'EntityID') {
+                const entityId = materials.extraContext?.rootEntityId ?? null;
+                return entityId ? { ok: true, value: entityId } : { ok: false, message: 'root anchor entity id is not available.' };
+            }
+            const recordId = materials.extraContext?.rootRecordId ?? null;
+            return recordId ? { ok: true, value: recordId } : { ok: false, message: 'root anchor record id is not available.' };
+        }
         case 'user':
             if (source.field === 'ID') return { ok: true, value: materials.user.ID };
             if (source.field === 'Email') return materials.user.Email ? { ok: true, value: materials.user.Email } : { ok: false, message: 'the caller has no email.' };
@@ -137,7 +192,7 @@ async function valueOf(provider: IMetadataProvider, system: UserInfo, source: Bi
             const field = entity.Fields.find((f) => f.Name.toLowerCase() === source.field!.toLowerCase());
             if (!field) return { ok: false, message: `${entity.Name} has no field named ${source.field}.` };
             if (entity.PrimaryKeys.length !== 1) return { ok: false, message: `${entity.Name} has a composite key, which an anchor binding does not read yet.` };
-            const rows = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>({
+            const rows = await RunView.FromMetadataProvider(provider).RunView<RawBindingRow>({
                 EntityName: entity.Name,
                 ExtraFilter: `[${entity.PrimaryKeys[0].Name}] = '${keyValueOf(entity, anchor.RecordID).replace(/'/g, "''")}'`,
                 Fields: [field.Name],
@@ -162,7 +217,7 @@ function keyValueOf(entity: { PrimaryKeys: Array<{ Name: string }> }, recordId: 
     return raw;
 }
 
-function scalar(raw: unknown): BoundValue {
+function scalar(raw: RawBindingFieldValue): BoundValue {
     if (raw === null || raw === undefined) return null;
     if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') return raw;
     if (raw instanceof Date) return raw.toISOString();
@@ -174,7 +229,7 @@ function scalar(raw: unknown): BoundValue {
  * (the chain of ParentID reaches People). Null when the user links nothing, or something else.
  */
 export function personFromUserLink(provider: IMetadataProvider, user: UserInfo): string | null {
-    const linked = user as unknown as { LinkedEntityID?: unknown; LinkedEntityRecordID?: unknown };
+    const linked = user as object as UserLinkedRecordInfo;
     const entityId = parseUuid(linked.LinkedEntityID == null ? '' : String(linked.LinkedEntityID));
     const recordId = parseUuid(linked.LinkedEntityRecordID == null ? '' : String(linked.LinkedEntityRecordID));
     if (!entityId || !recordId) return null;
