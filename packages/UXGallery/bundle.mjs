@@ -91,9 +91,9 @@ html, body {
   padding: 0;
 }
 body {
-  width: 1440px;
-  height: 900px;
-  overflow: hidden;
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
   font-family: var(--mj-font-family, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   font-size: 14px;
   line-height: 1.45;

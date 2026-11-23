@@ -209,6 +209,20 @@ import { BreadcrumbItem } from './types';
       background: var(--mj-status-info-bg);
       border-color: var(--mj-status-info-border);
     }
+    @media (max-width: 768px) {
+      .space-head {
+        padding: 12px 16px 0;
+      }
+      .top {
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .actions {
+        margin-left: 0;
+        width: 100%;
+        flex-wrap: wrap;
+      }
+    }
   `]
 })
 export class CollabSpaceHeaderComponent {

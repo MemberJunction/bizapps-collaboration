@@ -51,6 +51,16 @@ export { CollabSpaceLibraryComponent, LibraryCollection, LibrarySmartView } from
 export { CollabShareCheckDialogComponent } from './lib/share-check-dialog.component';
 export { CollabUploadDialogComponent, CollabUploadSubmitPayload } from './lib/upload-dialog.component';
 export {
+    CollabUploadIngestDisclosureComponent,
+    UploadIngestDisclosureComponent,
+    buildUploadIngestDisclosureModel,
+    type UploadIngestBandDisplay,
+    type UploadIngestDisclosureInput,
+    type UploadIngestDisclosureItem,
+    type UploadIngestDisclosureModel,
+    type UploadIngestMode,
+} from './lib/upload-ingest-disclosure.component';
+export {
     CollabNewConversationDialogComponent,
     NewConversationSubmitPayload,
     type WorkstreamLinkTaskOption,

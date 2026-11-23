@@ -27,10 +27,18 @@ import {
     type SpaceStatusReach,
 } from '@mj-biz-apps/collaboration-core';
 import {
+    type BootEntityGrantInventoryInput,
+    type BootEntityGrantInventoryResult,
     CollaborationAdminEngineBase,
     CollaborationEngineBase,
     COLLABORATION_APP_ID,
     COLLABORATION_SETTINGS_NAME,
+    type PersonaSecurityProbeInput,
+    type PersonaSecurityProbeResult,
+    type SpaceParticipantRoleAuditInput,
+    type SpaceParticipantRoleAuditResult,
+    type StaffRoleAuditInput,
+    type StaffRoleAuditResult,
 } from '@mj-biz-apps/collaboration-engine-base';
 import type {
     mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
@@ -278,5 +286,41 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
             };
         }
         return { valid: true };
+    }
+
+    /** Executes the XS-1 Space Participant Role Audit via CollaborationAdminEngineBase. */
+    public async RunSpaceParticipantRoleAudit(
+        input: SpaceParticipantRoleAuditInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<SpaceParticipantRoleAuditResult> {
+        return this.Admin.RunSpaceParticipantRoleAudit(input, contextUser, provider);
+    }
+
+    /** Executes the XS-7 Staff Role Audit via CollaborationAdminEngineBase. */
+    public async RunStaffRoleAudit(
+        input: StaffRoleAuditInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<StaffRoleAuditResult> {
+        return this.Admin.RunStaffRoleAudit(input, contextUser, provider);
+    }
+
+    /** Executes the XS-2 Boot Entity Grant Filter Inventory via CollaborationAdminEngineBase. */
+    public async RunBootEntityGrantInventory(
+        input: BootEntityGrantInventoryInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<BootEntityGrantInventoryResult> {
+        return this.Admin.RunBootEntityGrantInventory(input, contextUser, provider);
+    }
+
+    /** Executes the XS-3 Automated Cross-Surface Persona Security Probe via CollaborationAdminEngineBase. */
+    public async RunPersonaSecurityProbe(
+        input: PersonaSecurityProbeInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PersonaSecurityProbeResult> {
+        return this.Admin.RunPersonaSecurityProbe(input, contextUser, provider);
     }
 }

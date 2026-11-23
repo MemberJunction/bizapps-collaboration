@@ -31,7 +31,8 @@ Collaboration's Angular widgets. They take plain values, emit events, and work i
 | `mjc-space-overview` | `CollabSpaceOverviewComponent` | Frame 02 Overview page composite (needs-you strip, cards grid, mini room, sub-spaces), with a read-only About card for the details a space's type keeps of its own, which the host draws in the `[mjcAbout]` slot |
 | `mjc-space-library` | `CollabSpaceLibraryComponent` | Frame 03 Library page composite (collections, files table, item preview drawer) |
 | `mjc-share-check-dialog` | `CollabShareCheckDialogComponent` | Frame 04 Share check modal dialog composite. It opens with the focus on its content, not on a button, so Enter right after it opens shares nothing |
-| `mjc-upload-dialog` | `CollabUploadDialogComponent` | Uploads a file to a space, in a band the seat may choose |
+| `mjc-upload-dialog` | `CollabUploadDialogComponent` | Uploads a file or links a cloud document to a space, in a band the seat may choose, with embedded XS-8 ingest disclosure |
+| `mjc-upload-ingest-disclosure` | `CollabUploadIngestDisclosureComponent` | Inline and expandable domain-neutral upload ingest, indexing, visibility scope, and retention disclosure (`XS-8`) |
 | `mjc-new-conversation-dialog` | `CollabNewConversationDialogComponent` | Starts a conversation: its name and kind (General, Topic or Internal Only) |
 | `mjc-home-list` | `CollabHomeListComponent` | The rows behind one of Home's counts, how many there are in all when the list is cut short, and a failed read with a way to try again |
 | `mjc-new-space-dialog` | `CollabNewSpaceDialogComponent` | Starts a space: its kind, its name and description, and the kind's own details, which the host draws in the `[mjcDetails]` slot and holds Create for until the required ones are filled in |

@@ -10,6 +10,7 @@ import {
     LoadItemUseEntityServer,
     LoadCollaborationTaskEntityServer,
     LoadCollaborationAIRunLockdown,
+    LoadCollaborationSecurityAuditOperations,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 
 LoadScopedSearchAction();
@@ -24,6 +25,7 @@ LoadShareNoticeEntityServer();
 LoadItemUseEntityServer();
 LoadCollaborationTaskEntityServer();
 LoadCollaborationAIRunLockdown();
+LoadCollaborationSecurityAuditOperations();
 
 import './agents/index.js';
 import './checks/collab-world.checks.js';

@@ -6,6 +6,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { mimeTypeForFileName } from '@mj-biz-apps/collaboration-core';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
+import { CollabUploadIngestDisclosureComponent } from './upload-ingest-disclosure.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
 import type { FileKind, SpaceBand } from './types';
 
@@ -37,6 +38,7 @@ export interface CollabUploadSubmitPayload {
     MJDialogActionsComponent,
     CollabBandChipComponent,
     CollabFileIconComponent,
+    CollabUploadIngestDisclosureComponent,
   ],
   template: `
     <mj-dialog [Visible]="true" [Title]="'Add document to ' + (SpaceName || 'Space')" [Width]="540" [Closeable]="!IsSubmitting" (Close)="onCancel()">
@@ -54,6 +56,13 @@ export interface CollabUploadSubmitPayload {
             <div class="form-group">
               <label class="f-label">File</label>
               @if (!selectedFile) {
+                <input
+                  #fileInput
+                  type="file"
+                  class="hidden-file-input"
+                  aria-label="Choose a file to upload"
+                  (change)="onFileSelected($event)"
+                />
                 <div
                   class="dropzone"
                   [class.dragover]="isDragging"
@@ -68,13 +77,7 @@ export interface CollabUploadSubmitPayload {
                   (keydown.enter)="fileInput.click()"
                   (keydown.space)="fileInput.click(); $event.preventDefault()"
                 >
-                  <input
-                    #fileInput
-                    type="file"
-                    class="hidden-file-input"
-                    (change)="onFileSelected($event)"
-                  />
-                  <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                  <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i></div>
                   <div class="drop-text"><b>Click to upload</b> or drag and drop</div>
                   <div class="drop-sub">PDF, DOCX, XLSX, PPTX, PNG, JPG (up to {{ formatBytes(MaxBytes) }})</div>
                   @if (fileError) {
@@ -195,6 +198,16 @@ export interface CollabUploadSubmitPayload {
               </div>
             </div>
           </div>
+
+          <mjc-upload-ingest-disclosure
+            [SpaceName]="SpaceName"
+            [Mode]="activeMode"
+            [SelectedBand]="selectedBand"
+            [CanSeeTeamBand]="IsBandAllowed('Team')"
+            [MaxBytes]="MaxBytes"
+            [AgentRetrieval]="AgentRetrieval"
+            [DefaultExpanded]="DisclosureDefaultExpanded"
+          />
         </div>
 
 
@@ -225,13 +238,13 @@ export interface CollabUploadSubmitPayload {
       display: contents;
     }
     .dialog {
-      font-family: var(--mj-font-family, Inter, sans-serif);
-      color: var(--mj-text-primary, #0f172a);
+      font-family: var(--mj-font-family);
+      color: var(--mj-text-primary);
     }
     .d-sub {
       margin: 4px 0 0;
       font-size: 12.5px;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
       line-height: 1.4;
     }
     .d-body {
@@ -254,22 +267,22 @@ export interface CollabUploadSubmitPayload {
     .f-label {
       font-size: 12.5px;
       font-weight: 600;
-      color: var(--mj-text-primary, #0f172a);
+      color: var(--mj-text-primary);
     }
     .mj-input {
       height: 36px;
       padding: 0 10px;
-      border-radius: var(--mj-radius-md, 8px);
-      border: 1px solid var(--mj-border-default, #cbd5e1);
-      background: var(--mj-bg-surface, #ffffff);
+      border-radius: var(--mj-radius-md);
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
       font-size: 13px;
-      color: var(--mj-text-primary, #0f172a);
+      color: var(--mj-text-primary);
       box-sizing: border-box;
       outline: none;
     }
     .mj-input:focus {
-      border-color: var(--mj-brand-primary, #0076b6);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary, #0076b6) 20%, transparent);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
     }
     .url-input-wrap {
       position: relative;
@@ -279,7 +292,7 @@ export interface CollabUploadSubmitPayload {
     .url-icon {
       position: absolute;
       left: 10px;
-      color: var(--mj-text-muted, #94a3b8);
+      color: var(--mj-text-muted);
       font-size: 13px;
       pointer-events: none;
     }
@@ -289,18 +302,18 @@ export interface CollabUploadSubmitPayload {
     }
     .url-hint {
       font-size: 11.5px;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
     }
     .service-tag {
-      color: var(--mj-brand-primary, #0076b6);
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
     .dropzone {
-      border: 2px dashed var(--mj-border-default, #cbd5e1);
-      border-radius: var(--mj-radius-md, 8px);
+      border: 2px dashed var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
       padding: 24px 16px;
       text-align: center;
-      background: var(--mj-bg-surface-sunken, #f8fafc);
+      background: var(--mj-bg-surface-sunken);
       cursor: pointer;
       display: flex;
       flex-direction: column;
@@ -309,8 +322,8 @@ export interface CollabUploadSubmitPayload {
       transition: border-color 0.15s, background-color 0.15s;
     }
     .dropzone:hover, .dropzone.dragover {
-      border-color: var(--mj-brand-primary, #0076b6);
-      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 5%, transparent);
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
     }
     .file-error { color: var(--mj-status-error); font-size: 12px; margin-top: 6px; }
     .hidden-file-input {
@@ -318,25 +331,25 @@ export interface CollabUploadSubmitPayload {
     }
     .drop-icon {
       font-size: 28px;
-      color: var(--mj-brand-primary, #0076b6);
+      color: var(--mj-brand-primary);
       margin-bottom: 4px;
     }
     .drop-text {
       font-size: 13px;
-      color: var(--mj-text-primary, #0f172a);
+      color: var(--mj-text-primary);
     }
     .drop-sub {
       font-size: 11.5px;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
     }
     .file-chosen-bar {
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 10px 12px;
-      background: var(--mj-bg-surface-sunken, #f8fafc);
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      border-radius: var(--mj-radius-md, 8px);
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
     }
     .file-details {
       flex: 1;
@@ -347,11 +360,11 @@ export interface CollabUploadSubmitPayload {
     .file-name {
       font-size: 13px;
       font-weight: 600;
-      color: var(--mj-text-primary, #0f172a);
+      color: var(--mj-text-primary);
     }
     .file-size {
       font-size: 11.5px;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
     }
     .band-options {
       display: flex;
@@ -364,13 +377,13 @@ export interface CollabUploadSubmitPayload {
       gap: 10px;
       padding: 8px 10px;
       border-radius: 6px;
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      background: var(--mj-bg-surface, #ffffff);
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
       cursor: pointer;
     }
     .band-option.selected {
-      border-color: var(--mj-brand-primary, #0076b6);
-      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 5%, transparent);
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
     }
     .b-opt-content {
       display: flex;
@@ -378,17 +391,25 @@ export interface CollabUploadSubmitPayload {
       gap: 2px;
     }
     .b-opt-note {
-      font-size: var(--mj-text-xs, 12px);
+      font-size: var(--mj-text-xs);
       color: var(--mj-text-muted);
     }
     .b-opt-sub {
       font-size: 11px;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
     }
     .ellipsis {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    @media (max-width: 640px) {
+      .form-row {
+        flex-direction: column;
+      }
+      .form-group.half {
+        width: 100%;
+      }
     }
   `],
 })
@@ -402,6 +423,10 @@ export class CollabUploadDialogComponent {
   @Input() MaxBytes = 10 * 1024 * 1024;
   /** The space's own folders, offered as suggestions. */
   @Input() FolderSuggestions: readonly string[] = [];
+  /** Controls whether the space permits assistant retrieval for uploaded material. */
+  @Input() AgentRetrieval = 'Included';
+  /** Allows hosts/tests to start with the ingest disclosure panel expanded. */
+  @Input() DisclosureDefaultExpanded = false;
   public fileError = '';
 
   /** The bands this seat may choose. The server refuses any other, so the dialog offers only these. */

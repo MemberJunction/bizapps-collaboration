@@ -107,7 +107,7 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 
 | | Feature |
 |---|---|
-| ✅ | **A library per space,** on MemberJunction Storage: upload, open, promote from Team to Shared with a recorded stamp, share notices, and a record of who used what. |
+| ✅ | **A library per space,** on MemberJunction Storage: upload, open, promote from Team to Shared with a recorded stamp, share notices, a record of who used what, and an inline/expandable upload ingest model disclosure explaining storage, indexing, band reach, and retention. |
 | ✅ | **Tasks filed in spaces,** on [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks), in lists, boards and timelines. |
 | 🚧 | **Where files are stored is a setting,** per app, type, space or sub-space, so each relationship's files can live in its own storage account. |
 | 🗺️ | **Notes:** quick notes in a space, Shared, Team or private to their author, that the assistant can use in the right audience. |
@@ -145,6 +145,7 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 | ✅ | **One settings model,** from the app's defaults down through the type, parent spaces and the space. |
 | ✅ | **Rights through MemberJunction's Authorizations:** changing a space type needs *Configure Space Types*; changing a space's settings needs *Configure Spaces* and an owner seat; closing or reopening needs *Close and Reopen Spaces* and an owner seat. |
 | ✅ | **No right decided by a role's name:** one authorization, *Administer Spaces*, decides creating a top-level space, two settings, assigning across levels and backdating a close. UI, Developer and Integration hold it by default, and a host edits the grants. |
+| ✅ | **Security audits & persona security probe:** `BaseRemotableOperation` audits verify external participant roles (`XS-1`), staff least-privilege boundaries (`XS-7`), boot entity grant filters (`XS-2`), and rolled-back cross-surface persona isolation (`XS-3`). |
 | 🗺️ | **PostgreSQL,** beside SQL Server. |
 
 ### Extensibility
@@ -253,6 +254,7 @@ The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/p
 | [PR 9's plan](plans/pr9-plan.md) | Finishing the chat (merged) |
 | [PR #8's plan](plans/pr8-plan.md) | The build plan for anchors, grants, data reach, notes and pins |
 | [How Collaboration works](docs/HOW_THE_SYSTEM_WORKS.md) | The rules the rules module, the server and the database share, each marked built or planned |
+| [Security audits &amp; ingest disclosure](docs/security-audits-and-ingest-disclosure.md) | XS-1/XS-7 role audits, XS-2 boot entity grant inventory, XS-3 rolled-back persona probe, and XS-8 upload ingest disclosure |
 | [The extensibility plan](docs/EXTENSIBILITY_PLAN.md) | Space types as plug-ins, with chats, history and agents |
 | [The data guide](docs/reviewing-the-data.md) | The sample world's people and spaces |
 
