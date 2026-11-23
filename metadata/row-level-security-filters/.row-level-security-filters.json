@@ -588,5 +588,35 @@
       "Description": "Source receipts on space agent turns where the caller reaches the conversation, the receipt's (SpaceID, Band) visibility, and the underlying SpaceItem or effective KnowledgeSource grant (across App, SpaceType, and unbroken same-type ancestor chain with ListMode=Replace cutoffs) currently authorizes that space and band.",
       "FilterText": "((SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) AND (ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE ((sc.Kind IN (N'General', N'Topic') AND Band = N'Shared') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) AND ((SourceKind = N'SpaceItem' AND SpaceItemID IS NOT NULL AND ((Band = N'Shared' AND (CONVERT(nvarchar(36), SpaceID) + N'|' + CONVERT(nvarchar(36), SpaceItemID)) IN (SELECT (CONVERT(nvarchar(36), si.SpaceID) + N'|' + CONVERT(nvarchar(36), si.ID)) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.Band = N'Shared')) OR (Band = N'Team' AND (CONVERT(nvarchar(36), SpaceID) + N'|' + CONVERT(nvarchar(36), SpaceItemID)) IN (SELECT (CONVERT(nvarchar(36), si.SpaceID) + N'|' + CONVERT(nvarchar(36), si.ID)) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si)))) OR (SourceKind = N'KnowledgeSource' AND ContentSourceID IS NOT NULL AND ((Band = N'Shared' AND (CONVERT(nvarchar(36), SpaceID) + N'|' + CONVERT(nvarchar(36), ContentSourceID)) IN (SELECT (CONVERT(nvarchar(36), eks.SpaceID) + N'|' + CONVERT(nvarchar(36), eks.ContentSourceID)) FROM [__mj_BizAppsCollaboration].[fnEffectiveKnowledgeSourceGrants]() AS eks WHERE eks.Band = N'Shared')) OR (Band = N'Team' AND (CONVERT(nvarchar(36), SpaceID) + N'|' + CONVERT(nvarchar(36), ContentSourceID)) IN (SELECT (CONVERT(nvarchar(36), eks.SpaceID) + N'|' + CONVERT(nvarchar(36), eks.ContentSourceID)) FROM [__mj_BizAppsCollaboration].[fnEffectiveKnowledgeSourceGrants]() AS eks WHERE eks.Band IN (N'Shared', N'Team')))))))"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "E8B10001-4F50-4A6B-8C9D-0E1F2A3B4C51"
+    },
+    "fields": {
+      "Name": "Collaboration: Space Notice Events In Reach",
+      "Description": "Space notice events in spaces the caller reaches, filtered by Team/Shared band.",
+      "FilterText": "(SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E8B10002-4F50-4A6B-8C9D-0E1F2A3B4C52"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Space Notice Watermarks",
+      "Description": "Per-member space notice watermarks owned by the caller in spaces they reach.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E8B10003-4F50-4A6B-8C9D-0E1F2A3B4C53"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Space Digest Checkpoints",
+      "Description": "Digest cursor checkpoints owned by the caller.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND (SpaceID IS NULL OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+    }
   }
 ]
