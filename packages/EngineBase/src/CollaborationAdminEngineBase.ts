@@ -27,6 +27,11 @@ import {
     type BootEntityGrantInventoryResult,
     runBootEntityGrantInventory,
 } from './boot-entity-grant-inventory.js';
+import {
+    type PersonaSecurityProbeInput,
+    type PersonaSecurityProbeResult,
+    runPersonaSecurityProbe,
+} from './persona-security-probe.js';
 import { authorizeSecurityAuditCaller } from './security-audit-types.js';
 import {
     runSpaceParticipantRoleAudit,
@@ -182,5 +187,20 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
             throw new Error(auth.reason);
         }
         return runBootEntityGrantInventory(md, user!, input);
+    }
+
+    /** Executes the XS-3 Automated Cross-Surface Persona Security Probe inside a rolled-back transaction after verifying caller staff-admin authorization. */
+    public async RunPersonaSecurityProbe(
+        input: PersonaSecurityProbeInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PersonaSecurityProbeResult> {
+        const md = provider ?? Metadata.Provider;
+        const user = contextUser ?? md.CurrentUser;
+        const auth = authorizeSecurityAuditCaller(user, md, input.ParticipantRoleID);
+        if (!auth.authorized) {
+            throw new Error(auth.reason);
+        }
+        return runPersonaSecurityProbe(md, user!, input);
     }
 }

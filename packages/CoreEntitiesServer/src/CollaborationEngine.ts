@@ -33,6 +33,8 @@ import {
     CollaborationEngineBase,
     COLLABORATION_APP_ID,
     COLLABORATION_SETTINGS_NAME,
+    type PersonaSecurityProbeInput,
+    type PersonaSecurityProbeResult,
     type SpaceParticipantRoleAuditInput,
     type SpaceParticipantRoleAuditResult,
     type StaffRoleAuditInput,
@@ -311,5 +313,14 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         provider?: IMetadataProvider,
     ): Promise<BootEntityGrantInventoryResult> {
         return this.Admin.RunBootEntityGrantInventory(input, contextUser, provider);
+    }
+
+    /** Executes the XS-3 Automated Cross-Surface Persona Security Probe via CollaborationAdminEngineBase. */
+    public async RunPersonaSecurityProbe(
+        input: PersonaSecurityProbeInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PersonaSecurityProbeResult> {
+        return this.Admin.RunPersonaSecurityProbe(input, contextUser, provider);
     }
 }

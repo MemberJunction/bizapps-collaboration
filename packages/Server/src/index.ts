@@ -57,6 +57,19 @@ export {
     resolveInvitedSeatsForUser,
 } from './mint-space-link.js';
 
+export {
+    BaseHealthProbe,
+    BaseLiveCrudVerifier,
+    CollaborationPersonaSecurityProbe,
+    CollaborationPersonaSecurityVerifier,
+    LoadCollaborationSecurityAuditOperations,
+    PERSONA_SECURITY_PROBE_KEY,
+    PERSONA_SECURITY_PROBE_OPERATION_KEY,
+    PERSONA_SECURITY_VERIFIER_KEY,
+    PersonaSecurityProbeOperation,
+    runPersonaSecurityProbe,
+} from '@mj-biz-apps/collaboration-core-entities-server';
+
 function installPostgresProviderPrototypeHookFromServer(): void {
     try {
         const localRequire = createRequire(import.meta.url);
