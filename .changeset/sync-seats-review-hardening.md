@@ -1,6 +1,5 @@
 ---
 "@mj-biz-apps/collaboration-core-entities-server": patch
-"@mj-biz-apps/collaboration-example-space-types-server": patch
 ---
 
 Harden `BaseSpaceTypeServerDriver.SyncSeats` and `ExampleBoardServerDriver.SyncSeats` from #44 review:

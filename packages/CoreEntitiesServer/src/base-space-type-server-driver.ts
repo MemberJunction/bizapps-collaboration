@@ -365,29 +365,12 @@ export class BaseSpaceTypeServerDriver {
             if (entryPersonId) {
                 protectedPersonIds.add(entryPersonId);
             }
-            // If an entry failed with neither UserID nor PersonID (e.g. email-only lookup failure),
-            // we cannot tell which existing seat it refers to, so skip removals for this sync.
-            if (!entryUserId && !entryPersonId) {
-                skipRemovalPass = true;
-            }
         };
 
         for (const seatInput of people ?? []) {
             let personId = parseUuid(seatInput.PersonID);
             let userId = parseUuid(seatInput.UserID);
             let email = seatInput.Email?.trim() || null;
-
-            const matched = matchSpaceRoleType(roles, seatInput.RoleTypeName);
-            const role = matched.role;
-            if (!role) {
-                result.errors.push(
-                    matched.ambiguous
-                        ? `Space role type '${seatInput.RoleTypeName}' is the name of more than one role; give the role's code.`
-                        : `Unknown space role type '${seatInput.RoleTypeName}'.`
-                );
-                protectFailedEntry(userId, personId);
-                continue;
-            }
 
             if (!userId && personId) {
                 try {
@@ -467,6 +450,18 @@ export class BaseSpaceTypeServerDriver {
                 if (userLookup.Results?.[0]?.ID) {
                     userId = parseUuid(userLookup.Results[0].ID);
                 }
+            }
+
+            const matched = matchSpaceRoleType(roles, seatInput.RoleTypeName);
+            const role = matched.role;
+            if (!role) {
+                result.errors.push(
+                    matched.ambiguous
+                        ? `Space role type '${seatInput.RoleTypeName}' is the name of more than one role; give the role's code.`
+                        : `Unknown space role type '${seatInput.RoleTypeName}'.`
+                );
+                protectFailedEntry(userId, personId);
+                continue;
             }
 
             if (!userId) {
