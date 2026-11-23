@@ -43,14 +43,20 @@ import {
     type GetUserNotificationPreferencesResult,
     type PersonaSecurityProbeInput,
     type PersonaSecurityProbeResult,
+    type PreviewScopedSpaceDigestInput,
+    type PreviewScopedSpaceDigestResult,
     type PublishSpaceNoticeEventInput,
     type PublishSpaceNoticeEventResult,
     type RouteCollaborationNotificationsInput,
     type RouteCollaborationNotificationsResult,
+    type RunScopedSpaceDigestsInput,
+    type RunScopedSpaceDigestsResult,
     type SpaceParticipantRoleAuditInput,
     type SpaceParticipantRoleAuditResult,
     type StaffRoleAuditInput,
     type StaffRoleAuditResult,
+    type UpdateSpaceDigestCheckpointInput,
+    type UpdateSpaceDigestCheckpointResult,
     type UpdateUserNotificationPreferencesInput,
     type UpdateUserNotificationPreferencesResult,
 } from '@mj-biz-apps/collaboration-engine-base';
@@ -411,5 +417,35 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
     ): Promise<UpdateUserNotificationPreferencesResult> {
         EnsureCollaborationCommsV2TransportRegistered();
         return this.Base.UpdateUserNotificationPreferences(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Executes NT-2 reach-verified scoped digests via composite keyset pagination & Comms v2 dispatch. */
+    public async RunScopedSpaceDigests(
+        input: RunScopedSpaceDigestsInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<RunScopedSpaceDigestsResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.RunScopedSpaceDigests(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Previews a single member's reach-verified scoped digest without dispatching or advancing checkpoints. */
+    public async PreviewScopedSpaceDigest(
+        input: PreviewScopedSpaceDigestInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PreviewScopedSpaceDigestResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.PreviewScopedSpaceDigest(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Updates or pauses/resumes the acting member's `SpaceDigestCheckpoint`. */
+    public async UpdateSpaceDigestCheckpoint(
+        input: UpdateSpaceDigestCheckpointInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<UpdateSpaceDigestCheckpointResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.UpdateSpaceDigestCheckpoint(input, this.resolveNoticeActingUser(contextUser, provider), provider);
     }
 }

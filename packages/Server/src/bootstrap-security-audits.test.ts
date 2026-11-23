@@ -18,13 +18,19 @@ import {
     PERSONA_SECURITY_PROBE_OPERATION_KEY,
     PERSONA_SECURITY_VERIFIER_KEY,
     PersonaSecurityProbeOperation,
+    PREVIEW_SCOPED_SPACE_DIGEST_OPERATION_KEY,
+    PreviewScopedSpaceDigestOperation,
     ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY,
     RouteCollaborationNotificationsOperation,
+    RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+    RunScopedSpaceDigestsOperation,
     SPACE_PARTICIPANT_ROLE_AUDIT_OPERATION_KEY,
     SpaceParticipantRoleAuditOperation,
     STAFF_ROLE_AUDIT_OPERATION_KEY,
     StaffRoleAuditOperation,
+    UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY,
     UPDATE_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY,
+    UpdateSpaceDigestCheckpointOperation,
     UpdateUserNotificationPreferencesOperation,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 
@@ -96,6 +102,22 @@ describe('Server bootstrap security audit registration', () => {
         assert.ok(opRoute instanceof RouteCollaborationNotificationsOperation);
         assert.ok(opGetPrefs instanceof GetUserNotificationPreferencesOperation);
         assert.ok(opUpdatePrefs instanceof UpdateUserNotificationPreferencesOperation);
+
+        const opRunDigest = MJGlobal.Instance.ClassFactory.CreateInstance<RunScopedSpaceDigestsOperation>(
+            BaseRemotableOperation,
+            RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+        );
+        const opPreviewDigest = MJGlobal.Instance.ClassFactory.CreateInstance<PreviewScopedSpaceDigestOperation>(
+            BaseRemotableOperation,
+            PREVIEW_SCOPED_SPACE_DIGEST_OPERATION_KEY,
+        );
+        const opUpdateCheckpoint = MJGlobal.Instance.ClassFactory.CreateInstance<UpdateSpaceDigestCheckpointOperation>(
+            BaseRemotableOperation,
+            UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY,
+        );
+        assert.ok(opRunDigest instanceof RunScopedSpaceDigestsOperation);
+        assert.ok(opPreviewDigest instanceof PreviewScopedSpaceDigestOperation);
+        assert.ok(opUpdateCheckpoint instanceof UpdateSpaceDigestCheckpointOperation);
         assert.ok(GetCollaborationCommsV2Transport() instanceof MJCommsV2NotificationTransport);
         assert.ok(typeof GetCollaborationCommsV2DirectMessageDispatcher() === 'function');
     });

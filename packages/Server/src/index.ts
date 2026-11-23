@@ -24,6 +24,7 @@ import {
     LoadTaskAttributionEntityServer,
     LoadSpaceMeetingsAgendaProvider,
     LoadCollaborationAIRunLockdown,
+    LoadCollaborationDigestOperations,
     LoadCollaborationNotificationOperations,
     LoadCollaborationSecurityAuditOperations,
     LoadCollaborationSpaceNoticeOperations,
@@ -112,6 +113,7 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadCollaborationSecurityAuditOperations();
     LoadCollaborationSpaceNoticeOperations();
     LoadCollaborationNotificationOperations();
+    LoadCollaborationDigestOperations();
     InstallCollaborationCommsV2Bridge();
     LoadSpaceNoticeEventEntityServer();
     LoadSpaceNoticeWatermarkEntityServer();

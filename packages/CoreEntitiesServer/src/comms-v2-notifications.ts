@@ -17,6 +17,7 @@ import {
     type CommsV2TransportDispatchRequest,
     type CommsV2TransportDispatchResult,
     GetCollaborationCommsV2Transport,
+    LoadCollaborationDigestOperations,
     LoadCollaborationNotificationOperations,
     RegisterCollaborationCommsV2Transport,
 } from '@mj-biz-apps/collaboration-engine-base';
@@ -165,6 +166,7 @@ export class MJCommsV2NotificationTransport implements CollaborationCommsV2Trans
  */
 export function EnsureCollaborationCommsV2TransportRegistered(): void {
     LoadCollaborationNotificationOperations();
+    LoadCollaborationDigestOperations();
     if (!GetCollaborationCommsV2Transport()) {
         RegisterCollaborationCommsV2Transport(new MJCommsV2NotificationTransport());
     }
