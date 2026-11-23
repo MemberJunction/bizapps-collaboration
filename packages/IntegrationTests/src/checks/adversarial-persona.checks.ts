@@ -1376,7 +1376,7 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const dev = await GetPersonaUser(ctx, 'dev');
             const bea = await GetPersonaUser(ctx, 'bea');
-            const harborOwner = await GetPersonaUser(ctx, 'harbor');
+            const samStaff = await GetPersonaUser(ctx, 'sam');
             const harborMembers = await FindRows<{ ID: string }>(
                 ctx,
                 SPACE_MEMBER_ENTITY,
@@ -1392,7 +1392,7 @@ const checks: NamedCheck[] = [
                         SpaceAID: DISCOVERY_SPACE_ID,
                         SpaceBID: HARBOR_SPACE_ID,
                         ExternalParticipantUser: bea,
-                        RestrictedStaffUser: harborOwner,
+                        RestrictedStaffUser: samStaff,
                         OutOfSpaceRecords: [
                             {
                                 EntityName: SPACE_ENTITY,
