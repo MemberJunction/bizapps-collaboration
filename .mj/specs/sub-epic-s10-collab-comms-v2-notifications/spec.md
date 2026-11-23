@@ -38,3 +38,22 @@ Engineering specification for Sub-Epic S10 in `MemberJunction/bizapps-collaborat
 ## Verification Gates
 - Strict zero-`any` / zero-`unknown` / zero-`.Get()`/`.Set()` check: `node scripts/check-strict-types.mjs --self-test && node scripts/check-strict-types.mjs`
 - Registered `@RegisterClass` exports, row caps (`check-row-caps`), no role-name auth (`check-no-role-name-auth`), downstream domain-neutral naming (`check-downstream-names`), metadata sync-block hygiene (`strip-sync-blocks --check`), dependency model (`check-dependency-model`), migration parity scripts, and `mj standards check`: enforced in `pnpm test` and `.github/workflows/ci.yml`.
+
+## Critical User Journeys
+
+### CUJ-1 — Space Member in a High-Fan-Out Space (CS-4)
+1. An announcement or space event is published to a space with thousands of members.
+2. A single `SpaceNoticeEvent` row is persisted (`O(1)` write amplification) without writing per-member notice copies.
+3. The member opens the space notices feed (`Collaboration.GetSpaceNotices` / `Collaboration.GetSpaceUnreadNoticeCounts`) and sees the event as unread relative to their personal `SpaceNoticeWatermark` (or deterministic `MemberJoinedAt` baseline when no watermark exists yet).
+4. The member marks notices read (`Collaboration.AdvanceSpaceNoticeWatermark`), monotonically advancing their personal `(LastReadEventTimestamp, LastReadEventID)` cursor without affecting other members.
+
+### CUJ-2 — Collaborator with Custom Notification Preferences (NT-1)
+1. The collaborator configures channel opt-outs, timezone-aware quiet hours, muted spaces/items, and event-type subscriptions stored via `UserInfoEngine` (`Collaboration.NotificationPreferences`) and `MJ: User Notification Preferences`.
+2. Colleagues trigger `Mention`, `Reply`, `Share`, `StatusChanged`, `Task`, and `Approval` events.
+3. NT-1 (`Collaboration.RouteNotifications`) batch-resolves preferences via `RunView` (`ResultType: 'simple'`, `ID IN (...)` / `UserID IN (...)`) and dispatches only permitted channels and event types via `MJCommsV2NotificationTransport` (`NotificationEngine` + `CommunicationEngine`), guaranteeing zero notifications on muted or opted-out channels and zero `localStorage`/`sessionStorage` usage.
+
+### CUJ-3 — Digest Recipient Whose Space Access Changes (NT-2)
+1. Multiple scoped collaboration items accumulate across multiple pages since the previous `SpaceDigestCheckpoint` window.
+2. Before the scheduled digest runs, the user's membership or item-level access is revoked for a restricted space (or a Team-band item becomes unreachable).
+3. NT-2 (`Collaboration.RunScopedSpaceDigests` / `Collaboration.PreviewScopedSpaceDigest`) traverses all candidate events via deterministic composite `(EventTimestamp, ID)` keyset pagination (`RunView` `ResultType: 'simple'`, zero `OFFSET`, zero silent row caps) and runs batched assembly-time reach verification per recipient and item.
+4. All accessible items across every keyset page are included, revoked or unauthorized items are strictly excluded, outbound delivery is suppressed (`EmptyDigest`) if zero accessible items remain, and `SpaceDigestCheckpoint` advances monotonically only after Comms v2 dispatch succeeds.
