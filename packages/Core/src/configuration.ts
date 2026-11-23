@@ -13,6 +13,23 @@ export type ConfigurationValue =
     | ConfigurationValue[]
     | { [key: string]: ConfigurationValue };
 
+/** Write policy for space chats: non-loosening across Type -> Root -> Space. */
+export type ChatWhoCanWrite = 'Contributors' | 'TeamOnly' | 'Owners';
+
+/** Declarative scoped prompt part entry that may live in SpaceType/Space configuration. */
+export interface ScopedPromptPartConfigEntry {
+    ID?: string | null;
+    PromptID?: string | null;
+    Name: string;
+    Role?: 'System' | 'User' | 'Assistant';
+    Text: string;
+    Sort?: number;
+    Priority?: number;
+    MergeBehavior?: 'Override' | 'Append';
+    Status?: 'Active' | 'Provisional' | 'Archived';
+    Band?: 'Team' | 'Shared';
+}
+
 /**
  * The single typed settings shape for BizApps Collaboration at every level
  * (App, SpaceType, Space, SubSpace).
@@ -24,11 +41,15 @@ export interface CollaborationSettings {
     Chats?: {
         /** Who may start a chat. Default 'Anyone': anyone whose seat can post (a guest who can't post can't start one either). 'Owners' narrows it to owners. */
         WhoCanStart?: 'Anyone' | 'Owners';
+        /** Who may post writes in space chats (non-loosening narrowing across Type -> Root -> Space). Default 'Contributors'. */
+        WhoCanWrite?: ChatWhoCanWrite;
         /** When an agent replies. Default 'MentionOrOneToOne'. */
         AgentReplyMode?: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         /** The choice preselected when someone is added to an existing chat. Default 'None'. */
         HistoryOnAdd?: 'None' | 'All' | 'Since';
     };
+    /** Optional scoped prompt part declarations at this level (CX-4). */
+    PromptParts?: ScopedPromptPartConfigEntry[];
     /** Agent inheritance rules. */
     Agents?: {
         /** How this level's SpaceAgent rows combine with the list above. Default 'Extend'. */
@@ -130,6 +151,9 @@ export function validateSpaceTypeConfiguration(config: unknown): { valid: boolea
         if (c.Chats.WhoCanStart && !['Anyone', 'Owners'].includes(c.Chats.WhoCanStart)) {
             errors.push(`Invalid Chats.WhoCanStart: ${c.Chats.WhoCanStart}`);
         }
+        if (c.Chats.WhoCanWrite && !['Contributors', 'TeamOnly', 'Owners'].includes(c.Chats.WhoCanWrite)) {
+            errors.push(`Invalid Chats.WhoCanWrite: ${c.Chats.WhoCanWrite}`);
+        }
         if (c.Chats.AgentReplyMode && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(c.Chats.AgentReplyMode)) {
             errors.push(`Invalid Chats.AgentReplyMode: ${c.Chats.AgentReplyMode}`);
         }
@@ -195,11 +219,17 @@ export function validateSpaceConfiguration(
     if (sc.Chats?.WhoCanStart && !overridable.has('Chats.WhoCanStart')) {
         errors.push("Chats.WhoCanStart cannot be overridden by space: not in type's SpaceOverridable.");
     }
+    if (sc.Chats?.WhoCanWrite && !overridable.has('Chats.WhoCanWrite') && !overridable.has('Chats')) {
+        errors.push("Chats.WhoCanWrite cannot be overridden by space: not in type's SpaceOverridable.");
+    }
     if (sc.Chats?.AgentReplyMode && !overridable.has('Chats.AgentReplyMode')) {
         errors.push("Chats.AgentReplyMode cannot be overridden by space: not in type's SpaceOverridable.");
     }
     if (sc.Chats?.HistoryOnAdd && !overridable.has('Chats.HistoryOnAdd')) {
         errors.push("Chats.HistoryOnAdd cannot be overridden by space: not in type's SpaceOverridable.");
+    }
+    if (sc.PromptParts !== undefined && !overridable.has('PromptParts')) {
+        errors.push("PromptParts cannot be overridden by space: not in type's SpaceOverridable.");
     }
     if (sc.Agents?.ListMode && !overridable.has('Agents.ListMode')) {
         errors.push("Agents.ListMode cannot be overridden by space: not in type's SpaceOverridable.");
@@ -249,6 +279,7 @@ export interface ResolvedCollaborationSettings {
     StorageAccountID: string | null;
     Chats: {
         WhoCanStart: 'Anyone' | 'Owners';
+        WhoCanWrite?: ChatWhoCanWrite;
         AgentReplyMode: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         HistoryOnAdd: 'None' | 'All' | 'Since';
     };
@@ -283,6 +314,7 @@ export const DEFAULT_COLLABORATION_SETTINGS: ResolvedCollaborationSettings = {
 const KNOWN_SETTINGS_KEYS = new Set([
     'StorageAccountID',
     'Chats',
+    'PromptParts',
     'Agents',
     'Labels',
     'Children',
@@ -325,12 +357,15 @@ export function ValidateCollaborationSettings(
         } else {
             const chats = c['Chats'] as Record<string, unknown>;
             for (const k of Object.keys(chats)) {
-                if (!['WhoCanStart', 'AgentReplyMode', 'HistoryOnAdd'].includes(k)) {
+                if (!['WhoCanStart', 'WhoCanWrite', 'AgentReplyMode', 'HistoryOnAdd'].includes(k)) {
                     errors.push(`Unknown Chats key: ${k}`);
                 }
             }
             if (chats['WhoCanStart'] !== undefined && !['Anyone', 'Owners'].includes(chats['WhoCanStart'] as string)) {
                 errors.push(`Invalid Chats.WhoCanStart: ${String(chats['WhoCanStart'])}`);
+            }
+            if (chats['WhoCanWrite'] !== undefined && !['Contributors', 'TeamOnly', 'Owners'].includes(chats['WhoCanWrite'] as string)) {
+                errors.push(`Invalid Chats.WhoCanWrite: ${String(chats['WhoCanWrite'])}`);
             }
             if (chats['AgentReplyMode'] !== undefined && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(chats['AgentReplyMode'] as string)) {
                 errors.push(`Invalid Chats.AgentReplyMode: ${String(chats['AgentReplyMode'])}`);
@@ -338,6 +373,38 @@ export function ValidateCollaborationSettings(
             if (chats['HistoryOnAdd'] !== undefined && !['None', 'All', 'Since'].includes(chats['HistoryOnAdd'] as string)) {
                 errors.push(`Invalid Chats.HistoryOnAdd: ${String(chats['HistoryOnAdd'])}`);
             }
+        }
+    }
+
+    if (c['PromptParts'] !== undefined) {
+        if (!Array.isArray(c['PromptParts'])) {
+            errors.push('PromptParts must be an array.');
+        } else {
+            const entries = c['PromptParts'] as Array<Record<string, ConfigurationValue> | null | undefined>;
+            entries.forEach((entry, index) => {
+                if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+                    errors.push(`PromptParts[${index}] must be an object.`);
+                    return;
+                }
+                if (typeof entry['Name'] !== 'string' || !entry['Name'].trim()) {
+                    errors.push(`PromptParts[${index}].Name must be a non-empty string.`);
+                }
+                if (typeof entry['Text'] !== 'string' || !entry['Text'].trim()) {
+                    errors.push(`PromptParts[${index}].Text must be a non-empty string.`);
+                }
+                if (entry['Role'] !== undefined && !['System', 'User', 'Assistant'].includes(String(entry['Role']))) {
+                    errors.push(`PromptParts[${index}].Role must be System, User, or Assistant.`);
+                }
+                if (entry['MergeBehavior'] !== undefined && !['Override', 'Append'].includes(String(entry['MergeBehavior']))) {
+                    errors.push(`PromptParts[${index}].MergeBehavior must be Override or Append.`);
+                }
+                if (entry['Status'] !== undefined && !['Active', 'Provisional', 'Archived'].includes(String(entry['Status']))) {
+                    errors.push(`PromptParts[${index}].Status must be Active, Provisional, or Archived.`);
+                }
+                if (entry['Band'] !== undefined && !['Team', 'Shared'].includes(String(entry['Band']))) {
+                    errors.push(`PromptParts[${index}].Band must be Team or Shared.`);
+                }
+            });
         }
     }
 
@@ -463,12 +530,18 @@ export function ValidateCollaborationSettings(
             if (chats['WhoCanStart'] !== undefined && !isAllowed('Chats.WhoCanStart')) {
                 errors.push("Chats.WhoCanStart cannot be overridden by space: not in type's SpaceOverridable.");
             }
+            if (chats['WhoCanWrite'] !== undefined && !isAllowed('Chats.WhoCanWrite')) {
+                errors.push("Chats.WhoCanWrite cannot be overridden by space: not in type's SpaceOverridable.");
+            }
             if (chats['AgentReplyMode'] !== undefined && !isAllowed('Chats.AgentReplyMode')) {
                 errors.push("Chats.AgentReplyMode cannot be overridden by space: not in type's SpaceOverridable.");
             }
             if (chats['HistoryOnAdd'] !== undefined && !isAllowed('Chats.HistoryOnAdd')) {
                 errors.push("Chats.HistoryOnAdd cannot be overridden by space: not in type's SpaceOverridable.");
             }
+        }
+        if (c['PromptParts'] !== undefined && !isAllowed('PromptParts')) {
+            errors.push("PromptParts cannot be overridden by space: not in type's SpaceOverridable.");
         }
         if (c['Agents'] && typeof c['Agents'] === 'object') {
             const agents = c['Agents'] as Record<string, unknown>;
@@ -562,6 +635,25 @@ export function ResolveCollaborationSettings(
         DEFAULT_COLLABORATION_SETTINGS.Chats.WhoCanStart
     );
 
+    const whoCanWriteRank = (val: ChatWhoCanWrite | undefined): number => {
+        if (val === 'Owners') return 2;
+        if (val === 'TeamOnly') return 1;
+        if (val === 'Contributors') return 0;
+        return -1;
+    };
+    const writeCandidates: Array<ChatWhoCanWrite | undefined> = [
+        appConfig.Chats?.WhoCanWrite,
+        typeConfig?.Chats?.WhoCanWrite,
+        ...(isOverridable('Chats.WhoCanWrite') ? [...spaces].reverse().map((s) => s.Chats?.WhoCanWrite) : []),
+    ];
+    let whoCanWrite: ChatWhoCanWrite | undefined;
+    for (const candidate of writeCandidates) {
+        if (!candidate) continue;
+        if (!whoCanWrite || whoCanWriteRank(candidate) > whoCanWriteRank(whoCanWrite)) {
+            whoCanWrite = candidate;
+        }
+    }
+
     const agentReplyMode = resolveScalar(
         'Chats.AgentReplyMode',
         s => s.Chats?.AgentReplyMode,
@@ -636,6 +728,7 @@ export function ResolveCollaborationSettings(
         StorageAccountID: storageAccountId,
         Chats: {
             WhoCanStart: whoCanStart,
+            ...(whoCanWrite ? { WhoCanWrite: whoCanWrite } : {}),
             AgentReplyMode: agentReplyMode,
             HistoryOnAdd: historyOnAdd,
         },

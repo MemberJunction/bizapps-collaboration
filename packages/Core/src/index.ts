@@ -88,6 +88,7 @@ export {
 } from './configuration.js';
 export type {
     CollaborationSettings,
+    ChatWhoCanWrite,
     ConfigurationValue,
     EffectiveSpaceRules,
     ISpaceConfiguration,
@@ -96,7 +97,52 @@ export type {
     DataReachDeclaration,
     ResolveCollaborationSettingsParams,
     ResolvedCollaborationSettings,
+    ScopedPromptPartConfigEntry,
 } from './configuration.js';
+export {
+    evaluateSpaceChatWriteRules,
+    resolveNonLooseningWhoCanWrite,
+    type ChatWriteOperation,
+    type ChatWriteRuleEvaluationInput,
+    type ChatWriteSpaceChatSummary,
+    type ChatWriteVerdict,
+} from './chat-write-rules.js';
+export {
+    resolveScopedPromptParts,
+    type AssembledPromptMessage,
+    type ResolvedScopedPromptPart,
+    type ScopedPromptPartInput,
+    type ScopedPromptPartMergeBehavior,
+    type ScopedPromptPartRole,
+    type ScopedPromptPartScopeLevel,
+    type ScopedPromptPartStatus,
+    type ScopedPromptPartTargetScope,
+    type ScopedPromptResolutionResult,
+    type ScopedPromptSecondaryValue,
+} from './scoped-prompt-parts.js';
+export {
+    assertSubstrateContractPassed,
+    buildContractPromptFixtures,
+    COLLABORATION_SUBSTRATE_CONTRACT_SCENARIOS,
+    DEFAULT_SUBSTRATE_CONTRACT_FIXTURE_IDS,
+    registerCollaborationSubstrateContractTests,
+    runCollaborationSubstrateContractTests,
+    SUBSTRATE_CONTRACT_VERSION,
+    type CollaborationSubstrateContract,
+    type SpaceDetailsMap,
+    type SpaceDetailValue,
+    type SubstrateChatWriteRequest,
+    type SubstrateContractAssertionResult,
+    type SubstrateContractFactory,
+    type SubstrateContractScenarioDescriptor,
+    type SubstrateContractScenarioId,
+    type SubstrateContractScenarioResult,
+    type SubstrateContractSuiteReport,
+    type SubstrateContractTestContext,
+    type SubstrateEnsureSpaceRequest,
+    type SubstrateEnsureSpaceResult,
+    type SubstrateScopedPromptRequest,
+} from './substrate-contract.js';
 export { typeSeatsAudience, validateDataReachDeclaration } from './configuration.js';
 export {
     ResolveSpaceConfiguration,
