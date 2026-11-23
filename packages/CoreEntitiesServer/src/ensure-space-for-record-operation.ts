@@ -5,6 +5,7 @@
  * refuses, which `EnsureSpaceForRecord` asks on the way.
  */
 import { type IMetadataProvider, LogError, RunView, type UserInfo } from '@memberjunction/core';
+import type { SpaceDetailsMap } from '@mj-biz-apps/collaboration-core';
 import { EnsureSpaceForRecord } from './ensure-space-for-record.js';
 import { asMetadata } from './uuid.js';
 
@@ -15,6 +16,7 @@ export interface EnsureSpaceForRecordInput {
     SpaceName?: string | null;
     AnchorRole?: string | null;
     InheritsMembership?: boolean | null;
+    Details?: SpaceDetailsMap | null;
 }
 
 export interface EnsureSpaceForRecordOutcome {
@@ -39,7 +41,7 @@ export async function ensureSpaceForRecordForUser(provider: IMetadataProvider, u
     // The record, read as the caller: row-level security decides whether they see it at all
     const key = entity.PrimaryKeys[0];
     const value = recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId;
-    const read = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>({
+    const read = await RunView.FromMetadataProvider(provider).RunView<Record<string, string | number | null>>({
         EntityName: entity.Name,
         ExtraFilter: `[${key.Name}] = '${value.replace(/'/g, "''")}'`,
         Fields: [key.Name],
@@ -57,6 +59,7 @@ export async function ensureSpaceForRecordForUser(provider: IMetadataProvider, u
             spaceName: input.SpaceName?.trim() || undefined,
             anchorRole: input.AnchorRole?.trim() || undefined,
             inheritsMembership: input.InheritsMembership ?? undefined,
+            details: input.Details ?? undefined,
             contextUser: user,
             provider,
         });

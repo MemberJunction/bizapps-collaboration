@@ -1,6 +1,8 @@
-import { type BaseEntity, type DatabaseProviderBase, EntityFieldTSType, LogError, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
-import { ownDetailFields, type mjBizAppsCollaborationSpaceEntity, type mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
+import { type BaseEntity, type DatabaseProviderBase, LogError, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
+import type { SpaceDetailsMap } from '@mj-biz-apps/collaboration-core';
+import { type mjBizAppsCollaborationSpaceEntity, type mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from './CollaborationEngine.js';
+import { applySubtypeDetails } from './subtype-details.js';
 import { parseUuid } from './uuid.js';
 
 const SPACE_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
@@ -17,17 +19,10 @@ export interface CreateSpaceInput {
     /** Whether the space's members come from its parent (D22: the creator chooses). A top-level space has no parent to inherit from; default true. */
     InheritsMembership?: boolean;
     /** The subtype's own columns, by field name. Only what the type's subtype adds to a space is accepted. */
-    Details?: Record<string, unknown> | null;
+    Details?: SpaceDetailsMap | null;
 }
 
 export type CreateSpaceResult = { status: 'created'; spaceId: string } | { status: 'refused'; message: string };
-
-/** Puts a value from JSON where the entity field wants it: a date field takes a Date, not its text. */
-function asFieldValue(leaf: BaseEntity, name: string, value: unknown): unknown {
-    const field = leaf.EntityInfo.Fields.find((f) => f.Name === name);
-    if (field?.TSType === EntityFieldTSType.Date && typeof value === 'string') return new Date(value);
-    return value;
-}
 
 /**
  * Makes a top-level space of a type, and seats the person who makes it as its owner, in one transaction: the space (through its
@@ -67,10 +62,9 @@ export async function createSpace(provider: DatabaseProviderBase, user: UserInfo
     const attached = await space.EnsureISAChild();
     const leaf: BaseEntity = attached ? space.LeafEntity : space;
 
-    const allowed = new Set(attached ? ownDetailFields(attached).map((f) => f.name) : []);
-    for (const [field, value] of Object.entries(input.Details ?? {})) {
-        if (!allowed.has(field)) return { status: 'refused', message: `${field} is not a detail of a ${type.Name} space.` };
-        leaf.Set(field, asFieldValue(leaf, field, value));
+    const detailRefusal = applySubtypeDetails(leaf, attached, type.Name, input.Details);
+    if (detailRefusal) {
+        return { status: 'refused', message: detailRefusal };
     }
 
     await provider.BeginTransaction();

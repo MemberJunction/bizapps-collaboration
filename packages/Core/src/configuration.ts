@@ -13,6 +13,50 @@ export type ConfigurationValue =
     | ConfigurationValue[]
     | { [key: string]: ConfigurationValue };
 
+/** Strictly-typed input candidate for configuration validation helpers (zero `any`/`unknown`). */
+export type ConfigurationJsonInput =
+    | CollaborationSettings
+    | object
+    | string
+    | number
+    | boolean
+    | null
+    | undefined;
+
+type RawConfigValue =
+    | ConfigurationValue
+    | object
+    | undefined;
+
+type RawConfigObject = Record<string, RawConfigValue>;
+
+/** Write policy for space chats: non-loosening across Type -> Root -> Space. */
+export type ChatWhoCanWrite = 'Contributors' | 'TeamOnly' | 'Owners';
+
+/** Per-root delivery principal configuration (CA-4): non-loosening across Type -> Root -> Space. */
+export interface DeliveryPrincipalConfig {
+    /** Configured MJ User ID attributed to promoted / outbound SupportsAudience outputs for this root. */
+    UserID?: string | null;
+    /** Optional allowlist of permitted principal User IDs (sub-spaces may narrow, never widen). */
+    AllowedPrincipalUserIDs?: string[];
+    /** Must remain false/undefined: never silently fall back to the approving user's personal identity. */
+    AllowFallbackToCaller?: false;
+}
+
+/** Declarative scoped prompt part entry that may live in SpaceType/Space configuration. */
+export interface ScopedPromptPartConfigEntry {
+    ID?: string | null;
+    PromptID?: string | null;
+    Name: string;
+    Role?: 'System' | 'User' | 'Assistant';
+    Text: string;
+    Sort?: number;
+    Priority?: number;
+    MergeBehavior?: 'Override' | 'Append';
+    Status?: 'Active' | 'Provisional' | 'Archived';
+    Band?: 'Team' | 'Shared';
+}
+
 /**
  * The single typed settings shape for BizApps Collaboration at every level
  * (App, SpaceType, Space, SubSpace).
@@ -24,16 +68,24 @@ export interface CollaborationSettings {
     Chats?: {
         /** Who may start a chat. Default 'Anyone': anyone whose seat can post (a guest who can't post can't start one either). 'Owners' narrows it to owners. */
         WhoCanStart?: 'Anyone' | 'Owners';
+        /** Who may post writes in space chats (non-loosening narrowing across Type -> Root -> Space). Default 'Contributors'. */
+        WhoCanWrite?: ChatWhoCanWrite;
         /** When an agent replies. Default 'MentionOrOneToOne'. */
         AgentReplyMode?: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         /** The choice preselected when someone is added to an existing chat. Default 'None'. */
         HistoryOnAdd?: 'None' | 'All' | 'Since';
     };
+    /** Optional scoped prompt part declarations at this level (CX-4). */
+    PromptParts?: ScopedPromptPartConfigEntry[];
     /** Agent inheritance rules. */
     Agents?: {
         /** How this level's SpaceAgent rows combine with the list above. Default 'Extend'. */
         ListMode?: 'Extend' | 'Replace';
+        /** When true, action grants with server-side bindings are exposed to space agents with hidden bound params stripped (CX-3). */
+        EnableBoundActionGrants?: boolean;
     };
+    /** Per-root delivery principal configuration (CA-4). */
+    DeliveryPrincipal?: DeliveryPrincipalConfig;
     /** Word overrides: tab labels, e.g. { Tabs: { Library: 'Papers', People: 'Members' } }, and the two bands' names (item 53). */
     Labels?: {
         Tabs?: Record<string, string>;
@@ -71,7 +123,7 @@ export interface DataReachDeclaration {
 }
 
 /** Checks one DataReach declaration; the errors name the index so a list of them reads well. */
-export function validateDataReachDeclaration(declaration: unknown, index: number): string[] {
+export function validateDataReachDeclaration(declaration: ConfigurationJsonInput, index: number): string[] {
     const at = `DataReach[${index}]`;
     if (!declaration || typeof declaration !== 'object' || Array.isArray(declaration)) return [`${at} must be an object.`];
     const d = declaration as Partial<DataReachDeclaration>;
@@ -97,6 +149,12 @@ export interface EffectiveSpaceRules {
     };
     Agents: {
         ListMode: 'Extend' | 'Replace';
+        EnableBoundActionGrants?: boolean;
+    };
+    DeliveryPrincipal?: {
+        UserID: string | null;
+        AllowedPrincipalUserIDs?: string[];
+        AllowFallbackToCaller: false;
     };
     Labels?: { Tabs?: Record<string, string> };
     Extensions: Record<string, Record<string, ConfigurationValue>>;
@@ -118,7 +176,7 @@ export const DEFAULT_SPACE_RULES: EffectiveSpaceRules = {
 /**
  * Validates a SpaceTypeConfiguration object structure.
  */
-export function validateSpaceTypeConfiguration(config: unknown): { valid: boolean; errors: string[] } {
+export function validateSpaceTypeConfiguration(config: ConfigurationJsonInput): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
     if (!config || typeof config !== 'object' || Array.isArray(config)) {
         return { valid: false, errors: ['Configuration must be a non-null object.'] };
@@ -129,6 +187,9 @@ export function validateSpaceTypeConfiguration(config: unknown): { valid: boolea
     if (c.Chats) {
         if (c.Chats.WhoCanStart && !['Anyone', 'Owners'].includes(c.Chats.WhoCanStart)) {
             errors.push(`Invalid Chats.WhoCanStart: ${c.Chats.WhoCanStart}`);
+        }
+        if (c.Chats.WhoCanWrite && !['Contributors', 'TeamOnly', 'Owners'].includes(c.Chats.WhoCanWrite)) {
+            errors.push(`Invalid Chats.WhoCanWrite: ${c.Chats.WhoCanWrite}`);
         }
         if (c.Chats.AgentReplyMode && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(c.Chats.AgentReplyMode)) {
             errors.push(`Invalid Chats.AgentReplyMode: ${c.Chats.AgentReplyMode}`);
@@ -179,7 +240,7 @@ export function validateSpaceTypeConfiguration(config: unknown): { valid: boolea
  * Validates a SpaceConfiguration against allowed overridable keys from its SpaceType.
  */
 export function validateSpaceConfiguration(
-    spaceConfig: unknown,
+    spaceConfig: ConfigurationJsonInput,
     typeConfig: ISpaceTypeConfiguration | null | undefined
 ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
@@ -195,11 +256,17 @@ export function validateSpaceConfiguration(
     if (sc.Chats?.WhoCanStart && !overridable.has('Chats.WhoCanStart')) {
         errors.push("Chats.WhoCanStart cannot be overridden by space: not in type's SpaceOverridable.");
     }
+    if (sc.Chats?.WhoCanWrite && !overridable.has('Chats.WhoCanWrite') && !overridable.has('Chats')) {
+        errors.push("Chats.WhoCanWrite cannot be overridden by space: not in type's SpaceOverridable.");
+    }
     if (sc.Chats?.AgentReplyMode && !overridable.has('Chats.AgentReplyMode')) {
         errors.push("Chats.AgentReplyMode cannot be overridden by space: not in type's SpaceOverridable.");
     }
     if (sc.Chats?.HistoryOnAdd && !overridable.has('Chats.HistoryOnAdd')) {
         errors.push("Chats.HistoryOnAdd cannot be overridden by space: not in type's SpaceOverridable.");
+    }
+    if (sc.PromptParts !== undefined && !overridable.has('PromptParts')) {
+        errors.push("PromptParts cannot be overridden by space: not in type's SpaceOverridable.");
     }
     if (sc.Agents?.ListMode && !overridable.has('Agents.ListMode')) {
         errors.push("Agents.ListMode cannot be overridden by space: not in type's SpaceOverridable.");
@@ -249,11 +316,18 @@ export interface ResolvedCollaborationSettings {
     StorageAccountID: string | null;
     Chats: {
         WhoCanStart: 'Anyone' | 'Owners';
+        WhoCanWrite?: ChatWhoCanWrite;
         AgentReplyMode: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         HistoryOnAdd: 'None' | 'All' | 'Since';
     };
     Agents: {
         ListMode: 'Extend' | 'Replace';
+        EnableBoundActionGrants?: boolean;
+    };
+    DeliveryPrincipal?: {
+        UserID: string | null;
+        AllowedPrincipalUserIDs?: string[];
+        AllowFallbackToCaller: false;
     };
     Labels?: {
         Tabs?: Record<string, string>;
@@ -283,7 +357,9 @@ export const DEFAULT_COLLABORATION_SETTINGS: ResolvedCollaborationSettings = {
 const KNOWN_SETTINGS_KEYS = new Set([
     'StorageAccountID',
     'Chats',
+    'PromptParts',
     'Agents',
+    'DeliveryPrincipal',
     'Labels',
     'Children',
     'SpaceOverridable',
@@ -293,12 +369,14 @@ const KNOWN_SETTINGS_KEYS = new Set([
     'Extensions',
 ]);
 
+const CONFIG_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Validates any CollaborationSettings JSON object against the shape and rules.
  * Refuses unknown keys, wrong enum/data values, and enforces SpaceOverridable on space level.
  */
 export function ValidateCollaborationSettings(
-    config: unknown,
+    config: ConfigurationJsonInput,
     level: 'app' | 'type' | 'space',
     typeConfig?: CollaborationSettings | null
 ): { valid: boolean; errors: string[] } {
@@ -307,7 +385,7 @@ export function ValidateCollaborationSettings(
         return { valid: false, errors: ['Configuration must be a non-null object.'] };
     }
 
-    const c = config as Record<string, unknown>;
+    const c = config as RawConfigObject;
 
     for (const key of Object.keys(c)) {
         if (!KNOWN_SETTINGS_KEYS.has(key)) {
@@ -323,14 +401,17 @@ export function ValidateCollaborationSettings(
         if (!c['Chats'] || typeof c['Chats'] !== 'object' || Array.isArray(c['Chats'])) {
             errors.push('Chats must be an object.');
         } else {
-            const chats = c['Chats'] as Record<string, unknown>;
+            const chats = c['Chats'] as RawConfigObject;
             for (const k of Object.keys(chats)) {
-                if (!['WhoCanStart', 'AgentReplyMode', 'HistoryOnAdd'].includes(k)) {
+                if (!['WhoCanStart', 'WhoCanWrite', 'AgentReplyMode', 'HistoryOnAdd'].includes(k)) {
                     errors.push(`Unknown Chats key: ${k}`);
                 }
             }
             if (chats['WhoCanStart'] !== undefined && !['Anyone', 'Owners'].includes(chats['WhoCanStart'] as string)) {
                 errors.push(`Invalid Chats.WhoCanStart: ${String(chats['WhoCanStart'])}`);
+            }
+            if (chats['WhoCanWrite'] !== undefined && !['Contributors', 'TeamOnly', 'Owners'].includes(chats['WhoCanWrite'] as string)) {
+                errors.push(`Invalid Chats.WhoCanWrite: ${String(chats['WhoCanWrite'])}`);
             }
             if (chats['AgentReplyMode'] !== undefined && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(chats['AgentReplyMode'] as string)) {
                 errors.push(`Invalid Chats.AgentReplyMode: ${String(chats['AgentReplyMode'])}`);
@@ -341,18 +422,77 @@ export function ValidateCollaborationSettings(
         }
     }
 
+    if (c['PromptParts'] !== undefined) {
+        if (!Array.isArray(c['PromptParts'])) {
+            errors.push('PromptParts must be an array.');
+        } else {
+            const entries = c['PromptParts'] as Array<Record<string, ConfigurationValue> | null | undefined>;
+            entries.forEach((entry, index) => {
+                if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+                    errors.push(`PromptParts[${index}] must be an object.`);
+                    return;
+                }
+                if (typeof entry['Name'] !== 'string' || !entry['Name'].trim()) {
+                    errors.push(`PromptParts[${index}].Name must be a non-empty string.`);
+                }
+                if (typeof entry['Text'] !== 'string' || !entry['Text'].trim()) {
+                    errors.push(`PromptParts[${index}].Text must be a non-empty string.`);
+                }
+                if (entry['Role'] !== undefined && !['System', 'User', 'Assistant'].includes(String(entry['Role']))) {
+                    errors.push(`PromptParts[${index}].Role must be System, User, or Assistant.`);
+                }
+                if (entry['MergeBehavior'] !== undefined && !['Override', 'Append'].includes(String(entry['MergeBehavior']))) {
+                    errors.push(`PromptParts[${index}].MergeBehavior must be Override or Append.`);
+                }
+                if (entry['Status'] !== undefined && !['Active', 'Provisional', 'Archived'].includes(String(entry['Status']))) {
+                    errors.push(`PromptParts[${index}].Status must be Active, Provisional, or Archived.`);
+                }
+                if (entry['Band'] !== undefined && !['Team', 'Shared'].includes(String(entry['Band']))) {
+                    errors.push(`PromptParts[${index}].Band must be Team or Shared.`);
+                }
+            });
+        }
+    }
+
     if (c['Agents'] !== undefined) {
         if (!c['Agents'] || typeof c['Agents'] !== 'object' || Array.isArray(c['Agents'])) {
             errors.push('Agents must be an object.');
         } else {
-            const agents = c['Agents'] as Record<string, unknown>;
+            const agents = c['Agents'] as RawConfigObject;
             for (const k of Object.keys(agents)) {
-                if (!['ListMode'].includes(k)) {
+                if (!['ListMode', 'EnableBoundActionGrants'].includes(k)) {
                     errors.push(`Unknown Agents key: ${k}`);
                 }
             }
             if (agents['ListMode'] !== undefined && !['Extend', 'Replace'].includes(agents['ListMode'] as string)) {
                 errors.push(`Invalid Agents.ListMode: ${String(agents['ListMode'])}`);
+            }
+            if (agents['EnableBoundActionGrants'] !== undefined && typeof agents['EnableBoundActionGrants'] !== 'boolean') {
+                errors.push('Agents.EnableBoundActionGrants must be a boolean.');
+            }
+        }
+    }
+
+    if (c['DeliveryPrincipal'] !== undefined) {
+        const dp = c['DeliveryPrincipal'] as DeliveryPrincipalConfig | null;
+        if (!dp || typeof dp !== 'object' || Array.isArray(dp)) {
+            errors.push('DeliveryPrincipal must be an object.');
+        } else {
+            for (const k of Object.keys(dp)) {
+                if (!['UserID', 'AllowedPrincipalUserIDs', 'AllowFallbackToCaller'].includes(k)) {
+                    errors.push(`Unknown DeliveryPrincipal key: ${k}`);
+                }
+            }
+            if (dp.UserID !== undefined && dp.UserID !== null && (typeof dp.UserID !== 'string' || !CONFIG_UUID_RE.test(dp.UserID.trim()))) {
+                errors.push('DeliveryPrincipal.UserID must be a valid UUID string or null.');
+            }
+            if (dp.AllowedPrincipalUserIDs !== undefined) {
+                if (!Array.isArray(dp.AllowedPrincipalUserIDs) || dp.AllowedPrincipalUserIDs.some((id) => typeof id !== 'string' || !CONFIG_UUID_RE.test(id.trim()))) {
+                    errors.push('DeliveryPrincipal.AllowedPrincipalUserIDs must be an array of valid UUID strings.');
+                }
+            }
+            if (dp.AllowFallbackToCaller !== undefined && dp.AllowFallbackToCaller !== false) {
+                errors.push('DeliveryPrincipal.AllowFallbackToCaller cannot be true; fallback to caller identity is forbidden.');
             }
         }
     }
@@ -361,14 +501,14 @@ export function ValidateCollaborationSettings(
         if (!c['Labels'] || typeof c['Labels'] !== 'object' || Array.isArray(c['Labels'])) {
             errors.push('Labels must be an object.');
         } else {
-            const labels = c['Labels'] as Record<string, unknown>;
+            const labels = c['Labels'] as RawConfigObject;
             if (labels['Tabs'] !== undefined) {
                 if (!labels['Tabs'] || typeof labels['Tabs'] !== 'object' || Array.isArray(labels['Tabs'])) {
                     errors.push('Labels.Tabs must be an object.');
                 }
             }
             if (labels['Bands'] !== undefined) {
-                const bands = labels['Bands'] as Record<string, unknown> | null;
+                const bands = labels['Bands'] as RawConfigObject | null;
                 if (!bands || typeof bands !== 'object' || Array.isArray(bands)) errors.push('Labels.Bands must be an object.');
                 else {
                     for (const [band, name] of Object.entries(bands)) {
@@ -384,7 +524,7 @@ export function ValidateCollaborationSettings(
         if (!c['Children'] || typeof c['Children'] !== 'object' || Array.isArray(c['Children'])) {
             errors.push('Children must be an object.');
         } else {
-            const ch = c['Children'] as Record<string, unknown>;
+            const ch = c['Children'] as RawConfigObject;
             if (ch['AllowedTypeCodes'] !== undefined && !Array.isArray(ch['AllowedTypeCodes'])) {
                 errors.push('Children.AllowedTypeCodes must be an array of strings.');
             }
@@ -399,7 +539,7 @@ export function ValidateCollaborationSettings(
     }
 
     if (c['Seats'] !== undefined) {
-        const seats = c['Seats'] as Record<string, unknown> | null;
+        const seats = c['Seats'] as RawConfigObject | null;
         if (!seats || typeof seats !== 'object' || Array.isArray(seats)) {
             errors.push('Seats must be an object.');
         } else if (seats['Audience'] !== undefined && !['StaffOnly', 'StaffAndParticipants'].includes(seats['Audience'] as string)) {
@@ -418,7 +558,7 @@ export function ValidateCollaborationSettings(
         const grants = c['Grants'];
         if (!grants || typeof grants !== 'object' || Array.isArray(grants)) errors.push('Grants must be an object keyed by grant kind.');
         else {
-            for (const [kind, rule] of Object.entries(grants as Record<string, { ListMode?: unknown } | null>)) {
+            for (const [kind, rule] of Object.entries(grants as Record<string, { ListMode?: RawConfigValue } | null>)) {
                 if (!isGrantKind(kind)) errors.push(`Grants.${kind}: not a grant kind (${GRANT_KINDS.join(', ')}).`);
                 else if (rule?.ListMode !== undefined && !['Extend', 'Replace'].includes(rule.ListMode as string)) errors.push(`Invalid Grants.${kind}.ListMode: ${String(rule.ListMode)}`);
             }
@@ -426,17 +566,17 @@ export function ValidateCollaborationSettings(
     }
     if (c['DataReach'] !== undefined) {
         if (!Array.isArray(c['DataReach'])) errors.push('DataReach must be an array of declarations.');
-        else c['DataReach'].forEach((declaration, index) => errors.push(...validateDataReachDeclaration(declaration, index)));
+        else (c['DataReach'] as ConfigurationJsonInput[]).forEach((declaration, index) => errors.push(...validateDataReachDeclaration(declaration, index)));
     }
 
     if (level === 'app') {
         // The app's row sets every key: a key left out would silently fall back to the code's default, and then a typo or a
         // half-written row would look like a working configuration (extensibility plan § 4)
-        const requiredKeys: Array<[string, unknown]> = [
-            ['Chats.WhoCanStart', (c['Chats'] as Record<string, unknown> | undefined)?.['WhoCanStart']],
-            ['Chats.AgentReplyMode', (c['Chats'] as Record<string, unknown> | undefined)?.['AgentReplyMode']],
-            ['Chats.HistoryOnAdd', (c['Chats'] as Record<string, unknown> | undefined)?.['HistoryOnAdd']],
-            ['Agents.ListMode', (c['Agents'] as Record<string, unknown> | undefined)?.['ListMode']],
+        const requiredKeys: Array<[string, RawConfigValue]> = [
+            ['Chats.WhoCanStart', (c['Chats'] as RawConfigObject | undefined)?.['WhoCanStart']],
+            ['Chats.AgentReplyMode', (c['Chats'] as RawConfigObject | undefined)?.['AgentReplyMode']],
+            ['Chats.HistoryOnAdd', (c['Chats'] as RawConfigObject | undefined)?.['HistoryOnAdd']],
+            ['Agents.ListMode', (c['Agents'] as RawConfigObject | undefined)?.['ListMode']],
         ];
         for (const [key, value] of requiredKeys) {
             if (value === undefined) errors.push(`The application's settings must set ${key}.`);
@@ -459,9 +599,12 @@ export function ValidateCollaborationSettings(
             errors.push("StorageAccountID cannot be overridden by space: not in type's SpaceOverridable.");
         }
         if (c['Chats'] && typeof c['Chats'] === 'object') {
-            const chats = c['Chats'] as Record<string, unknown>;
+            const chats = c['Chats'] as RawConfigObject;
             if (chats['WhoCanStart'] !== undefined && !isAllowed('Chats.WhoCanStart')) {
                 errors.push("Chats.WhoCanStart cannot be overridden by space: not in type's SpaceOverridable.");
+            }
+            if (chats['WhoCanWrite'] !== undefined && !isAllowed('Chats.WhoCanWrite')) {
+                errors.push("Chats.WhoCanWrite cannot be overridden by space: not in type's SpaceOverridable.");
             }
             if (chats['AgentReplyMode'] !== undefined && !isAllowed('Chats.AgentReplyMode')) {
                 errors.push("Chats.AgentReplyMode cannot be overridden by space: not in type's SpaceOverridable.");
@@ -470,10 +613,35 @@ export function ValidateCollaborationSettings(
                 errors.push("Chats.HistoryOnAdd cannot be overridden by space: not in type's SpaceOverridable.");
             }
         }
+        if (c['PromptParts'] !== undefined && !isAllowed('PromptParts')) {
+            errors.push("PromptParts cannot be overridden by space: not in type's SpaceOverridable.");
+        }
         if (c['Agents'] && typeof c['Agents'] === 'object') {
-            const agents = c['Agents'] as Record<string, unknown>;
+            const agents = c['Agents'] as RawConfigObject;
             if (agents['ListMode'] !== undefined && !isAllowed('Agents.ListMode')) {
                 errors.push("Agents.ListMode cannot be overridden by space: not in type's SpaceOverridable.");
+            }
+            if (agents['EnableBoundActionGrants'] !== undefined && !isAllowed('Agents.EnableBoundActionGrants')) {
+                errors.push("Agents.EnableBoundActionGrants cannot be overridden by space: not in type's SpaceOverridable.");
+            }
+        }
+        if (c['DeliveryPrincipal'] !== undefined) {
+            if (!isAllowed('DeliveryPrincipal') && !isAllowed('DeliveryPrincipal.UserID')) {
+                errors.push("DeliveryPrincipal cannot be overridden by space: not in type's SpaceOverridable.");
+            } else {
+                const spaceDp = c['DeliveryPrincipal'] as DeliveryPrincipalConfig | null;
+                const typeAllowed = typeConfig?.DeliveryPrincipal?.AllowedPrincipalUserIDs;
+                if (spaceDp?.AllowedPrincipalUserIDs !== undefined) {
+                    if (!typeAllowed || spaceDp.AllowedPrincipalUserIDs.some((id) => !typeAllowed.some((tId) => tId.toLowerCase() === id.toLowerCase()))) {
+                        errors.push('DeliveryPrincipal.AllowedPrincipalUserIDs on a space cannot widen the space type allowlist.');
+                    }
+                }
+                if (spaceDp?.UserID && typeAllowed && typeAllowed.length > 0) {
+                    const match = typeAllowed.some((tId) => tId.toLowerCase() === spaceDp.UserID!.toLowerCase());
+                    if (!match) {
+                        errors.push('DeliveryPrincipal.UserID on a space must belong to the space type AllowedPrincipalUserIDs.');
+                    }
+                }
             }
         }
         if (c['Grants'] && typeof c['Grants'] === 'object') {
@@ -562,6 +730,25 @@ export function ResolveCollaborationSettings(
         DEFAULT_COLLABORATION_SETTINGS.Chats.WhoCanStart
     );
 
+    const whoCanWriteRank = (val: ChatWhoCanWrite | undefined): number => {
+        if (val === 'Owners') return 2;
+        if (val === 'TeamOnly') return 1;
+        if (val === 'Contributors') return 0;
+        return -1;
+    };
+    const writeCandidates: Array<ChatWhoCanWrite | undefined> = [
+        appConfig.Chats?.WhoCanWrite,
+        typeConfig?.Chats?.WhoCanWrite,
+        ...(isOverridable('Chats.WhoCanWrite') ? [...spaces].reverse().map((s) => s.Chats?.WhoCanWrite) : []),
+    ];
+    let whoCanWrite: ChatWhoCanWrite | undefined;
+    for (const candidate of writeCandidates) {
+        if (!candidate) continue;
+        if (!whoCanWrite || whoCanWriteRank(candidate) > whoCanWriteRank(whoCanWrite)) {
+            whoCanWrite = candidate;
+        }
+    }
+
     const agentReplyMode = resolveScalar(
         'Chats.AgentReplyMode',
         s => s.Chats?.AgentReplyMode,
@@ -579,6 +766,40 @@ export function ResolveCollaborationSettings(
         s => s.Agents?.ListMode,
         DEFAULT_COLLABORATION_SETTINGS.Agents.ListMode
     );
+    const enableBoundActionGrants = resolveScalar(
+        'Agents.EnableBoundActionGrants',
+        s => s.Agents?.EnableBoundActionGrants,
+        undefined
+    );
+
+    const resolveDeliveryPrincipal = (): ResolvedCollaborationSettings['DeliveryPrincipal'] => {
+        // Non-loosening: type/app allowlist acts as ceiling if specified.
+        const typeAllowed = typeConfig?.DeliveryPrincipal?.AllowedPrincipalUserIDs ?? appConfig.DeliveryPrincipal?.AllowedPrincipalUserIDs;
+        let allowedPrincipalUserIDs: string[] | undefined = typeAllowed ? [...typeAllowed] : undefined;
+        let resolvedUserId: string | null = null;
+        if (isOverridable('DeliveryPrincipal') || isOverridable('DeliveryPrincipal.UserID')) {
+            for (const s of spaces) {
+                const candidate = s.DeliveryPrincipal?.UserID;
+                if (candidate && (!allowedPrincipalUserIDs || allowedPrincipalUserIDs.some((a) => a.toLowerCase() === candidate.toLowerCase()))) {
+                    resolvedUserId = candidate;
+                    break;
+                }
+            }
+        }
+        if (!resolvedUserId && typeConfig?.DeliveryPrincipal?.UserID) {
+            resolvedUserId = typeConfig.DeliveryPrincipal.UserID;
+        }
+        if (!resolvedUserId && appConfig.DeliveryPrincipal?.UserID) {
+            resolvedUserId = appConfig.DeliveryPrincipal.UserID;
+        }
+        if (!resolvedUserId && !allowedPrincipalUserIDs) return undefined;
+        return {
+            UserID: resolvedUserId,
+            ...(allowedPrincipalUserIDs ? { AllowedPrincipalUserIDs: allowedPrincipalUserIDs } : {}),
+            AllowFallbackToCaller: false,
+        };
+    };
+    const deliveryPrincipal = resolveDeliveryPrincipal();
 
     // Tab keys merge without regard to case: the app's 'Library' and a type's 'library' are one key, and the nearer level wins
     const mergeTabs = (into: Record<string, string>, from: Record<string, string> | undefined): Record<string, string> => {
@@ -636,12 +857,15 @@ export function ResolveCollaborationSettings(
         StorageAccountID: storageAccountId,
         Chats: {
             WhoCanStart: whoCanStart,
+            ...(whoCanWrite ? { WhoCanWrite: whoCanWrite } : {}),
             AgentReplyMode: agentReplyMode,
             HistoryOnAdd: historyOnAdd,
         },
         Agents: {
             ListMode: listMode,
+            ...(enableBoundActionGrants !== undefined ? { EnableBoundActionGrants: enableBoundActionGrants } : {}),
         },
+        ...(deliveryPrincipal ? { DeliveryPrincipal: deliveryPrincipal } : {}),
         Labels: tabs || bands ? { ...(tabs ? { Tabs: tabs } : {}), ...(bands ? { Bands: bands } : {}) } : undefined,
         Children: typeConfig?.Children,
         Extensions: extensions,

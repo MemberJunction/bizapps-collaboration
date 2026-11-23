@@ -88,7 +88,10 @@ export {
 } from './configuration.js';
 export type {
     CollaborationSettings,
+    ChatWhoCanWrite,
+    ConfigurationJsonInput,
     ConfigurationValue,
+    DeliveryPrincipalConfig,
     EffectiveSpaceRules,
     ISpaceConfiguration,
     ISpaceRules,
@@ -96,7 +99,52 @@ export type {
     DataReachDeclaration,
     ResolveCollaborationSettingsParams,
     ResolvedCollaborationSettings,
+    ScopedPromptPartConfigEntry,
 } from './configuration.js';
+export {
+    evaluateSpaceChatWriteRules,
+    resolveNonLooseningWhoCanWrite,
+    type ChatWriteOperation,
+    type ChatWriteRuleEvaluationInput,
+    type ChatWriteSpaceChatSummary,
+    type ChatWriteVerdict,
+} from './chat-write-rules.js';
+export {
+    resolveScopedPromptParts,
+    type AssembledPromptMessage,
+    type ResolvedScopedPromptPart,
+    type ScopedPromptPartInput,
+    type ScopedPromptPartMergeBehavior,
+    type ScopedPromptPartRole,
+    type ScopedPromptPartScopeLevel,
+    type ScopedPromptPartStatus,
+    type ScopedPromptPartTargetScope,
+    type ScopedPromptResolutionResult,
+    type ScopedPromptSecondaryValue,
+} from './scoped-prompt-parts.js';
+export {
+    assertSubstrateContractPassed,
+    buildContractPromptFixtures,
+    COLLABORATION_SUBSTRATE_CONTRACT_SCENARIOS,
+    DEFAULT_SUBSTRATE_CONTRACT_FIXTURE_IDS,
+    registerCollaborationSubstrateContractTests,
+    runCollaborationSubstrateContractTests,
+    SUBSTRATE_CONTRACT_VERSION,
+    type CollaborationSubstrateContract,
+    type SpaceDetailsMap,
+    type SpaceDetailValue,
+    type SubstrateChatWriteRequest,
+    type SubstrateContractAssertionResult,
+    type SubstrateContractFactory,
+    type SubstrateContractScenarioDescriptor,
+    type SubstrateContractScenarioId,
+    type SubstrateContractScenarioResult,
+    type SubstrateContractSuiteReport,
+    type SubstrateContractTestContext,
+    type SubstrateEnsureSpaceRequest,
+    type SubstrateEnsureSpaceResult,
+    type SubstrateScopedPromptRequest,
+} from './substrate-contract.js';
 export { typeSeatsAudience, validateDataReachDeclaration } from './configuration.js';
 export {
     ResolveSpaceConfiguration,
@@ -146,6 +194,7 @@ export {
     type KnowledgeSourceGrantSettings,
     type AgentLimitName,
     type AgentDefinitionForGrant,
+    type GrantInputValue,
 } from './grants.js';
 export * from './notes.js';
 export {
@@ -187,7 +236,43 @@ export {
 } from './detail-fields.js';
 export { mimeTypeForFileName } from './file-types.js';
 export { agentGrantFor, agentRunSettingsFor, audienceOfConversationKind, turnToolsFor } from './turn-tools.js';
-export type { AgentRunSettings, ChatAudience, TurnTools, WithheldAction } from './turn-tools.js';
+export type { AgentRunSettings, ChatAudience, TurnTools, TurnToolsOptions, WithheldAction } from './turn-tools.js';
+export {
+    buildBoundActionGrantExposure,
+    buildBoundActionPromptCatalog,
+    collectHiddenBoundParamNames,
+    DEFAULT_HIDDEN_BOUND_PARAM_NAMES,
+    enforceBoundActionParameters,
+    redactActionParametersForAgent,
+    resolveNonLooseningDeliveryPrincipal,
+    type ActionMetadataDescriptor,
+    type ActionParamDefinition,
+    type BoundActionEnforcementResult,
+    type BoundActionGrantExposure,
+    type BoundActionPromptCatalogItem,
+    type BoundParamPrimitive,
+    type BoundParamValue,
+    type BoundParamValuesMap,
+    type DeliveryPrincipalLevelInput,
+    type ExposedAgentActionParam,
+    type HiddenBoundParamOverridePolicy,
+    type NonLooseningPrincipalResolution,
+} from './bound-agent-action-grants.js';
+export {
+    evaluateApprovalPromotionGate,
+    evaluateDraftApprovalTaskVisibility,
+    type ApprovalPromotionGateInput,
+    type ApprovalPromotionGateVerdict,
+    type ApprovalTaskStatus,
+    type DraftVisibilityDecision,
+} from './approval-promotion.js';
+export {
+    evaluateSpaceDocAccess,
+    filterVisibleSpaceDocs,
+    type SpaceDocAccessInput,
+    type SpaceDocAccessVerdict,
+    type SpaceDocOperation,
+} from './docs-band.js';
 export {
     allowedBandsForSpace,
     hasStructuralChatScopeAccess,

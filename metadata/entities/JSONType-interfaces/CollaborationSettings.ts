@@ -16,6 +16,13 @@ export type ConfigurationValue =
     | ConfigurationValue[]
     | { [key: string]: ConfigurationValue };
 
+/** Per-root delivery principal configuration (CA-4). */
+export interface DeliveryPrincipalConfig {
+    UserID?: string | null;
+    AllowedPrincipalUserIDs?: string[];
+    AllowFallbackToCaller?: false;
+}
+
 /**
  * The single typed settings shape for BizApps Collaboration at every level
  * (App, SpaceType, Space, SubSpace).
@@ -27,6 +34,8 @@ export interface CollaborationSettings {
     Chats?: {
         /** Who may start a chat. Default 'Anyone': anyone whose seat can post (a guest who can't post can't start one either). 'Owners' narrows it to owners. */
         WhoCanStart?: 'Anyone' | 'Owners';
+        /** Who may post writes in space chats (non-loosening narrowing across Type -> Root -> Space). Default 'Contributors'. */
+        WhoCanWrite?: 'Contributors' | 'TeamOnly' | 'Owners';
         /** When an agent replies. Default 'MentionOrOneToOne'. */
         AgentReplyMode?: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         /** The choice preselected when someone is added to an existing chat. Default 'None'. */
@@ -36,7 +45,11 @@ export interface CollaborationSettings {
     Agents?: {
         /** How this level's SpaceAgent rows combine with the list above. Default 'Extend'. */
         ListMode?: 'Extend' | 'Replace';
+        /** When true, action grants with server-side bindings are exposed to space agents with hidden bound params stripped (CX-3). */
+        EnableBoundActionGrants?: boolean;
     };
+    /** Per-root delivery principal configuration (CA-4). */
+    DeliveryPrincipal?: DeliveryPrincipalConfig;
     /** Word overrides, e.g. { Tabs: { Library: 'Papers', People: 'Members' } }. */
     Labels?: {
         Tabs?: Record<string, string>;

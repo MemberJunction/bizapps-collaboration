@@ -11,11 +11,14 @@ const OWNER_ROLE = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE3';
 
 interface Setup { spaceSaves?: boolean; seatSaves?: boolean; hasSubtype?: boolean; type?: object | undefined; ownerRole?: object | undefined }
 
+type FakePropValue = string | number | boolean | Date | object | null | undefined;
+type FakeRecord = Record<string, FakePropValue | ((...args: never[]) => FakePropValue)>;
+
 /** A provider that hands out a space (with its subtype, if asked) and a seat, and records the transaction and what was written. */
 function providerFor(setup: Setup) {
     const log: string[] = [];
-    const set: Record<string, unknown> = {};
-    const seat: Record<string, unknown> = {
+    const set: Record<string, FakePropValue> = {};
+    const seat: FakeRecord = {
         NewRecord: () => undefined,
         Save: async () => { log.push('seat save'); return setup.seatSaves ?? true; },
         LatestResult: { CompleteMessage: 'seat refused' },
@@ -31,11 +34,20 @@ function providerFor(setup: Setup) {
             ParentEntityFieldNames: new Set(['Name', 'Description']),
             Name: 'Example Boards',
         },
-        Set: (name: string, value: unknown) => { set[name] = value; },
+        Set: (name: string, value: FakePropValue) => { set[name] = value; },
         Save: async () => { log.push('space save'); return setup.spaceSaves ?? true; },
         LatestResult: { CompleteMessage: 'A board may not sit here.' },
     };
-    const space: Record<string, unknown> = {
+    for (const propName of ['TermName', 'NextMeeting']) {
+        Object.defineProperty(leaf, propName, {
+            enumerable: true,
+            get: () => set[propName],
+            set: (value: FakePropValue) => {
+                set[propName] = value;
+            },
+        });
+    }
+    const space: FakeRecord = {
         ID: SPACE_ID,
         NewRecord: () => undefined,
         EnsureISAChild: async () => (setup.hasSubtype ? leaf : null),
@@ -66,9 +78,9 @@ describe('making a space and its owner seat', () => {
         heldSystem = WellKnownUserSource.Instance.GetSystemUser.bind(WellKnownUserSource.Instance);
         WellKnownUserSource.Instance.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' } as UserInfo);
         held = { config: engine.Config.bind(engine), type: engine.SpaceTypeById.bind(engine), role: engine.SpaceRoleTypeByCode.bind(engine) };
-        engine.Config = (async () => undefined) as unknown as typeof engine.Config;
-        engine.SpaceTypeById = ((id: string) => (id.toLowerCase() === TYPE_ID.toLowerCase() ? type : undefined)) as unknown as typeof engine.SpaceTypeById;
-        engine.SpaceRoleTypeByCode = ((code: string) => (code === 'owner' ? ownerRole : undefined)) as unknown as typeof engine.SpaceRoleTypeByCode;
+        engine.Config = (async () => undefined) as object as typeof engine.Config;
+        engine.SpaceTypeById = ((id: string) => (id.toLowerCase() === TYPE_ID.toLowerCase() ? type : undefined)) as object as typeof engine.SpaceTypeById;
+        engine.SpaceRoleTypeByCode = ((code: string) => (code === 'owner' ? ownerRole : undefined)) as object as typeof engine.SpaceRoleTypeByCode;
     });
     after(() => {
         WellKnownUserSource.Instance.GetSystemUser = heldSystem;

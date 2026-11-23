@@ -77,6 +77,25 @@ export { BaseSpaceSignalProvider } from './space-signal-provider.js';
 export type { SpaceSignalObservation } from './space-signal-provider.js';
 export { EnsureSpaceForRecord } from './ensure-space-for-record.js';
 export type { EnsureSpaceForRecordParams } from './ensure-space-for-record.js';
+export { applySubtypeDetails, parseSpaceDetailsJson, type ParseSpaceDetailsResult } from './subtype-details.js';
+export {
+    CollaborationChatWritePermissionProvider,
+    LoadCollaborationChatWritePermissionProvider,
+    RegisterCollaborationChatWritePermissionProvider,
+    ResetCollaborationChatWritePermissionRegistrationForTests,
+    type ChatWriteDetailSnapshot,
+    type ChatWritePermissionContext,
+} from './chat-write-permission-provider.js';
+export {
+    CollaborationPromptComponentResolver,
+    LoadCollaborationPromptComponentResolver,
+    resolveSpaceScopedPromptParts,
+    type ResolveSpaceScopedPromptPartsParams,
+} from './scoped-prompt-parts.js';
+export {
+    createCollaborationServerSubstrate,
+    type CollaborationServerSubstrateOptions,
+} from './substrate-adapter.js';
 export type {
     RetrievalRankingMode,
     SearchEngineLike,
@@ -108,7 +127,57 @@ export { loadSpaceConfiguration, typeSettingsOf } from './space-configuration.js
 export { getSpaceConfigurationForUser } from './get-space-configuration.js';
 export { ensureSpaceForRecordForUser } from './ensure-space-for-record-operation.js';
 export { resolveBindings } from './resolve-bindings.js';
-export type { BoundValue, ResolveBindingsOutcome } from './resolve-bindings.js';
+export type { BoundValue, ResolveBindingsExtraContext, ResolveBindingsOutcome } from './resolve-bindings.js';
+export {
+    resolvePerRootDeliveryPrincipal,
+    type PerRootDeliveryPrincipalFailure,
+    type PerRootDeliveryPrincipalOutcome,
+    type ResolvedPerRootDeliveryPrincipal,
+} from './delivery-principal.js';
+export {
+    CollaborationBoundActionGrantRegistry,
+    type BoundActionParamsMap,
+    type InvokeBoundSpaceAgentActionParams,
+    type ResolvedTurnBoundActions,
+} from './bound-agent-action-grants.js';
+export {
+    createSpaceDraftApprovalTask,
+    decideAndPromoteSpaceDraft,
+    DRAFT_PROMOTED_AUDIT_LOG_TYPE,
+    getSpaceApprovalTask,
+    listSpaceApprovalTasks,
+    type ApprovalWorkflowOutcome,
+    type CreateSpaceDraftApprovalInput,
+    type SpaceDraftApprovalSummary,
+} from './approval-promotion.js';
+export {
+    CollaborationSpaceItemArtifactPermissionDelegate,
+    createSpaceDoc,
+    getSpaceDoc,
+    listSpaceDocs,
+    LoadCollaborationSpaceItemArtifactPermissionDelegate,
+    promoteSpaceDocToShared,
+    updateSpaceDoc,
+    type SpaceDocOutcome,
+    type SpaceDocRecord,
+} from './space-docs.js';
+export {
+    LoadSpaceAudienceActions,
+    MANAGE_SPACE_DOC_ACTION,
+    ManageSpaceDocAction,
+    PROMOTE_SPACE_DRAFT_TO_SHARED_ACTION,
+    PromoteSpaceDraftToSharedAction,
+    PROPOSE_SPACE_AUDIENCE_OUTPUT_ACTION,
+    ProposeSpaceAudienceOutputAction,
+    PUBLISH_SPACE_SHARED_UPDATE_ACTION,
+    PublishSpaceSharedUpdateAction,
+    type SpaceActionAudienceContract,
+    type SpaceActionAudienceMode,
+    type SpaceHiddenScopeParamSpec,
+    type SpaceRunActionParams,
+    type SpaceServerBoundScopeMap,
+    type SpaceServerBoundScopeValue,
+} from './space-audience-actions.js';
 export { runSpaceView, runSpaceQuery, getSpaceDashboard, getSpaceComponent, GRANT_RUN_AUDIT_LOG_TYPE } from './grant-operations.js';
 export type { ClientValues, GrantRunRequest, RowsOutcome, DashboardOutcome, ComponentOutcome } from './grant-operations.js';
 export type { EnsureSpaceForRecordInput, EnsureSpaceForRecordOutcome } from './ensure-space-for-record-operation.js';
@@ -160,7 +229,7 @@ export {
     SCOPED_SEARCH_ACTION_ID,
     COLLABORATION_SPACE_SCOPE_ID,
 } from './turn-tools.js';
-export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant, TurnToolSourceHit } from './turn-tools.js';
+export type { ResolvedTurnTools, ResolveTurnToolsOptions, SpaceTurnContext, TurnSpaceDataGrant, TurnToolSourceHit } from './turn-tools.js';
 export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction.js';
 export type { TurnToolsGiven } from './execute-space-chat-turn.js';
 export { IsPeopleEntity, PEOPLE_ENTITY, ResolvePersonIDForUser, ResolveUserIDForPerson, ResolveUserIDsForPeople } from '@mj-biz-apps/common-entities';

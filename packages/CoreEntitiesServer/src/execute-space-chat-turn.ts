@@ -57,6 +57,8 @@ import {
     type MultiScopeTurnSearchDispatcher,
     resolveTurnKnowledgeScopes,
 } from './turn-knowledge-scopes.js';
+import { resolveSpaceScopedPromptParts } from './scoped-prompt-parts.js';
+import type { BoundActionParamsMap } from './bound-agent-action-grants.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
@@ -117,6 +119,8 @@ export interface ExecuteSpaceChatTurnInput {
     multiScopeSearch?: MultiScopeTurnSearchDispatcher;
     /** Optional page size for keyset-paged `Space Items` reads. */
     itemsPageSize?: number;
+    /** Optional CX-3 override enabling server-bound action grants on this turn even if space config omits Agents.EnableBoundActionGrants. */
+    enableBoundActionGrants?: boolean;
 }
 
 /** Candidate item in retrieval scope for the turn (sources-in-scope chip). */
@@ -484,13 +488,21 @@ async function runClaimedTurn(
         return { ok: false, message: `The agent ${targetAgentId} is not allowed in this space.` };
     }
 
-    // 7b. The turn's tools (B20) and authorized knowledge scopes (CT-3):
+    // 7b. The turn's tools (B20 / CX-3) and authorized knowledge scopes (CT-3):
     const audience = isOneToOneAssistant
         ? (reach.role.canSeeTeamBand ? 'Team' : 'Shared')
         : audienceOfConversationKind(foundChat.Kind);
+    const enableBoundActions =
+        input.enableBoundActionGrants === true ||
+        loaded.configuration.Settings.Agents?.EnableBoundActionGrants === true;
     let turnTools: Awaited<ReturnType<typeof resolveTurnTools>>;
     try {
-        turnTools = await resolveTurnTools(provider, system, loaded.configuration, audience, targetAgentId);
+        turnTools = await resolveTurnTools(provider, system, loaded.configuration, audience, targetAgentId, {
+            includeBoundActions: enableBoundActions,
+            spaceId,
+            callerUser: user,
+            loadedConfiguration: loaded,
+        });
     } catch (toolsError) {
         return { ok: false, message: `The turn's tools could not be resolved: ${toolsError instanceof Error ? toolsError.message : String(toolsError)}` };
     }
@@ -541,8 +553,21 @@ async function runClaimedTurn(
         }
         const built = await driver.call.driver.BuildAgentContext({ ...driver.call.base, chatId: foundChat.ID, viewerBands });
         const meetingsContext = await buildSpaceMeetingsAgentContext(provider, spaceId, viewerBands, user);
+        let scopedInstructions: readonly string[] = [];
+        try {
+            const scopedPromptResult = await resolveSpaceScopedPromptParts({
+                provider,
+                systemUser: system,
+                spaceId,
+                audience,
+                loadedConfiguration: loaded,
+            });
+            scopedInstructions = scopedPromptResult.instructions;
+        } catch (scopedPromptErr) {
+            LogError(`executeSpaceChatTurn: scoped prompt parts resolution failed for space ${spaceId}: ${scopedPromptErr instanceof Error ? scopedPromptErr.message : String(scopedPromptErr)}`);
+        }
         typeContext = {
-            instructions: [...(built?.instructions ?? []), ...(meetingsContext.instructions ?? [])],
+            instructions: [...scopedInstructions, ...(built?.instructions ?? []), ...(meetingsContext.instructions ?? [])],
             contextData: { ...(built?.contextData ?? {}), ...(meetingsContext.contextData ?? {}) },
         };
     } catch (contextError) {
@@ -835,7 +860,11 @@ async function runClaimedTurn(
             const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
             if (agentEntity && (await agentEntity.Load(targetAgentId))) {
                 const runner = new AgentRunner(provider);
-                const runnerParams: ExecuteAgentParams & { Audience?: { Mode: 'Intersection'; UserIDs: string[] } } = {
+                type SpaceExecuteAgentParams = ExecuteAgentParams & {
+                    Audience?: { Mode: 'Intersection'; UserIDs: string[] };
+                    boundActionParams?: BoundActionParamsMap;
+                };
+                const runnerParams: SpaceExecuteAgentParams = {
                     agent: agentEntity,
                     contextUser: user,
                     userId: user.ID,
@@ -857,8 +886,9 @@ async function runClaimedTurn(
                         allowedItems: audienceQuoted,
                         suppliedSources: retrieval.suppliedSources ?? [],
                         retrievalStats: retrieval.stats,
-                        // B20 / CT-3: what the model is told it may run, and the knowledge scopes + hits in force
+                        // B20 / CT-3 / CX-3: what the model is told it may run, and the knowledge scopes + hits in force
                         spaceData: turnTools.spaceData,
+                        ...(turnTools.boundActionCatalog ? { boundActions: turnTools.boundActionCatalog } : {}),
                         knowledgeSourceIds: turnTools.tools.KnowledgeSourceIDs,
                         grantedKnowledgeScopes: audienceAuthorizedScopes.grantedScopes.map((s) => ({
                             scopeId: s.scopeId,
@@ -871,6 +901,9 @@ async function runClaimedTurn(
                         typeContextData: typeContext.contextData ?? {},
                     },
                     context: turnContext,
+                    ...(turnTools.boundActionParams && Object.keys(turnTools.boundActionParams).length > 0
+                        ? { boundActionParams: turnTools.boundActionParams }
+                        : {}),
                     ...(turnTools.actionChanges.length ? { actionChanges: turnTools.actionChanges } : {}),
                     ...(turnTools.runSettings.planMode !== undefined ? { planMode: turnTools.runSettings.planMode } : {}),
                     ...(turnTools.runSettings.effortLevel !== undefined ? { effortLevel: turnTools.runSettings.effortLevel } : {}),

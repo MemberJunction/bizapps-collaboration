@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "node --experimental-strip-types --test src/rules.test.ts"
+    "test": "node --experimental-strip-types --test src/rules.test.ts src/chat-write-rules.test.ts src/scoped-prompt-parts.test.ts src/substrate-contract.test.ts"
   },
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",

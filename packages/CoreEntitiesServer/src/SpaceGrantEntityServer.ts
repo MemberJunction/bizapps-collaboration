@@ -14,6 +14,7 @@ import {
     type AgentGrantSettings,
     type CollaborationSettings,
     GRANT_KIND_ENTITY,
+    type GrantInputValue,
     isGrantKind,
     typeSeatsAudience,
     validateAgentGrantSettings,
@@ -142,10 +143,10 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
         if ('refusal' in judged) return fail(result, judged.field, judged.refusal);
         typeId = judged.typeId;
         const typeConfig = judged.typeConfig;
-        let bindings: unknown = null;
+        let bindings: GrantInputValue = null;
         if (this.Bindings) {
             try {
-                bindings = JSON.parse(this.Bindings);
+                bindings = JSON.parse(this.Bindings) as GrantInputValue;
             } catch {
                 return fail(result, 'Bindings', 'Grant change refused: Bindings must be valid JSON.');
             }
@@ -155,7 +156,8 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
         if (rule) return fail(result, 'Kind', rule);
 
         const targetFields = kind === 'Agent' ? ['ID', 'Name', 'Status', 'AcceptsSkills', 'MaxCostPerRun', 'MaxTokensPerRun', 'MaxIterationsPerRun', 'MaxTimePerRun'] : ['ID', 'Name'];
-        const targets = await rv.RunView<Record<string, unknown>>({
+        type GrantTargetRow = Record<string, string | number | boolean | null | undefined>;
+        const targets = await rv.RunView<GrantTargetRow>({
             EntityName: kindEntity.Name,
             ExtraFilter: `ID = '${targetId}'`,
             Fields: targetFields,
@@ -234,7 +236,7 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
     }
 
     /** What MJ says of the agent, as the settings validator judges against it. */
-    private async agentDefinition(rv: RunView, system: Parameters<RunView['RunView']>[1], agent: Record<string, unknown>): Promise<AgentDefinitionForGrant> {
+    private async agentDefinition(rv: RunView, system: Parameters<RunView['RunView']>[1], agent: Record<string, string | number | boolean | null | undefined>): Promise<AgentDefinitionForGrant> {
         const id = String(agent['ID']);
         const accepts = (agent['AcceptsSkills'] as string | null | undefined) ?? 'None';
         const definition: AgentDefinitionForGrant = {

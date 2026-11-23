@@ -22,6 +22,10 @@ import {
     LoadSpaceMeetingsAgendaProvider,
     LoadCollaborationAIRunLockdown,
     LoadCollaborationSecurityAuditOperations,
+    LoadCollaborationChatWritePermissionProvider,
+    LoadCollaborationPromptComponentResolver,
+    LoadCollaborationSpaceItemArtifactPermissionDelegate,
+    LoadSpaceAudienceActions,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import './generated/generated.js';
 import { createRequire } from 'node:module';
@@ -100,6 +104,10 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceMeetingsAgendaProvider();
     LoadCollaborationAIRunLockdown();
     LoadCollaborationSecurityAuditOperations();
+    LoadCollaborationChatWritePermissionProvider();
+    LoadCollaborationPromptComponentResolver();
+    LoadCollaborationSpaceItemArtifactPermissionDelegate();
+    LoadSpaceAudienceActions();
     installPostgresProviderPrototypeHookFromServer();
     try {
         ensurePostgresReceiptContextHook(Metadata.Provider);

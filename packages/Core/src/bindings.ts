@@ -3,7 +3,7 @@
  * the space, its anchors and the caller. The server's `ResolveBindings` reads records with these; nothing here does.
  */
 import type { BindingExpression, SpaceGrantBindings } from './grants.ts';
-import type { ResolvedCollaborationSettings } from './configuration.ts';
+import type { ConfigurationValue, ResolvedCollaborationSettings } from './configuration.ts';
 
 /** The columns of a space a binding may read. A binding may not read a space's Configuration or its image URL. */
 export const SPACE_BINDING_FIELDS = ['ID', 'Name', 'Description', 'StartedAt', 'PlannedCloseAt', 'ClosedAt', 'ParentID', 'SpaceTypeID', 'OwnerID', 'StatusID'] as const;
@@ -18,12 +18,20 @@ export type BindingSource =
     | { kind: 'space'; field: SpaceBindingField }
     | { kind: 'config'; path: string }
     | { kind: 'user'; field: UserBindingField }
+    | { kind: 'root'; field: 'ID' | 'EntityID' | 'RecordID' }
+    | { kind: 'band' }
+    | { kind: 'deliveryPrincipal' }
     | { kind: 'value'; value: string | number | boolean };
 
 /** Reads an expression into its source, or says what is wrong with it. `name` is the bound parameter's name, for the message. */
 export function bindingSource(name: string, expression: BindingExpression): { ok: true; source: BindingSource } | { ok: false; error: string } {
     if ('Value' in expression) return { ok: true, source: { kind: 'value', value: expression.Value } };
     const from = expression.From;
+    if (from === 'Root.ID') return { ok: true, source: { kind: 'root', field: 'ID' } };
+    if (from === 'Root.EntityID') return { ok: true, source: { kind: 'root', field: 'EntityID' } };
+    if (from === 'Root.RecordID') return { ok: true, source: { kind: 'root', field: 'RecordID' } };
+    if (from === 'Space.Band') return { ok: true, source: { kind: 'band' } };
+    if (from === 'DeliveryPrincipal.ID') return { ok: true, source: { kind: 'deliveryPrincipal' } };
     if (from.startsWith('Anchor:')) {
         const rest = from.slice('Anchor:'.length);
         const dot = rest.indexOf('.');
@@ -78,15 +86,21 @@ export function needsCallerPerson(sources: ReadonlyMap<string, BindingSource>): 
     return false;
 }
 
+type SettingsTraversalValue =
+    | ResolvedCollaborationSettings
+    | ConfigurationValue
+    | object
+    | undefined;
+
 /**
  * Reads a dotted path off the effective settings: `Chats.WhoCanStart`, `Extensions.example-chapter.Region`. Returns `undefined`
  * when any step is missing, and refuses to descend into arrays, so a path never reads a list by index.
  */
 export function readSettingsPath(settings: ResolvedCollaborationSettings, path: string): string | number | boolean | null | undefined {
-    let current: unknown = settings;
+    let current: SettingsTraversalValue = settings;
     for (const step of path.split('.')) {
         if (current === null || current === undefined || typeof current !== 'object' || Array.isArray(current)) return undefined;
-        current = (current as Record<string, unknown>)[step];
+        current = (current as Record<string, SettingsTraversalValue>)[step];
     }
     if (current === null) return null;
     if (typeof current === 'string' || typeof current === 'number' || typeof current === 'boolean') return current;
@@ -103,7 +117,7 @@ export function boundNames(bindings: SpaceGrantBindings | null | undefined): Set
  * refused, as is a value for a name the target does not have. `targetNames` is null when the server does not know them, as for a
  * view's properties before MJ#4789; then only the bound-name rule applies.
  */
-export function refuseClientValues(clientValues: Record<string, unknown> | null | undefined, bindings: SpaceGrantBindings | null | undefined, targetNames: readonly string[] | null): string | null {
+export function refuseClientValues(clientValues: Record<string, ConfigurationValue | object | undefined> | null | undefined, bindings: SpaceGrantBindings | null | undefined, targetNames: readonly string[] | null): string | null {
     if (!clientValues) return null;
     const bound = boundNames(bindings);
     const known = targetNames ? new Set(targetNames.map((name) => name.toLowerCase())) : null;

@@ -19,13 +19,28 @@ export const GRANT_KIND_ENTITY: Readonly<Record<GrantKind, string>> = {
     KnowledgeSource: 'MJ: Content Sources',
 };
 
-export function isGrantKind(value: unknown): value is GrantKind {
+export type GrantInputValue = object | string | number | boolean | null | undefined;
+
+export function isGrantKind(value: GrantInputValue): value is GrantKind {
     return typeof value === 'string' && (GRANT_KINDS as readonly string[]).includes(value);
 }
 
-/** Where a bound value comes from (D27). A literal is a `Value`; anything else is resolved on the server. */
+/** Where a bound value comes from (D27 / CX-3 / CA-4). A literal is a `Value`; anything else is resolved on the server. */
 export type BindingExpression =
-    | { From: `Anchor:${string}` | `Space.${string}` | `Config:${string}` | 'User.ID' | 'User.Email' | 'User.PersonID' }
+    | {
+          From:
+              | `Anchor:${string}`
+              | `Space.${string}`
+              | `Config:${string}`
+              | 'User.ID'
+              | 'User.Email'
+              | 'User.PersonID'
+              | 'Root.ID'
+              | 'Root.EntityID'
+              | 'Root.RecordID'
+              | 'Space.Band'
+              | 'DeliveryPrincipal.ID';
+      }
     | { Value: string | number | boolean };
 
 /** A grant's bindings: a parameter or property name of the target, mapped to where its value comes from. */
@@ -56,21 +71,21 @@ export const AGENT_LIMIT_NAMES = ['MaxCostPerRun', 'MaxTokensPerRun', 'MaxIterat
 export type AgentLimitName = (typeof AGENT_LIMIT_NAMES)[number];
 
 const FROM_PREFIXES = ['Anchor:', 'Space.', 'Config:'] as const;
-const FROM_EXACT = ['User.ID', 'User.Email', 'User.PersonID'] as const;
+const FROM_EXACT = ['User.ID', 'User.Email', 'User.PersonID', 'Root.ID', 'Root.EntityID', 'Root.RecordID', 'Space.Band', 'DeliveryPrincipal.ID'] as const;
 
 /** Reads one binding expression, or says what is wrong with it. */
-export function parseBindingExpression(name: string, raw: unknown): { ok: true; expression: BindingExpression } | { ok: false; error: string } {
+export function parseBindingExpression(name: string, raw: GrantInputValue): { ok: true; expression: BindingExpression } | { ok: false; error: string } {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: `Binding "${name}" must be an object with From or Value.` };
     const keys = Object.keys(raw);
     const hasFrom = 'From' in raw;
     const hasValue = 'Value' in raw;
     if (hasFrom === hasValue || keys.length !== 1) return { ok: false, error: `Binding "${name}" must have exactly one of From or Value.` };
     if (hasValue) {
-        const value = (raw as { Value: unknown }).Value;
+        const value = (raw as { Value?: GrantInputValue }).Value;
         if (!['string', 'number', 'boolean'].includes(typeof value)) return { ok: false, error: `Binding "${name}": Value must be a string, number or boolean.` };
         return { ok: true, expression: { Value: value as string | number | boolean } };
     }
-    const from = (raw as { From: unknown }).From;
+    const from = (raw as { From?: GrantInputValue }).From;
     if (typeof from !== 'string' || from.trim() === '') return { ok: false, error: `Binding "${name}": From must be a non-empty string.` };
     const exact = (FROM_EXACT as readonly string[]).includes(from);
     const prefixed = FROM_PREFIXES.some((prefix) => from.startsWith(prefix) && from.length > prefix.length);
@@ -84,12 +99,12 @@ export function parseBindingExpression(name: string, raw: unknown): { ok: true; 
  * Validates a grant's bindings: each key names a real parameter or property of the target (when the caller knows them)
  * and each expression parses. `targetNames` is null when the target's names are not known to the caller, as on the client.
  */
-export function validateSpaceGrantBindings(bindings: unknown, targetNames: readonly string[] | null): string[] {
+export function validateSpaceGrantBindings(bindings: GrantInputValue, targetNames: readonly string[] | null): string[] {
     if (bindings === null || bindings === undefined) return [];
     if (typeof bindings !== 'object' || Array.isArray(bindings)) return ['Bindings must be an object keyed by the target\'s parameter or property names.'];
     const errors: string[] = [];
     const known = targetNames ? new Set(targetNames.map((n) => n.toLowerCase())) : null;
-    for (const [name, raw] of Object.entries(bindings as Record<string, unknown>)) {
+    for (const [name, raw] of Object.entries(bindings as Record<string, GrantInputValue>)) {
         if (known && !known.has(name.toLowerCase())) errors.push(`Binding "${name}" names nothing the target has.`);
         const parsed = parseBindingExpression(name, raw);
         if (!parsed.ok) errors.push(parsed.error);
@@ -113,7 +128,7 @@ export interface AgentDefinitionForGrant {
 const sameId = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /** Validates an agent grant's settings against the agent's own definition: a setting may narrow, never widen (item 148). */
-export function validateAgentGrantSettings(settings: unknown, agent: AgentDefinitionForGrant): string[] {
+export function validateAgentGrantSettings(settings: GrantInputValue, agent: AgentDefinitionForGrant): string[] {
     if (settings === null || settings === undefined) return [];
     if (typeof settings !== 'object' || Array.isArray(settings)) return ['Settings must be an object.'];
     const s = settings as AgentGrantSettings;
