@@ -1,3 +1,4 @@
+import '@angular/compiler';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Type } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -19,7 +20,7 @@ import {
 } from './base-space-type-ui-driver';
 import { BaseSpaceTab } from './base-space-tab';
 import { BaseSpaceOverviewCard } from './base-space-overview-card';
-import { DEFAULT_SPACE_RULES } from '@mj-biz-apps/collaboration-core';
+import { BaseAgendaProvider, DEFAULT_SPACE_RULES, type AgendaItem, type SpaceBatchContext } from '@mj-biz-apps/collaboration-core';
 
 class CustomTestUIDriver extends BaseSpaceTypeUIDriver {
     public override GetTabs(ctx: SpaceUIContext, defaultTabs: SpaceTabDescriptor[]): SpaceTabDescriptor[] {
@@ -305,6 +306,81 @@ describe('UI Driver & Extensibility Contributions', () => {
             );
 
             expect(assembled.map((c) => c.key)).toEqual(['welcome']);
+        });
+    });
+
+    describe('collectSpaceAgendaItems', () => {
+        it('skips agenda providers registered for non-matching spaceTypes and filters out past items', async () => {
+            const { collectSpaceAgendaItems } = await import('./space-coming-up-card.component');
+            class BoardOnlyProvider extends BaseAgendaProvider {
+                public override async getItemsForSpaces(context: SpaceBatchContext): Promise<AgendaItem[]> {
+                    return context.spaceIds.map((spaceId) => ({
+                        id: `board:${spaceId}`,
+                        spaceId,
+                        title: 'Board-Only Meeting',
+                        date: new Date(Date.now() + 86_400_000),
+                        typeIcon: 'fa-solid fa-gavel',
+                        sourceProvider: 'board-only',
+                    }));
+                }
+            }
+            class WildcardPastAndFutureProvider extends BaseAgendaProvider {
+                public override async getItemsForSpaces(context: SpaceBatchContext): Promise<AgendaItem[]> {
+                    return context.spaceIds.flatMap((spaceId) => [
+                        {
+                            id: `past:${spaceId}`,
+                            spaceId,
+                            title: 'Past Meeting',
+                            date: new Date(Date.now() - 86_400_000),
+                            typeIcon: 'fa-solid fa-calendar',
+                            sourceProvider: 'wildcard',
+                        },
+                        {
+                            id: `future:${spaceId}`,
+                            spaceId,
+                            title: 'Future Wildcard Meeting',
+                            date: new Date(Date.now() + 172_800_000),
+                            typeIcon: 'fa-solid fa-calendar',
+                            sourceProvider: 'wildcard',
+                        },
+                    ]);
+                }
+            }
+
+            MJGlobal.Instance.ClassFactory.Register(
+                BaseAgendaProvider,
+                BoardOnlyProvider,
+                'test:board-only-agenda',
+                1,
+                true,
+                false,
+                { spaceTypes: ['example-board'] },
+            );
+            MJGlobal.Instance.ClassFactory.Register(
+                BaseAgendaProvider,
+                WildcardPastAndFutureProvider,
+                'test:wildcard-agenda',
+                1,
+                true,
+                false,
+                { spaceTypes: ['*'] },
+            );
+
+            const nonBoardItems = await collectSpaceAgendaItems({
+                spaceIds: ['sp-1'],
+                viewerId: 'u-1',
+            });
+            expect(nonBoardItems.map((i) => i.title)).toEqual(['Future Wildcard Meeting']);
+
+            const boardItems = await collectSpaceAgendaItems({
+                spaceIds: ['sp-1'],
+                viewerId: 'u-1',
+                spaceType: 'example-board',
+            });
+            expect(boardItems.map((i) => i.title)).toEqual([
+                'Board-Only Meeting',
+                'Future Wildcard Meeting',
+            ]);
         });
     });
 });

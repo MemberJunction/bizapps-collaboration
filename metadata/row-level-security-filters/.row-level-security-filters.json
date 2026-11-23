@@ -459,7 +459,8 @@
       "FilterText": "((SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR (Band = N'Shared' AND CAST(SpaceID AS NVARCHAR(450)) = '{{ScopeResourceID}}'))"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-11-05T21:13:49.197Z"
     }
   },
   {
@@ -472,7 +473,8 @@
       "FilterText": "(SpaceID IN (SELECT ID FROM [__mj_BizAppsCollaboration].[Space] WHERE OwnerID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-11-05T21:13:49.218Z"
     }
   },
   {
@@ -553,6 +555,56 @@
       "Name": "Collaboration: Resource Type Catalog",
       "Description": "The resource-type catalog: MJ's Explorer shell reads it at startup (it needs the Custom type's ID to open an app's landing page). It names types, not records. The filter is present so the participant is not exempt from row-level security, as All Application Roles is.",
       "FilterText": "(1 = 1)"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300001-1111-4111-8111-000000000001"
+    },
+    "fields": {
+      "Name": "Collaboration: Meetings In Reach",
+      "Description": "Meetings linked to a space the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "(ID IN (SELECT MeetingID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE MeetingID IS NOT NULL))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300002-1111-4111-8111-000000000002"
+    },
+    "fields": {
+      "Name": "Collaboration: Meeting Series In Reach",
+      "Description": "Meeting series linked to a space the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "(ID IN (SELECT SeriesID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE SeriesID IS NOT NULL AND MeetingID IS NULL))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300003-1111-4111-8111-000000000003"
+    },
+    "fields": {
+      "Name": "Collaboration: Meeting Rows In Reach",
+      "Description": "Attendees, agenda items, and notes of meetings the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "(MeetingID IN (SELECT MeetingID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE MeetingID IS NOT NULL))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300004-1111-4111-8111-000000000004"
+    },
+    "fields": {
+      "Name": "Collaboration: Meeting Series Rows In Reach",
+      "Description": "Series attendees of meeting series the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "(SeriesID IN (SELECT SeriesID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE SeriesID IS NOT NULL AND MeetingID IS NULL))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2300005-1111-4111-8111-000000000005"
+    },
+    "fields": {
+      "Name": "Collaboration: Meeting Links In Reach",
+      "Description": "MeetingLink rows for meetings or series the caller reaches through fnCollaborationMeetingAccess.",
+      "FilterText": "((MeetingID IS NOT NULL AND MeetingID IN (SELECT MeetingID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE MeetingID IS NOT NULL)) OR (SeriesID IS NOT NULL AND SeriesID IN (SELECT SeriesID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE SeriesID IS NOT NULL AND MeetingID IS NULL)))"
     }
   }
 ]

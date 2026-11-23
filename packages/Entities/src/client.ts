@@ -46,6 +46,44 @@ export interface CreateSpaceTaskPayload {
     ErrorMessage?: string;
 }
 
+export interface CreateSpaceMeetingInput {
+    SpaceID: string;
+    Name: string;
+    StartsAt: string;
+    EndsAt: string;
+    TimeZone: string;
+    Description?: string | null;
+    TypeID?: string | null;
+    LocationType?: 'Virtual' | 'InPerson' | 'Hybrid' | 'Phone';
+    Location?: string | null;
+    VideoJoinURL?: string | null;
+    Visibility?: 'Standard' | 'Private';
+}
+
+export interface CreateSpaceMeetingPayload {
+    Success: boolean;
+    MeetingID?: string;
+    LinkID?: string;
+    ItemID?: string;
+    Band?: 'Team' | 'Shared';
+    ErrorMessage?: string;
+}
+
+export interface EnsureMeetingSpaceChatInput {
+    SpaceID: string;
+    MeetingID: string;
+    MeetingName?: string | null;
+    Visibility?: 'Standard' | 'Private';
+}
+
+export interface EnsureMeetingSpaceChatPayload {
+    Success: boolean;
+    SpaceChatID?: string;
+    ConversationID?: string;
+    Created?: boolean;
+    ErrorMessage?: string;
+}
+
 export interface PostSpaceMessageGraphQLInput {
     SpaceID: string;
     Text: string;
@@ -431,6 +469,31 @@ mutation CreateSpaceTask($input: CreateSpaceTaskInput!) {
 }
 `;
 
+const CREATE_SPACE_MEETING_MUTATION = `
+mutation CreateSpaceMeeting($input: CreateSpaceMeetingInput!) {
+    CreateSpaceMeeting(input: $input) {
+        Success
+        MeetingID
+        LinkID
+        ItemID
+        Band
+        ErrorMessage
+    }
+}
+`;
+
+const ENSURE_MEETING_SPACE_CHAT_MUTATION = `
+mutation EnsureMeetingSpaceChat($input: EnsureMeetingSpaceChatInput!) {
+    EnsureMeetingSpaceChat(input: $input) {
+        Success
+        SpaceChatID
+        ConversationID
+        Created
+        ErrorMessage
+    }
+}
+`;
+
 const POST_SPACE_MESSAGE_MUTATION = `
 mutation PostSpaceMessage($input: PostSpaceMessageInput!) {
     PostSpaceMessage(input: $input) {
@@ -506,6 +569,16 @@ export class CollaborationClient {
     async CreateSpaceTask(input: CreateSpaceTaskInput): Promise<CreateSpaceTaskPayload> {
         const res = await this.activeExecutor.ExecuteGQL(CREATE_SPACE_TASK_MUTATION, { input });
         return (res?.CreateSpaceTask as CreateSpaceTaskPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async CreateSpaceMeeting(input: CreateSpaceMeetingInput): Promise<CreateSpaceMeetingPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(CREATE_SPACE_MEETING_MUTATION, { input });
+        return (res?.CreateSpaceMeeting as CreateSpaceMeetingPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async EnsureMeetingSpaceChat(input: EnsureMeetingSpaceChatInput): Promise<EnsureMeetingSpaceChatPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(ENSURE_MEETING_SPACE_CHAT_MUTATION, { input });
+        return (res?.EnsureMeetingSpaceChat as EnsureMeetingSpaceChatPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
     async PostSpaceMessage(input: PostSpaceMessageGraphQLInput): Promise<PostSpaceMessageGraphQLPayload> {

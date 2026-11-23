@@ -115,3 +115,32 @@ export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction
 export { CollaborationScopedSearchAction, LoadCollaborationScopedSearchAction, unquoteSpaceSearch, unwrapPhraseQuotes } from './CollaborationScopedSearchAction.js';
 export type { TurnToolsGiven } from './execute-space-chat-turn.js';
 export { IsPeopleEntity, PEOPLE_ENTITY, ResolvePersonIDForUser, ResolveUserIDForPerson, ResolveUserIDsForPeople } from '@mj-biz-apps/common-entities';
+export {
+    COLLABORATION_SPACES_ENTITY_ID,
+    MEETING_SUBJECT_PREFIX,
+    SpaceMeetingsAgendaProvider,
+    LoadSpaceMeetingsAgendaProvider,
+    buildSpaceMeetingsAgentContext,
+    createSpaceMeeting,
+    ensureMeetingSpaceChat,
+    loadSpaceMeetings,
+    meetingChatSubject,
+    parseMeetingIdFromSubject,
+    removeUnfiledMeeting,
+} from './space-meetings.js';
+export type {
+    CreateSpaceMeetingInput,
+    CreateSpaceMeetingResult,
+    SpaceMeetingAgendaItemSummary,
+    SpaceMeetingNoteSummary,
+    SpaceMeetingSummary,
+    SpaceMeetingsResult,
+} from './space-meetings.js';
+export {
+    mintSpaceLink,
+    resolveMagicLinkHost,
+    setMagicLinkHostProvider,
+    type MagicLinkHost,
+    type MintSpaceLinkResult,
+} from './mint-space-link.js';
+
