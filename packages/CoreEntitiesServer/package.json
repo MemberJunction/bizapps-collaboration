@@ -29,7 +29,6 @@
     "@memberjunction/content-pipeline": "^6.3.0-edge.1",
     "@memberjunction/conversations-runtime": "^6.3.0-edge.1",
     "@memberjunction/core": "^6.3.0-edge.1",
-    "@memberjunction/core-actions": "^6.3.0-edge.1",
     "@memberjunction/core-entities": "^6.3.0-edge.1",
     "@memberjunction/global": "^6.3.0-edge.1",
     "@memberjunction/notifications": "^6.3.0-edge.1",

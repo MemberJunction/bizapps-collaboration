@@ -6,6 +6,8 @@
  * grants were cut to the audience first.
  */
 import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import type { ActionChange } from '@memberjunction/ai-core-plus';
 import {
     agentGrantFor,
@@ -17,6 +19,7 @@ import {
     turnToolsFor,
     type TurnTools,
 } from '@mj-biz-apps/collaboration-core';
+import { parseUuid } from './uuid.js';
 
 /** The shipped *Collaboration: Run Space Data* action, as `metadata/actions/` ships it. */
 export const RUN_SPACE_DATA_ACTION_ID = 'EAE6CFED-E2EB-4B6E-816D-6CFE5156A5F5';
@@ -188,4 +191,103 @@ export function findSpaceDataGrant(spaceData: readonly TurnSpaceDataGrant[], nam
         ?? spaceData.find((g) => g.Name.toLowerCase() === wanted.toLowerCase())
         ?? spaceData.find((g) => g.GrantID.toLowerCase() === wanted.toLowerCase())
         ?? null;
+}
+
+interface ScopedSearchResultLike {
+    EntityName?: string | null;
+    RecordID?: string | null;
+    Title?: string | null;
+    RecordName?: string | null;
+    Score?: number | null;
+    SourceType?: string | null;
+    OriginatingScopeID?: string | null;
+    OriginatingScopeName?: string | null;
+    RawMetadata?: string | Record<string, string | number | boolean | null> | null;
+}
+
+interface TurnContextWithToolHits {
+    toolSourceHits?: TurnToolSourceHit[];
+}
+
+function readRawMetaContentSourceId(rawMeta: ScopedSearchResultLike['RawMetadata']): string | null {
+    if (!rawMeta) return null;
+    if (typeof rawMeta === 'string') {
+        try {
+            const parsed = JSON.parse(rawMeta) as Record<string, string | number | boolean | null>;
+            return typeof parsed['ContentSourceID'] === 'string' ? parseUuid(parsed['ContentSourceID']) : null;
+        } catch {
+            return null;
+        }
+    }
+    return typeof rawMeta['ContentSourceID'] === 'string' ? parseUuid(rawMeta['ContentSourceID']) : null;
+}
+
+/**
+ * Appends scoped-search result hits onto a `SpaceTurnContext.toolSourceHits` buffer when the run carries
+ * Collaboration's native space scope, preserving originating scope provenance for source receipt validation.
+ */
+export function recordScopedSearchHitsOnContext(
+    params: Pick<RunActionParams, 'Context' | 'RunScope'>,
+    result: ActionResultSimple,
+): void {
+    if (!result.Success || !params.RunScope?.SearchScopeIDs?.some((id) => UUIDsEqual(id, COLLABORATION_SPACE_SCOPE_ID))) {
+        return;
+    }
+    const ctx = params.Context as TurnContextWithToolHits | undefined;
+    if (!ctx || !Array.isArray(ctx.toolSourceHits)) {
+        return;
+    }
+    const resultsParam = result.Params?.find((p) => p.Name.trim().toLowerCase() === 'results');
+    if (!resultsParam || !Array.isArray(resultsParam.Value)) {
+        return;
+    }
+    for (const rawItem of resultsParam.Value as ScopedSearchResultLike[]) {
+        if (!rawItem || typeof rawItem !== 'object') continue;
+        const entityName = typeof rawItem.EntityName === 'string' ? rawItem.EntityName.trim() : '';
+        const recordId = typeof rawItem.RecordID === 'string' ? rawItem.RecordID.trim() : '';
+        const title = (typeof rawItem.Title === 'string' && rawItem.Title.trim()) ||
+            (typeof rawItem.RecordName === 'string' && rawItem.RecordName.trim()) ||
+            null;
+        const score = typeof rawItem.Score === 'number' && Number.isFinite(rawItem.Score) ? rawItem.Score : null;
+        const rankingMode: TurnToolSourceHit['rankingMode'] = rawItem.SourceType === 'vector' ? 'vector' : 'lexical';
+        const contentSourceId = readRawMetaContentSourceId(rawItem.RawMetadata);
+        const originatingScopeId = typeof rawItem.OriginatingScopeID === 'string' ? parseUuid(rawItem.OriginatingScopeID) : null;
+        const originatingScopeName =
+            typeof rawItem.OriginatingScopeName === 'string' && rawItem.OriginatingScopeName.trim()
+                ? rawItem.OriginatingScopeName.trim()
+                : null;
+
+        if (entityName === 'MJ: Content Sources' || (contentSourceId && !recordId)) {
+            const cid = contentSourceId ?? parseUuid(recordId);
+            if (cid) {
+                ctx.toolSourceHits.push({
+                    sourceKind: 'KnowledgeSource',
+                    contentSourceId: cid,
+                    entityName: 'MJ: Content Sources',
+                    recordId: recordId || cid,
+                    title,
+                    score,
+                    rankingMode: 'grant',
+                    ...(originatingScopeId ? { originatingScopeId } : {}),
+                    ...(originatingScopeName ? { originatingScopeName } : {}),
+                });
+            }
+            continue;
+        }
+
+        if (recordId) {
+            ctx.toolSourceHits.push({
+                sourceKind: 'SpaceItem',
+                ...(entityName === 'MJ_BizApps_Collaboration: Space Items' ? { spaceItemId: parseUuid(recordId) } : {}),
+                ...(contentSourceId ? { contentSourceId } : {}),
+                entityName: entityName || null,
+                recordId,
+                title,
+                score,
+                rankingMode,
+                ...(originatingScopeId ? { originatingScopeId } : {}),
+                ...(originatingScopeName ? { originatingScopeName } : {}),
+            });
+        }
+    }
 }

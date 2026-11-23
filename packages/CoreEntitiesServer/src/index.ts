@@ -153,6 +153,7 @@ export {
 export {
     resolveTurnTools,
     findSpaceDataGrant,
+    recordScopedSearchHitsOnContext,
     RUN_SPACE_DATA_ACTION_ID,
     RUN_SPACE_DATA_ACTION_NAME,
     SCOPED_SEARCH_ACTION_ID,
@@ -160,7 +161,6 @@ export {
 } from './turn-tools.js';
 export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant, TurnToolSourceHit } from './turn-tools.js';
 export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction.js';
-export { CollaborationScopedSearchAction, LoadCollaborationScopedSearchAction, recordScopedSearchHitsOnContext, unquoteSpaceSearch, unwrapPhraseQuotes } from './CollaborationScopedSearchAction.js';
 export type { TurnToolsGiven } from './execute-space-chat-turn.js';
 export { IsPeopleEntity, PEOPLE_ENTITY, ResolvePersonIDForUser, ResolveUserIDForPerson, ResolveUserIDsForPeople } from '@mj-biz-apps/common-entities';
 export {

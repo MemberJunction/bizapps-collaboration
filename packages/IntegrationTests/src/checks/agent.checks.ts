@@ -1,5 +1,6 @@
 import { CompositeKey, DatabaseProviderBase, RunView, type UserInfo } from '@memberjunction/core';
-import { ActionEngineServer } from '@memberjunction/actions';
+import { MJGlobal } from '@memberjunction/global';
+import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
 import { SearchEngine } from '@memberjunction/search-engine';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import type { MJContentSourceEntity, MJSearchScopeEntity, MJSearchScopePermissionEntity } from '@memberjunction/core-entities';
@@ -2096,6 +2097,11 @@ const checks: NamedCheck[] = [
             await engine.Config(false, ada, ctx.Provider);
             const action = engine.Actions.find((a) => SameID(a.ID, SCOPED_SEARCH_ACTION_ID));
             Assert(!!action, 'Scoped Search is registered');
+            const scopedReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, '__Scoped_Search');
+            Assert(
+                scopedReg?.SubClass?.name === 'ScopedSearchAction',
+                `__Scoped_Search resolves directly to core ScopedSearchAction without Collaboration override (got ${scopedReg?.SubClass?.name ?? 'none'})`,
+            );
             const run = (chatId: string, query: string, hostScope: boolean) =>
                 engine.RunAction({
                     Action: action!,
@@ -2145,7 +2151,7 @@ const checks: NamedCheck[] = [
                 Assert(unhosted.Success === false && unhosted.Result?.ResultCode === 'ACCESS_DENIED', `Without the space's scope, Research Agent may not search (got ${unhosted.Result?.ResultCode ?? unhosted.Message})`);
                 Assert(finds(await search(general.spaceChatId!, sharedName!), sharedId), `Research Agent in a General chat finds the Shared task "${sharedName}"`);
                 Assert(!finds(await search(general.spaceChatId!, teamName!), teamId), `Research Agent in a General chat never finds the Team task "${teamName}"`);
-                // Agents quote their searches; the space's search still finds the words, and quoting widens nothing (INTERIM, CollaborationScopedSearchAction)
+                // Agents quote their searches; core ScopedSearchAction unquotes via NormalizeScopedSearchQuery and quoting widens nothing (CT-9)
                 Assert(finds(await search(general.spaceChatId!, `"${sharedName}"`), sharedId), `A quoted search in a General chat finds the Shared task "${sharedName}"`);
                 Assert(!finds(await search(general.spaceChatId!, `"${teamName}"`), teamId), `A quoted search in a General chat never finds the Team task "${teamName}"`);
                 // The negative control: the same words find the Team task in a staff member's Private chat, so its absence above is the audience's doing

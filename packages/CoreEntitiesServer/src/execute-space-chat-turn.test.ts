@@ -9,7 +9,7 @@ import { COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES, evaluateParticipantAIRunWriteAc
 import { PARTICIPANT_ROLE_ID } from '../dist/task-attribution.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
 import { COLLABORATION_SPACE_SCOPE_ID, type SpaceTurnContext } from '../dist/turn-tools.js';
-import { recordScopedSearchHitsOnContext } from '../dist/CollaborationScopedSearchAction.js';
+import { recordScopedSearchHitsOnContext } from '../dist/turn-tools.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
