@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { ExampleBoardServerDriver } from './index.js';
 import {
@@ -307,5 +307,32 @@ describe('ExampleBoardServerDriver', () => {
         });
         expect(refused.ok).toBe(false);
         expect(refused.message).toContain('off the record');
+    });
+
+    it('SyncSeats forwards options to BaseSpaceTypeServerDriver.SyncSeats', async () => {
+        const expected = { added: 0, updated: 0, removed: 0, invited: 0, errors: [] };
+        const spy = vi.spyOn(BaseSpaceTypeServerDriver.prototype, 'SyncSeats').mockResolvedValue(expected);
+        try {
+            const space = createMockSpace();
+            const user = createMockUser();
+            const provider = {} as unknown as IMetadataProvider;
+            const opts = {
+                host: {
+                    enabled: true,
+                    publicUrl: 'https://board.example.org',
+                    restrictedRoleName: 'Space Participant',
+                    grantableRoleNames: ['Space Participant'],
+                    inviteIssuerRoleNames: ['Administrator'],
+                    fromAddress: 'noreply@board.example.org',
+                    defaultExpiresInHours: 72,
+                    provisioningGuard: 'block' as const,
+                },
+            };
+            const result = await driver.SyncSeats(space, 'committees:board', [], user, provider, opts);
+            expect(result).toBe(expected);
+            expect(spy).toHaveBeenCalledWith(space, 'committees:board', [], user, provider, opts);
+        } finally {
+            spy.mockRestore();
+        }
     });
 });
