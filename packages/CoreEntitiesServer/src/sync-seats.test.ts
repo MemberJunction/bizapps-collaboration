@@ -42,6 +42,8 @@ function createMockProvider(options: {
     existingSeats?: SeatRecord[];
     refuseRemoveSeatIds?: Set<string>;
     refuseInviteSave?: boolean;
+    failPeopleLookup?: boolean;
+    failUsersLookup?: boolean;
     inviteApproval?: 'Approve' | 'AutoApprove';
 }) {
     const seats = new Map<string, SeatRecord>();
@@ -166,6 +168,9 @@ function createMockProvider(options: {
             };
         }
         if (params.EntityName === 'MJ: Users') {
+            if (options.failUsersLookup && filter.includes('email =')) {
+                return { Success: false, Results: [], ErrorMessage: 'transient users store error' };
+            }
             if (filter.includes('linkedentityrecordid')) {
                 const results = [];
                 if (filter.includes(PERSON_ALICE.toLowerCase())) {
@@ -179,6 +184,9 @@ function createMockProvider(options: {
             return { Success: true, Results: [] };
         }
         if (params.EntityName === 'MJ_BizApps_Common: People') {
+            if (options.failPeopleLookup) {
+                return { Success: false, Results: [], ErrorMessage: 'transient people store error' };
+            }
             const results = [];
             if (filter.includes(PERSON_CAROL.toLowerCase())) {
                 const p = savedPeople.get(PERSON_CAROL);
@@ -502,6 +510,235 @@ describe('BaseSpaceTypeServerDriver.SyncSeats', () => {
         assert.equal(savedInvites[0]?.UseCount, 0);
     });
 
+    /** Alice holds a synced Member seat; the sync names her next role, and the role her seat ends on is the one the name resolved to. */
+    async function syncAliceAs(roleTypeName: string) {
+        const world = createMockProvider({
+            existingSeats: [
+                { ID: 'seat-alice', SpaceID: SPACE_ID, UserID: USER_ALICE, PersonID: PERSON_ALICE, SpaceRoleTypeID: ROLE_MEMBER, Band: 'Team', Status: 'Active', SyncSource: 'roster:main' },
+            ],
+        });
+        const result = await new BaseSpaceTypeServerDriver().SyncSeats(
+            world.space,
+            'roster:main',
+            [{ PersonID: PERSON_ALICE, RoleTypeName: roleTypeName }],
+            ACTING_USER,
+            world.provider,
+        );
+        return { result, seat: world.seats.get('seat-alice') };
+    }
+
+    it('keeps a person\'s existing synced seat (even with PersonID null) when their roster entry fails to resolve', async () => {
+        const { result, seat } = await syncAliceAs('Typo');
+        assert.equal(result.removed, 0);
+        assert.equal(result.updated, 0);
+        assert.equal(result.errors.length, 1);
+        assert.match(result.errors[0], /Unknown space role type 'Typo'/);
+        assert.equal(seat?.Status, 'Active');
+        assert.equal(seat?.SpaceRoleTypeID, ROLE_MEMBER);
+
+        // Seat has PersonID: null — identity must still resolve PersonID -> UserID before matching the role.
+        const world = createMockProvider({
+            existingSeats: [
+                {
+                    ID: 'seat-alice-no-person',
+                    SpaceID: SPACE_ID,
+                    UserID: USER_ALICE,
+                    PersonID: null,
+                    SpaceRoleTypeID: ROLE_MEMBER,
+                    Band: 'Team',
+                    Status: 'Active',
+                    SyncSource: 'roster:main',
+                },
+            ],
+        });
+        const noPersonRes = await new BaseSpaceTypeServerDriver().SyncSeats(
+            world.space,
+            'roster:main',
+            [{ PersonID: PERSON_ALICE, RoleTypeName: 'Typo' }],
+            ACTING_USER,
+            world.provider
+        );
+        assert.equal(noPersonRes.removed, 0);
+        assert.equal(noPersonRes.errors.length, 1);
+        assert.equal(world.seats.get('seat-alice-no-person')?.Status, 'Active');
+    });
+
+    it('keeps an existing synced seat when an invite fails or a person has no user and no valid email', async () => {
+        const USER_CAROL_EXISTING = 'bbbb0000-0000-4000-8000-000000000099';
+        const PERSON_NO_EMAIL = 'aaaa0000-0000-4000-8000-000000000099';
+        const USER_NO_EMAIL = 'bbbb0000-0000-4000-8000-000000000098';
+
+        // Failed invite preserves Carol's existing synced seat
+        const failedInviteWorld = createMockProvider({
+            existingSeats: [
+                {
+                    ID: 'seat-carol',
+                    SpaceID: SPACE_ID,
+                    UserID: USER_CAROL_EXISTING,
+                    PersonID: PERSON_CAROL,
+                    SpaceRoleTypeID: ROLE_GUEST,
+                    Band: 'Shared',
+                    Status: 'Invited',
+                    SyncSource: 'roster:main',
+                },
+            ],
+            refuseInviteSave: true,
+        });
+        const inviteRes = await new BaseSpaceTypeServerDriver().SyncSeats(
+            failedInviteWorld.space,
+            'roster:main',
+            [{ PersonID: PERSON_CAROL, RoleTypeName: 'Participant' }],
+            ACTING_USER,
+            failedInviteWorld.provider
+        );
+        assert.equal(inviteRes.removed, 0);
+        assert.equal(inviteRes.errors.length, 1);
+        assert.equal(failedInviteWorld.seats.get('seat-carol')?.Status, 'Invited');
+
+        // Person with no linked user and no valid email preserves their existing synced seat
+        const noEmailWorld = createMockProvider({
+            existingSeats: [
+                {
+                    ID: 'seat-no-email',
+                    SpaceID: SPACE_ID,
+                    UserID: USER_NO_EMAIL,
+                    PersonID: PERSON_NO_EMAIL,
+                    SpaceRoleTypeID: ROLE_GUEST,
+                    Band: 'Shared',
+                    Status: 'Active',
+                    SyncSource: 'roster:main',
+                },
+            ],
+        });
+        const noEmailRes = await new BaseSpaceTypeServerDriver().SyncSeats(
+            noEmailWorld.space,
+            'roster:main',
+            [{ PersonID: PERSON_NO_EMAIL, RoleTypeName: 'Participant' }],
+            ACTING_USER,
+            noEmailWorld.provider
+        );
+        assert.equal(noEmailRes.removed, 0);
+        assert.equal(noEmailRes.errors.length, 1);
+        assert.equal(noEmailWorld.seats.get('seat-no-email')?.Status, 'Active');
+    });
+
+    it('does not let a permanently unmapped email-only error block removals of dropped seats', async () => {
+        const { provider, space, seats } = createMockProvider({
+            existingSeats: [
+                {
+                    ID: 'seat-alice',
+                    SpaceID: SPACE_ID,
+                    UserID: USER_ALICE,
+                    PersonID: PERSON_ALICE,
+                    SpaceRoleTypeID: ROLE_MEMBER,
+                    Band: 'Team',
+                    Status: 'Active',
+                    SyncSource: 'roster:main',
+                },
+                {
+                    ID: 'seat-bob',
+                    SpaceID: SPACE_ID,
+                    UserID: USER_BOB,
+                    PersonID: PERSON_BOB,
+                    SpaceRoleTypeID: ROLE_GUEST,
+                    Band: 'Shared',
+                    Status: 'Active',
+                    SyncSource: 'roster:main',
+                },
+            ],
+        });
+        const result = await new BaseSpaceTypeServerDriver().SyncSeats(
+            space,
+            'roster:main',
+            [
+                { PersonID: PERSON_ALICE, RoleTypeName: 'member' },
+                { Email: 'dave@example.org', RoleTypeName: 'Typo' },
+            ],
+            ACTING_USER,
+            provider
+        );
+        assert.equal(result.removed, 1);
+        assert.equal(result.errors.length, 1);
+        assert.equal(seats.get('seat-alice')?.Status, 'Active');
+        assert.equal(seats.get('seat-bob')?.Status, 'Removed');
+    });
+
+    it('skips removals when a transient People or Users lookup fails during roster resolution', async () => {
+        const baseSeats: SeatRecord[] = [
+            {
+                ID: 'seat-alice',
+                SpaceID: SPACE_ID,
+                UserID: USER_ALICE,
+                PersonID: PERSON_ALICE,
+                SpaceRoleTypeID: ROLE_MEMBER,
+                Band: 'Team',
+                Status: 'Active',
+                SyncSource: 'roster:main',
+            },
+            {
+                ID: 'seat-bob',
+                SpaceID: SPACE_ID,
+                UserID: USER_BOB,
+                PersonID: PERSON_BOB,
+                SpaceRoleTypeID: ROLE_GUEST,
+                Band: 'Shared',
+                Status: 'Active',
+                SyncSource: 'roster:main',
+            },
+        ];
+
+        const peopleWorld = createMockProvider({ existingSeats: baseSeats, failPeopleLookup: true });
+        const peopleRes = await new BaseSpaceTypeServerDriver().SyncSeats(
+            peopleWorld.space,
+            'roster:main',
+            [{ PersonID: PERSON_CAROL, RoleTypeName: 'Participant' }],
+            ACTING_USER,
+            peopleWorld.provider
+        );
+        assert.equal(peopleRes.removed, 0);
+        assert.equal(peopleRes.errors.length, 1);
+        assert.match(peopleRes.errors[0], /transient people store error/);
+        assert.equal(peopleWorld.seats.get('seat-alice')?.Status, 'Active');
+        assert.equal(peopleWorld.seats.get('seat-bob')?.Status, 'Active');
+
+        const usersWorld = createMockProvider({ existingSeats: baseSeats, failUsersLookup: true });
+        const usersRes = await new BaseSpaceTypeServerDriver().SyncSeats(
+            usersWorld.space,
+            'roster:main',
+            [{ Email: 'carol@example.org', RoleTypeName: 'Participant' }],
+            ACTING_USER,
+            usersWorld.provider
+        );
+        assert.equal(usersRes.removed, 0);
+        assert.equal(usersRes.errors.length, 1);
+        assert.match(usersRes.errors[0], /transient users store error/);
+        assert.equal(usersWorld.seats.get('seat-alice')?.Status, 'Active');
+        assert.equal(usersWorld.seats.get('seat-bob')?.Status, 'Active');
+    });
+
+    it('passes a type-less, role-less space owner unchanged to mintSpaceLink rather than promoting them to Owner', async () => {
+        const { provider, space } = createMockProvider({
+            existingSeats: [],
+        });
+        // Uses ACTING_USER.ID (an active space Owner in the mock) with no Type or UserRoles so mintSpaceLink reaches callerMayReceiveLink.
+        const bareSpaceOwner = {
+            ID: ACTING_USER.ID,
+            Name: 'Ada (no Type)',
+        } as unknown as UserInfo;
+
+        const driver = new BaseSpaceTypeServerDriver();
+        const result = await driver.SyncSeats(
+            space,
+            'roster:main',
+            [{ PersonID: PERSON_CAROL, RoleTypeName: 'Participant' }],
+            bareSpaceOwner,
+            provider
+        );
+
+        assert.equal(result.invited, 1);
+        assert.deepEqual(result.errors, []);
+        assert.equal(result.redemptionUrls, undefined, 'type-less caller must not be promoted to Owner and handed a raw link');
+    });
     it('seats an invitee as Invited without issuing a link when a non-owner invites onto an approval-gated space', async () => {
         const { provider, space, savedSeats, savedInvites } = createMockProvider({
             existingSeats: [],

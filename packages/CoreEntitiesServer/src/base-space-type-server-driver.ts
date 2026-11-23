@@ -148,6 +148,10 @@ export interface PersonSeatInput {
     RoleTypeName: string;
 }
 
+export interface SyncSeatsOptions {
+    host?: MagicLinkHost;
+}
+
 export interface SyncSeatsResult {
     added: number;
     updated: number;
@@ -270,7 +274,7 @@ export class BaseSpaceTypeServerDriver {
         people: PersonSeatInput[],
         actingUser: UserInfo,
         provider: IMetadataProvider,
-        options?: { host?: MagicLinkHost }
+        options?: SyncSeatsOptions
     ): Promise<SyncSeatsResult> {
         const result: SyncSeatsResult = {
             added: 0,
@@ -348,14 +352,21 @@ export class BaseSpaceTypeServerDriver {
             }
         >();
         const invitedUserIds = new Set<string>();
+        // Seats whose roster entry failed to resolve must never be swept by the removal pass below.
+        const protectedUserIds = new Set<string>();
+        const protectedPersonIds = new Set<string>();
+        let skipRemovalPass = false;
+
+        const protectFailedEntry = (entryUserId: string | null, entryPersonId: string | null): void => {
+            if (entryUserId) {
+                protectedUserIds.add(entryUserId);
+            }
+            if (entryPersonId) {
+                protectedPersonIds.add(entryPersonId);
+            }
+        };
 
         for (const seatInput of people ?? []) {
-            const role = matchSpaceRoleType(roles, seatInput.RoleTypeName, space.SpaceTypeID);
-            if (!role) {
-                result.errors.push(`Unknown space role type '${seatInput.RoleTypeName}'.`);
-                continue;
-            }
-
             let personId = parseUuid(seatInput.PersonID);
             let userId = parseUuid(seatInput.UserID);
             let email = seatInput.Email?.trim() || null;
@@ -383,7 +394,15 @@ export class BaseSpaceTypeServerDriver {
                         },
                         rosterReader
                     );
-                    if (personLookup.Success && personLookup.Results?.[0]) {
+                    if (!personLookup.Success) {
+                        result.errors.push(
+                            personLookup.ErrorMessage ?? `Could not look up person ${personId}.`
+                        );
+                        protectFailedEntry(userId, personId);
+                        skipRemovalPass = true;
+                        continue;
+                    }
+                    if (personLookup.Results?.[0]) {
                         const pRow = personLookup.Results[0];
                         if (!userId && pRow.LinkedUserID) {
                             userId = parseUuid(pRow.LinkedUserID);
@@ -419,20 +438,31 @@ export class BaseSpaceTypeServerDriver {
                     },
                     rosterReader
                 );
-                if (userLookup.Success && userLookup.Results?.[0]?.ID) {
+                if (!userLookup.Success) {
+                    result.errors.push(
+                        userLookup.ErrorMessage ?? `Could not look up MJ User for ${email}.`
+                    );
+                    protectFailedEntry(userId, personId);
+                    skipRemovalPass = true;
+                    continue;
+                }
+                if (userLookup.Results?.[0]?.ID) {
                     userId = parseUuid(userLookup.Results[0].ID);
                 }
             }
 
+            const role = matchSpaceRoleType(roles, seatInput.RoleTypeName, space.SpaceTypeID);
+            if (!role) {
+                result.errors.push(`Unknown space role type '${seatInput.RoleTypeName}'.`);
+                protectFailedEntry(userId, personId);
+                continue;
+            }
+
             if (!userId) {
                 if (email && email.includes('@')) {
-                    const issuerUser: UserInfo =
-                        actingUser.Type || (actingUser.UserRoles?.length ?? 0) > 0
-                            ? actingUser
-                            : ({ ...actingUser, Type: 'Owner' } as UserInfo);
                     const mintRes = await mintSpaceLink({
                         provider,
-                        user: issuerUser,
+                        user: actingUser,
                         spaceId,
                         email,
                         roleId: role.ID,
@@ -452,11 +482,13 @@ export class BaseSpaceTypeServerDriver {
                         }
                     } else {
                         result.errors.push(mintRes.message ?? `Failed to invite ${email}.`);
+                        protectFailedEntry(parseUuid(mintRes.userId), personId);
                     }
                 } else {
                     result.errors.push(
                         `Cannot sync seat for ${personId ?? 'unknown person'}: no linked MJ User and no valid email address.`
                     );
+                    protectFailedEntry(userId, personId);
                 }
                 continue;
             }
@@ -561,37 +593,45 @@ export class BaseSpaceTypeServerDriver {
         }
 
         // Remove seats from this SyncSource that are no longer in the incoming roster
-        for (const [userId, existing] of existingByUser.entries()) {
-            const existingSource = (existing.SyncSource ?? '').trim();
-            if (existingSource !== cleanSource || existing.Status === 'Removed') {
-                continue;
-            }
-            if (desiredByUser.has(userId) || invitedUserIds.has(userId)) {
-                continue;
-            }
-
-            try {
-                const member = await provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(
-                    'MJ_BizApps_Collaboration: Space Members',
-                    actingUser
-                );
-                const loaded = typeof member.Load === 'function' ? await member.Load(existing.ID) : true;
-                if (!loaded) {
-                    result.errors.push(`Could not load seat ${existing.ID} for removal.`);
+        if (!skipRemovalPass) {
+            for (const [userId, existing] of existingByUser.entries()) {
+                const existingSource = (existing.SyncSource ?? '').trim();
+                if (existingSource !== cleanSource || existing.Status === 'Removed') {
                     continue;
                 }
-                member.Status = 'Removed';
-                if (await member.Save()) {
-                    result.removed += 1;
-                } else {
-                    result.errors.push(
-                        member.LatestResult?.CompleteMessage ?? `Failed to remove seat ${existing.ID}.`
-                    );
+                const existingPersonId = parseUuid(existing.PersonID);
+                if (
+                    desiredByUser.has(userId) ||
+                    invitedUserIds.has(userId) ||
+                    protectedUserIds.has(userId) ||
+                    (existingPersonId && protectedPersonIds.has(existingPersonId))
+                ) {
+                    continue;
                 }
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                LogError(`SyncSeats remove failed for seat ${existing.ID}: ${msg}`);
-                result.errors.push(msg);
+
+                try {
+                    const member = await provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(
+                        'MJ_BizApps_Collaboration: Space Members',
+                        actingUser
+                    );
+                    const loaded = typeof member.Load === 'function' ? await member.Load(existing.ID) : true;
+                    if (!loaded) {
+                        result.errors.push(`Could not load seat ${existing.ID} for removal.`);
+                        continue;
+                    }
+                    member.Status = 'Removed';
+                    if (await member.Save()) {
+                        result.removed += 1;
+                    } else {
+                        result.errors.push(
+                            member.LatestResult?.CompleteMessage ?? `Failed to remove seat ${existing.ID}.`
+                        );
+                    }
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    LogError(`SyncSeats remove failed for seat ${existing.ID}: ${msg}`);
+                    result.errors.push(msg);
+                }
             }
         }
 
