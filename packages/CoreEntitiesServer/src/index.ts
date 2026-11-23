@@ -234,4 +234,18 @@ export {
     type ResolveToolSuppliedSourcesParams,
     type ResolveToolSuppliedSourcesResult,
 } from './space-agent-source-receipts.js';
+export {
+    buildStructuralChatScopeQuery,
+    COLLABORATION_CHAT_SCOPE_FUNCTION_NAME,
+    COLLABORATION_SCHEMA_PG,
+    COLLABORATION_SCHEMA_TSQL,
+    detectStructuralChatScopeDialect,
+    resolveStructuralChatScope,
+    type BuiltStructuralChatScopeQuery,
+    type ResolveStructuralChatScopeParams,
+    type StructuralChatScopeDialect,
+    type StructuralChatScopeExecutableProvider,
+    type StructuralChatScopeExecuteOptions,
+    type StructuralChatScopeSqlParam,
+} from './structural-chat-scope.js';
 

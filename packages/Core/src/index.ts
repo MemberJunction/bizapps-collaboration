@@ -187,6 +187,19 @@ export { mimeTypeForFileName } from './file-types.js';
 export { agentGrantFor, agentRunSettingsFor, audienceOfConversationKind, turnToolsFor } from './turn-tools.js';
 export type { AgentRunSettings, ChatAudience, TurnTools, WithheldAction } from './turn-tools.js';
 export {
+    allowedBandsForSpace,
+    hasStructuralChatScopeAccess,
+    isStructuralChatScopeBand,
+    normalizeChatScopeUuid,
+    parseStructuralChatScopeRows,
+    toMutableSpaceBandsMap,
+} from './chat-scope.js';
+export type {
+    RawStructuralChatScopeRow,
+    StructuralChatScopePair,
+    StructuralChatScopeResolution,
+} from './chat-scope.js';
+export {
     assertValidReceiptUuid,
     canReaderAccessSourceReceipt,
     extractAndValidateSourceReceipts,
