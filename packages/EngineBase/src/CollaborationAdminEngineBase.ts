@@ -22,6 +22,22 @@ import {
 import type { GrantKind } from '@mj-biz-apps/collaboration-core';
 import type { mjBizAppsCollaborationSpaceGrantEntity } from '@mj-biz-apps/collaboration-entities';
 import type { MJAuthorizationEntity, MJAuthorizationRoleEntity } from '@memberjunction/core-entities';
+import {
+    type BootEntityGrantInventoryInput,
+    type BootEntityGrantInventoryResult,
+    runBootEntityGrantInventory,
+} from './boot-entity-grant-inventory.js';
+import { authorizeSecurityAuditCaller } from './security-audit-types.js';
+import {
+    runSpaceParticipantRoleAudit,
+    type SpaceParticipantRoleAuditInput,
+    type SpaceParticipantRoleAuditResult,
+} from './space-participant-role-audit.js';
+import {
+    runStaffRoleAudit,
+    type StaffRoleAuditInput,
+    type StaffRoleAuditResult,
+} from './staff-role-audit.js';
 
 const normalizeKey = (key: string | null | undefined): string => (key ?? '').trim().toLowerCase();
 
@@ -119,5 +135,52 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
             this._authorizationsByName = map;
         }
         return this._authorizationsByName.get(normalizeKey(name));
+    }
+
+    // ─── Security Audits (XS-1, XS-2, XS-7) ────────────────────────────────────
+
+    /** Executes the XS-1 Space Participant Role Audit after verifying caller staff-admin authorization. */
+    public async RunSpaceParticipantRoleAudit(
+        input: SpaceParticipantRoleAuditInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<SpaceParticipantRoleAuditResult> {
+        const md = provider ?? Metadata.Provider;
+        const user = contextUser ?? md.CurrentUser;
+        const auth = authorizeSecurityAuditCaller(user, md, input.ParticipantRoleID);
+        if (!auth.authorized) {
+            throw new Error(auth.reason);
+        }
+        return runSpaceParticipantRoleAudit(md, user!, input);
+    }
+
+    /** Executes the XS-7 Staff Role Audit after verifying caller staff-admin authorization. */
+    public async RunStaffRoleAudit(
+        input: StaffRoleAuditInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<StaffRoleAuditResult> {
+        const md = provider ?? Metadata.Provider;
+        const user = contextUser ?? md.CurrentUser;
+        const auth = authorizeSecurityAuditCaller(user, md, input.ParticipantRoleID);
+        if (!auth.authorized) {
+            throw new Error(auth.reason);
+        }
+        return runStaffRoleAudit(md, user!, input);
+    }
+
+    /** Executes the XS-2 Boot Entity Grant Filter Inventory after verifying caller staff-admin authorization. */
+    public async RunBootEntityGrantInventory(
+        input: BootEntityGrantInventoryInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<BootEntityGrantInventoryResult> {
+        const md = provider ?? Metadata.Provider;
+        const user = contextUser ?? md.CurrentUser;
+        const auth = authorizeSecurityAuditCaller(user, md, input.ParticipantRoleID);
+        if (!auth.authorized) {
+            throw new Error(auth.reason);
+        }
+        return runBootEntityGrantInventory(md, user!, input);
     }
 }
