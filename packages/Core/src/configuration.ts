@@ -13,6 +13,23 @@ export type ConfigurationValue =
     | ConfigurationValue[]
     | { [key: string]: ConfigurationValue };
 
+/** Strictly-typed input candidate for configuration validation helpers (zero `any`/`unknown`). */
+export type ConfigurationJsonInput =
+    | CollaborationSettings
+    | object
+    | string
+    | number
+    | boolean
+    | null
+    | undefined;
+
+type RawConfigValue =
+    | ConfigurationValue
+    | object
+    | undefined;
+
+type RawConfigObject = Record<string, RawConfigValue>;
+
 /** Write policy for space chats: non-loosening across Type -> Root -> Space. */
 export type ChatWhoCanWrite = 'Contributors' | 'TeamOnly' | 'Owners';
 
@@ -106,7 +123,7 @@ export interface DataReachDeclaration {
 }
 
 /** Checks one DataReach declaration; the errors name the index so a list of them reads well. */
-export function validateDataReachDeclaration(declaration: unknown, index: number): string[] {
+export function validateDataReachDeclaration(declaration: ConfigurationJsonInput, index: number): string[] {
     const at = `DataReach[${index}]`;
     if (!declaration || typeof declaration !== 'object' || Array.isArray(declaration)) return [`${at} must be an object.`];
     const d = declaration as Partial<DataReachDeclaration>;
@@ -159,7 +176,7 @@ export const DEFAULT_SPACE_RULES: EffectiveSpaceRules = {
 /**
  * Validates a SpaceTypeConfiguration object structure.
  */
-export function validateSpaceTypeConfiguration(config: unknown): { valid: boolean; errors: string[] } {
+export function validateSpaceTypeConfiguration(config: ConfigurationJsonInput): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
     if (!config || typeof config !== 'object' || Array.isArray(config)) {
         return { valid: false, errors: ['Configuration must be a non-null object.'] };
@@ -223,7 +240,7 @@ export function validateSpaceTypeConfiguration(config: unknown): { valid: boolea
  * Validates a SpaceConfiguration against allowed overridable keys from its SpaceType.
  */
 export function validateSpaceConfiguration(
-    spaceConfig: unknown,
+    spaceConfig: ConfigurationJsonInput,
     typeConfig: ISpaceTypeConfiguration | null | undefined
 ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
@@ -359,7 +376,7 @@ const CONFIG_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
  * Refuses unknown keys, wrong enum/data values, and enforces SpaceOverridable on space level.
  */
 export function ValidateCollaborationSettings(
-    config: unknown,
+    config: ConfigurationJsonInput,
     level: 'app' | 'type' | 'space',
     typeConfig?: CollaborationSettings | null
 ): { valid: boolean; errors: string[] } {
@@ -368,7 +385,7 @@ export function ValidateCollaborationSettings(
         return { valid: false, errors: ['Configuration must be a non-null object.'] };
     }
 
-    const c = config as Record<string, unknown>;
+    const c = config as RawConfigObject;
 
     for (const key of Object.keys(c)) {
         if (!KNOWN_SETTINGS_KEYS.has(key)) {
@@ -384,7 +401,7 @@ export function ValidateCollaborationSettings(
         if (!c['Chats'] || typeof c['Chats'] !== 'object' || Array.isArray(c['Chats'])) {
             errors.push('Chats must be an object.');
         } else {
-            const chats = c['Chats'] as Record<string, unknown>;
+            const chats = c['Chats'] as RawConfigObject;
             for (const k of Object.keys(chats)) {
                 if (!['WhoCanStart', 'WhoCanWrite', 'AgentReplyMode', 'HistoryOnAdd'].includes(k)) {
                     errors.push(`Unknown Chats key: ${k}`);
@@ -441,7 +458,7 @@ export function ValidateCollaborationSettings(
         if (!c['Agents'] || typeof c['Agents'] !== 'object' || Array.isArray(c['Agents'])) {
             errors.push('Agents must be an object.');
         } else {
-            const agents = c['Agents'] as Record<string, unknown>;
+            const agents = c['Agents'] as RawConfigObject;
             for (const k of Object.keys(agents)) {
                 if (!['ListMode', 'EnableBoundActionGrants'].includes(k)) {
                     errors.push(`Unknown Agents key: ${k}`);
@@ -484,14 +501,14 @@ export function ValidateCollaborationSettings(
         if (!c['Labels'] || typeof c['Labels'] !== 'object' || Array.isArray(c['Labels'])) {
             errors.push('Labels must be an object.');
         } else {
-            const labels = c['Labels'] as Record<string, unknown>;
+            const labels = c['Labels'] as RawConfigObject;
             if (labels['Tabs'] !== undefined) {
                 if (!labels['Tabs'] || typeof labels['Tabs'] !== 'object' || Array.isArray(labels['Tabs'])) {
                     errors.push('Labels.Tabs must be an object.');
                 }
             }
             if (labels['Bands'] !== undefined) {
-                const bands = labels['Bands'] as Record<string, unknown> | null;
+                const bands = labels['Bands'] as RawConfigObject | null;
                 if (!bands || typeof bands !== 'object' || Array.isArray(bands)) errors.push('Labels.Bands must be an object.');
                 else {
                     for (const [band, name] of Object.entries(bands)) {
@@ -507,7 +524,7 @@ export function ValidateCollaborationSettings(
         if (!c['Children'] || typeof c['Children'] !== 'object' || Array.isArray(c['Children'])) {
             errors.push('Children must be an object.');
         } else {
-            const ch = c['Children'] as Record<string, unknown>;
+            const ch = c['Children'] as RawConfigObject;
             if (ch['AllowedTypeCodes'] !== undefined && !Array.isArray(ch['AllowedTypeCodes'])) {
                 errors.push('Children.AllowedTypeCodes must be an array of strings.');
             }
@@ -522,7 +539,7 @@ export function ValidateCollaborationSettings(
     }
 
     if (c['Seats'] !== undefined) {
-        const seats = c['Seats'] as Record<string, unknown> | null;
+        const seats = c['Seats'] as RawConfigObject | null;
         if (!seats || typeof seats !== 'object' || Array.isArray(seats)) {
             errors.push('Seats must be an object.');
         } else if (seats['Audience'] !== undefined && !['StaffOnly', 'StaffAndParticipants'].includes(seats['Audience'] as string)) {
@@ -541,7 +558,7 @@ export function ValidateCollaborationSettings(
         const grants = c['Grants'];
         if (!grants || typeof grants !== 'object' || Array.isArray(grants)) errors.push('Grants must be an object keyed by grant kind.');
         else {
-            for (const [kind, rule] of Object.entries(grants as Record<string, { ListMode?: unknown } | null>)) {
+            for (const [kind, rule] of Object.entries(grants as Record<string, { ListMode?: RawConfigValue } | null>)) {
                 if (!isGrantKind(kind)) errors.push(`Grants.${kind}: not a grant kind (${GRANT_KINDS.join(', ')}).`);
                 else if (rule?.ListMode !== undefined && !['Extend', 'Replace'].includes(rule.ListMode as string)) errors.push(`Invalid Grants.${kind}.ListMode: ${String(rule.ListMode)}`);
             }
@@ -549,17 +566,17 @@ export function ValidateCollaborationSettings(
     }
     if (c['DataReach'] !== undefined) {
         if (!Array.isArray(c['DataReach'])) errors.push('DataReach must be an array of declarations.');
-        else c['DataReach'].forEach((declaration, index) => errors.push(...validateDataReachDeclaration(declaration, index)));
+        else (c['DataReach'] as ConfigurationJsonInput[]).forEach((declaration, index) => errors.push(...validateDataReachDeclaration(declaration, index)));
     }
 
     if (level === 'app') {
         // The app's row sets every key: a key left out would silently fall back to the code's default, and then a typo or a
         // half-written row would look like a working configuration (extensibility plan § 4)
-        const requiredKeys: Array<[string, unknown]> = [
-            ['Chats.WhoCanStart', (c['Chats'] as Record<string, unknown> | undefined)?.['WhoCanStart']],
-            ['Chats.AgentReplyMode', (c['Chats'] as Record<string, unknown> | undefined)?.['AgentReplyMode']],
-            ['Chats.HistoryOnAdd', (c['Chats'] as Record<string, unknown> | undefined)?.['HistoryOnAdd']],
-            ['Agents.ListMode', (c['Agents'] as Record<string, unknown> | undefined)?.['ListMode']],
+        const requiredKeys: Array<[string, RawConfigValue]> = [
+            ['Chats.WhoCanStart', (c['Chats'] as RawConfigObject | undefined)?.['WhoCanStart']],
+            ['Chats.AgentReplyMode', (c['Chats'] as RawConfigObject | undefined)?.['AgentReplyMode']],
+            ['Chats.HistoryOnAdd', (c['Chats'] as RawConfigObject | undefined)?.['HistoryOnAdd']],
+            ['Agents.ListMode', (c['Agents'] as RawConfigObject | undefined)?.['ListMode']],
         ];
         for (const [key, value] of requiredKeys) {
             if (value === undefined) errors.push(`The application's settings must set ${key}.`);
@@ -582,7 +599,7 @@ export function ValidateCollaborationSettings(
             errors.push("StorageAccountID cannot be overridden by space: not in type's SpaceOverridable.");
         }
         if (c['Chats'] && typeof c['Chats'] === 'object') {
-            const chats = c['Chats'] as Record<string, unknown>;
+            const chats = c['Chats'] as RawConfigObject;
             if (chats['WhoCanStart'] !== undefined && !isAllowed('Chats.WhoCanStart')) {
                 errors.push("Chats.WhoCanStart cannot be overridden by space: not in type's SpaceOverridable.");
             }
@@ -600,7 +617,7 @@ export function ValidateCollaborationSettings(
             errors.push("PromptParts cannot be overridden by space: not in type's SpaceOverridable.");
         }
         if (c['Agents'] && typeof c['Agents'] === 'object') {
-            const agents = c['Agents'] as Record<string, unknown>;
+            const agents = c['Agents'] as RawConfigObject;
             if (agents['ListMode'] !== undefined && !isAllowed('Agents.ListMode')) {
                 errors.push("Agents.ListMode cannot be overridden by space: not in type's SpaceOverridable.");
             }

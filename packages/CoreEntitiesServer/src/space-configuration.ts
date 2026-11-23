@@ -10,6 +10,7 @@
 import { type IMetadataProvider, LogError, RunView, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import {
     type CollaborationSettings,
+    type ConfigurationJsonInput,
     type EffectiveSpaceConfiguration,
     GRANT_KIND_ENTITY,
     type GrantKind,
@@ -75,9 +76,9 @@ export function typeSettingsOf(type: mjBizAppsCollaborationSpaceTypeEntity | nul
 
 function parseSpaceSettings(row: SpaceChainRow, typeSettings: CollaborationSettings | null): CollaborationSettings | null {
     if (!row.Configuration) return null;
-    let parsed: unknown;
+    let parsed: ConfigurationJsonInput;
     try {
-        parsed = JSON.parse(row.Configuration);
+        parsed = JSON.parse(row.Configuration) as ConfigurationJsonInput;
     } catch (error) {
         return refuse(`space ${row.ID} has a configuration that does not parse: ${error instanceof Error ? error.message : String(error)}`);
     }

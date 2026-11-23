@@ -89,6 +89,7 @@ export {
 export type {
     CollaborationSettings,
     ChatWhoCanWrite,
+    ConfigurationJsonInput,
     ConfigurationValue,
     DeliveryPrincipalConfig,
     EffectiveSpaceRules,
@@ -193,6 +194,7 @@ export {
     type KnowledgeSourceGrantSettings,
     type AgentLimitName,
     type AgentDefinitionForGrant,
+    type GrantInputValue,
 } from './grants.js';
 export * from './notes.js';
 export {

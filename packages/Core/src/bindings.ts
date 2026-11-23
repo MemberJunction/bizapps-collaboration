@@ -3,7 +3,7 @@
  * the space, its anchors and the caller. The server's `ResolveBindings` reads records with these; nothing here does.
  */
 import type { BindingExpression, SpaceGrantBindings } from './grants.ts';
-import type { ResolvedCollaborationSettings } from './configuration.ts';
+import type { ConfigurationValue, ResolvedCollaborationSettings } from './configuration.ts';
 
 /** The columns of a space a binding may read. A binding may not read a space's Configuration or its image URL. */
 export const SPACE_BINDING_FIELDS = ['ID', 'Name', 'Description', 'StartedAt', 'PlannedCloseAt', 'ClosedAt', 'ParentID', 'SpaceTypeID', 'OwnerID', 'StatusID'] as const;
@@ -86,15 +86,21 @@ export function needsCallerPerson(sources: ReadonlyMap<string, BindingSource>): 
     return false;
 }
 
+type SettingsTraversalValue =
+    | ResolvedCollaborationSettings
+    | ConfigurationValue
+    | object
+    | undefined;
+
 /**
  * Reads a dotted path off the effective settings: `Chats.WhoCanStart`, `Extensions.example-chapter.Region`. Returns `undefined`
  * when any step is missing, and refuses to descend into arrays, so a path never reads a list by index.
  */
 export function readSettingsPath(settings: ResolvedCollaborationSettings, path: string): string | number | boolean | null | undefined {
-    let current: unknown = settings;
+    let current: SettingsTraversalValue = settings;
     for (const step of path.split('.')) {
         if (current === null || current === undefined || typeof current !== 'object' || Array.isArray(current)) return undefined;
-        current = (current as Record<string, unknown>)[step];
+        current = (current as Record<string, SettingsTraversalValue>)[step];
     }
     if (current === null) return null;
     if (typeof current === 'string' || typeof current === 'number' || typeof current === 'boolean') return current;
@@ -111,7 +117,7 @@ export function boundNames(bindings: SpaceGrantBindings | null | undefined): Set
  * refused, as is a value for a name the target does not have. `targetNames` is null when the server does not know them, as for a
  * view's properties before MJ#4789; then only the bound-name rule applies.
  */
-export function refuseClientValues(clientValues: Record<string, unknown> | null | undefined, bindings: SpaceGrantBindings | null | undefined, targetNames: readonly string[] | null): string | null {
+export function refuseClientValues(clientValues: Record<string, ConfigurationValue | object | undefined> | null | undefined, bindings: SpaceGrantBindings | null | undefined, targetNames: readonly string[] | null): string | null {
     if (!clientValues) return null;
     const bound = boundNames(bindings);
     const known = targetNames ? new Set(targetNames.map((name) => name.toLowerCase())) : null;

@@ -6,7 +6,7 @@
 
 import { BaseEntity, BaseEntityResult, LogError, Metadata, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { ValidateCollaborationSettings, type CollaborationSettings } from '@mj-biz-apps/collaboration-core';
+import { ValidateCollaborationSettings, type CollaborationSettings, type ConfigurationJsonInput } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { refuseSubtypeEntity, type SubtypeEntityShape } from './subtype-rules.js';
@@ -64,9 +64,9 @@ export class SpaceTypeEntityServer extends mjBizAppsCollaborationSpaceTypeEntity
 
         // 1. Validate Configuration JSON if present
         if (this.Configuration) {
-            let parsed: unknown;
+            let parsed: ConfigurationJsonInput;
             try {
-                parsed = JSON.parse(this.Configuration);
+                parsed = JSON.parse(this.Configuration) as ConfigurationJsonInput;
             } catch {
                 return fail(result, 'Configuration', 'Space type configuration must be valid JSON.');
             }
