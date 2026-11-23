@@ -41,7 +41,7 @@ export async function ensureSpaceForRecordForUser(provider: IMetadataProvider, u
     // The record, read as the caller: row-level security decides whether they see it at all
     const key = entity.PrimaryKeys[0];
     const value = recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId;
-    const read = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>({
+    const read = await RunView.FromMetadataProvider(provider).RunView<Record<string, string | number | null>>({
         EntityName: entity.Name,
         ExtraFilter: `[${key.Name}] = '${value.replace(/'/g, "''")}'`,
         Fields: [key.Name],

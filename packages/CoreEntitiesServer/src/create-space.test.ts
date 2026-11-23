@@ -35,6 +35,15 @@ function providerFor(setup: Setup) {
         Save: async () => { log.push('space save'); return setup.spaceSaves ?? true; },
         LatestResult: { CompleteMessage: 'A board may not sit here.' },
     };
+    for (const propName of ['TermName', 'NextMeeting']) {
+        Object.defineProperty(leaf, propName, {
+            enumerable: true,
+            get: () => set[propName],
+            set: (value: unknown) => {
+                set[propName] = value;
+            },
+        });
+    }
     const space: Record<string, unknown> = {
         ID: SPACE_ID,
         NewRecord: () => undefined,

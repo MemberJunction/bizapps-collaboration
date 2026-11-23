@@ -36,6 +36,7 @@ jobs:
       # These three read the source and the installed packages, not a build, so they run before the build and are not held up by it
       - run: node scripts/strip-sync-blocks.mjs --check
       - run: node scripts/check-mj-tokens.mjs --self-test && node scripts/check-mj-tokens.mjs
+      - run: node scripts/check-strict-types.mjs --self-test && node scripts/check-strict-types.mjs
       - run: node scripts/check-downstream-names.mjs
       - run: node scripts/check-mj-inputs.mjs --self-test && node scripts/check-mj-inputs.mjs
       - run: node scripts/check-registered-exports.mjs --self-test && node scripts/check-registered-exports.mjs
