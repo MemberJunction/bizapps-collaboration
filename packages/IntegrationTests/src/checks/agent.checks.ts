@@ -1,8 +1,25 @@
-import { CompositeKey, RunView, type UserInfo } from '@memberjunction/core';
-import { ActionEngineServer } from '@memberjunction/actions';
+import { CompositeKey, DatabaseProviderBase, RunView, type UserInfo } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
+import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
+import { LoadScopedSearchAction } from '@memberjunction/core-actions';
 import { SearchEngine } from '@memberjunction/search-engine';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { audienceOfConversationKind, noteDocument } from '@mj-biz-apps/collaboration-core';
+import type { MJContentSourceEntity, MJSearchScopeEntity, MJSearchScopePermissionEntity } from '@memberjunction/core-entities';
+import {
+    COLLABORATION_SPACE_SCOPE_NAME,
+    querySpaceAgentSourceReceipts,
+    resolveTurnKnowledgeScopes,
+} from '@mj-biz-apps/collaboration-core-entities-server';
+import type { mjBizAppsCollaborationSpaceGrantEntity } from '@mj-biz-apps/collaboration-entities';
+import {
+    SPACE_AGENT_SOURCE_RECEIPT_ENTITY,
+    SPACE_GRANT_ENTITY as AG_SPACE_GRANT_ENTITY,
+} from '../entity-names.js';
+import {
+    audienceOfConversationKind,
+    hasStructuralChatScopeAccess,
+    noteDocument,
+} from '@mj-biz-apps/collaboration-core';
 import {
     collaborationFileStore,
     createSpaceConversation,
@@ -14,11 +31,13 @@ import {
     loadSpaceConfiguration,
     postSpaceMessage,
     resolveSpaceAgentRetrieval,
+    resolveStructuralChatScope,
     resolveTurnTools,
     COLLABORATION_SPACE_SCOPE_ID,
     SCOPED_SEARCH_ACTION_ID,
     uploadSpaceFile,
 } from '@mj-biz-apps/collaboration-core-entities-server';
+import sql from 'mssql';
 import type {
     mjBizAppsCollaborationSpaceItemEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
@@ -2075,10 +2094,16 @@ const checks: NamedCheck[] = [
             }
 
             // 2. The real action as Research Agent, under each chat's run scope as BaseAgent stamps it for a space turn
+            LoadScopedSearchAction();
             const engine = ActionEngineServer.Instance;
             await engine.Config(false, ada, ctx.Provider);
             const action = engine.Actions.find((a) => SameID(a.ID, SCOPED_SEARCH_ACTION_ID));
             Assert(!!action, 'Scoped Search is registered');
+            const scopedReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, '__Scoped_Search');
+            Assert(
+                scopedReg?.SubClass?.name === 'ScopedSearchAction',
+                `__Scoped_Search resolves directly to core ScopedSearchAction without Collaboration override (got ${scopedReg?.SubClass?.name ?? 'none'})`,
+            );
             const run = (chatId: string, query: string, hostScope: boolean) =>
                 engine.RunAction({
                     Action: action!,
@@ -2128,7 +2153,7 @@ const checks: NamedCheck[] = [
                 Assert(unhosted.Success === false && unhosted.Result?.ResultCode === 'ACCESS_DENIED', `Without the space's scope, Research Agent may not search (got ${unhosted.Result?.ResultCode ?? unhosted.Message})`);
                 Assert(finds(await search(general.spaceChatId!, sharedName!), sharedId), `Research Agent in a General chat finds the Shared task "${sharedName}"`);
                 Assert(!finds(await search(general.spaceChatId!, teamName!), teamId), `Research Agent in a General chat never finds the Team task "${teamName}"`);
-                // Agents quote their searches; the space's search still finds the words, and quoting widens nothing (INTERIM, CollaborationScopedSearchAction)
+                // Agents quote their searches; core ScopedSearchAction unquotes via NormalizeScopedSearchQuery and quoting widens nothing (CT-9)
                 Assert(finds(await search(general.spaceChatId!, `"${sharedName}"`), sharedId), `A quoted search in a General chat finds the Shared task "${sharedName}"`);
                 Assert(!finds(await search(general.spaceChatId!, `"${teamName}"`), teamId), `A quoted search in a General chat never finds the Team task "${teamName}"`);
                 // The negative control: the same words find the Team task in a staff member's Private chat, so its absence above is the audience's doing
@@ -2484,6 +2509,668 @@ const checks: NamedCheck[] = [
                         ? [() => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, devSeatId!, "AG15 Dev's temporary seat on Discovery")]
                         : []),
                 ]);
+            }
+        },
+    },
+    {
+        Id: 'agent.AG16',
+        Name: 'AG16 — CS-1 fnCollaborationChatScope returns (SpaceID, Band) pairs via structural Audience reach across spaces/bands with out-of-audience isolation and O(1) cost regardless of audience cardinality',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            if (isClientTransport(ctx)) {
+                return;
+            }
+            Assert(ctx.Provider instanceof DatabaseProviderBase, 'Server harness provider must extend DatabaseProviderBase');
+            if (!(ctx.Provider instanceof DatabaseProviderBase)) {
+                return;
+            }
+            const dbProvider = ctx.Provider;
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const harper = await GetPersonaUser(ctx, 'harper');
+            const remy = await GetPersonaUser(ctx, 'remy');
+            const pat = await GetPersonaUser(ctx, 'pat');
+
+            const stamp = Date.now();
+            const createdChats: Array<{ convId: string; chatId: string }> = [];
+
+            const measureSpaceMemberLogicalReads = async (
+                tx: sql.Transaction,
+                primaryId: string,
+                userId: string,
+            ): Promise<{ pairs: Array<{ SpaceID: string; Band: string }>; logicalReads: number }> => {
+                const req = new sql.Request(tx);
+                req.input('primaryId', sql.UniqueIdentifier, primaryId);
+                req.input('userId', sql.UniqueIdentifier, userId);
+                let spaceMemberReads = 0;
+                req.on('info', (info: { message?: string }) => {
+                    const msg = info.message ?? '';
+                    const match = /Table 'SpaceMember'.*?logical reads (\d+)/i.exec(msg);
+                    if (match) {
+                        spaceMemberReads += Number(match[1]);
+                    }
+                });
+                const res = await req.query<{ SpaceID: string; Band: string }>(`
+                    SET STATISTICS IO ON;
+                    SELECT CONVERT(NVARCHAR(36), [SpaceID]) AS [SpaceID], [Band]
+                    FROM [__mj_BizAppsCollaboration].[fnCollaborationChatScope](@primaryId, @userId)
+                    ORDER BY [SpaceID] ASC, [Band] ASC;
+                    SET STATISTICS IO OFF;
+                `);
+                return { pairs: res.recordset ?? [], logicalReads: spaceMemberReads };
+            };
+
+            try {
+                const nwGen = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    Name: `ag16-nw-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(nwGen.ok && !!nwGen.conversationId && !!nwGen.spaceChatId, 'Ada opens Northwind General chat for AG16');
+                if (!nwGen.ok || !nwGen.conversationId || !nwGen.spaceChatId) throw new Error('Northwind General creation failed');
+                createdChats.push({ convId: nwGen.conversationId, chatId: nwGen.spaceChatId });
+
+                const nwPriv = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    Name: `ag16-nw-priv-${stamp}`,
+                    Kind: 'Private',
+                });
+                Assert(nwPriv.ok && !!nwPriv.conversationId && !!nwPriv.spaceChatId, 'Ada opens Northwind Private chat for AG16');
+                if (!nwPriv.ok || !nwPriv.conversationId || !nwPriv.spaceChatId) throw new Error('Northwind Private creation failed');
+                createdChats.push({ convId: nwPriv.conversationId, chatId: nwPriv.spaceChatId });
+
+                const discPriv = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `ag16-disc-priv-${stamp}`,
+                    Kind: 'Private',
+                });
+                Assert(discPriv.ok && !!discPriv.conversationId && !!discPriv.spaceChatId, 'Ada opens Discovery Private chat for AG16');
+                if (!discPriv.ok || !discPriv.conversationId || !discPriv.spaceChatId) throw new Error('Discovery Private creation failed');
+                createdChats.push({ convId: discPriv.conversationId, chatId: discPriv.spaceChatId });
+
+                const beaAsst = await createSpaceConversation(ctx.Provider, bea, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `ag16-bea-asst-${stamp}`,
+                    Kind: 'Assistant',
+                });
+                Assert(beaAsst.ok && !!beaAsst.conversationId && !!beaAsst.spaceChatId, 'Bea opens Discovery Assistant chat for AG16');
+                if (!beaAsst.ok || !beaAsst.conversationId || !beaAsst.spaceChatId) throw new Error('Bea Assistant creation failed');
+                createdChats.push({ convId: beaAsst.conversationId, chatId: beaAsst.spaceChatId });
+
+                // 1. General chat on Northwind for Ada: strictly Shared across expected subtree (never Team, Delivery, Closed-past, Harbor)
+                const nwGenAda = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: nwGen.spaceChatId,
+                    userId: ada.ID,
+                    contextUser: ada,
+                });
+                Assert(
+                    nwGenAda.spaceIds.length === EXPECTED_ADA_NORTHWIND_SPACES.size &&
+                        nwGenAda.spaceIds.every((id) => EXPECTED_ADA_NORTHWIND_SPACES.has(id)),
+                    `Northwind General SpaceIDs match expected Ada subtree (${nwGenAda.spaceIds.join(',')})`,
+                );
+                Assert(
+                    nwGenAda.pairs.every((p) => p.Band === 'Shared') && nwGenAda.pairs.length === EXPECTED_ADA_NORTHWIND_SPACES.size,
+                    'Northwind General chat emits strictly Shared pairs even for Team owner Ada',
+                );
+                Assert(!hasStructuralChatScopeAccess(nwGenAda, DELIVERY_SPACE_ID, 'Shared'), 'Delivery (ExcludedFromParentScope) is excluded');
+                Assert(!hasStructuralChatScopeAccess(nwGenAda, CLOSED_PAST_SPACE_ID, 'Shared'), 'Closed-past (ExcludedEntirely) is excluded');
+                Assert(!hasStructuralChatScopeAccess(nwGenAda, HARBOR_SPACE_ID, 'Shared'), 'Sibling Harbor space is excluded');
+
+                // 2. Private chat on Northwind for Ada: emits both Shared and Team pairs across reachable spaces
+                const nwPrivAda = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: nwPriv.spaceChatId,
+                    userId: ada.ID,
+                    contextUser: ada,
+                });
+                Assert(
+                    nwPrivAda.pairs.length === EXPECTED_ADA_NORTHWIND_SPACES.size * 2,
+                    `Northwind Private chat emits both Shared and Team pairs (${nwPrivAda.pairs.length} pairs)`,
+                );
+                Assert(hasStructuralChatScopeAccess(nwPrivAda, NORTHWIND_SPACE_ID, 'Team'), 'Northwind Private allows Team for Ada');
+                Assert(hasStructuralChatScopeAccess(nwPrivAda, DISCOVERY_SPACE_ID, 'Team'), 'Discovery inherits Team in Northwind Private for Ada');
+                Assert(hasStructuralChatScopeAccess(nwPrivAda, FIELD_NOTES_SPACE_ID, 'Team'), 'Field notes inherits Team in Northwind Private for Ada');
+
+                // 3. Discovery Private chat for Shared-only client Bea -> empty reach (fail closed)
+                const discPrivBea = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: discPriv.spaceChatId,
+                    userId: bea.ID,
+                    contextUser: bea,
+                });
+                Assert(discPrivBea.pairs.length === 0, 'Shared-only Bea gets 0 pairs on Discovery Private chat');
+
+                // 4. Discovery Assistant chat owned by Bea: Bea gets Shared on Discovery+Field notes; Ada (non-owner) gets 0 pairs
+                const beaAsstBea = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: beaAsst.spaceChatId,
+                    userId: bea.ID,
+                    contextUser: bea,
+                });
+                Assert(
+                    beaAsstBea.pairs.length === EXPECTED_BEA_DISCOVERY_SPACES.size &&
+                        beaAsstBea.pairs.every((p) => p.Band === 'Shared') &&
+                        beaAsstBea.spaceIds.every((id) => EXPECTED_BEA_DISCOVERY_SPACES.has(id)),
+                    'Bea Assistant chat resolves Shared reach across Discovery and Field notes',
+                );
+                const beaAsstAda = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: beaAsst.spaceChatId,
+                    userId: ada.ID,
+                    contextUser: ada,
+                });
+                Assert(beaAsstAda.pairs.length === 0, 'Non-owner Ada gets 0 pairs on Bea Assistant chat');
+
+                // 5. Out-of-audience / removed / invited / malformed isolation
+                for (const [label, outsider] of [
+                    ['Harper (Harbor outsider)', harper],
+                    ['Remy (Removed)', remy],
+                    ['Pat (Invited)', pat],
+                ] as const) {
+                    const outRes = await resolveStructuralChatScope({
+                        provider: dbProvider,
+                        primaryScopeRecordId: nwGen.spaceChatId,
+                        userId: outsider.ID,
+                        contextUser: outsider,
+                    });
+                    Assert(outRes.pairs.length === 0, `${label} gets 0 pairs on Northwind General chat`);
+                }
+                const invalidRes = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: "' OR '1'='1",
+                    userId: ada.ID,
+                    contextUser: ada,
+                });
+                Assert(invalidRes.pairs.length === 0, 'Malformed PrimaryScopeRecordID fails closed with 0 pairs');
+
+                // 6. Constant-cost O(1) verification regardless of audience member count (rolled-back transaction)
+                const pool = ctx.Pool;
+                Assert(!!pool, 'Server harness provides SQL connection pool for cardinality test');
+                if (pool) {
+                    const tx = new sql.Transaction(pool);
+                    await tx.begin();
+                    try {
+                        const baseline = await measureSpaceMemberLogicalReads(tx, discPriv.spaceChatId, ada.ID);
+                        Assert(baseline.pairs.length === 4, `Baseline Discovery Private Ada pairs = 4 (saw ${baseline.pairs.length})`);
+
+                        await new sql.Request(tx)
+                            .input('spaceId', sql.UniqueIdentifier, DISCOVERY_SPACE_ID)
+                            .query(`
+                                DECLARE @guestRole UNIQUEIDENTIFIER = (SELECT TOP 1 [ID] FROM [__mj_BizAppsCollaboration].[SpaceRoleType] WHERE [Code] = N'guest');
+                                DECLARE @i INT = 1;
+                                WHILE @i <= 250
+                                BEGIN
+                                    DECLARE @uid UNIQUEIDENTIFIER = NEWID();
+                                    INSERT INTO [__mj].[User] ([ID], [Name], [Email], [Type], [IsActive])
+                                    VALUES (@uid, N'AG16 Scale User ' + CAST(@i AS NVARCHAR(10)), N'ag16-scale-' + CAST(@i AS NVARCHAR(10)) + N'@example.invalid', N'User', 1);
+                                    INSERT INTO [__mj_BizAppsCollaboration].[SpaceMember] ([SpaceID], [UserID], [SpaceRoleTypeID], [Band], [Status])
+                                    VALUES (@spaceId, @uid, @guestRole, N'Shared', N'Active');
+                                    SET @i = @i + 1;
+                                END
+                            `);
+
+                        const scaled = await measureSpaceMemberLogicalReads(tx, discPriv.spaceChatId, ada.ID);
+                        Assert(
+                            JSON.stringify(scaled.pairs) === JSON.stringify(baseline.pairs),
+                            'Adding 250 Discovery audience members produces identical (SpaceID, Band) pairs',
+                        );
+                        Assert(
+                            scaled.logicalReads <= baseline.logicalReads + 4,
+                            `SpaceMember logical reads stayed O(1) across +250 members (baseline=${baseline.logicalReads}, scaled=${scaled.logicalReads})`,
+                        );
+                    } finally {
+                        await tx.rollback();
+                    }
+                }
+            } finally {
+                for (const chat of createdChats.reverse()) {
+                    await cleanupConversation(ctx.Provider, ctx.User, chat.convId, chat.chatId);
+                }
+            }
+        },
+    },
+    {
+        Id: 'agent.AG17',
+        Name: 'AG17 — CT-3 resolves granted extra knowledge scopes in space turns, excludes unauthorized/Team/revoked grants, and persists OriginatingScopeID and OriginatingScopeName on source receipts',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const stamp = Date.now();
+
+            const createdChats: Array<{ convId: string; chatId: string }> = [];
+            const createdGrantIds: string[] = [];
+            const createdPermIds: string[] = [];
+            const createdScopeIds: string[] = [];
+            const createdContentSourceIds: string[] = [];
+
+            const CONTENT_SOURCES_ENTITY = 'MJ: Content Sources';
+            const CONTENT_TYPES_ENTITY = 'MJ: Content Types';
+            const CONTENT_SOURCE_TYPES_ENTITY = 'MJ: Content Source Types';
+            const CONTENT_FILE_TYPES_ENTITY = 'MJ: Content File Types';
+
+            const sharedScopeName = `AG17 Organization Policy Scope ${stamp}`;
+            const teamScopeName = `AG17 Team Operations Scope ${stamp}`;
+            const deniedScopeName = `AG17 Denied Audience Scope ${stamp}`;
+            const revokedScopeName = `AG17 Revoked Inherited Scope ${stamp}`;
+
+            try {
+                // Discover required FK lookup IDs from seeded Content Types/Source Types/File Types + Discovery effective audience (direct + inherited Northwind active seats)
+                const [contentTypes, sourceTypes, fileTypes, discoveryMembers] = await Promise.all([
+                    FindRows<{ ID: string }>(ctx, CONTENT_TYPES_ENTITY, '1=1', ['ID']),
+                    FindRows<{ ID: string }>(ctx, CONTENT_SOURCE_TYPES_ENTITY, '1=1', ['ID']),
+                    FindRows<{ ID: string }>(ctx, CONTENT_FILE_TYPES_ENTITY, '1=1', ['ID']),
+                    FindRows<{ UserID: string | null }>(
+                        ctx,
+                        SPACE_MEMBER_ENTITY,
+                        `SpaceID IN ('${DISCOVERY_SPACE_ID}', '${NORTHWIND_SPACE_ID}') AND Status = 'Active' AND UserID IS NOT NULL`,
+                        ['UserID'],
+                    ),
+                ]);
+                Assert(contentTypes.length > 0, 'Seeded MJ: Content Types row exists');
+                Assert(sourceTypes.length > 0, 'Seeded MJ: Content Source Types row exists');
+                Assert(fileTypes.length > 0, 'Seeded MJ: Content File Types row exists');
+
+                const contentTypeId = contentTypes[0].ID;
+                const sourceTypeId = sourceTypes[0].ID;
+                const fileTypeId = fileTypes[0].ID;
+                const csEntityId = ctx.Provider.EntityByName(CONTENT_SOURCES_ENTITY)?.ID;
+                Assert(!!csEntityId, 'MJ: Content Sources entity metadata is loaded');
+                if (!csEntityId) throw new Error('Missing MJ: Content Sources entity ID');
+
+                const memberUserIds = Array.from(
+                    new Set(
+                        [ada.ID, bea.ID, ...discoveryMembers.map((m) => m.UserID).filter((v): v is string => !!v)].map((id) =>
+                            id.toLowerCase(),
+                        ),
+                    ),
+                );
+
+                const createContentSource = async (name: string): Promise<string> => {
+                    const cs = await ctx.Provider.GetEntityObject<MJContentSourceEntity>(CONTENT_SOURCES_ENTITY, ctx.User);
+                    cs.NewRecord();
+                    cs.Name = name;
+                    cs.ContentTypeID = contentTypeId;
+                    cs.ContentSourceTypeID = sourceTypeId;
+                    cs.ContentFileTypeID = fileTypeId;
+                    cs.URL = `https://knowledge.example.test/${encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))}`;
+                    cs.ForceDiscovery = false;
+                    const saved = await cs.Save();
+                    Assert(saved, `Create Content Source '${name}': ${cs.LatestResult?.CompleteMessage ?? 'save failed'}`);
+                    createdContentSourceIds.push(cs.ID);
+                    return cs.ID;
+                };
+
+                const createSearchScope = async (name: string, contentSourceId: string): Promise<string> => {
+                    const scope = await ctx.Provider.GetEntityObject<MJSearchScopeEntity>(SEARCH_SCOPE_ENTITY, ctx.User);
+                    scope.NewRecord();
+                    scope.Name = name;
+                    scope.Status = 'Active';
+                    scope.IsGlobal = false;
+                    scope.IsDefault = false;
+                    scope.ScopeConfig = JSON.stringify({ ContentSourceID: contentSourceId });
+                    const saved = await scope.Save();
+                    Assert(saved, `Create Search Scope '${name}': ${scope.LatestResult?.CompleteMessage ?? 'save failed'}`);
+                    createdScopeIds.push(scope.ID);
+                    return scope.ID;
+                };
+
+                const createScopePermission = async (
+                    scopeId: string,
+                    userId: string,
+                    level: MJSearchScopePermissionEntity['PermissionLevel'],
+                ): Promise<string> => {
+                    const perm = await ctx.Provider.GetEntityObject<MJSearchScopePermissionEntity>(SEARCH_SCOPE_PERMISSION_ENTITY, ctx.User);
+                    perm.NewRecord();
+                    perm.SearchScopeID = scopeId;
+                    perm.UserID = userId;
+                    perm.PermissionLevel = level;
+                    const saved = await perm.Save();
+                    Assert(saved, `Create Search Scope Permission (${level}): ${perm.LatestResult?.CompleteMessage ?? 'save failed'}`);
+                    createdPermIds.push(perm.ID);
+                    return perm.ID;
+                };
+
+                const createKnowledgeGrant = async (opts: {
+                    spaceId: string;
+                    contentSourceId: string;
+                    scopeId: string;
+                    band: mjBizAppsCollaborationSpaceGrantEntity['Band'];
+                    mode: mjBizAppsCollaborationSpaceGrantEntity['Mode'];
+                    label: string;
+                    sequence: number;
+                }): Promise<string> => {
+                    const grant = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceGrantEntity>(AG_SPACE_GRANT_ENTITY, ctx.User);
+                    grant.NewRecord();
+                    grant.SpaceID = opts.spaceId;
+                    grant.Kind = 'KnowledgeSource';
+                    grant.Mode = opts.mode;
+                    grant.TargetEntityID = csEntityId;
+                    grant.TargetRecordID = opts.contentSourceId;
+                    grant.Label = opts.label;
+                    grant.Band = opts.band;
+                    grant.IsDefault = false;
+                    grant.Sequence = opts.sequence;
+                    grant.Settings = JSON.stringify({ SearchScopeID: opts.scopeId });
+                    const saved = await grant.Save();
+                    Assert(saved, `Create KnowledgeSource grant '${opts.label}': ${grant.LatestResult?.CompleteMessage ?? 'save failed'}`);
+                    createdGrantIds.push(grant.ID);
+                    return grant.ID;
+                };
+
+                // 1. Seed 4 Content Sources, 4 Search Scopes, and explicit Search Scope Permissions
+                const csSharedId = await createContentSource(`AG17 Shared Policy KB ${stamp}`);
+                const csTeamId = await createContentSource(`AG17 Team Ops KB ${stamp}`);
+                const csDeniedId = await createContentSource(`AG17 Denied Audience KB ${stamp}`);
+                const csRevokedId = await createContentSource(`AG17 Revoked KB ${stamp}`);
+
+                const scopeSharedId = await createSearchScope(sharedScopeName, csSharedId);
+                const scopeTeamId = await createSearchScope(teamScopeName, csTeamId);
+                const scopeDeniedId = await createSearchScope(deniedScopeName, csDeniedId);
+                const scopeRevokedId = await createSearchScope(revokedScopeName, csRevokedId);
+
+                for (const uid of memberUserIds) {
+                    await createScopePermission(scopeSharedId, uid, 'Search');
+                    await createScopePermission(scopeTeamId, uid, 'Search');
+                    await createScopePermission(scopeRevokedId, uid, 'Search');
+                    // Explicitly grant Ada Search on scopeDeniedId, while Bea gets None deny
+                    await createScopePermission(scopeDeniedId, uid, SameID(uid, bea.ID) ? 'None' : 'Search');
+                }
+
+                // 2. Grant Shared, Team, Denied, and Parent+Remove Revoked KnowledgeSource grants
+                await createKnowledgeGrant({
+                    spaceId: DISCOVERY_SPACE_ID,
+                    contentSourceId: csSharedId,
+                    scopeId: scopeSharedId,
+                    band: 'Shared',
+                    mode: 'Extend',
+                    label: `AG17 Policy Source ${stamp}`,
+                    sequence: 10,
+                });
+                await createKnowledgeGrant({
+                    spaceId: DISCOVERY_SPACE_ID,
+                    contentSourceId: csTeamId,
+                    scopeId: scopeTeamId,
+                    band: 'Team',
+                    mode: 'Extend',
+                    label: `AG17 Team Ops Source ${stamp}`,
+                    sequence: 20,
+                });
+                await createKnowledgeGrant({
+                    spaceId: DISCOVERY_SPACE_ID,
+                    contentSourceId: csDeniedId,
+                    scopeId: scopeDeniedId,
+                    band: 'Shared',
+                    mode: 'Extend',
+                    label: `AG17 Denied Audience Source ${stamp}`,
+                    sequence: 30,
+                });
+                // Inherited on Northwind (Discovery's parent) and revoked with Mode='Remove' on Discovery
+                await createKnowledgeGrant({
+                    spaceId: NORTHWIND_SPACE_ID,
+                    contentSourceId: csRevokedId,
+                    scopeId: scopeRevokedId,
+                    band: 'Shared',
+                    mode: 'Extend',
+                    label: `AG17 Parent Revocable Source ${stamp}`,
+                    sequence: 40,
+                });
+                await createKnowledgeGrant({
+                    spaceId: DISCOVERY_SPACE_ID,
+                    contentSourceId: csRevokedId,
+                    scopeId: scopeRevokedId,
+                    band: 'Shared',
+                    mode: 'Remove',
+                    label: `AG17 Revoked on Discovery ${stamp}`,
+                    sequence: 41,
+                });
+
+                // Verify direct batched resolveTurnKnowledgeScopes honors Extend + Remove + Audience permissions
+                const { configuration: discConfig } = await loadSpaceConfiguration(ctx.Provider, DISCOVERY_SPACE_ID);
+                const resolvedShared = await resolveTurnKnowledgeScopes({
+                    provider: ctx.Provider,
+                    systemUser: ctx.User,
+                    contextUser: ada,
+                    configuration: discConfig,
+                    audience: 'Shared',
+                    audienceUsers: [ada, bea],
+                    primaryScopeRecordId: DISCOVERY_SPACE_ID,
+                });
+                Assert(
+                    resolvedShared.searchScopeIds.some((id) => SameID(id, SEARCH_SCOPE_ID)) &&
+                        resolvedShared.searchScopeIds.some((id) => SameID(id, scopeSharedId)) &&
+                        !resolvedShared.searchScopeIds.some((id) => SameID(id, scopeTeamId)) &&
+                        !resolvedShared.searchScopeIds.some((id) => SameID(id, scopeDeniedId)) &&
+                        !resolvedShared.searchScopeIds.some((id) => SameID(id, scopeRevokedId)),
+                    'AG17 resolveTurnKnowledgeScopes includes native + Shared scope and excludes Team, None-denied, and Mode=Remove revoked scopes',
+                );
+
+                // 3. Execute General (Shared) space turn in Discovery with multi-scope dispatch seam
+                const genStart = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-ag17-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(genStart.ok === true && !!genStart.conversationId && !!genStart.spaceChatId, 'AG17 Ada creates General conversation in Discovery');
+                if (!genStart.ok || !genStart.conversationId || !genStart.spaceChatId) {
+                    throw new Error(`AG17 General conversation failed: ${genStart.message ?? 'unknown'}`);
+                }
+                createdChats.push({ convId: genStart.conversationId, chatId: genStart.spaceChatId });
+
+                const genMsg = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genStart.conversationId,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} summarize granted knowledge scopes and Discovery items`,
+                });
+                Assert(genMsg.ok === true && !!genMsg.detailId, 'AG17 post General message succeeds');
+                if (!genMsg.ok || !genMsg.detailId) throw new Error('AG17 General post failed');
+
+                let capturedGenScopeIds: string[] = [];
+                const genTurn = await executeSpaceChatTurn(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genStart.conversationId,
+                    userMessageId: genMsg.detailId,
+                    multiScopeSearch: async (searchParams) => {
+                        capturedGenScopeIds = [...(searchParams.ScopeIDs ?? [])];
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                                    RecordID: '00000000-0000-0000-0000-000000000000',
+                                    Title: `AG17 Granted Policy Excerpt ${stamp}`,
+                                    Snippet: 'Organization knowledge scope policy rule approved for shared space.',
+                                    Score: 0.94,
+                                    SourceType: 'vector',
+                                    OriginatingScopeID: scopeSharedId,
+                                    OriginatingScopeName: sharedScopeName,
+                                    RawMetadata: JSON.stringify({ ContentSourceID: csSharedId }),
+                                },
+                                {
+                                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                                    RecordID: '00000000-0000-0000-0000-000000000001',
+                                    Title: `AG17 Denied Scope Leak ${stamp}`,
+                                    Snippet: 'Should never pass fail-closed scope attribution.',
+                                    Score: 0.99,
+                                    SourceType: 'vector',
+                                    OriginatingScopeID: scopeDeniedId,
+                                    OriginatingScopeName: deniedScopeName,
+                                    RawMetadata: JSON.stringify({ ContentSourceID: csDeniedId }),
+                                },
+                            ],
+                        };
+                    },
+                });
+                Assert(genTurn.ok === true, `AG17 General executeSpaceChatTurn succeeds: ${genTurn.ok ? '' : genTurn.message}`);
+                if (!genTurn.ok) throw new Error(genTurn.message);
+                Assert(
+                    capturedGenScopeIds.some((id) => SameID(id, SEARCH_SCOPE_ID)) &&
+                        capturedGenScopeIds.some((id) => SameID(id, scopeSharedId)) &&
+                        !capturedGenScopeIds.some((id) => SameID(id, scopeTeamId)) &&
+                        !capturedGenScopeIds.some((id) => SameID(id, scopeDeniedId)) &&
+                        !capturedGenScopeIds.some((id) => SameID(id, scopeRevokedId)),
+                    `AG17 General turn SearchScopeIDs strictly scoped to [native, shared], saw ${capturedGenScopeIds.join(',')}`,
+                );
+
+                const genReceipts = genTurn.sourceReceipts ?? [];
+                Assert(
+                    genReceipts.some((r) => SameID(r.contentSourceId, csSharedId) && r.originatingScopeName === sharedScopeName),
+                    'AG17 General turn response receipts include granted KnowledgeSource with exact OriginatingScopeName',
+                );
+                Assert(
+                    genReceipts.some((r) => r.sourceKind === 'SpaceItem' && r.originatingScopeName === COLLABORATION_SPACE_SCOPE_NAME),
+                    'AG17 General turn response receipts include native SpaceItem with Collaboration Space Scope',
+                );
+                Assert(
+                    !genReceipts.some((r) => SameID(r.contentSourceId, csDeniedId) || SameID(r.contentSourceId, csRevokedId)),
+                    'AG17 General turn receipts exclude unauthorized and revoked ContentSources',
+                );
+
+                // Confirm persisted DB columns OriginatingScopeID & OriginatingScopeName in SpaceAgentSourceReceipt
+                const persistedGenRows = await FindRows<{
+                    ID: string;
+                    SourceKind: string;
+                    ContentSourceID: string | null;
+                    OriginatingScopeID: string | null;
+                    OriginatingScopeName: string | null;
+                }>(
+                    ctx,
+                    SPACE_AGENT_SOURCE_RECEIPT_ENTITY,
+                    `ConversationID = '${genStart.conversationId}'`,
+                    ['ID', 'SourceKind', 'ContentSourceID', 'OriginatingScopeID', 'OriginatingScopeName'],
+                    ctx.User,
+                    { BypassCache: true },
+                );
+                const persistedShared = persistedGenRows.find((row) => SameID(row.ContentSourceID, csSharedId));
+                Assert(
+                    !!persistedShared &&
+                        SameID(persistedShared.OriginatingScopeID, scopeSharedId) &&
+                        persistedShared.OriginatingScopeName === sharedScopeName,
+                    'AG17 Persisted SpaceAgentSourceReceipt records exact OriginatingScopeID and OriginatingScopeName for granted scope',
+                );
+                const persistedNative = persistedGenRows.find((row) => row.SourceKind === 'SpaceItem');
+                Assert(
+                    !!persistedNative &&
+                        SameID(persistedNative.OriginatingScopeID, SEARCH_SCOPE_ID) &&
+                        persistedNative.OriginatingScopeName === COLLABORATION_SPACE_SCOPE_NAME,
+                    'AG17 Persisted SpaceAgentSourceReceipt records native Collaboration Space Scope provenance',
+                );
+
+                // 4. Execute Private (Team) space turn for Ada -> Team grant becomes authorized & readable by Ada, not Bea
+                const privStart = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-ag17-priv-${stamp}`,
+                    Kind: 'Private',
+                });
+                Assert(privStart.ok === true && !!privStart.conversationId && !!privStart.spaceChatId, 'AG17 Ada creates Private conversation in Discovery');
+                if (!privStart.ok || !privStart.conversationId || !privStart.spaceChatId) {
+                    throw new Error(`AG17 Private conversation failed: ${privStart.message ?? 'unknown'}`);
+                }
+                createdChats.push({ convId: privStart.conversationId, chatId: privStart.spaceChatId });
+
+                const privMsg = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: privStart.conversationId,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} summarize team ops scope`,
+                });
+                Assert(privMsg.ok === true && !!privMsg.detailId, 'AG17 post Private message succeeds');
+                if (!privMsg.ok || !privMsg.detailId) throw new Error('AG17 Private post failed');
+
+                let capturedPrivScopeIds: string[] = [];
+                const privTurn = await executeSpaceChatTurn(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: privStart.conversationId,
+                    userMessageId: privMsg.detailId,
+                    multiScopeSearch: async (searchParams) => {
+                        capturedPrivScopeIds = [...(searchParams.ScopeIDs ?? [])];
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                                    RecordID: '00000000-0000-0000-0000-000000000002',
+                                    Title: `AG17 Team Ops Excerpt ${stamp}`,
+                                    Snippet: 'Internal Team Operations playbook.',
+                                    Score: 0.91,
+                                    SourceType: 'lexical',
+                                    OriginatingScopeID: scopeTeamId,
+                                    OriginatingScopeName: teamScopeName,
+                                    RawMetadata: JSON.stringify({ ContentSourceID: csTeamId }),
+                                },
+                            ],
+                        };
+                    },
+                });
+                Assert(privTurn.ok === true, 'AG17 Private executeSpaceChatTurn succeeds');
+                Assert(
+                    capturedPrivScopeIds.some((id) => SameID(id, scopeTeamId)) &&
+                        capturedPrivScopeIds.some((id) => SameID(id, scopeSharedId)) &&
+                        !capturedPrivScopeIds.some((id) => SameID(id, scopeRevokedId)),
+                    'AG17 Private turn SearchScopeIDs includes Team-band + Shared scopes and still excludes Mode=Remove revoked scope',
+                );
+
+                // Query persisted receipts via server provenance query API (Ada sees Team scope receipt; Shared-only reader does not)
+                const adaBands = new Map<string, Set<'Team' | 'Shared'>>([
+                    [DISCOVERY_SPACE_ID.toLowerCase(), new Set<'Team' | 'Shared'>(['Team', 'Shared'])],
+                ]);
+                const adaRead = await querySpaceAgentSourceReceipts({
+                    provider: ctx.Provider,
+                    user: ada,
+                    conversationId: privStart.conversationId,
+                    inReachSpaceBands: adaBands,
+                    callerCanSeeTeam: true,
+                });
+                Assert(
+                    adaRead.ok &&
+                        adaRead.receipts.some((r) => SameID(r.ContentSourceID, csTeamId) && r.OriginatingScopeName === teamScopeName),
+                    'AG17 querySpaceAgentSourceReceipts returns Team granted scope receipt with OriginatingScopeName for Ada',
+                );
+
+                const sharedOnlyBands = new Map<string, Set<'Team' | 'Shared'>>([
+                    [DISCOVERY_SPACE_ID.toLowerCase(), new Set<'Team' | 'Shared'>(['Shared'])],
+                ]);
+                const restrictedRead = await querySpaceAgentSourceReceipts({
+                    provider: ctx.Provider,
+                    user: bea,
+                    conversationId: privStart.conversationId,
+                    inReachSpaceBands: sharedOnlyBands,
+                    callerCanSeeTeam: false,
+                });
+                Assert(
+                    !restrictedRead.receipts.some((r) => SameID(r.ContentSourceID, csTeamId)),
+                    'AG17 Fail-closed receipt query never leaks Team-band granted scope receipt to Shared-only reader',
+                );
+            } finally {
+                for (const chat of createdChats.reverse()) {
+                    await cleanupConversation(ctx.Provider, ctx.User, chat.convId, chat.chatId);
+                }
+                for (const grantId of [...createdGrantIds].reverse()) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, AG_SPACE_GRANT_ENTITY, grantId, 'AG17 SpaceGrant');
+                }
+                for (const permId of [...createdPermIds].reverse()) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SEARCH_SCOPE_PERMISSION_ENTITY, permId, 'AG17 SearchScopePermission');
+                }
+                if (createdScopeIds.length > 0) {
+                    const scopeInClause = createdScopeIds.map((id) => `'${id}'`).join(',');
+                    const leftoverPerms = await FindRows<{ ID: string }>(
+                        ctx,
+                        SEARCH_SCOPE_PERMISSION_ENTITY,
+                        `SearchScopeID IN (${scopeInClause})`,
+                        ['ID'],
+                        ctx.User,
+                        { BypassCache: true },
+                    );
+                    for (const perm of leftoverPerms) {
+                        await deleteRowAndConfirm(ctx.Provider, ctx.User, SEARCH_SCOPE_PERMISSION_ENTITY, perm.ID, 'AG17 leftover SearchScopePermission');
+                    }
+                }
+                for (const scopeId of [...createdScopeIds].reverse()) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SEARCH_SCOPE_ENTITY, scopeId, 'AG17 SearchScope');
+                }
+                for (const csId of [...createdContentSourceIds].reverse()) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, CONTENT_SOURCES_ENTITY, csId, 'AG17 ContentSource');
+                }
             }
         },
     },

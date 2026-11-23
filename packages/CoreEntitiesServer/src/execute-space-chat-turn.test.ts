@@ -9,7 +9,7 @@ import { COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES, evaluateParticipantAIRunWriteAc
 import { PARTICIPANT_ROLE_ID } from '../dist/task-attribution.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
 import { COLLABORATION_SPACE_SCOPE_ID, type SpaceTurnContext } from '../dist/turn-tools.js';
-import { recordScopedSearchHitsOnContext } from '../dist/CollaborationScopedSearchAction.js';
+import { recordScopedSearchHitsOnContext } from '../dist/turn-tools.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
@@ -1676,5 +1676,140 @@ describe('executeSpaceChatTurn', () => {
         } finally {
             AgentRunner.prototype.RunAgent = prevRunAgent;
         }
+    });
+
+    it('hydrates missing UserCache audience participants via batched RunView and fails closed when any participant cannot be verified (CR-4)', async () => {
+        const EXTRA_SCOPE_ID = 'ee100000-0000-4000-8000-000000000001';
+        const EXTRA_CS_ID = 'ff100000-0000-4000-8000-000000000001';
+        const EXTRA_ROLE_ID = 'aa200000-0000-4000-8000-000000000001';
+
+        const makeAudienceProvider = (opts: { hydrateOtherUser: boolean; otherHasRole: boolean }) => {
+            const baseProvider = createMockProvider({
+                roomSeats: [{ UserID: OTHER_USER_ID, User: 'Other Participant' }],
+            });
+            const baseRunView = stubOf<IRunViewProvider>(baseProvider);
+            const audienceProviderObj: Partial<IMetadataProvider & IRunViewProvider> = {
+                ...baseProvider,
+                async RunView<T>(params: RunViewParams, userArg?: UserInfo): Promise<RunViewResult<T>> {
+                    const entity = params.EntityName ?? '';
+                    const filter = String(params.ExtraFilter ?? '');
+                    if (entity === 'MJ_BizApps_Collaboration: Space Grants') {
+                        return mockResult<T>([
+                            {
+                                ID: '10200000-0000-4000-8000-000000000001',
+                                Kind: 'Agent',
+                                Mode: 'Extend',
+                                Band: 'Shared',
+                                TargetEntityID: 'E-AGENTS',
+                                Sequence: 0,
+                                TargetRecordID: ALLOWED_AGENT_ID,
+                                SpaceTypeID: null,
+                                SpaceID: SPACE_ID,
+                                IsDefault: true,
+                            },
+                            {
+                                ID: '10200000-0000-4000-8000-000000000002',
+                                Kind: 'KnowledgeSource',
+                                Mode: 'Extend',
+                                Band: 'Shared',
+                                TargetEntityID: 'E-SOURCES',
+                                Sequence: 1,
+                                TargetRecordID: EXTRA_CS_ID,
+                                SpaceTypeID: null,
+                                SpaceID: SPACE_ID,
+                                IsDefault: false,
+                                Settings: JSON.stringify({ SearchScopeID: EXTRA_SCOPE_ID }),
+                            },
+                        ]);
+                    }
+                    if (entity === 'MJ: Content Sources') {
+                        return mockResult<T>([{ ID: EXTRA_CS_ID, Name: 'Audience Test KB', Configuration: null }]);
+                    }
+                    if (entity === 'MJ: Search Scopes') {
+                        return mockResult<T>([
+                            { ID: COLLABORATION_SPACE_SCOPE_ID, Name: 'Collaboration Space Scope', Status: 'Active', IsGlobal: false },
+                            { ID: EXTRA_SCOPE_ID, Name: 'Audience Checked Scope', Status: 'Active', IsGlobal: false },
+                        ]);
+                    }
+                    if (entity === 'MJ: Search Scope Permissions') {
+                        return mockResult<T>([
+                            { ID: 'perm-caller', SearchScopeID: EXTRA_SCOPE_ID, UserID: CALLER_ID, RoleID: null, PermissionLevel: 'Search', PrimaryScopeRecordID: null },
+                            { ID: 'perm-role', SearchScopeID: EXTRA_SCOPE_ID, UserID: null, RoleID: EXTRA_ROLE_ID, PermissionLevel: 'Search', PrimaryScopeRecordID: null },
+                        ]);
+                    }
+                    if (entity === 'MJ: Users' && filter.toLowerCase().includes(OTHER_USER_ID.toLowerCase())) {
+                        return opts.hydrateOtherUser
+                            ? mockResult<T>([{ ID: OTHER_USER_ID, Name: 'Other Participant', Email: 'other@example.test', IsActive: true }])
+                            : mockResult<T>([]);
+                    }
+                    if (entity === 'MJ: User Roles' && filter.toLowerCase().includes(OTHER_USER_ID.toLowerCase())) {
+                        return opts.hydrateOtherUser && opts.otherHasRole
+                            ? mockResult<T>([{ ID: 'ur-other-1', UserID: OTHER_USER_ID, RoleID: EXTRA_ROLE_ID, Role: 'Authorized Reader' }])
+                            : mockResult<T>([]);
+                    }
+                    return baseRunView.RunView<T>(params, userArg);
+                },
+                async RunViews<T>(paramsList: RunViewParams[], userArg?: UserInfo): Promise<RunViewResult<T>[]> {
+                    return Promise.all(paramsList.map((p) => audienceProviderObj.RunView!<T>(p, userArg)));
+                },
+            };
+            return stubOf<IMetadataProvider>(audienceProviderObj);
+        };
+
+        // Case 1: Missing from UserCache, fallback RunView fails to find OTHER_USER_ID -> FAIL CLOSED
+        let unverifiedSearchCalled = false;
+        const missingRes = await executeSpaceChatTurn(
+            makeAudienceProvider({ hydrateOtherUser: false, otherHasRole: false }),
+            callerUser,
+            {
+                ...defaultInput,
+                multiScopeSearch: async () => {
+                    unverifiedSearchCalled = true;
+                    return { Success: true, Results: [] };
+                },
+            },
+        );
+        assert.equal(missingRes.ok, true, missingRes.ok ? '' : missingRes.message);
+        if (missingRes.ok) {
+            assert.deepEqual(missingRes.tools?.searchScopeIds, [COLLABORATION_SPACE_SCOPE_ID]);
+            assert.deepEqual(missingRes.tools?.grantedKnowledgeScopeNames, []);
+        }
+        assert.equal(unverifiedSearchCalled, false, 'Must never dispatch multi-scope search without verified full Audience.Readers');
+
+        // Case 2: Fallback RunView hydrates OTHER_USER_ID WITHOUT role -> audience intersection withholds extra scope
+        const deniedRes = await executeSpaceChatTurn(
+            makeAudienceProvider({ hydrateOtherUser: true, otherHasRole: false }),
+            callerUser,
+            {
+                ...defaultInput,
+                multiScopeSearch: async () => ({ Success: true, Results: [] }),
+            },
+        );
+        assert.equal(deniedRes.ok, true, deniedRes.ok ? '' : deniedRes.message);
+        if (deniedRes.ok) {
+            assert.deepEqual(deniedRes.tools?.searchScopeIds, [COLLABORATION_SPACE_SCOPE_ID]);
+            assert.deepEqual(deniedRes.tools?.grantedKnowledgeScopeNames, []);
+        }
+
+        // Case 3: Fallback RunView hydrates OTHER_USER_ID WITH authorized role -> extra scope authorized & Audience.Readers populated
+        let capturedReaderIds: string[] = [];
+        const authorizedRes = await executeSpaceChatTurn(
+            makeAudienceProvider({ hydrateOtherUser: true, otherHasRole: true }),
+            callerUser,
+            {
+                ...defaultInput,
+                multiScopeSearch: async (searchParams) => {
+                    capturedReaderIds = (searchParams.Audience?.Readers ?? []).map((r) => r.ID.toLowerCase());
+                    return { Success: true, Results: [] };
+                },
+            },
+        );
+        assert.equal(authorizedRes.ok, true, authorizedRes.ok ? '' : authorizedRes.message);
+        if (authorizedRes.ok) {
+            assert.deepEqual(authorizedRes.tools?.searchScopeIds, [COLLABORATION_SPACE_SCOPE_ID, EXTRA_SCOPE_ID]);
+            assert.deepEqual(authorizedRes.tools?.grantedKnowledgeScopeNames, ['Audience Checked Scope']);
+        }
+        assert.equal(capturedReaderIds.includes(CALLER_ID.toLowerCase()), true);
+        assert.equal(capturedReaderIds.includes(OTHER_USER_ID.toLowerCase()), true);
     });
 });

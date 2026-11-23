@@ -82,6 +82,8 @@ interface MockReceiptRow {
     EstimatedTokens: number;
     WasTruncated: boolean;
     Sequence: number;
+    OriginatingScopeID?: string | null;
+    OriginatingScopeName?: string | null;
 }
 
 type MockReceiptFieldValue =
@@ -129,6 +131,8 @@ function createMockReceiptRecord(
         EstimatedTokens: 0,
         WasTruncated: false,
         Sequence: 1,
+        OriginatingScopeID: null,
+        OriginatingScopeName: null,
         LatestResult: okResult,
         NewRecord(): boolean {
             rec['ID'] = `f0000000-0000-4000-8000-${String(store.length + 1).padStart(12, '0')}`;
@@ -176,6 +180,8 @@ function createMockReceiptRecord(
                 EstimatedTokens: typeof rec['EstimatedTokens'] === 'number' ? rec['EstimatedTokens'] : 0,
                 WasTruncated: Boolean(rec['WasTruncated']),
                 Sequence: typeof rec['Sequence'] === 'number' ? rec['Sequence'] : 1,
+                OriginatingScopeID: typeof rec['OriginatingScopeID'] === 'string' ? rec['OriginatingScopeID'] : null,
+                OriginatingScopeName: typeof rec['OriginatingScopeName'] === 'string' ? rec['OriginatingScopeName'] : null,
             };
             const idx = store.findIndex((r) => r.ID === row.ID);
             if (idx >= 0) {
@@ -237,9 +243,19 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
                         .filter((r) => !afterId || r.ID.toLowerCase() > afterId)
                         .sort((a, b) => a.ID.localeCompare(b.ID));
                     const page = params.MaxRows ? filtered.slice(0, params.MaxRows) : filtered;
+                    const projected = Array.isArray(params.Fields) && params.Fields.length > 0
+                        ? page.map((row) => {
+                            const out: Record<string, string | number | boolean | null | undefined> = {};
+                            const rowRecord: Record<string, string | number | boolean | null | undefined> = { ...row };
+                            for (const field of params.Fields ?? []) {
+                                out[field] = rowRecord[field];
+                            }
+                            return out;
+                        })
+                        : page;
                     return {
                         Success: true,
-                        Results: page as T[],
+                        Results: projected as Partial<T>[] as T[],
                         UserViewRunID: '',
                         TotalRowCount: page.length,
                         RowCount: page.length,
@@ -352,6 +368,8 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
                 estimatedTokens: 85,
                 wasTruncated: false,
                 sequence: 1,
+                originatingScopeId: '6e5187cf-7e5b-447f-893d-d291994083c0',
+                originatingScopeName: 'Collaboration Space Scope',
             },
             {
                 sourceKind: 'KnowledgeSource',
@@ -371,6 +389,8 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
                 estimatedTokens: 0,
                 wasTruncated: false,
                 sequence: 2,
+                originatingScopeId: '7a000000-0000-4000-8000-000000000001',
+                originatingScopeName: 'Granted Product Knowledge Scope',
             },
         ];
 
@@ -455,6 +475,12 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
         assert.equal(queryResult.receipts.length, 2);
         assert.equal(queryResult.filteredOutCount, 2);
         assert.ok(queryResult.receipts.every((r) => r.Band === 'Shared' && r.SpaceID === SPACE_A));
+        const returnedSpaceItem = queryResult.receipts.find((r) => r.SourceKind === 'SpaceItem');
+        const returnedKnowledge = queryResult.receipts.find((r) => r.SourceKind === 'KnowledgeSource');
+        assert.equal(returnedSpaceItem?.OriginatingScopeID, '6e5187cf-7e5b-447f-893d-d291994083c0');
+        assert.equal(returnedSpaceItem?.OriginatingScopeName, 'Collaboration Space Scope');
+        assert.equal(returnedKnowledge?.OriginatingScopeID, '7a000000-0000-4000-8000-000000000001');
+        assert.equal(returnedKnowledge?.OriginatingScopeName, 'Granted Product Knowledge Scope');
     });
 
     it('rejects prompt-injected and hallucinated source citations and verifies SpaceAgentSourceReceiptEntityServer guards', async () => {
@@ -645,6 +671,8 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
             estimatedTokens: 40,
             wasTruncated: false,
             sequence: 1,
+            originatingScopeId: '6e5187cf-7e5b-447f-893d-d291994083c0',
+            originatingScopeName: 'Collaboration Space Scope',
         };
 
         const badIds = ["' OR '1'='1", "11111111-1111-4111-8111-111111111111'; DROP TABLE x;--", 'not-a-uuid', ''];

@@ -608,6 +608,7 @@ export function applyContextTokenBudget<TItem extends SpaceAgentItemShape>(
 export interface SearchEngineSearchParams {
     Query: string;
     MaxResults?: number;
+    MinScore?: number;
     ScopeIDs?: string[];
     Filters?: {
         SourceTypes?: string[];
@@ -616,28 +617,47 @@ export interface SearchEngineSearchParams {
         AllowedBandsBySpaceID?: Readonly<Record<string, Band>>;
     };
     SearchContext?: {
+        PrimaryScopeEntityName?: string;
         PrimaryScopeRecordID?: string;
         SecondaryScopes?: Record<string, string[]>;
     };
     Audience?: {
         Readers: UserInfo[];
     };
+    AIAgentID?: string | null;
+    AISkillID?: string | null;
+}
+
+export interface SearchEngineResultScopeAttribution {
+    ScopeID: string;
+    ScopeName: string;
+}
+
+export interface SearchEngineSearchResultItem {
+    ID?: string;
+    EntityName: string;
+    RecordID: string;
+    Title?: string;
+    RecordName?: string;
+    Snippet?: string;
+    Score: number;
+    SourceType: string;
+    RawMetadata?: string | Record<string, string | number | boolean | null>;
+    OriginatingScopeID?: string;
+    OriginatingScopeName?: string;
+    OriginatingScopes?: SearchEngineResultScopeAttribution[];
 }
 
 export interface SearchEngineLike {
+    readonly IsConfigured?: boolean;
     Config(config: Record<string, never>, contextUser: UserInfo): Promise<void>;
     Search(
         params: SearchEngineSearchParams,
         contextUser: UserInfo,
     ): Promise<{
         Success: boolean;
-        Results: Array<{
-            EntityName: string;
-            RecordID: string;
-            Score: number;
-            SourceType: string;
-            RawMetadata?: Record<string, string | number | boolean | null>;
-        }>;
+        Results: SearchEngineSearchResultItem[];
+        ErrorMessage?: string;
     }>;
     GetAvailableProviders?(): Array<{ SourceType: string; IsAvailable: boolean }>;
 }
@@ -646,7 +666,7 @@ interface SearchEngineModule {
     SearchEngine?: { Instance?: SearchEngineLike };
 }
 
-function tryLoadHostSearchEngine(): SearchEngineLike | null {
+export function tryLoadHostSearchEngine(): SearchEngineLike | null {
     try {
         const reqFromHere = createRequire(import.meta.url);
         const agentsEntry = reqFromHere.resolve('@memberjunction/ai-agents');
@@ -783,7 +803,7 @@ export class HostSearchEngineVectorAdapter implements SpaceAgentVectorSearchAdap
                 if (!candidateId || !query.allowedSpaceItemIds.has(candidateId)) {
                     continue;
                 }
-                if (row.RawMetadata) {
+                if (typeof row.RawMetadata === 'object' && row.RawMetadata !== null) {
                     const metaSpaceRaw = row.RawMetadata['SpaceID'];
                     if (typeof metaSpaceRaw === 'string') {
                         const metaSpace = parseUuid(metaSpaceRaw)?.toLowerCase();

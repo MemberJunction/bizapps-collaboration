@@ -40,6 +40,8 @@ function makeEntityRow(overrides: Partial<mjBizAppsCollaborationSpaceAgentSource
         CitationOrdinal: 1,
         EstimatedTokens: 280,
         WasTruncated: false,
+        OriginatingScopeID: null,
+        OriginatingScopeName: null,
         Sequence: 1,
         __mj_CreatedAt: new Date(),
         __mj_UpdatedAt: new Date(),
@@ -410,5 +412,67 @@ describe('Space chat source receipts client logic (CT-2)', () => {
         ]);
         const streamedFiltered = parseTurnSourceReceiptsPayload(streamedJson, DETAIL_1, reach, liveSources);
         assert.equal(streamedFiltered.length, 0);
+    });
+
+    it('maps OriginatingScopeID and OriginatingScopeName cleanly from entity rows and streamed JSON (CT-3)', () => {
+        const reach = buildClientReceiptReachContext({
+            chatAudience: 'Shared',
+            activeSpaceId: SPACE_A,
+            canSeeTeamOnActiveSpace: false,
+            reachableSpaces: [{ id: SPACE_A, canSeeTeam: false }],
+        });
+        const liveSources = {
+            scopedSpaceId: SPACE_A,
+            spaceItems: [{ id: ITEM_SHARED, spaceId: SPACE_A, band: 'Shared' as const }],
+            knowledgeSourceBandsBySpace: {
+                [SPACE_A]: { [CONTENT_SRC]: 'Shared' as const },
+            },
+        };
+        const rows = [
+            makeEntityRow({
+                ID: 'r-native',
+                SpaceID: SPACE_A,
+                SpaceItemID: ITEM_SHARED,
+                Band: 'Shared',
+                SourceTitle: 'Native Item',
+                OriginatingScopeID: '6e5187cf-7e5b-447f-893d-d291994083c0',
+                OriginatingScopeName: 'Collaboration Space Scope',
+            }),
+            makeEntityRow({
+                ID: 'r-extra',
+                SpaceID: SPACE_A,
+                SourceKind: 'KnowledgeSource',
+                SpaceItemID: null,
+                ContentSourceID: CONTENT_SRC,
+                Band: 'Shared',
+                SourceTitle: 'Extra Knowledge Doc',
+                OriginatingScopeID: '99990000-0000-4000-8000-000000000001',
+                OriginatingScopeName: 'External Policy Scope',
+            }),
+        ];
+        const mapped = filterAndMapSourceReceipts(rows, reach, liveSources);
+        assert.equal(mapped.length, 2);
+        assert.equal(mapped[0]?.originatingScopeName, 'Collaboration Space Scope');
+        assert.equal(mapped[1]?.originatingScopeName, 'External Policy Scope');
+
+        const parsed = parseTurnSourceReceiptsPayload(
+            JSON.stringify([
+                {
+                    sourceKind: 'KnowledgeSource',
+                    spaceId: SPACE_A,
+                    spaceItemId: null,
+                    contentSourceId: CONTENT_SRC,
+                    sourceTitle: 'Extra Knowledge Doc',
+                    band: 'Shared',
+                    originatingScopeId: '99990000-0000-4000-8000-000000000001',
+                    originatingScopeName: 'External Policy Scope',
+                },
+            ]),
+            DETAIL_1,
+            reach,
+            liveSources,
+        );
+        assert.equal(parsed.length, 1);
+        assert.equal(parsed[0]?.originatingScopeName, 'External Policy Scope');
     });
 });

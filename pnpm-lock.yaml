@@ -531,6 +531,9 @@ importers:
       '@memberjunction/core':
         specifier: ^6.3.0-edge.1
         version: 6.3.0-edge.1
+      '@memberjunction/core-actions':
+        specifier: ^6.3.0-edge.1
+        version: 6.3.0-edge.1(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.30.0(zod@4.6.7))(@smithy/signature-v4@5.7.5)(@types/node@24.10.11)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/core-entities':
         specifier: ^6.3.0-edge.1
         version: 6.3.0-edge.1

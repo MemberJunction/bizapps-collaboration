@@ -26,6 +26,8 @@ export interface ValidatedSuppliedSourceCandidate {
     rankingMode: SourceReceiptRankingMode;
     estimatedTokens: number;
     wasTruncated: boolean;
+    originatingScopeId?: string | null;
+    originatingScopeName?: string | null;
 }
 
 export interface SpaceAgentSourceReceiptEntry {
@@ -46,6 +48,8 @@ export interface SpaceAgentSourceReceiptEntry {
     estimatedTokens: number;
     wasTruncated: boolean;
     sequence: number;
+    originatingScopeId: string | null;
+    originatingScopeName: string | null;
 }
 
 export interface RejectedSourceCitation {
@@ -95,6 +99,13 @@ export function normalizeReceiptUuid(raw: string | null | undefined): string | n
     if (typeof raw !== 'string') return null;
     const trimmed = raw.trim().toLowerCase();
     return UUID_REGEX.test(trimmed) ? trimmed : null;
+}
+
+/** Normalizes and sanitizes a Search Scope display name to max 200 characters, returning null when empty. */
+export function normalizeScopeName(raw: string | null | undefined): string | null {
+    const cleaned = stripCitationMarkdown(raw);
+    if (!cleaned) return null;
+    return cleaned.slice(0, 200);
 }
 
 /**
@@ -281,6 +292,8 @@ export function extractAndValidateSourceReceipts(
                 ? Number(candidate.relevanceScore.toFixed(6))
                 : null,
             estimatedTokens: Math.max(0, Math.trunc(candidate.estimatedTokens)),
+            originatingScopeId: normalizeReceiptUuid(candidate.originatingScopeId),
+            originatingScopeName: normalizeScopeName(candidate.originatingScopeName),
         });
     }
 
@@ -375,6 +388,8 @@ export function extractAndValidateSourceReceipts(
             estimatedTokens: item.estimatedTokens,
             wasTruncated: item.wasTruncated,
             sequence: idx + 1,
+            originatingScopeId: item.originatingScopeId ?? null,
+            originatingScopeName: item.originatingScopeName ?? null,
         };
     });
 

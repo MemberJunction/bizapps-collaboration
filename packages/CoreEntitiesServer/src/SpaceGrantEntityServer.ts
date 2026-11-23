@@ -11,11 +11,13 @@ import { BaseEntity, type IMetadataProvider, LogError, Metadata, RunView, Valida
 import { RegisterClass } from '@memberjunction/global';
 import {
     type AgentDefinitionForGrant,
+    type AgentGrantSettings,
     type CollaborationSettings,
     GRANT_KIND_ENTITY,
     isGrantKind,
     typeSeatsAudience,
     validateAgentGrantSettings,
+    validateKnowledgeSourceGrantSettings,
     validateSpaceGrantBindings,
 } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceGrantEntity } from '@mj-biz-apps/collaboration-entities';
@@ -171,18 +173,25 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
             if (errors.length) return fail(result, 'Bindings', `Grant change refused: ${errors.join(' ')}`);
         }
 
-        // An agent's settings stay inside its definition (item 148)
+        // An agent's settings stay inside its definition (item 148); KnowledgeSource grants may name Search Scope IDs (CT-3)
         if (this.Settings) {
-            if (kind !== 'Agent') return fail(result, 'Settings', 'Grant change refused: only an agent grant carries settings.');
-            let settings: unknown;
+            if (kind !== 'Agent' && kind !== 'KnowledgeSource') {
+                return fail(result, 'Settings', 'Grant change refused: only an agent grant carries settings.');
+            }
+            let settingsJson: AgentGrantSettings | Record<string, string | string[]> | null = null;
             try {
-                settings = JSON.parse(this.Settings);
+                settingsJson = JSON.parse(this.Settings) as AgentGrantSettings | Record<string, string | string[]> | null;
             } catch {
                 return fail(result, 'Settings', 'Grant change refused: Settings must be valid JSON.');
             }
-            const agent = await this.agentDefinition(rv, system, target);
-            const errors = validateAgentGrantSettings(settings, agent);
-            if (errors.length) return fail(result, 'Settings', `Grant change refused: ${errors.join(' ')}`);
+            if (kind === 'KnowledgeSource') {
+                const errors = validateKnowledgeSourceGrantSettings(settingsJson);
+                if (errors.length) return fail(result, 'Settings', `Grant change refused: ${errors.join(' ')}`);
+            } else {
+                const agent = await this.agentDefinition(rv, system, target);
+                const errors = validateAgentGrantSettings(settingsJson, agent);
+                if (errors.length) return fail(result, 'Settings', `Grant change refused: ${errors.join(' ')}`);
+            }
         }
         return result;
     }

@@ -138,10 +138,12 @@ export {
     parseBindingExpression,
     validateSpaceGrantBindings,
     validateAgentGrantSettings,
+    validateKnowledgeSourceGrantSettings,
     type GrantKind,
     type BindingExpression,
     type SpaceGrantBindings,
     type AgentGrantSettings,
+    type KnowledgeSourceGrantSettings,
     type AgentLimitName,
     type AgentDefinitionForGrant,
 } from './grants.js';
@@ -187,6 +189,19 @@ export { mimeTypeForFileName } from './file-types.js';
 export { agentGrantFor, agentRunSettingsFor, audienceOfConversationKind, turnToolsFor } from './turn-tools.js';
 export type { AgentRunSettings, ChatAudience, TurnTools, WithheldAction } from './turn-tools.js';
 export {
+    allowedBandsForSpace,
+    hasStructuralChatScopeAccess,
+    isStructuralChatScopeBand,
+    normalizeChatScopeUuid,
+    parseStructuralChatScopeRows,
+    toMutableSpaceBandsMap,
+} from './chat-scope.js';
+export type {
+    RawStructuralChatScopeRow,
+    StructuralChatScopePair,
+    StructuralChatScopeResolution,
+} from './chat-scope.js';
+export {
     assertValidReceiptUuid,
     canReaderAccessSourceReceipt,
     extractAndValidateSourceReceipts,
@@ -197,6 +212,7 @@ export {
     isValidReceiptUuid,
     normalizeReceiptId,
     normalizeReceiptUuid,
+    normalizeScopeName,
     resolveEffectiveKnowledgeSourceBandsBySpace,
     stripCitationMarkdown,
     stripRecordKeyPrefix,

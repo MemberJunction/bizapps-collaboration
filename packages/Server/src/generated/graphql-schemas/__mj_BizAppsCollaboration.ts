@@ -469,6 +469,14 @@ export class mjBizAppsCollaborationSpaceAgentSourceReceipt_ {
     @Field(() => Int, { nullable: true, description: "Deterministic display sequence of the receipt on the assistant message." })
     Sequence?: number;
 
+    @Field({ nullable: true, description: "Search Scope ID that originated this supplied or cited source hit." })
+    @MaxLength(36)
+    OriginatingScopeID?: string;
+
+    @Field({ nullable: true, description: "Human-readable Search Scope name that originated this supplied or cited source hit." })
+    @MaxLength(200)
+    OriginatingScopeName?: string;
+
     @Field()
     _mj__CreatedAt: Date;
 
@@ -570,6 +578,12 @@ export class CreatemjBizAppsCollaborationSpaceAgentSourceReceiptInput {
     @Field(() => Int, { nullable: true })
     Sequence?: number;
 
+    @Field({ nullable: true })
+    OriginatingScopeID?: string | null;
+
+    @Field({ nullable: true })
+    OriginatingScopeName?: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -644,6 +658,12 @@ export class UpdatemjBizAppsCollaborationSpaceAgentSourceReceiptInput {
 
     @Field(() => Int, { nullable: true })
     Sequence?: number;
+
+    @Field({ nullable: true })
+    OriginatingScopeID?: string | null;
+
+    @Field({ nullable: true })
+    OriginatingScopeName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

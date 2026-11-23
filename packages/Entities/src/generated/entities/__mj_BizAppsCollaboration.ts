@@ -259,6 +259,16 @@ export const mjBizAppsCollaborationSpaceAgentSourceReceiptSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 1
         * * Description: Deterministic display sequence of the receipt on the assistant message.`),
+    OriginatingScopeID: z.string().nullable().describe(`
+        * * Field Name: OriginatingScopeID
+        * * Display Name: Originating Scope ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Search Scope ID that originated this supplied or cited source hit.`),
+    OriginatingScopeName: z.string().nullable().describe(`
+        * * Field Name: OriginatingScopeName
+        * * Display Name: Originating Scope Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Human-readable Search Scope name that originated this supplied or cited source hit.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -1824,6 +1834,20 @@ export class mjBizAppsCollaborationSpaceAgentSourceReceiptEntity extends BaseEnt
     }
     set Sequence(value: number) {
         this.Set('Sequence', value);
+    }
+
+    get OriginatingScopeID(): string | null {
+        return this.Get('OriginatingScopeID');
+    }
+    set OriginatingScopeID(value: string | null) {
+        this.Set('OriginatingScopeID', value);
+    }
+
+    get OriginatingScopeName(): string | null {
+        return this.Get('OriginatingScopeName');
+    }
+    set OriginatingScopeName(value: string | null) {
+        this.Set('OriginatingScopeName', value);
     }
 
     get __mj_CreatedAt(): Date {

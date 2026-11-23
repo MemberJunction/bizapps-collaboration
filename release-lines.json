@@ -3,7 +3,9 @@
   "next": {
     "edgeOnlyMigrations": [
       "V202611211945__v0.2.x__Space_Agent_Source_Receipts.sql",
-      "V202611220100__v0.2.x__SpaceType_TargetApplication.sql"
+      "V202611220100__v0.2.x__SpaceType_TargetApplication.sql",
+      "V202611230415__v0.2.x__Structural_Chat_Scope.sql",
+      "V202611231200__v0.2.x__Source_Receipt_Originating_Scope.sql"
     ]
   },
   "lines": {

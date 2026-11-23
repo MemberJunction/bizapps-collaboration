@@ -137,8 +137,23 @@ export type { CreateSpaceConversationInput, CreateSpaceConversationResult } from
 
 
 export {
+    COLLABORATION_SPACE_SCOPE_NAME,
+    dispatchMultiScopeTurnSearch,
+    escapeSqlLiteral,
+    resolveTurnKnowledgeScopes,
+    type DispatchMultiScopeTurnSearchResult,
+    type GrantedKnowledgeScopeSearchHit,
+    type MultiScopeTurnSearchDispatchInput,
+    type MultiScopeTurnSearchDispatcher,
+    type RejectedKnowledgeScope,
+    type ResolvedKnowledgeScope,
+    type ResolvedTurnKnowledgeScopesResult,
+    type ResolveTurnKnowledgeScopesParams,
+} from './turn-knowledge-scopes.js';
+export {
     resolveTurnTools,
     findSpaceDataGrant,
+    recordScopedSearchHitsOnContext,
     RUN_SPACE_DATA_ACTION_ID,
     RUN_SPACE_DATA_ACTION_NAME,
     SCOPED_SEARCH_ACTION_ID,
@@ -146,7 +161,6 @@ export {
 } from './turn-tools.js';
 export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant, TurnToolSourceHit } from './turn-tools.js';
 export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction.js';
-export { CollaborationScopedSearchAction, LoadCollaborationScopedSearchAction, recordScopedSearchHitsOnContext, unquoteSpaceSearch, unwrapPhraseQuotes } from './CollaborationScopedSearchAction.js';
 export type { TurnToolsGiven } from './execute-space-chat-turn.js';
 export { IsPeopleEntity, PEOPLE_ENTITY, ResolvePersonIDForUser, ResolveUserIDForPerson, ResolveUserIDsForPeople } from '@mj-biz-apps/common-entities';
 export {
@@ -234,4 +248,18 @@ export {
     type ResolveToolSuppliedSourcesParams,
     type ResolveToolSuppliedSourcesResult,
 } from './space-agent-source-receipts.js';
+export {
+    buildStructuralChatScopeQuery,
+    COLLABORATION_CHAT_SCOPE_FUNCTION_NAME,
+    COLLABORATION_SCHEMA_PG,
+    COLLABORATION_SCHEMA_TSQL,
+    detectStructuralChatScopeDialect,
+    resolveStructuralChatScope,
+    type BuiltStructuralChatScopeQuery,
+    type ResolveStructuralChatScopeParams,
+    type StructuralChatScopeDialect,
+    type StructuralChatScopeExecutableProvider,
+    type StructuralChatScopeExecuteOptions,
+    type StructuralChatScopeSqlParam,
+} from './structural-chat-scope.js';
 

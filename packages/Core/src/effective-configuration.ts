@@ -18,7 +18,7 @@ import {
     type ResolvedCollaborationSettings,
     typeSeatsAudience,
 } from './configuration.ts';
-import { type AgentGrantSettings, type GrantKind, GRANT_KINDS, type SpaceGrantBindings, isGrantKind } from './grants.ts';
+import { type AgentGrantSettings, type GrantKind, GRANT_KINDS, type KnowledgeSourceGrantSettings, type SpaceGrantBindings, isGrantKind } from './grants.ts';
 
 export type ConfigurationLevel = 'App' | 'Type' | 'Space';
 export type GrantMode = 'Extend' | 'Remove';
@@ -35,7 +35,7 @@ export interface GrantRowInput {
     Band: string;
     IsDefault?: boolean | null;
     Bindings?: SpaceGrantBindings | string | null;
-    Settings?: AgentGrantSettings | string | null;
+    Settings?: AgentGrantSettings | KnowledgeSourceGrantSettings | string | null;
     Sequence?: number | null;
     /** False when the caller found the target gone. Absent means it was not checked, so the grant stands. */
     TargetExists?: boolean;
@@ -73,7 +73,7 @@ export interface EffectiveGrant {
     IsDefault: boolean;
     Sequence: number;
     Bindings: SpaceGrantBindings;
-    Settings: AgentGrantSettings | null;
+    Settings: AgentGrantSettings | KnowledgeSourceGrantSettings | null;
     /** Where the grant came from, for the settings screen and the logs. */
     Level: ConfigurationLevel;
     LevelID: string | null;
@@ -175,7 +175,7 @@ function levelRows(level: ConfigurationLevel, levelId: string | null, rows: read
         }
         const bindings = parseJson<SpaceGrantBindings>(row.Bindings, 'bindings', row.ID, log);
         if (!bindings.ok) continue;
-        const settings = parseJson<AgentGrantSettings>(row.Settings, 'settings', row.ID, log);
+        const settings = parseJson<AgentGrantSettings | KnowledgeSourceGrantSettings>(row.Settings, 'settings', row.ID, log);
         if (!settings.ok) continue;
         extend.push({
             GrantID: row.ID,
@@ -187,7 +187,7 @@ function levelRows(level: ConfigurationLevel, levelId: string | null, rows: read
             IsDefault: !!row.IsDefault,
             Sequence: row.Sequence ?? 0,
             Bindings: bindings.value ?? {},
-            Settings: kind === 'Agent' ? settings.value : null,
+            Settings: kind === 'Agent' || kind === 'KnowledgeSource' ? settings.value : null,
             Level: level,
             LevelID: levelId,
         });
