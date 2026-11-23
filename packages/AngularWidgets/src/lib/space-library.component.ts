@@ -2,11 +2,13 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
 import type { AvatarItem, LibraryRowModel, SpaceBand } from './types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJClickableDirective, MJEmptyStateComponent, MJTabNavComponent, type TabConfig } from '@memberjunction/ng-ui-components';
+import { SPACE_UPLOAD_MAX_BYTES } from '@mj-biz-apps/collaboration-core';
 import { filterLibraryRows } from './library-filter';
 import { CollabAvatarStackComponent } from './avatar-stack.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
 import { CollabItemPreviewComponent } from './item-preview.component';
+import { CollabUploadIngestDisclosureComponent } from './upload-ingest-disclosure.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface LibraryCollection {
@@ -32,6 +34,7 @@ export interface LibrarySmartView {
     CollabBandChipComponent,
     CollabFileIconComponent,
     CollabItemPreviewComponent,
+    CollabUploadIngestDisclosureComponent,
     MJEmptyStateComponent,
     MJTabNavComponent,
     MJClickableDirective,
@@ -113,6 +116,19 @@ export interface LibrarySmartView {
             />
           }
         </div>
+
+        @if (ShowUploadDisclosure) {
+          <div class="lib-disclosure-wrap">
+            <mjc-upload-ingest-disclosure
+              [Compact]="true"
+              [SpaceName]="SpaceName"
+              [SelectedBand]="DefaultUploadBand"
+              [CanSeeTeamBand]="CanSeeTeamSide"
+              [MaxBytes]="UploadMaxBytes"
+              [AgentRetrieval]="AgentRetrieval"
+            />
+          </div>
+        }
 
         <div class="card table-card">
           <table class="table">
@@ -308,6 +324,10 @@ export interface LibrarySmartView {
       display: flex;
       align-items: center;
       gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .lib-disclosure-wrap {
       margin-bottom: 12px;
     }
 
@@ -512,6 +532,11 @@ export class CollabSpaceLibraryComponent {
   @Input() public CanShareItems = true;
   @Input() public IsOpeningFile = false;
   @Input() public OpeningLabel = 'Opening...';
+  @Input() public ShowUploadDisclosure = false;
+  @Input() public SpaceName = '';
+  @Input() public DefaultUploadBand: SpaceBand | null = null;
+  @Input() public UploadMaxBytes: number = SPACE_UPLOAD_MAX_BYTES;
+  @Input() public AgentRetrieval = 'Included';
 
   @Output() public FolderSelectRequested = new EventEmitter<string>();
   @Output() public BandFilterChangeRequested = new EventEmitter<'All' | 'Shared' | 'Team'>();
