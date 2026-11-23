@@ -467,7 +467,7 @@ BEGIN
             'OriginatingScopeID',
             'Originating Scope ID',
             'Search Scope ID that originated this supplied or cited source hit.',
-            'UUID',
+            'uuid',
             16, 0, 0,
             TRUE, NULL, FALSE, TRUE, FALSE, FALSE,
             NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW()
@@ -496,8 +496,8 @@ BEGIN
             'OriginatingScopeName',
             'Originating Scope Name',
             'Human-readable Search Scope name that originated this supplied or cited source hit.',
-            'nvarchar',
-            400, 0, 0,
+            'varchar',
+            200, 0, 0,
             TRUE, NULL, FALSE, TRUE, FALSE, FALSE,
             NULL, NULL, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, 'Search', NOW(), NOW()
         );

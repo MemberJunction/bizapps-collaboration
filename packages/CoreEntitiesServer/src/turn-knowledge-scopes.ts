@@ -827,11 +827,13 @@ export async function dispatchMultiScopeTurnSearch(
             continue;
         }
 
-        const rawCsId = normalizeReceiptUuid(stripRecordKeyPrefix(readRawMetaField(item.RawMetadata, 'ContentSourceID')));
-        const resolvedCsId =
-            (rawCsId && grantedScope.contentSourceIds.includes(rawCsId) ? rawCsId : null) ??
-            grantedScope.contentSourceIds[0] ??
-            null;
+        const rawCsMeta = stripRecordKeyPrefix(readRawMetaField(item.RawMetadata, 'ContentSourceID'));
+        const rawCsId = normalizeReceiptUuid(rawCsMeta);
+        if (rawCsMeta !== null && (!rawCsId || !grantedScope.contentSourceIds.includes(rawCsId))) {
+            // Fail closed: never attribute a hit whose explicit ContentSourceID is excluded from this scope's grants
+            continue;
+        }
+        const resolvedCsId = rawCsId ?? grantedScope.contentSourceIds[0] ?? null;
         if (!resolvedCsId) {
             continue;
         }

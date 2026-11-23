@@ -662,6 +662,114 @@ describe('CT-3 Granted Extra Knowledge Scopes & Originating Scope Attribution', 
         assert.equal(savedRows[1]?.OriginatingScopeName, 'Organization Policy Scope');
     });
 
+    it('drops hits with an explicit ungranted ContentSourceID on a composite SearchScope while falling back when ContentSourceID is omitted or null', async () => {
+        const caller = makeTestUser(CALLER_USER_ID);
+        const compositeScopeId = 'bb000001-0000-4000-8000-000000000050';
+        const csExcludedId = 'aa000001-0000-4000-8000-000000000099';
+        const csFirstId = CS_POLICY_ID.toLowerCase();
+        const csSecondId = CS_TEAM_ID.toLowerCase();
+
+        const compositeScope = {
+            scopeId: compositeScopeId,
+            scopeName: 'Composite Shared Knowledge Scope',
+            maxBand: 'Shared' as const,
+            contentSourceIds: [csFirstId, csSecondId],
+            contentSourceNamesById: new Map<string, string>([
+                [csFirstId, 'Organization Policy KB'],
+                [csSecondId, 'Internal Operations Runbooks'],
+            ]),
+            sequence: 1,
+        };
+
+        const providerObj: Partial<IMetadataProvider> = {
+            Entities: [],
+            EntityByName(name: string): EntityInfo | undefined {
+                if (name === 'MJ: Content Sources') {
+                    return { ID: 'e-cs-id', Name: name } as Partial<EntityInfo> as EntityInfo;
+                }
+                return undefined;
+            },
+        };
+
+        const dispatchResult = await dispatchMultiScopeTurnSearch(
+            {
+                query: 'incident checklist',
+                spaceId: SPACE_ID,
+                spaceChatId: CHAT_ID,
+                maxResults: 10,
+                nativeScope: {
+                    scopeId: COLLABORATION_SPACE_SCOPE_ID,
+                    scopeName: COLLABORATION_SPACE_SCOPE_NAME,
+                },
+                grantedScopes: [compositeScope],
+                scopeById: new Map([[compositeScopeId, compositeScope]]),
+                scopeByContentSourceId: new Map([
+                    [csFirstId, compositeScope],
+                    [csSecondId, compositeScope],
+                ]),
+                contentSourceNamesById: compositeScope.contentSourceNamesById,
+                maxBandByContentSourceId: new Map([
+                    [csFirstId, 'Shared' as const],
+                    [csSecondId, 'Shared' as const],
+                ]),
+                searchScopeIds: [COLLABORATION_SPACE_SCOPE_ID, compositeScopeId],
+                contextUser: caller,
+                provider: providerObj as IMetadataProvider,
+            },
+            async () => ({
+                Success: true,
+                Results: [
+                    {
+                        EntityName: 'MJ: Content Item Chunks',
+                        RecordID: '99990000-0000-4000-8000-000000000101',
+                        Title: 'Excluded Content Source Hit',
+                        Snippet: 'Should be dropped rather than attributed to sibling ContentSource.',
+                        Score: 0.98,
+                        SourceType: 'vector',
+                        RawMetadata: { ContentSourceID: csExcludedId },
+                        OriginatingScopeID: compositeScopeId,
+                        OriginatingScopeName: 'Composite Shared Knowledge Scope',
+                    },
+                    {
+                        EntityName: 'MJ: Content Item Chunks',
+                        RecordID: '99990000-0000-4000-8000-000000000102',
+                        Title: 'Second Granted Source Hit',
+                        Snippet: 'Explicitly matched second ContentSource in composite scope.',
+                        Score: 0.91,
+                        SourceType: 'vector',
+                        RawMetadata: { ContentSourceID: csSecondId },
+                        OriginatingScopeID: compositeScopeId,
+                        OriginatingScopeName: 'Composite Shared Knowledge Scope',
+                    },
+                    {
+                        EntityName: 'MJ: Content Item Chunks',
+                        RecordID: '99990000-0000-4000-8000-000000000103',
+                        Title: 'Omitted Content Source Hit',
+                        Snippet: 'Falls back cleanly to first granted ContentSource when omitted/null.',
+                        Score: 0.87,
+                        SourceType: 'vector',
+                        RawMetadata: { ContentSourceID: null },
+                        OriginatingScopeID: compositeScopeId,
+                        OriginatingScopeName: 'Composite Shared Knowledge Scope',
+                    },
+                ],
+            }),
+        );
+
+        assert.equal(dispatchResult.grantedKnowledgeHits.length, 2, 'Excluded ContentSource hit must be dropped fail-closed');
+        assert.equal(
+            dispatchResult.grantedKnowledgeHits.some((h) => h.title === 'Excluded Content Source Hit' || h.contentSourceId === csExcludedId),
+            false,
+            'Excluded ContentSource hit must not fall back to grantedScope.contentSourceIds[0]',
+        );
+        assert.equal(dispatchResult.grantedKnowledgeHits[0]?.contentSourceId, csSecondId);
+        assert.equal(dispatchResult.grantedKnowledgeHits[1]?.contentSourceId, csFirstId);
+        assert.deepEqual(
+            dispatchResult.extraKnowledgeCandidates.map((c) => c.contentSourceId),
+            [csSecondId, csFirstId],
+        );
+    });
+
     it('enforces dual-dialect migration parity and zero-any / zero-unknown / zero-BaseEntity.Get()/Set() strictness across Slice 2 files', () => {
         const repoRoot = resolve(process.cwd());
         const tsqlMig = readFileSync(
