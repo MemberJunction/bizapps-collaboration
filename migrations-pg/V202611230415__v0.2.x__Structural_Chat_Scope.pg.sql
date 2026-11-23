@@ -10,7 +10,13 @@ CREATE SCHEMA IF NOT EXISTS __mj_bizappscollaboration;
 SET search_path TO __mj_bizappscollaboration, public;
 SET standard_conforming_strings = on;
 
--- 1. Set-returning SQL structural chat scope function (fnCollaborationChatScope)
+-- 1. Covering filtered index on SpaceMember(UserID, Status) for O(1) UserDirectSeats lookup
+CREATE INDEX IF NOT EXISTS "IX_SpaceMember_UserID_Status_Cover"
+    ON __mj_bizappscollaboration."SpaceMember" ("UserID", "Status")
+    INCLUDE ("SpaceID", "SpaceRoleTypeID")
+    WHERE ("Status" = 'Active');
+
+-- Set-returning SQL structural chat scope function (fnCollaborationChatScope)
 CREATE OR REPLACE FUNCTION __mj_bizappscollaboration."fnCollaborationChatScope"(
     p_primary_scope_record_id UUID,
     p_user_id UUID

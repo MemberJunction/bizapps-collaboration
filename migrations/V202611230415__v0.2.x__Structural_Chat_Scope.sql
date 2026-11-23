@@ -5,7 +5,22 @@
 -- enumeration. Implemented as a pure inline table-valued function (TVF).
 -- =============================================================================
 
--- 1. Inline structural chat scope TVF (fnCollaborationChatScope)
+-- 1. Covering filtered index on SpaceMember(UserID, Status) for O(1) UserDirectSeats lookup
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_SpaceMember_UserID_Status_Cover'
+      AND object_id = OBJECT_ID(N'[${flyway:defaultSchema}].[SpaceMember]')
+)
+BEGIN
+    CREATE NONCLUSTERED INDEX [IX_SpaceMember_UserID_Status_Cover]
+        ON [${flyway:defaultSchema}].[SpaceMember] ([UserID], [Status])
+        INCLUDE ([SpaceID], [SpaceRoleTypeID])
+        WHERE ([Status] = N'Active');
+END;
+GO
+
+-- Inline structural chat scope TVF (fnCollaborationChatScope)
 CREATE OR ALTER FUNCTION [${flyway:defaultSchema}].[fnCollaborationChatScope]
 (
     @PrimaryScopeRecordID UNIQUEIDENTIFIER,
@@ -21,7 +36,7 @@ RETURN
             CAST(r.[CanSeeTeamBand] AS INT) AS [CanSeeTeam],
             0 AS [Steps],
             CAST(CONVERT(VARCHAR(36), m.[SpaceID]) AS VARCHAR(MAX)) AS [Path]
-        FROM [${flyway:defaultSchema}].[SpaceMember] AS m
+        FROM [${flyway:defaultSchema}].[SpaceMember] AS m WITH (INDEX([IX_SpaceMember_UserID_Status_Cover]), FORCESEEK)
         INNER JOIN [${flyway:defaultSchema}].[Space] AS s
             ON s.[ID] = m.[SpaceID]
         INNER JOIN [${flyway:defaultSchema}].[fnCollaborationSpaceStatuses]() AS st

@@ -119,13 +119,34 @@ describe('CS-1 dual-dialect structural chat scope migrations & TypeScript wrappe
             assert.equal(pgsql.includes(forbidden), false, `PG must not enumerate rosters via ${forbidden}`);
         }
 
-        // Verify SpaceMember is only referenced once, strictly filtered by UserID = @UserID / p_user_id
-        const tsqlSpaceMemberMatches = tsql.match(/SpaceMember/g) ?? [];
-        const pgSpaceMemberMatches = pgsql.match(/SpaceMember/g) ?? [];
-        assert.equal(tsqlSpaceMemberMatches.length, 1, 'T-SQL must touch SpaceMember strictly in UserDirectSeats');
-        assert.equal(pgSpaceMemberMatches.length, 1, 'PG must touch SpaceMember strictly in UserDirectSeats');
+        // Verify SpaceMember is only queried in UserDirectSeats (plus covering index DDL) and keyed on @UserID / p_user_id
+        assert.ok(tsql.includes('IX_SpaceMember_UserID_Status_Cover'), 'T-SQL migration must create covering index on SpaceMember(UserID, Status)');
+        assert.ok(pgsql.includes('IX_SpaceMember_UserID_Status_Cover'), 'PG migration must create covering index on SpaceMember(UserID, Status)');
+        assert.ok(tsql.includes('WITH (INDEX([IX_SpaceMember_UserID_Status_Cover]), FORCESEEK)'), 'T-SQL UserDirectSeats must seek the covering SpaceMember index');
+        const tsqlQueryRefs = tsql.match(/FROM\s+\[\$\{flyway:defaultSchema\}\]\.\[SpaceMember\]/g) ?? [];
+        const pgQueryRefs = pgsql.match(/FROM\s+__mj_bizappscollaboration\."SpaceMember"/g) ?? [];
+        assert.equal(tsqlQueryRefs.length, 1, 'T-SQL must query SpaceMember strictly in UserDirectSeats');
+        assert.equal(pgQueryRefs.length, 1, 'PG must query SpaceMember strictly in UserDirectSeats');
         assert.ok(tsql.includes('m.[UserID] = @UserID'), 'T-SQL SpaceMember lookup must be keyed on @UserID');
         assert.ok(pgsql.includes('m."UserID" = p_user_id'), 'PG SpaceMember lookup must be keyed on p_user_id');
+
+        // Verify live Search Scope expansion queries wire fnCollaborationChatScope
+        const subtreeQuery = JSON.parse(readFileSync(resolve(repoRoot, 'metadata/queries/.collaboration-space-subtree.json'), 'utf8')) as Array<{
+            primaryKey: { ID: string };
+            fields: { SQL: string };
+        }>;
+        const audienceQuery = JSON.parse(readFileSync(resolve(repoRoot, 'metadata/queries/.collaboration-space-chat-audience.json'), 'utf8')) as Array<{
+            primaryKey: { ID: string };
+            fields: { SQL: string };
+        }>;
+        assert.equal(subtreeQuery[0]?.primaryKey.ID, 'FA742FD3-00D4-461F-A356-0265D72C39F4');
+        assert.equal(audienceQuery[0]?.primaryKey.ID, '0970BED4-D315-4863-8D41-C4D344FB9894');
+        assert.ok(subtreeQuery[0]?.fields.SQL.includes('[__mj_BizAppsCollaboration].[fnCollaborationChatScope]'));
+        assert.ok(subtreeQuery[0]?.fields.SQL.includes('AS [SpaceID]'));
+        assert.equal(subtreeQuery[0]?.fields.SQL.includes('fnCollaborationAccess'), false);
+        assert.ok(audienceQuery[0]?.fields.SQL.includes('[__mj_BizAppsCollaboration].[fnCollaborationChatScope]'));
+        assert.ok(audienceQuery[0]?.fields.SQL.includes('AS [Band]'));
+        assert.equal(audienceQuery[0]?.fields.SQL.includes('fnCollaborationAccess'), false);
     });
 
     it('detects dialects and builds parameterized dual-dialect queries fail-closed', () => {
