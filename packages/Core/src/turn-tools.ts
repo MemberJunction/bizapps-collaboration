@@ -89,7 +89,11 @@ export interface AgentRunSettings {
 
 /** Maps an agent grant's settings (D31) onto MJ's run parameters; a null grant gives the agent's own defaults. */
 export function agentRunSettingsFor(grant: Pick<EffectiveGrant, 'Settings'> | null | undefined): AgentRunSettings {
-    const settings: AgentGrantSettings | null = grant?.Settings ?? null;
+    const rawSettings = grant?.Settings ?? null;
+    const settings: AgentGrantSettings | null =
+        rawSettings && !('SearchScopeID' in rawSettings) && !('SearchScopeIDs' in rawSettings)
+            ? (rawSettings as AgentGrantSettings)
+            : null;
     const out: AgentRunSettings = { requestedSkillIDs: [], closed: [] };
     if (!settings) return out;
     if (settings.PlanMode === 'Required') out.planMode = true;

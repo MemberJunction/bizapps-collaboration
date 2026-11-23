@@ -31,6 +31,7 @@ import {
     membershipReaches,
     type MemberSnapshot,
     normalizeReceiptUuid,
+    normalizeScopeName,
     resolveEffectiveKnowledgeSourceBandsBySpace,
     type RoleFlags,
     type SourceReceiptBand,
@@ -764,6 +765,11 @@ export interface QuerySpaceAgentSourceReceiptsResult {
     errorMessage?: string;
 }
 
+export interface ResolveSuppliedKnowledgeScopeMeta {
+    scopeId?: string | null;
+    scopeName?: string | null;
+}
+
 /**
  * Resolves only the granted in-reach knowledge sources that were actually supplied/retrieved
  * in the turn context or tool results, strictly bounded by `chatAudience`.
@@ -776,6 +782,7 @@ export async function resolveSuppliedKnowledgeSources(
     knowledgeSourceIdsInForce: readonly string[],
     chatAudience: SourceReceiptBand,
     suppliedKnowledgeSourceIds?: ReadonlySet<string>,
+    originatingScopeByContentSourceId?: ReadonlyMap<string, ResolveSuppliedKnowledgeScopeMeta>,
 ): Promise<ValidatedSuppliedSourceCandidate[]> {
     const cleanSpaceId = normalizeReceiptUuid(spaceId);
     if (!cleanSpaceId || knowledgeSourceIdsInForce.length === 0) {
@@ -840,6 +847,7 @@ export async function resolveSuppliedKnowledgeSources(
         if (seen.has(contentSourceId)) continue;
         seen.add(contentSourceId);
         const title = titleById.get(contentSourceId) ?? grant.Label?.trim() ?? `Knowledge Source ${contentSourceId.slice(0, 8)}`;
+        const scopeMeta = originatingScopeByContentSourceId?.get(contentSourceId);
         candidates.push({
             sourceKind: 'KnowledgeSource',
             spaceId: cleanSpaceId,
@@ -854,6 +862,8 @@ export async function resolveSuppliedKnowledgeSources(
             rankingMode: 'grant',
             estimatedTokens: 0,
             wasTruncated: false,
+            originatingScopeId: normalizeReceiptUuid(scopeMeta?.scopeId),
+            originatingScopeName: normalizeScopeName(scopeMeta?.scopeName),
         });
     }
     return candidates;
@@ -913,17 +923,19 @@ export interface ResolveToolSuppliedSourcesParams {
     toolHits: readonly TurnToolSourceHit[];
     reachContext: SourceReceiptReachContext;
     alreadySuppliedSpaceItemIds: ReadonlySet<string>;
+    nativeScope?: { scopeId: string; scopeName: string };
 }
 
 export interface ResolveToolSuppliedSourcesResult {
     spaceItemCandidates: ValidatedSuppliedSourceCandidate[];
     suppliedKnowledgeSourceIds: Set<string>;
+    originatingScopeByContentSourceId: Map<string, ResolveSuppliedKnowledgeScopeMeta>;
     rejectedCount: number;
 }
 
 /**
  * Resolves and fail-closed validates sources returned by in-turn search or knowledge tools
- * (e.g. `CollaborationScopedSearchAction`) against the turn's `(space, band)` reach before
+ * (e.g. `Scoped Search`) against the turn's `(space, band)` reach before
  * merging them into receipt candidates.
  */
 export async function resolveToolSuppliedSourceCandidates(
@@ -931,11 +943,21 @@ export async function resolveToolSuppliedSourceCandidates(
 ): Promise<ResolveToolSuppliedSourcesResult> {
     const spaceItemCandidates: ValidatedSuppliedSourceCandidate[] = [];
     const suppliedKnowledgeSourceIds = new Set<string>();
+    const originatingScopeByContentSourceId = new Map<string, ResolveSuppliedKnowledgeScopeMeta>();
     let rejectedCount = 0;
 
     if (params.toolHits.length === 0) {
-        return { spaceItemCandidates, suppliedKnowledgeSourceIds, rejectedCount };
+        return { spaceItemCandidates, suppliedKnowledgeSourceIds, originatingScopeByContentSourceId, rejectedCount };
     }
+
+    const recordContentSourceScope = (csId: string, hit: TurnToolSourceHit | undefined): void => {
+        if (!hit) return;
+        const scopeId = normalizeReceiptUuid(hit.originatingScopeId);
+        const scopeName = normalizeScopeName(hit.originatingScopeName);
+        if ((scopeId || scopeName) && !originatingScopeByContentSourceId.has(csId)) {
+            originatingScopeByContentSourceId.set(csId, { scopeId, scopeName });
+        }
+    };
 
     const directSpaceItemIds = new Set<string>();
     const taskRecordIds = new Set<string>();
@@ -943,11 +965,16 @@ export async function resolveToolSuppliedSourceCandidates(
     const contentItemIds = new Set<string>();
     const hitBySpaceItemId = new Map<string, TurnToolSourceHit>();
     const hitByTaskRecordId = new Map<string, TurnToolSourceHit>();
+    const hitByChunkId = new Map<string, TurnToolSourceHit>();
+    const hitByContentItemId = new Map<string, TurnToolSourceHit>();
 
     for (const hit of params.toolHits) {
         if (hit.sourceKind === 'KnowledgeSource') {
             const cid = normalizeReceiptUuid(stripRecordKeyPrefix(hit.contentSourceId ?? hit.recordId));
-            if (cid) suppliedKnowledgeSourceIds.add(cid);
+            if (cid) {
+                suppliedKnowledgeSourceIds.add(cid);
+                recordContentSourceScope(cid, hit);
+            }
             continue;
         }
         const directItemId = normalizeReceiptUuid(stripRecordKeyPrefix(hit.spaceItemId));
@@ -966,11 +993,16 @@ export async function resolveToolSuppliedSourceCandidates(
             if (!hitByTaskRecordId.has(recId)) hitByTaskRecordId.set(recId, hit);
         } else if (hit.entityName === 'MJ: Content Item Chunks') {
             chunkIds.add(recId);
+            if (!hitByChunkId.has(recId)) hitByChunkId.set(recId, hit);
         } else if (hit.entityName === 'MJ: Content Items') {
             contentItemIds.add(recId);
+            if (!hitByContentItemId.has(recId)) hitByContentItemId.set(recId, hit);
         } else {
             const cid = normalizeReceiptUuid(stripRecordKeyPrefix(hit.contentSourceId));
-            if (cid) suppliedKnowledgeSourceIds.add(cid);
+            if (cid) {
+                suppliedKnowledgeSourceIds.add(cid);
+                recordContentSourceScope(cid, hit);
+            }
         }
     }
 
@@ -989,8 +1021,15 @@ export async function resolveToolSuppliedSourceCandidates(
                 MaxRows: 500,
             }, params.systemUser);
             for (const row of chunksRes.Success && chunksRes.Results ? chunksRes.Results : []) {
+                const chunkId = normalizeReceiptUuid(row.ID);
                 const ciId = normalizeReceiptUuid(row.ContentItemID);
-                if (ciId) contentItemIds.add(ciId);
+                if (ciId) {
+                    contentItemIds.add(ciId);
+                    const chunkHit = chunkId ? hitByChunkId.get(chunkId) : undefined;
+                    if (chunkHit && !hitByContentItemId.has(ciId)) {
+                        hitByContentItemId.set(ciId, chunkHit);
+                    }
+                }
             }
         } catch (err) {
             LogError(`resolveToolSuppliedSourceCandidates chunk lookup warning: ${err instanceof Error ? err.message : String(err)}`);
@@ -1010,10 +1049,20 @@ export async function resolveToolSuppliedSourceCandidates(
             }, params.systemUser);
             const erdIds: string[] = [];
             for (const row of ciRes.Success && ciRes.Results ? ciRes.Results : []) {
+                const ciId = normalizeReceiptUuid(row.ID);
+                const ciHit = ciId ? hitByContentItemId.get(ciId) : undefined;
                 const csId = normalizeReceiptUuid(row.ContentSourceID);
-                if (csId) suppliedKnowledgeSourceIds.add(csId);
+                if (csId) {
+                    suppliedKnowledgeSourceIds.add(csId);
+                    recordContentSourceScope(csId, ciHit);
+                }
                 const erdId = normalizeReceiptUuid(row.EntityRecordDocumentID);
-                if (erdId) erdIds.push(erdId);
+                if (erdId) {
+                    erdIds.push(erdId);
+                    if (ciHit && !hitByContentItemId.has(erdId)) {
+                        hitByContentItemId.set(erdId, ciHit);
+                    }
+                }
             }
             if (erdIds.length > 0) {
                 const erdFilter = erdIds.map((id) => `'${id}'`).join(', ');
@@ -1027,7 +1076,13 @@ export async function resolveToolSuppliedSourceCandidates(
                 }, params.systemUser);
                 for (const erd of erdRes.Success && erdRes.Results ? erdRes.Results : []) {
                     const siId = normalizeReceiptUuid(stripRecordKeyPrefix(erd.RecordID));
-                    if (siId) directSpaceItemIds.add(siId);
+                    if (siId) {
+                        directSpaceItemIds.add(siId);
+                        const erdHit = normalizeReceiptUuid(erd.ID) ? hitByContentItemId.get(normalizeReceiptUuid(erd.ID)!) : undefined;
+                        if (erdHit && !hitBySpaceItemId.has(siId)) {
+                            hitBySpaceItemId.set(siId, erdHit);
+                        }
+                    }
                 }
             }
         } catch (err) {
@@ -1163,10 +1218,12 @@ export async function resolveToolSuppliedSourceCandidates(
             rankingMode: hitMeta?.rankingMode ?? 'lexical',
             estimatedTokens: 0,
             wasTruncated: false,
+            originatingScopeId: normalizeReceiptUuid(hitMeta?.originatingScopeId ?? params.nativeScope?.scopeId),
+            originatingScopeName: normalizeScopeName(hitMeta?.originatingScopeName ?? params.nativeScope?.scopeName),
         });
     }
 
-    return { spaceItemCandidates, suppliedKnowledgeSourceIds, rejectedCount };
+    return { spaceItemCandidates, suppliedKnowledgeSourceIds, originatingScopeByContentSourceId, rejectedCount };
 }
 
 function receiptNaturalKey(entry: {
@@ -1265,56 +1322,94 @@ export async function persistSpaceAgentSourceReceipts(
                 }
 
                 const savedIds: string[] = [];
-                for (const entry of receipts) {
-                    const entity = await provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>(
-                        COLLABORATION_SOURCE_RECEIPT_ENTITY,
-                        systemUser,
-                    );
-                    if (!entity) {
-                        return { ok: false, errorMessage: 'Unable to instantiate Space Agent Source Receipt entity.' };
-                    }
-
-                    const key = receiptNaturalKey(entry);
-                    const existingId = key ? existingIdByKey.get(key) : undefined;
-                    if (existingId) {
-                        const loaded = await entity.Load(existingId);
-                        if (!loaded) {
-                            return { ok: false, errorMessage: `Failed to load existing source receipt ${existingId} for retry upsert.` };
+                const useTransactionGroup = receipts.length > 1 && typeof provider.CreateTransactionGroup === 'function';
+                const tg = useTransactionGroup ? await provider.CreateTransactionGroup() : null;
+                const queuedEntities: mjBizAppsCollaborationSpaceAgentSourceReceiptEntity[] = [];
+                try {
+                    for (const entry of receipts) {
+                        const entity = await provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentSourceReceiptEntity>(
+                            COLLABORATION_SOURCE_RECEIPT_ENTITY,
+                            systemUser,
+                        );
+                        if (!entity) {
+                            return { ok: false, errorMessage: 'Unable to instantiate Space Agent Source Receipt entity.' };
                         }
-                    } else {
-                        entity.NewRecord();
+
+                        const key = receiptNaturalKey(entry);
+                        const existingId = key ? existingIdByKey.get(key) : undefined;
+                        if (existingId) {
+                            const loaded = await entity.Load(existingId);
+                            if (!loaded) {
+                                return { ok: false, errorMessage: `Failed to load existing source receipt ${existingId} for retry upsert.` };
+                            }
+                        } else {
+                            entity.NewRecord();
+                        }
+
+                        entity.SpaceID = normalizeReceiptUuid(entry.spaceId)!;
+                        entity.SpaceChatID = cleanChatId;
+                        entity.ConversationID = cleanConversationId;
+                        entity.ConversationDetailID = cleanDetailId;
+                        entity.AgentRunID = cleanRunId;
+                        entity.SourceKind = entry.sourceKind;
+                        entity.SpaceItemID = entry.spaceItemId;
+                        entity.ContentSourceID = entry.contentSourceId;
+                        entity.TargetEntityID = entry.targetEntityId;
+                        entity.TargetRecordID = entry.targetRecordId;
+                        entity.SourceTitle = entry.sourceTitle;
+                        entity.Band = entry.band;
+                        entity.WasSupplied = entry.wasSupplied;
+                        entity.WasCited = entry.wasCited;
+                        entity.RetrievalRank = entry.retrievalRank;
+                        entity.RelevanceScore = entry.relevanceScore;
+                        entity.RankingMode = entry.rankingMode;
+                        entity.CitationOrdinal = entry.citationOrdinal;
+                        entity.EstimatedTokens = entry.estimatedTokens;
+                        entity.WasTruncated = entry.wasTruncated;
+                        entity.Sequence = entry.sequence;
+                        entity.OriginatingScopeID = normalizeReceiptUuid(entry.originatingScopeId);
+                        entity.OriginatingScopeName = normalizeScopeName(entry.originatingScopeName);
+
+                        if (tg) {
+                            entity.TransactionGroup = tg;
+                            queuedEntities.push(entity);
+                        }
+
+                        const saved = await entity.Save();
+                        if (!saved) {
+                            return {
+                                ok: false,
+                                errorMessage: entity.LatestResult?.CompleteMessage ?? 'Failed to save Space Agent Source Receipt row.',
+                            };
+                        }
+                        if (!tg) {
+                            if (!entity.ID) {
+                                return { ok: false, errorMessage: 'Saved Space Agent Source Receipt did not return an ID.' };
+                            }
+                            savedIds.push(entity.ID);
+                        }
                     }
 
-                    entity.SpaceID = normalizeReceiptUuid(entry.spaceId)!;
-                    entity.SpaceChatID = cleanChatId;
-                    entity.ConversationID = cleanConversationId;
-                    entity.ConversationDetailID = cleanDetailId;
-                    entity.AgentRunID = cleanRunId;
-                    entity.SourceKind = entry.sourceKind;
-                    entity.SpaceItemID = entry.spaceItemId;
-                    entity.ContentSourceID = entry.contentSourceId;
-                    entity.TargetEntityID = entry.targetEntityId;
-                    entity.TargetRecordID = entry.targetRecordId;
-                    entity.SourceTitle = entry.sourceTitle;
-                    entity.Band = entry.band;
-                    entity.WasSupplied = entry.wasSupplied;
-                    entity.WasCited = entry.wasCited;
-                    entity.RetrievalRank = entry.retrievalRank;
-                    entity.RelevanceScore = entry.relevanceScore;
-                    entity.RankingMode = entry.rankingMode;
-                    entity.CitationOrdinal = entry.citationOrdinal;
-                    entity.EstimatedTokens = entry.estimatedTokens;
-                    entity.WasTruncated = entry.wasTruncated;
-                    entity.Sequence = entry.sequence;
-
-                    const saved = await entity.Save();
-                    if (!saved || !entity.ID) {
-                        return {
-                            ok: false,
-                            errorMessage: entity.LatestResult?.CompleteMessage ?? 'Failed to save Space Agent Source Receipt row.',
-                        };
+                    if (tg) {
+                        const committed = await tg.Submit();
+                        if (!committed) {
+                            const firstErr = queuedEntities.find((e) => e.LatestResult?.CompleteMessage)?.LatestResult?.CompleteMessage;
+                            return {
+                                ok: false,
+                                errorMessage: firstErr ?? 'TransactionGroup commit failed while persisting source receipts.',
+                            };
+                        }
+                        for (const entity of queuedEntities) {
+                            if (!entity.ID) {
+                                return { ok: false, errorMessage: 'Committed Space Agent Source Receipt did not return an ID.' };
+                            }
+                            savedIds.push(entity.ID);
+                        }
                     }
-                    savedIds.push(entity.ID);
+                } finally {
+                    for (const entity of queuedEntities) {
+                        (entity as { TransactionGroup?: TransactionGroupBase | null }).TransactionGroup = undefined;
+                    }
                 }
 
                 return {

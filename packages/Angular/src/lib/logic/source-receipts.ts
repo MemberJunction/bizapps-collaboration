@@ -194,6 +194,10 @@ export function filterAndMapSourceReceipts(
             estimatedTokens: Number.isFinite(row.EstimatedTokens) ? row.EstimatedTokens : 0,
             wasTruncated: Boolean(row.WasTruncated),
             sequence: Number.isFinite(row.Sequence) ? row.Sequence : 0,
+            originatingScopeId: normalizeReceiptUuid(row.OriginatingScopeID),
+            originatingScopeName: typeof row.OriginatingScopeName === 'string' && row.OriginatingScopeName.trim()
+                ? stripCitationMarkdown(row.OriginatingScopeName)
+                : null,
         });
     }
     return out;
@@ -217,6 +221,8 @@ interface RawJsonReceiptCandidate {
     estimatedTokens?: string | number | boolean | null;
     wasTruncated?: string | number | boolean | null;
     sequence?: string | number | boolean | null;
+    originatingScopeId?: string | number | boolean | null;
+    originatingScopeName?: string | number | boolean | null;
 }
 
 type JsonParsedPayload =
@@ -326,6 +332,10 @@ export function parseTurnSourceReceiptsPayload(
             estimatedTokens,
             wasTruncated: item.wasTruncated === true,
             sequence: seq,
+            originatingScopeId: typeof item.originatingScopeId === 'string' ? normalizeReceiptUuid(item.originatingScopeId) : null,
+            originatingScopeName: typeof item.originatingScopeName === 'string' && item.originatingScopeName.trim()
+                ? stripCitationMarkdown(item.originatingScopeName)
+                : null,
         });
     }
     return out;

@@ -345,6 +345,8 @@ export interface SpaceChatAnswerSourceReceipt {
   estimatedTokens: number;
   wasTruncated: boolean;
   sequence: number;
+  originatingScopeId?: string | null;
+  originatingScopeName?: string | null;
 }
 
 export type DataRowValue = string | number | boolean | Date | object | null | undefined;

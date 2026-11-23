@@ -44,6 +44,14 @@ export interface AgentGrantSettings {
     Limits?: Partial<Record<AgentLimitName, number>>;
 }
 
+/** Optional settings on a KnowledgeSource grant (CT-3): links explicit Search Scope IDs to the grant. */
+export interface KnowledgeSourceGrantSettings {
+    /** Primary MJ: Search Scopes record ID associated with this KnowledgeSource grant. */
+    SearchScopeID?: string;
+    /** Additional MJ: Search Scopes record IDs associated with this KnowledgeSource grant. */
+    SearchScopeIDs?: string[];
+}
+
 export const AGENT_LIMIT_NAMES = ['MaxCostPerRun', 'MaxTokensPerRun', 'MaxIterationsPerRun', 'MaxTimePerRun'] as const;
 export type AgentLimitName = (typeof AGENT_LIMIT_NAMES)[number];
 
@@ -147,6 +155,46 @@ export function validateAgentGrantSettings(settings: unknown, agent: AgentDefini
                 const own = agent.Limits?.[name as AgentLimitName];
                 if (own !== null && own !== undefined && value > own) errors.push(`Settings.Limits.${name} (${value}) is above the agent's own (${own}).`);
             }
+        }
+    }
+    return errors;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Strongly-typed candidate shape for validating KnowledgeSource grant settings without `any` or `unknown`. */
+export type KnowledgeSourceGrantSettingsInput =
+    | KnowledgeSourceGrantSettings
+    | object
+    | string
+    | number
+    | boolean
+    | null
+    | undefined;
+
+/** Validates optional KnowledgeSource grant settings (`SearchScopeID` / `SearchScopeIDs`). */
+export function validateKnowledgeSourceGrantSettings(settings: KnowledgeSourceGrantSettingsInput): string[] {
+    if (settings === null || settings === undefined) return [];
+    if (typeof settings !== 'object' || Array.isArray(settings)) return ['Settings must be an object.'];
+    const raw = settings as {
+        SearchScopeID?: string | number | boolean | object | null;
+        SearchScopeIDs?: readonly (string | number | boolean | object | null)[];
+    };
+    const errors: string[] = [];
+    for (const key of Object.keys(raw)) {
+        if (key !== 'SearchScopeID' && key !== 'SearchScopeIDs') {
+            errors.push(`Settings.${key} is not a supported KnowledgeSource grant setting.`);
+        }
+    }
+    if (raw.SearchScopeID !== undefined) {
+        if (typeof raw.SearchScopeID !== 'string' || !UUID_PATTERN.test(raw.SearchScopeID.trim())) {
+            errors.push('Settings.SearchScopeID must be a valid UUID string.');
+        }
+    }
+    if (raw.SearchScopeIDs !== undefined) {
+        const list = raw.SearchScopeIDs;
+        if (!Array.isArray(list) || list.some((id) => typeof id !== 'string' || !UUID_PATTERN.test(id.trim()))) {
+            errors.push('Settings.SearchScopeIDs must be an array of valid UUID strings.');
         }
     }
     return errors;

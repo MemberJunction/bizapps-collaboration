@@ -87,6 +87,7 @@ describe('CollabAnswerSourceReceiptsComponent', () => {
                 estimatedTokens: 350,
                 wasTruncated: true,
                 sequence: 1,
+                originatingScopeName: 'External Policy Scope',
             }),
         ]);
         fixture.detectChanges();
@@ -124,6 +125,7 @@ describe('CollabAnswerSourceReceiptsComponent', () => {
         const rows = host.querySelectorAll('[data-testid="answer-receipt-row"]');
         expect(rows).toHaveLength(3);
         expect(rows[0].textContent).toContain('Vector match');
+        expect(rows[0].textContent).toContain('Scope External Policy Scope');
         expect(rows[0].textContent).toContain('Excerpt truncated');
         expect(rows[2].textContent).toContain('Supplied');
 

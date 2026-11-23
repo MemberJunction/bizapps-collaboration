@@ -38,7 +38,7 @@ export interface TurnSpaceDataGrant {
     Parameters: string[];
 }
 
-/** Validated/raw source hit emitted by an in-turn search or knowledge tool for receipt tracking (CT-2). */
+/** Validated/raw source hit emitted by an in-turn search or knowledge tool for receipt tracking (CT-2 / CT-3). */
 export interface TurnToolSourceHit {
     sourceKind: 'SpaceItem' | 'KnowledgeSource';
     spaceItemId?: string | null;
@@ -48,6 +48,8 @@ export interface TurnToolSourceHit {
     title?: string | null;
     score?: number | null;
     rankingMode?: 'vector' | 'lexical' | 'grant' | 'none';
+    originatingScopeId?: string | null;
+    originatingScopeName?: string | null;
 }
 
 /** What *Run space data* reads from the run's context: the space, the conversation and the grants in force for this turn. */

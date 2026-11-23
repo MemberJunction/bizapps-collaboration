@@ -5,6 +5,7 @@ import {
     type IMetadataProvider,
     type UserInfo,
 } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     ConversationEngine,
     MJConversationDetailEntity,
@@ -46,9 +47,15 @@ import {
     buildSourceReceiptReachContext,
     ensurePostgresReceiptContextHook,
     persistSpaceAgentSourceReceipts,
+    type ResolveSuppliedKnowledgeScopeMeta,
     resolveSuppliedKnowledgeSources,
     resolveToolSuppliedSourceCandidates,
 } from './space-agent-source-receipts.js';
+import {
+    dispatchMultiScopeTurnSearch,
+    type MultiScopeTurnSearchDispatcher,
+    resolveTurnKnowledgeScopes,
+} from './turn-knowledge-scopes.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
@@ -105,6 +112,8 @@ export interface ExecuteSpaceChatTurnInput {
     maxContextTokens?: number;
     /** Optional vector search adapter for testing or host injection. */
     vectorSearch?: SpaceAgentVectorSearchAdapter;
+    /** Optional multi-scope SearchEngine dispatcher seam for testing or host injection (CT-3). */
+    multiScopeSearch?: MultiScopeTurnSearchDispatcher;
     /** Optional page size for keyset-paged `Space Items` reads. */
     itemsPageSize?: number;
 }
@@ -129,6 +138,10 @@ export interface TurnToolsGiven {
     dataGrantNames: string[];
     /** The Content Source ids in force. */
     knowledgeSourceIds: string[];
+    /** Resolved Search Scope IDs handed to the agent turn (native space scope + authorized granted extra knowledge scopes). */
+    searchScopeIds?: string[];
+    /** Human-readable Search Scope names corresponding to `searchScopeIds`. */
+    grantedKnowledgeScopeNames?: string[];
     /** What was in force but not given, and why (D36's closures, settings MJ's run cannot take). */
     withheld: string[];
 }
@@ -470,7 +483,7 @@ async function runClaimedTurn(
         return { ok: false, message: `The agent ${targetAgentId} is not allowed in this space.` };
     }
 
-    // 7b. The turn's tools (B20): the grants in force for the conversation's audience, and the agent grant's run settings
+    // 7b. The turn's tools (B20) and authorized knowledge scopes (CT-3):
     const audience = isOneToOneAssistant
         ? (reach.role.canSeeTeamBand ? 'Team' : 'Shared')
         : audienceOfConversationKind(foundChat.Kind);
@@ -480,11 +493,21 @@ async function runClaimedTurn(
     } catch (toolsError) {
         return { ok: false, message: `The turn's tools could not be resolved: ${toolsError instanceof Error ? toolsError.message : String(toolsError)}` };
     }
+    const turnKnowledgeScopes = await resolveTurnKnowledgeScopes({
+        provider,
+        systemUser: system,
+        contextUser: user,
+        configuration: loaded.configuration,
+        audience,
+        primaryScopeRecordId: foundChat.ID,
+    });
     const toolsGiven: TurnToolsGiven = {
         audience,
         actionIds: turnTools.actionIds,
         dataGrantNames: turnTools.spaceData.map((grant) => grant.Name),
         knowledgeSourceIds: turnTools.tools.KnowledgeSourceIDs,
+        searchScopeIds: turnKnowledgeScopes.searchScopeIds,
+        grantedKnowledgeScopeNames: turnKnowledgeScopes.grantedScopes.map((s) => s.scopeName),
         withheld: turnTools.withheld,
     };
     // What Run space data reads when the agent calls it; the run's id is filled in once the run exists (A2)
@@ -569,6 +592,55 @@ async function runClaimedTurn(
     }));
     const participantUserIds = retrieval.audienceUserIds;
 
+    // Re-evaluate granted knowledge scopes against every hydrated reader in the conversation's audience
+    const hydratedAudienceUsers: UserInfo[] = [];
+    for (const pid of participantUserIds) {
+        if (pid.toLowerCase() === user.ID.toLowerCase()) {
+            hydratedAudienceUsers.push(user);
+        } else {
+            const cachedUser = (UserCache.Users ?? []).find((u: UserInfo) => u.ID.toLowerCase() === pid.toLowerCase());
+            if (cachedUser) {
+                hydratedAudienceUsers.push(cachedUser);
+            }
+        }
+    }
+    const audienceAuthorizedScopes =
+        hydratedAudienceUsers.length > 1
+            ? await resolveTurnKnowledgeScopes({
+                  provider,
+                  systemUser: system,
+                  contextUser: user,
+                  configuration: loaded.configuration,
+                  audience,
+                  audienceUsers: hydratedAudienceUsers,
+                  primaryScopeRecordId: foundChat.ID,
+              })
+            : turnKnowledgeScopes;
+    toolsGiven.searchScopeIds = audienceAuthorizedScopes.searchScopeIds;
+    toolsGiven.grantedKnowledgeScopeNames = audienceAuthorizedScopes.grantedScopes.map((s) => s.scopeName);
+
+    const multiScopeSearchResult = await dispatchMultiScopeTurnSearch(
+        {
+            query: rankingQuery || stripMentionMarkup(messageText),
+            spaceId,
+            spaceChatId: foundChat.ID,
+            maxResults: input.topK ?? 20,
+            nativeScope: audienceAuthorizedScopes.nativeScope,
+            grantedScopes: audienceAuthorizedScopes.grantedScopes,
+            scopeById: audienceAuthorizedScopes.scopeById,
+            scopeByContentSourceId: audienceAuthorizedScopes.scopeByContentSourceId,
+            contentSourceNamesById: audienceAuthorizedScopes.contentSourceNamesById,
+            maxBandByContentSourceId: audienceAuthorizedScopes.maxBandByContentSourceId,
+            searchScopeIds: audienceAuthorizedScopes.searchScopeIds,
+            ...(hydratedAudienceUsers.length > 0 && hydratedAudienceUsers.length === participantUserIds.length
+                ? { audienceUsers: hydratedAudienceUsers }
+                : {}),
+            contextUser: user,
+            provider,
+        },
+        input.multiScopeSearch,
+    );
+
     // 10. Write reply as system user (Item 5 / A19 Part 2)
     const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     assistantDetail.NewRecord();
@@ -638,8 +710,8 @@ async function runClaimedTurn(
                     ConversationHistoryFrom: conversationHistoryFrom,
                     PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
                     PrimaryScopeRecordID: foundChat.ID,
-                    // The space's search, for whichever agent runs: the scope derives the space and the audience from the chat
-                    SearchScopeIDs: [COLLABORATION_SPACE_SCOPE_ID],
+                    // The space's native scope + authorized granted extra knowledge scopes (CT-3)
+                    SearchScopeIDs: audienceAuthorizedScopes.searchScopeIds,
                     Audience: {
                         Mode: 'Intersection',
                         UserIDs: participantUserIds,
@@ -651,9 +723,15 @@ async function runClaimedTurn(
                         allowedItems: audienceQuoted,
                         suppliedSources: retrieval.suppliedSources ?? [],
                         retrievalStats: retrieval.stats,
-                        // B20: what the model is told it may run, and the knowledge in force; the values stay the server's
+                        // B20 / CT-3: what the model is told it may run, and the knowledge scopes + hits in force
                         spaceData: turnTools.spaceData,
                         knowledgeSourceIds: turnTools.tools.KnowledgeSourceIDs,
+                        grantedKnowledgeScopes: audienceAuthorizedScopes.grantedScopes.map((s) => ({
+                            scopeId: s.scopeId,
+                            scopeName: s.scopeName,
+                            contentSourceIds: s.contentSourceIds,
+                        })),
+                        grantedKnowledgeHits: multiScopeSearchResult.grantedKnowledgeHits,
                         // Item 83: what the space's type adds to the turn
                         typeInstructions: typeContext.instructions ?? [],
                         typeContextData: typeContext.contextData ?? {},
@@ -728,7 +806,8 @@ async function runClaimedTurn(
             return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
         }
 
-        // Validate & persist source receipts BEFORE marking assistant reply Complete (fail-closed CT-2 commit boundary)
+        // Validate & persist source receipts BEFORE marking assistant reply Complete (fail-closed CT-2 / CT-3 commit boundary)
+        const nativeScopeMeta = audienceAuthorizedScopes.nativeScope;
         const suppliedItemCandidates: ValidatedSuppliedSourceCandidate[] =
             retrieval.suppliedSources && retrieval.suppliedSources.length > 0
                 ? retrieval.suppliedSources.map((src) => ({
@@ -745,6 +824,8 @@ async function runClaimedTurn(
                       rankingMode: src.rankingMode,
                       estimatedTokens: src.estimatedTokens,
                       wasTruncated: src.truncated,
+                      originatingScopeId: nativeScopeMeta.scopeId,
+                      originatingScopeName: nativeScopeMeta.scopeName,
                   }))
                 : audienceQuoted.map((item) => ({
                       sourceKind: 'SpaceItem',
@@ -760,11 +841,28 @@ async function runClaimedTurn(
                       rankingMode: 'none',
                       estimatedTokens: 0,
                       wasTruncated: false,
+                      originatingScopeId: nativeScopeMeta.scopeId,
+                      originatingScopeName: nativeScopeMeta.scopeName,
                   }));
 
-        // Accumulate validated sources returned by in-turn search/knowledge tools (e.g. Scoped Search)
+        // Accumulate validated sources returned by in-turn search/knowledge tools (e.g. Scoped Search) and multi-scope search
         const stepToolHits = extractToolSourceHitsFromAgentRun(finishedResult);
-        const allToolHits: TurnToolSourceHit[] = [...(turnContext.toolSourceHits ?? []), ...stepToolHits];
+        const nativeDispatchHits: TurnToolSourceHit[] = multiScopeSearchResult.nativeToolHits.map((hit) => ({
+            sourceKind: 'SpaceItem',
+            ...(hit.EntityName === 'MJ_BizApps_Collaboration: Space Items' ? { spaceItemId: parseUuid(hit.RecordID) } : {}),
+            entityName: hit.EntityName || null,
+            recordId: hit.RecordID || null,
+            title: hit.Title ?? hit.RecordName ?? null,
+            score: typeof hit.Score === 'number' && Number.isFinite(hit.Score) ? hit.Score : null,
+            rankingMode: hit.SourceType === 'vector' ? 'vector' : 'lexical',
+            originatingScopeId: hit.OriginatingScopeID ?? nativeScopeMeta.scopeId,
+            originatingScopeName: hit.OriginatingScopeName ?? nativeScopeMeta.scopeName,
+        }));
+        const allToolHits: TurnToolSourceHit[] = [
+            ...(turnContext.toolSourceHits ?? []),
+            ...stepToolHits,
+            ...nativeDispatchHits,
+        ];
 
         const receiptReachContext = buildSourceReceiptReachContext(
             audience,
@@ -784,7 +882,23 @@ async function runClaimedTurn(
             toolHits: allToolHits,
             reachContext: receiptReachContext,
             alreadySuppliedSpaceItemIds: initialItemIdSet,
+            nativeScope: nativeScopeMeta,
         });
+
+        const mergedScopeByContentSource = new Map<string, ResolveSuppliedKnowledgeScopeMeta>();
+        for (const [csId, scope] of audienceAuthorizedScopes.scopeByContentSourceId.entries()) {
+            mergedScopeByContentSource.set(csId, { scopeId: scope.scopeId, scopeName: scope.scopeName });
+        }
+        for (const [csId, meta] of toolResolved.originatingScopeByContentSourceId.entries()) {
+            mergedScopeByContentSource.set(csId, meta);
+        }
+
+        const extraKnowledgeSourceIdSet = new Set<string>(toolResolved.suppliedKnowledgeSourceIds);
+        for (const extraCand of multiScopeSearchResult.extraKnowledgeCandidates) {
+            if (extraCand.contentSourceId) {
+                extraKnowledgeSourceIdSet.add(extraCand.contentSourceId);
+            }
+        }
 
         const suppliedKnowledgeCandidates = await resolveSuppliedKnowledgeSources(
             provider,
@@ -793,11 +907,17 @@ async function runClaimedTurn(
             loaded.configuration.Grants.KnowledgeSource,
             toolsGiven.knowledgeSourceIds,
             audience,
-            toolResolved.suppliedKnowledgeSourceIds,
+            extraKnowledgeSourceIdSet,
+            mergedScopeByContentSource,
         );
 
         const receiptExtraction = extractAndValidateSourceReceipts(
-            [...suppliedItemCandidates, ...toolResolved.spaceItemCandidates, ...suppliedKnowledgeCandidates],
+            [
+                ...suppliedItemCandidates,
+                ...toolResolved.spaceItemCandidates,
+                ...multiScopeSearchResult.extraKnowledgeCandidates,
+                ...suppliedKnowledgeCandidates,
+            ],
             agentReplyText,
             receiptReachContext,
         );
@@ -984,6 +1104,8 @@ interface ParsedStepSearchItem {
     SourceType?: string | null;
     ContentSourceID?: string | null;
     SpaceItemID?: string | null;
+    OriginatingScopeID?: string | null;
+    OriginatingScopeName?: string | null;
     RawMetadata?: string | Record<string, string | number | boolean | null> | null;
 }
 
@@ -991,17 +1113,26 @@ interface ParsedStepOutput {
     Results?: ParsedStepSearchItem[];
     ContentSourceID?: string | null;
     KnowledgeSourceIDs?: string[];
+    ScopeID_Resolved?: string | null;
+    ScopeName_Resolved?: string | null;
     result?: {
         success?: boolean;
         data?: {
             Results?: ParsedStepSearchItem[];
             ContentSourceID?: string | null;
             KnowledgeSourceIDs?: string[];
+            ScopeID_Resolved?: string | null;
+            ScopeName_Resolved?: string | null;
         };
     };
 }
 
-function collectSearchItemsFromArray(rawItems: readonly ParsedStepSearchItem[], out: TurnToolSourceHit[]): void {
+function collectSearchItemsFromArray(
+    rawItems: readonly ParsedStepSearchItem[],
+    out: TurnToolSourceHit[],
+    fallbackScopeId: string | null,
+    fallbackScopeName: string | null,
+): void {
     for (const item of rawItems) {
         if (!item || typeof item !== 'object') continue;
         const entityName = typeof item.EntityName === 'string' ? item.EntityName.trim() : '';
@@ -1012,6 +1143,10 @@ function collectSearchItemsFromArray(rawItems: readonly ParsedStepSearchItem[], 
             null;
         const score = typeof item.Score === 'number' && Number.isFinite(item.Score) ? item.Score : null;
         const rankingMode: TurnToolSourceHit['rankingMode'] = item.SourceType === 'vector' ? 'vector' : 'lexical';
+        const itemScopeId = parseUuid(item.OriginatingScopeID) ?? fallbackScopeId;
+        const itemScopeName =
+            (typeof item.OriginatingScopeName === 'string' && item.OriginatingScopeName.trim()) ||
+            fallbackScopeName;
         let contentSourceId = typeof item.ContentSourceID === 'string' ? parseUuid(item.ContentSourceID) : null;
         if (!contentSourceId && item.RawMetadata && typeof item.RawMetadata === 'object') {
             const rawCid = item.RawMetadata['ContentSourceID'];
@@ -1039,6 +1174,8 @@ function collectSearchItemsFromArray(rawItems: readonly ParsedStepSearchItem[], 
                     title,
                     score,
                     rankingMode: 'grant',
+                    originatingScopeId: itemScopeId,
+                    originatingScopeName: itemScopeName,
                 });
             }
             continue;
@@ -1057,6 +1194,8 @@ function collectSearchItemsFromArray(rawItems: readonly ParsedStepSearchItem[], 
                 title,
                 score,
                 rankingMode,
+                originatingScopeId: itemScopeId,
+                originatingScopeName: itemScopeName,
             });
         }
     }
@@ -1077,33 +1216,74 @@ function extractToolSourceHitsFromAgentRun(runResult: ExecuteAgentResult | undef
             continue;
         }
         if (!parsed || typeof parsed !== 'object') continue;
+        const parsedScopeId = parseUuid(parsed.ScopeID_Resolved);
+        const parsedScopeName =
+            typeof parsed.ScopeName_Resolved === 'string' && parsed.ScopeName_Resolved.trim()
+                ? parsed.ScopeName_Resolved.trim()
+                : null;
         if (Array.isArray(parsed.Results)) {
-            collectSearchItemsFromArray(parsed.Results, out);
+            collectSearchItemsFromArray(parsed.Results, out, parsedScopeId, parsedScopeName);
         }
         if (parsed.result?.success !== false && parsed.result?.data) {
             const data = parsed.result.data;
+            const dataScopeId = parseUuid(data.ScopeID_Resolved) ?? parsedScopeId;
+            const dataScopeName =
+                (typeof data.ScopeName_Resolved === 'string' && data.ScopeName_Resolved.trim()) ||
+                parsedScopeName;
             if (Array.isArray(data.Results)) {
-                collectSearchItemsFromArray(data.Results, out);
+                collectSearchItemsFromArray(data.Results, out, dataScopeId, dataScopeName);
             }
             if (typeof data.ContentSourceID === 'string') {
                 const cid = parseUuid(data.ContentSourceID);
-                if (cid) out.push({ sourceKind: 'KnowledgeSource', contentSourceId: cid, rankingMode: 'grant' });
+                if (cid) {
+                    out.push({
+                        sourceKind: 'KnowledgeSource',
+                        contentSourceId: cid,
+                        rankingMode: 'grant',
+                        originatingScopeId: dataScopeId,
+                        originatingScopeName: dataScopeName,
+                    });
+                }
             }
             if (Array.isArray(data.KnowledgeSourceIDs)) {
                 for (const rawCid of data.KnowledgeSourceIDs) {
                     const cid = parseUuid(rawCid);
-                    if (cid) out.push({ sourceKind: 'KnowledgeSource', contentSourceId: cid, rankingMode: 'grant' });
+                    if (cid) {
+                        out.push({
+                            sourceKind: 'KnowledgeSource',
+                            contentSourceId: cid,
+                            rankingMode: 'grant',
+                            originatingScopeId: dataScopeId,
+                            originatingScopeName: dataScopeName,
+                        });
+                    }
                 }
             }
         }
         if (typeof parsed.ContentSourceID === 'string') {
             const cid = parseUuid(parsed.ContentSourceID);
-            if (cid) out.push({ sourceKind: 'KnowledgeSource', contentSourceId: cid, rankingMode: 'grant' });
+            if (cid) {
+                out.push({
+                    sourceKind: 'KnowledgeSource',
+                    contentSourceId: cid,
+                    rankingMode: 'grant',
+                    originatingScopeId: parsedScopeId,
+                    originatingScopeName: parsedScopeName,
+                });
+            }
         }
         if (Array.isArray(parsed.KnowledgeSourceIDs)) {
             for (const rawCid of parsed.KnowledgeSourceIDs) {
                 const cid = parseUuid(rawCid);
-                if (cid) out.push({ sourceKind: 'KnowledgeSource', contentSourceId: cid, rankingMode: 'grant' });
+                if (cid) {
+                    out.push({
+                        sourceKind: 'KnowledgeSource',
+                        contentSourceId: cid,
+                        rankingMode: 'grant',
+                        originatingScopeId: parsedScopeId,
+                        originatingScopeName: parsedScopeName,
+                    });
+                }
             }
         }
     }

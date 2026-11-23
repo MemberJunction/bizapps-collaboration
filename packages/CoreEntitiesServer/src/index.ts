@@ -137,6 +137,20 @@ export type { CreateSpaceConversationInput, CreateSpaceConversationResult } from
 
 
 export {
+    COLLABORATION_SPACE_SCOPE_NAME,
+    dispatchMultiScopeTurnSearch,
+    escapeSqlLiteral,
+    resolveTurnKnowledgeScopes,
+    type DispatchMultiScopeTurnSearchResult,
+    type GrantedKnowledgeScopeSearchHit,
+    type MultiScopeTurnSearchDispatchInput,
+    type MultiScopeTurnSearchDispatcher,
+    type RejectedKnowledgeScope,
+    type ResolvedKnowledgeScope,
+    type ResolvedTurnKnowledgeScopesResult,
+    type ResolveTurnKnowledgeScopesParams,
+} from './turn-knowledge-scopes.js';
+export {
     resolveTurnTools,
     findSpaceDataGrant,
     RUN_SPACE_DATA_ACTION_ID,

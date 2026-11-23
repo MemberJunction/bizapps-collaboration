@@ -124,6 +124,9 @@ export function sortAnswerSourceReceipts(
                   </div>
                   <div class="receipt-detail-meta">
                     <span>{{ rankingModeLabel(receipt.rankingMode) }}</span>
+                    @if (receipt.originatingScopeName) {
+                      <span>· Scope {{ cleanTitle(receipt.originatingScopeName) }}</span>
+                    }
                     @if (receipt.retrievalRank !== null) {
                       <span>· Rank #{{ receipt.retrievalRank }}</span>
                     }

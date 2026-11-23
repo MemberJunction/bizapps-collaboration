@@ -26,7 +26,7 @@ export async function resolveSpaceAgentSkills(provider: IMetadataProvider, space
     const configuration = loaded ?? (await loadSpaceConfiguration(provider, spaceId)).configuration;
     const skillIds = new Set<string>();
     for (const grant of configuration.Grants.Agent) {
-        const skills = grant.Settings?.Skills;
+        const skills = grant.Settings && 'Skills' in grant.Settings ? grant.Settings.Skills : undefined;
         if (!skills || skills === 'None') continue;
         if (!Array.isArray(skills)) {
             LogError(`resolveSpaceAgentSkills: grant ${grant.GrantID} names skills in a shape that is not a list; none are added.`);

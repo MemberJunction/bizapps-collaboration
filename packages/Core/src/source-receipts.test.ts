@@ -223,4 +223,59 @@ describe('Core source receipts domain validation', () => {
         assert.equal(effective.get(LEAF_REPLACE_ID)?.get(KS_VALID), undefined);
         assert.equal(effective.get(LEAF_REPLACE_ID)?.get(KS_REPLACE_ONLY), 'Shared');
     });
+
+    it('propagates and sanitizes OriginatingScopeID and OriginatingScopeName on every emitted receipt (CT-3)', () => {
+        const reach: SourceReceiptReachContext = {
+            chatAudience: 'Shared',
+            inReachSpaceBands: new Map([[SPACE_A, new Set(['Shared'] as const)]]),
+        };
+        const out = extractAndValidateSourceReceipts(
+            [
+                buildCandidate({
+                    sourceKind: 'SpaceItem',
+                    spaceId: SPACE_A,
+                    spaceItemId: ITEM_SHARED,
+                    contentSourceId: null,
+                    targetEntityId: TARGET_ENTITY,
+                    targetRecordId: ITEM_SHARED,
+                    sourceTitle: 'Space Handbook',
+                    band: 'Shared',
+                    retrievalRank: 1,
+                    relevanceScore: 0.91,
+                    rankingMode: 'vector',
+                    estimatedTokens: 60,
+                    wasTruncated: false,
+                    originatingScopeId: '6E5187CF-7E5B-447F-893D-D291994083C0',
+                    originatingScopeName: 'Collaboration Space Scope',
+                }),
+                buildCandidate({
+                    sourceKind: 'KnowledgeSource',
+                    spaceId: SPACE_A,
+                    spaceItemId: null,
+                    contentSourceId: CONTENT_SRC,
+                    targetEntityId: TARGET_ENTITY,
+                    targetRecordId: CONTENT_SRC,
+                    sourceTitle: 'External Reference Guide',
+                    band: 'Shared',
+                    retrievalRank: 2,
+                    relevanceScore: 0.87,
+                    rankingMode: 'lexical',
+                    estimatedTokens: 90,
+                    wasTruncated: false,
+                    originatingScopeId: '99990000-0000-4000-8000-000000000001',
+                    originatingScopeName: '**Granted** Knowledge Scope [cite:1]',
+                }),
+            ],
+            `See [source:${ITEM_SHARED}] and [source:${CONTENT_SRC}].`,
+            reach,
+        );
+
+        assert.equal(out.receipts.length, 2);
+        assert.equal(out.receipts[0]?.originatingScopeId, '6e5187cf-7e5b-447f-893d-d291994083c0');
+        assert.equal(out.receipts[0]?.originatingScopeName, 'Collaboration Space Scope');
+        assert.equal(out.receipts[0]?.wasCited, true);
+        assert.equal(out.receipts[1]?.originatingScopeId, '99990000-0000-4000-8000-000000000001');
+        assert.equal(out.receipts[1]?.originatingScopeName, 'Granted Knowledge Scope');
+        assert.equal(out.receipts[1]?.wasCited, true);
+    });
 });

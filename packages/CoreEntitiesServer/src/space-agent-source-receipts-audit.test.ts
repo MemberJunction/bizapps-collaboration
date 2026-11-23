@@ -352,6 +352,8 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
                 estimatedTokens: 85,
                 wasTruncated: false,
                 sequence: 1,
+                originatingScopeId: '6e5187cf-7e5b-447f-893d-d291994083c0',
+                originatingScopeName: 'Collaboration Space Scope',
             },
             {
                 sourceKind: 'KnowledgeSource',
@@ -371,6 +373,8 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
                 estimatedTokens: 0,
                 wasTruncated: false,
                 sequence: 2,
+                originatingScopeId: '7a000000-0000-4000-8000-000000000001',
+                originatingScopeName: 'Granted Product Knowledge Scope',
             },
         ];
 
@@ -645,6 +649,8 @@ describe('SpaceAgentSourceReceipt audit tests (CT-2)', () => {
             estimatedTokens: 40,
             wasTruncated: false,
             sequence: 1,
+            originatingScopeId: '6e5187cf-7e5b-447f-893d-d291994083c0',
+            originatingScopeName: 'Collaboration Space Scope',
         };
 
         const badIds = ["' OR '1'='1", "11111111-1111-4111-8111-111111111111'; DROP TABLE x;--", 'not-a-uuid', ''];
