@@ -3,8 +3,16 @@ import { describe, it } from 'node:test';
 import { BaseRemotableOperation } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import {
+    BaseHealthProbe,
+    BaseLiveCrudVerifier,
     BOOT_ENTITY_GRANT_INVENTORY_OPERATION_KEY,
     BootEntityGrantInventoryOperation,
+    CollaborationPersonaSecurityProbe,
+    CollaborationPersonaSecurityVerifier,
+    PERSONA_SECURITY_PROBE_KEY,
+    PERSONA_SECURITY_PROBE_OPERATION_KEY,
+    PERSONA_SECURITY_VERIFIER_KEY,
+    PersonaSecurityProbeOperation,
     SPACE_PARTICIPANT_ROLE_AUDIT_OPERATION_KEY,
     SpaceParticipantRoleAuditOperation,
     STAFF_ROLE_AUDIT_OPERATION_KEY,
@@ -44,9 +52,24 @@ describe('Server bootstrap security audit registration', () => {
             BaseRemotableOperation,
             STAFF_ROLE_AUDIT_OPERATION_KEY,
         );
+        const op3 = MJGlobal.Instance.ClassFactory.CreateInstance<PersonaSecurityProbeOperation>(
+            BaseRemotableOperation,
+            PERSONA_SECURITY_PROBE_OPERATION_KEY,
+        );
+        const probe3 = MJGlobal.Instance.ClassFactory.CreateInstance<CollaborationPersonaSecurityProbe>(
+            BaseHealthProbe,
+            PERSONA_SECURITY_PROBE_KEY,
+        );
+        const verifier3 = MJGlobal.Instance.ClassFactory.CreateInstance<CollaborationPersonaSecurityVerifier>(
+            BaseLiveCrudVerifier,
+            PERSONA_SECURITY_VERIFIER_KEY,
+        );
 
         assert.ok(op1 instanceof SpaceParticipantRoleAuditOperation);
         assert.ok(op2 instanceof BootEntityGrantInventoryOperation);
         assert.ok(op7 instanceof StaffRoleAuditOperation);
+        assert.ok(op3 instanceof PersonaSecurityProbeOperation);
+        assert.ok(probe3 instanceof CollaborationPersonaSecurityProbe);
+        assert.ok(verifier3 instanceof CollaborationPersonaSecurityVerifier);
     });
 });

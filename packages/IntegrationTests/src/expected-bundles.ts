@@ -15,7 +15,7 @@ export const EXPECTED_BUNDLES: Record<string, number> = {
     'stage3': 7,
     'stage4': 5,
     'space-meetings': 2,
-    'adversarial-persona': 6,
+    'adversarial-persona': 7,
 };
 
 export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {

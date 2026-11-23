@@ -23,10 +23,12 @@ import {
 import type { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import {
     collaborationFileStore,
+    CollaborationEngine,
     createSpaceConversation,
     createSpaceMeeting,
     createSpaceTask,
     decideUploadBand,
+    DISCLOSURE_SURFACES,
     ensureMeetingSpaceChat,
     executeSpaceChatTurn,
     mintSpaceLink,
@@ -1365,6 +1367,52 @@ const checks: NamedCheck[] = [
                     });
                 }
             }
+        },
+    },
+    {
+        Id: 'adversarial-persona.AP7',
+        Name: 'AP7 — XS-3 cross-surface persona security probe sweeps all 5 vectors inside WithRolledBackTransaction',
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const dev = await GetPersonaUser(ctx, 'dev');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const harborOwner = await GetPersonaUser(ctx, 'harbor');
+            const harborMembers = await FindRows<{ ID: string }>(
+                ctx,
+                SPACE_MEMBER_ENTITY,
+                `SpaceID = '${HARBOR_SPACE_ID}'`,
+                ['ID'],
+            );
+            Assert(harborMembers.length > 0, 'Harbor holds at least one Space Member record');
+
+            const result = await CollaborationEngine.Instance.RunPersonaSecurityProbe(
+                {
+                    FixtureMode: 'world-provided',
+                    WorldFixtures: {
+                        SpaceAID: DISCOVERY_SPACE_ID,
+                        SpaceBID: HARBOR_SPACE_ID,
+                        ExternalParticipantUser: bea,
+                        RestrictedStaffUser: harborOwner,
+                        OutOfSpaceRecords: [
+                            {
+                                EntityName: SPACE_ENTITY,
+                                RecordIDs: [HARBOR_SPACE_ID],
+                            },
+                            {
+                                EntityName: SPACE_MEMBER_ENTITY,
+                                RecordIDs: harborMembers.map((m) => m.ID),
+                            },
+                        ],
+                    },
+                    MaxRowsPerProbe: 10,
+                },
+                dev,
+                ctx.Provider,
+            );
+
+            Assert(result.Passed, `XS-3 live probe reported findings: ${JSON.stringify(result.Findings)}`);
+            Assert(result.Stats.RolledBack === true, 'XS-3 probe rolled back transaction');
+            Assert(result.Stats.SurfacesChecked === DISCLOSURE_SURFACES.length, 'XS-3 swept all 5 disclosure surfaces');
         },
     },
 ];

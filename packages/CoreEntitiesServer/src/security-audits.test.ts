@@ -18,6 +18,8 @@ import {
 } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import {
+    BaseHealthProbe,
+    BaseLiveCrudVerifier,
     BOOT_ENTITY_GRANT_INVENTORY_OPERATION_KEY,
     BootEntityGrantInventoryOperation,
     COLLABORATION_BOOT_ENTITY_REGISTRY,
@@ -25,8 +27,14 @@ import {
     COLLABORATION_ROOT_AUTHORIZATION_NAME,
     COLLABORATION_SCHEMA_NAME,
     CollaborationEngine,
+    CollaborationPersonaSecurityProbe,
+    CollaborationPersonaSecurityVerifier,
     LoadCollaborationSecurityAuditOperations,
     PARTICIPANT_ROLE_ID,
+    PERSONA_SECURITY_PROBE_KEY,
+    PERSONA_SECURITY_PROBE_OPERATION_KEY,
+    PERSONA_SECURITY_VERIFIER_KEY,
+    PersonaSecurityProbeOperation,
     SPACE_PARTICIPANT_ROLE_AUDIT_OPERATION_KEY,
     SpaceParticipantRoleAuditOperation,
     STAFF_ROLE_AUDIT_OPERATION_KEY,
@@ -165,27 +173,75 @@ describe('CoreEntitiesServer & Server security audit operation registration', ()
             BaseRemotableOperation,
             STAFF_ROLE_AUDIT_OPERATION_KEY,
         );
+        const op3 = MJGlobal.Instance.ClassFactory.CreateInstance<PersonaSecurityProbeOperation>(
+            BaseRemotableOperation,
+            PERSONA_SECURITY_PROBE_OPERATION_KEY,
+        );
+        const probe3 = MJGlobal.Instance.ClassFactory.CreateInstance<CollaborationPersonaSecurityProbe>(
+            BaseHealthProbe,
+            PERSONA_SECURITY_PROBE_KEY,
+        );
+        const verifier3 = MJGlobal.Instance.ClassFactory.CreateInstance<CollaborationPersonaSecurityVerifier>(
+            BaseLiveCrudVerifier,
+            PERSONA_SECURITY_VERIFIER_KEY,
+        );
 
         assert.ok(op1 instanceof SpaceParticipantRoleAuditOperation);
         assert.ok(op2 instanceof BootEntityGrantInventoryOperation);
         assert.ok(op7 instanceof StaffRoleAuditOperation);
+        assert.ok(op3 instanceof PersonaSecurityProbeOperation);
+        assert.ok(probe3 instanceof CollaborationPersonaSecurityProbe);
+        assert.ok(verifier3 instanceof CollaborationPersonaSecurityVerifier);
     });
 
-    it('CollaborationEngine delegates XS-1, XS-2, and XS-7 audits and rejects external participant callers', async () => {
+    it('CollaborationEngine delegates XS-1, XS-2, XS-3, and XS-7 audits and rejects external participant callers', async () => {
         const provider = createServerAuditProvider();
+        let rollbacks = 0;
+        Object.defineProperty(provider, 'BeginEntityTransaction', {
+            value: async () => ({
+                IsNested: false,
+                Commit: async () => {
+                    throw new Error('XS-3 must never commit');
+                },
+                Rollback: async () => {
+                    rollbacks += 1;
+                },
+            }),
+        });
         const admin = makeUser(DEV_USER_ID, DEV_ROLE_ID, 'Owner');
         const participant = makeUser(BEA_USER_ID, PARTICIPANT_ROLE_ID, 'User');
 
         const xs1 = await CollaborationEngine.Instance.RunSpaceParticipantRoleAudit({}, admin, provider);
         const xs7 = await CollaborationEngine.Instance.RunStaffRoleAudit({}, admin, provider);
         const xs2 = await CollaborationEngine.Instance.RunBootEntityGrantInventory({}, admin, provider);
+        const xs3 = await CollaborationEngine.Instance.RunPersonaSecurityProbe(
+            {
+                FixtureMode: 'world-provided',
+                WorldFixtures: {
+                    SpaceAID: 'C1000001-0000-4000-8000-000000000002',
+                    SpaceBID: 'C1000001-0000-4000-8000-000000000006',
+                    ExternalParticipantUser: participant,
+                    RestrictedStaffUser: makeUser('D2000001-0000-4000-8000-000000000001', DEV_ROLE_ID, 'User'),
+                    OutOfSpaceRecords: [],
+                },
+            },
+            admin,
+            provider,
+        );
 
         assert.equal(xs1.Passed, true);
         assert.equal(xs7.Passed, true);
         assert.equal(xs2.Passed, true);
+        assert.equal(xs3.Passed, true);
+        assert.equal(xs3.Stats.RolledBack, true);
+        assert.equal(rollbacks, 1);
 
         await assert.rejects(
             () => CollaborationEngine.Instance.RunBootEntityGrantInventory({}, participant, provider),
+            /External Space Participant accounts cannot invoke/,
+        );
+        await assert.rejects(
+            () => CollaborationEngine.Instance.RunPersonaSecurityProbe({}, participant, provider),
             /External Space Participant accounts cannot invoke/,
         );
     });
