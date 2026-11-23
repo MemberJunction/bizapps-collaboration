@@ -92,7 +92,7 @@ interface StoredItem {
     PromotedByUserID: string | null;
 }
 
-function createDocsBandMockProvider(options: { readOnlySpace?: boolean } = {}) {
+function createDocsBandMockProvider(options: { readOnlySpace?: boolean; failArtifactRename?: boolean } = {}) {
     const artifacts: StoredArtifact[] = [];
     const versions: StoredVersion[] = [];
     const items: StoredItem[] = [];
@@ -169,6 +169,10 @@ function createDocsBandMockProvider(options: { readOnlySpace?: boolean } = {}) {
                     },
                     async Save() {
                         const existing = artifacts.find((a) => a.ID === obj.ID);
+                        if (existing && options.failArtifactRename && obj.Name !== existing.Name) {
+                            obj.LatestResult.CompleteMessage = 'Mock artifact title save failed.';
+                            return false;
+                        }
                         const copy: StoredArtifact = {
                             ID: obj.ID,
                             Name: obj.Name,
@@ -655,5 +659,38 @@ describe('CX-13: MJ Docs Integration Across Team & Shared Bands', () => {
         });
         assert.equal(blocked.ok, false);
         if (!blocked.ok) assert.equal(blocked.code, 'READ_ONLY');
+    });
+
+    it('CR-5: updateSpaceDoc fails closed when artifact.Save() fails on title rename without creating a new version', async () => {
+        const { provider, artifacts, versions } = createDocsBandMockProvider({ failArtifactRename: true });
+        const teamUser = makeUser(TEAM_MEMBER_ID, 'Team Member');
+
+        const created = await createSpaceDoc({
+            provider,
+            callerUser: teamUser,
+            spaceId: SPACE_ID,
+            title: 'Original Title',
+            content: 'v1',
+            band: 'Team',
+        });
+        assert.equal(created.ok, true);
+        if (!created.ok) return;
+        assert.equal(versions.length, 1);
+
+        const renameFail = await updateSpaceDoc({
+            provider,
+            callerUser: teamUser,
+            spaceId: SPACE_ID,
+            spaceItemId: created.data.spaceItemId,
+            content: 'v2 should not persist',
+            title: 'Renamed Title',
+        });
+        assert.equal(renameFail.ok, false);
+        if (!renameFail.ok) {
+            assert.equal(renameFail.code, 'FAILED');
+            assert.match(renameFail.message, /Mock artifact title save failed/);
+        }
+        assert.equal(artifacts[0].Name, 'Original Title');
+        assert.equal(versions.length, 1);
     });
 });

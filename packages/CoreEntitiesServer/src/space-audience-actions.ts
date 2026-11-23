@@ -22,7 +22,6 @@ import {
     type Band,
     type BoundParamValuesMap,
     enforceBoundActionParameters,
-    evaluateSpaceChatWriteRules,
     membershipReaches,
     spaceIsReadOnly,
 } from '@mj-biz-apps/collaboration-core';
@@ -30,6 +29,7 @@ import {
     createSpaceDraftApprovalTask,
     decideAndPromoteSpaceDraft,
 } from './approval-promotion.js';
+import { CollaborationChatWritePermissionProvider } from './chat-write-permission-provider.js';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { resolvePerRootDeliveryPrincipal } from './delivery-principal.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
@@ -96,6 +96,9 @@ function validateBoundHiddenParamsForDirectCall(
     const resolved: Record<string, string | null> = {};
 
     const scopeMap = (params as SpaceRunActionParams).ServerBoundScopeParams ?? {};
+    const hasServerBoundScopeMap = Object.keys(scopeMap).length > 0;
+    const hasAuthoritativeRunScope = params.RunScope !== undefined && params.RunScope !== null;
+
     for (const hName of hiddenNames) {
         const scopeEntry = Object.entries(scopeMap).find(
             ([k]) => k.trim().toLowerCase() === hName.trim().toLowerCase(),
@@ -107,19 +110,29 @@ function validateBoundHiddenParamsForDirectCall(
         }
     }
 
-    // Check any input param that was NOT marked Bound: true by the server wrapper
+    // Check hidden input params: accept params marked Bound: true, or injected by an MJ AgentRunner
+    // run (RunScope present and no separate ServerBoundScopeParams override) when ActionParam.Bound
+    // is omitted by the host runner. Reject explicit Bound: false or un-Bound direct-call args.
     for (const p of params.Params) {
         if (p.Type !== 'Input' && p.Type !== 'Both') continue;
-        const isHidden = hiddenNames.some((h) => h.toLowerCase() === p.Name.trim().toLowerCase());
-        if (isHidden) {
-            if (p.Bound === true && p.Value !== undefined && p.Value !== null) {
-                if (!(p.Name in serverBound)) {
-                    serverBound[p.Name] = String(p.Value);
-                    resolved[p.Name] = String(p.Value);
-                }
-            } else if (p.Value !== undefined) {
-                callerArgs[p.Name] = typeof p.Value === 'string' || typeof p.Value === 'number' || typeof p.Value === 'boolean' || p.Value === null ? p.Value : String(p.Value);
+        const canonicalName = hiddenNames.find((h) => h.toLowerCase() === p.Name.trim().toLowerCase());
+        if (!canonicalName) continue;
+
+        const isServerInjected =
+            p.Bound === true ||
+            (p.Bound !== false && hasAuthoritativeRunScope && !hasServerBoundScopeMap);
+
+        if (isServerInjected && p.Value !== undefined && p.Value !== null) {
+            if (!(canonicalName in serverBound)) {
+                const valStr = String(p.Value);
+                serverBound[canonicalName] = valStr;
+                resolved[canonicalName] = valStr;
             }
+        } else if (p.Value !== undefined) {
+            callerArgs[canonicalName] =
+                typeof p.Value === 'string' || typeof p.Value === 'number' || typeof p.Value === 'boolean' || p.Value === null
+                    ? p.Value
+                    : String(p.Value);
         }
     }
 
@@ -452,11 +465,15 @@ export class PublishSpaceSharedUpdateAction extends BaseAction {
 
         // Verify per-root delivery principal also satisfies CS-3 rule-based chat write check when conversationId is provided
         if (conversationId) {
+            const parsedConversationId = parseUuid(conversationId);
+            if (!parsedConversationId) {
+                return { Success: false, ResultCode: 'VALIDATION_ERROR', Message: 'Valid ConversationID is required.' };
+            }
             const rv = RunView.FromMetadataProvider(provider);
             const chatRes = await rv.RunView<{ ID: string; Kind: string; Status: string; OwnerUserID?: string | null }>(
                 {
                     EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-                    ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parseUuid(conversationId) ?? ''}'`,
+                    ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedConversationId}'`,
                     Fields: ['ID', 'Kind', 'Status', 'OwnerUserID'],
                     ResultType: 'simple',
                     MaxRows: 1,
@@ -467,25 +484,16 @@ export class PublishSpaceSharedUpdateAction extends BaseAction {
             if (!chat) {
                 return { Success: false, ResultCode: 'NOT_FOUND', Message: 'Target Space Chat was not found.' };
             }
-            const writeVerdict = evaluateSpaceChatWriteRules({
-                operation: 'create',
-                callerUserId: principalOutcome.principalUserId,
-                spaceId,
-                spaces: writeContext.spaces,
-                memberships: writeContext.memberships,
-                spaceChat: {
-                    id: chat.ID,
-                    spaceId,
-                    kind: chat.Kind,
-                    status: chat.Status,
-                    ownerUserId: chat.OwnerUserID ?? null,
-                },
-                whoCanWritePolicy: 'Contributors',
+            const writeVerdict = await CollaborationChatWritePermissionProvider.Instance.EvaluateWritePermission({
+                Provider: provider,
+                ContextUser: principalOutcome.principalUser,
+                Operation: 'create',
+                ConversationID: parsedConversationId,
             });
             if (writeVerdict.Decision === 'Deny') {
                 return { Success: false, ResultCode: 'UNAUTHORIZED', Message: writeVerdict.Reason };
             }
-            if (writeVerdict.Decision === 'Abstain') {
+            if (writeVerdict.Decision !== 'Allow') {
                 return {
                     Success: false,
                     ResultCode: 'UNAUTHORIZED',

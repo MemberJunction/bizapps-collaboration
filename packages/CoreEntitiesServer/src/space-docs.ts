@@ -735,7 +735,13 @@ export async function updateSpaceDoc(params: {
 
     if (params.title?.trim() && nextTitle !== artifact.Name) {
         artifact.Name = nextTitle;
-        await artifact.Save();
+        if (!(await artifact.Save())) {
+            return {
+                ok: false,
+                code: 'FAILED',
+                message: artifact.LatestResult?.CompleteMessage ?? 'Failed to update document title.',
+            };
+        }
     }
 
     const version = await params.provider.GetEntityObject<MJArtifactVersionEntity>(ARTIFACT_VERSIONS_ENTITY, system);

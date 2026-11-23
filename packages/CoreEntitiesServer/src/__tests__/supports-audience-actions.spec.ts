@@ -44,6 +44,7 @@ const SPACE_TYPE_ID = '33333333-3333-4333-8333-333333333301';
 const UNCONFIGURED_TYPE_ID = '33333333-3333-4333-8333-333333333302';
 const ROLE_TEAM_ID = '44444444-4444-4444-8444-444444444401';
 const ROLE_SHARED_ID = '44444444-4444-4444-8444-444444444402';
+const ROLE_TEAM_NON_OWNER_ID = '44444444-4444-4444-8444-444444444403';
 const CONVERSATION_ID = '55555555-5555-4555-8555-555555555501';
 const SPACE_CHAT_ID = '55555555-5555-4555-8555-555555555502';
 
@@ -52,19 +53,36 @@ function makeUser(id: string, name: string, type: 'Owner' | 'User' = 'User'): Us
     return u as UserInfo;
 }
 
-function createSupportsAudienceHarness(options: { inactivePrincipal?: boolean } = {}) {
+interface SupportsAudienceHarnessOptions {
+    inactivePrincipal?: boolean;
+    principalSeat?: 'team' | 'team-non-owner' | 'shared' | 'none';
+    typeChatsWhoCanWrite?: 'Anyone' | 'Contributors' | 'TeamOnly' | 'Owners';
+    spaceChatsWhoCanWrite?: 'Anyone' | 'Contributors' | 'TeamOnly' | 'Owners';
+}
+
+function createSupportsAudienceHarness(options: SupportsAudienceHarnessOptions = {}) {
     const savedMessages: Array<{ UserID: string; Message: string; ConversationID: string }> = [];
 
     const typeConfig = JSON.stringify({
-        Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'Always', HistoryOnAdd: 'All' },
+        Chats: {
+            WhoCanStart: 'Anyone',
+            WhoCanWrite: options.typeChatsWhoCanWrite ?? 'Contributors',
+            AgentReplyMode: 'Always',
+            HistoryOnAdd: 'All',
+        },
         Agents: { ListMode: 'Extend' },
         DeliveryPrincipal: {
             UserID: PRINCIPAL_ID,
             AllowedPrincipalUserIDs: [PRINCIPAL_ID],
             AllowFallbackToCaller: false,
         },
-        SpaceOverridable: ['DeliveryPrincipal'],
+        SpaceOverridable: options.spaceChatsWhoCanWrite
+            ? ['DeliveryPrincipal', 'Chats.WhoCanWrite']
+            : ['DeliveryPrincipal'],
     });
+    const spaceConfig = options.spaceChatsWhoCanWrite
+        ? JSON.stringify({ Chats: { WhoCanWrite: options.spaceChatsWhoCanWrite } })
+        : null;
 
     const providerImpl: Partial<IMetadataProvider & IRunViewProvider> = {
         Entities: [],
@@ -157,7 +175,7 @@ function createSupportsAudienceHarness(options: { inactivePrincipal?: boolean } 
                     if (f.includes(UNCONFIGURED_SPACE_ID)) {
                         return ok([{ ID: UNCONFIGURED_SPACE_ID, ParentID: null, SpaceTypeID: UNCONFIGURED_TYPE_ID, OwnerID: OWNER_ID, InheritsMembership: false, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null, Configuration: null }]);
                     }
-                    return ok([{ ID: ROOT_SPACE_ID, ParentID: null, SpaceTypeID: SPACE_TYPE_ID, OwnerID: OWNER_ID, InheritsMembership: false, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null, Configuration: null }]);
+                    return ok([{ ID: ROOT_SPACE_ID, ParentID: null, SpaceTypeID: SPACE_TYPE_ID, OwnerID: OWNER_ID, InheritsMembership: false, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null, Configuration: spaceConfig }]);
                 }
                 case 'MJ_BizApps_Collaboration: Space Types': {
                     const f = String(params.ExtraFilter ?? '');
@@ -166,16 +184,34 @@ function createSupportsAudienceHarness(options: { inactivePrincipal?: boolean } 
                     }
                     return ok([{ ID: SPACE_TYPE_ID, Code: 'subtyped', Name: 'Subtyped', Configuration: typeConfig }]);
                 }
-                case 'MJ_BizApps_Collaboration: Space Members':
-                    return ok([
+                case 'MJ_BizApps_Collaboration: Space Members': {
+                    const principalSeatMode = options.principalSeat ?? 'team';
+                    const allMembers = [
                         { ID: 'M1', SpaceID: ROOT_SPACE_ID, UserID: APPROVER_ID, SpaceRoleTypeID: ROLE_TEAM_ID, Band: 'Team', Status: 'Active' },
-                        { ID: 'M2', SpaceID: ROOT_SPACE_ID, UserID: PRINCIPAL_ID, SpaceRoleTypeID: ROLE_TEAM_ID, Band: 'Team', Status: 'Active' },
+                        ...(principalSeatMode === 'team'
+                            ? [{ ID: 'M2', SpaceID: ROOT_SPACE_ID, UserID: PRINCIPAL_ID, SpaceRoleTypeID: ROLE_TEAM_ID, Band: 'Team', Status: 'Active' }]
+                            : principalSeatMode === 'team-non-owner'
+                              ? [{ ID: 'M2', SpaceID: ROOT_SPACE_ID, UserID: PRINCIPAL_ID, SpaceRoleTypeID: ROLE_TEAM_NON_OWNER_ID, Band: 'Team', Status: 'Active' }]
+                              : principalSeatMode === 'shared'
+                                ? [{ ID: 'M2', SpaceID: ROOT_SPACE_ID, UserID: PRINCIPAL_ID, SpaceRoleTypeID: ROLE_SHARED_ID, Band: 'Shared', Status: 'Active' }]
+                                : []),
                         { ID: 'M3', SpaceID: ROOT_SPACE_ID, UserID: SHARED_ID, SpaceRoleTypeID: ROLE_SHARED_ID, Band: 'Shared', Status: 'Active' },
                         { ID: 'M4', SpaceID: UNCONFIGURED_SPACE_ID, UserID: APPROVER_ID, SpaceRoleTypeID: ROLE_TEAM_ID, Band: 'Team', Status: 'Active' },
-                    ]);
+                    ];
+                    const f = String(params.ExtraFilter ?? '');
+                    const userMatch = f.match(/UserID\s*=\s*'([^']+)'/i);
+                    const spaceInMatch = f.match(/SpaceID\s+IN\s*\(([^)]+)\)/i);
+                    const filtered = allMembers.filter((m) => {
+                        if (userMatch && m.UserID.toLowerCase() !== userMatch[1].toLowerCase()) return false;
+                        if (spaceInMatch && !spaceInMatch[1].toLowerCase().includes(m.SpaceID.toLowerCase())) return false;
+                        return true;
+                    });
+                    return ok(filtered);
+                }
                 case 'MJ_BizApps_Collaboration: Space Role Types':
                     return ok([
                         { ID: ROLE_TEAM_ID, Level: 80, MaxGrantableLevel: 80, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true },
+                        { ID: ROLE_TEAM_NON_OWNER_ID, Level: 60, MaxGrantableLevel: 40, CanInvite: false, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: false, CanContribute: true },
                         { ID: ROLE_SHARED_ID, Level: 20, MaxGrantableLevel: 0, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: false, IsOwnerRole: false, CanContribute: true },
                     ]);
                 case 'MJ_BizApps_Collaboration: Space Anchors':
@@ -190,7 +226,7 @@ function createSupportsAudienceHarness(options: { inactivePrincipal?: boolean } 
                 case 'MJ: User Roles':
                     return ok([{ ID: 'UR1', UserID: PRINCIPAL_ID, RoleID: ROLE_TEAM_ID, Role: 'Member' }]);
                 case 'MJ_BizApps_Collaboration: Space Chats':
-                    return ok([{ ID: SPACE_CHAT_ID, ConversationID: CONVERSATION_ID, Kind: 'General', Status: 'Active', OwnerUserID: null }]);
+                    return ok([{ ID: SPACE_CHAT_ID, SpaceID: ROOT_SPACE_ID, ConversationID: CONVERSATION_ID, Kind: 'General', Status: 'Active', OwnerUserID: null }]);
                 default:
                     return ok([]);
             }
@@ -227,6 +263,9 @@ describe('CA-1 & CA-4: supports-audience-actions.spec.ts', () => {
         CollaborationEngine.Instance.SpaceRoleTypeById = (id: string | null | undefined) => {
             if (id === ROLE_TEAM_ID) {
                 return { ID: ROLE_TEAM_ID, Level: 80, MaxGrantableLevel: 80, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true } as ReturnType<typeof CollaborationEngine.Instance.SpaceRoleTypeById>;
+            }
+            if (id === ROLE_TEAM_NON_OWNER_ID) {
+                return { ID: ROLE_TEAM_NON_OWNER_ID, Level: 60, MaxGrantableLevel: 40, CanInvite: false, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: false, CanContribute: true } as ReturnType<typeof CollaborationEngine.Instance.SpaceRoleTypeById>;
             }
             if (id === ROLE_SHARED_ID) {
                 return { ID: ROLE_SHARED_ID, Level: 20, MaxGrantableLevel: 0, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: false, IsOwnerRole: false, CanContribute: true } as ReturnType<typeof CollaborationEngine.Instance.SpaceRoleTypeById>;
@@ -347,5 +386,119 @@ describe('CA-1 & CA-4: supports-audience-actions.spec.ts', () => {
         } as SpaceRunActionParams);
         assert.equal(badAudience.Success, false);
         assert.equal(badAudience.ResultCode, 'AUDIENCE_VALIDATION_FAILED');
+    });
+
+    it('CR-4: PublishSpaceSharedUpdateAction evaluates CS-3 using principalUser memberships and non-loosening policyChain', async () => {
+        const approver = makeUser(APPROVER_ID, 'Approver');
+        const sharedReader = makeUser(SHARED_ID, 'SharedReader');
+        const action = new PublishSpaceSharedUpdateAction();
+
+        // (a) Invoking user (approver) has Team/Owner seat, but principalUser has NO seat -> refused UNAUTHORIZED
+        const noSeatHarness = createSupportsAudienceHarness({ principalSeat: 'none' });
+        const noSeatRes = await action.Run({
+            Action: { ID: 'A1', Name: PUBLISH_SPACE_SHARED_UPDATE_ACTION } as RunActionParams['Action'],
+            ContextUser: approver,
+            Provider: noSeatHarness.provider,
+            Filters: [],
+            Params: [
+                { Name: 'Message', Type: 'Input', Value: 'Should fail without principal seat' },
+                { Name: 'ConversationID', Type: 'Input', Value: CONVERSATION_ID },
+            ],
+            ServerBoundScopeParams: { SpaceID: ROOT_SPACE_ID },
+            Audience: { Readers: [approver, sharedReader] },
+        } as SpaceRunActionParams);
+        assert.equal(noSeatRes.Success, false);
+        assert.equal(noSeatRes.ResultCode, 'UNAUTHORIZED');
+        assert.equal(noSeatHarness.savedMessages.length, 0);
+
+        // (b) Stricter SpaceType WhoCanWrite ('TeamOnly') cannot be loosened by Space ('Contributors') -> Shared principal refused
+        const teamOnlyHarness = createSupportsAudienceHarness({
+            principalSeat: 'shared',
+            typeChatsWhoCanWrite: 'TeamOnly',
+            spaceChatsWhoCanWrite: 'Contributors',
+        });
+        const teamOnlyRes = await action.Run({
+            Action: { ID: 'A1', Name: PUBLISH_SPACE_SHARED_UPDATE_ACTION } as RunActionParams['Action'],
+            ContextUser: approver,
+            Provider: teamOnlyHarness.provider,
+            Filters: [],
+            Params: [
+                { Name: 'Message', Type: 'Input', Value: 'Should fail under TeamOnly policy' },
+                { Name: 'ConversationID', Type: 'Input', Value: CONVERSATION_ID },
+            ],
+            ServerBoundScopeParams: { SpaceID: ROOT_SPACE_ID },
+            Audience: { Readers: [approver, sharedReader] },
+        } as SpaceRunActionParams);
+        assert.equal(teamOnlyRes.Success, false);
+        assert.equal(teamOnlyRes.ResultCode, 'UNAUTHORIZED');
+        assert.equal(teamOnlyHarness.savedMessages.length, 0);
+
+        // (c) Stricter SpaceType WhoCanWrite ('Owners') denies non-owner principalUser even when invoking approver IS an owner
+        const ownersHarness = createSupportsAudienceHarness({
+            principalSeat: 'team-non-owner',
+            typeChatsWhoCanWrite: 'Owners',
+        });
+        const ownersRes = await action.Run({
+            Action: { ID: 'A1', Name: PUBLISH_SPACE_SHARED_UPDATE_ACTION } as RunActionParams['Action'],
+            ContextUser: approver,
+            Provider: ownersHarness.provider,
+            Filters: [],
+            Params: [
+                { Name: 'Message', Type: 'Input', Value: 'Should fail under Owners policy' },
+                { Name: 'ConversationID', Type: 'Input', Value: CONVERSATION_ID },
+            ],
+            ServerBoundScopeParams: { SpaceID: ROOT_SPACE_ID },
+            Audience: { Readers: [approver, sharedReader] },
+        } as SpaceRunActionParams);
+        assert.equal(ownersRes.Success, false);
+        assert.equal(ownersRes.ResultCode, 'UNAUTHORIZED');
+        assert.equal(ownersHarness.savedMessages.length, 0);
+    });
+
+    it('CR-2: accepts AgentRunner-injected boundActionParams with RunScope when ActionParam.Bound is omitted, while rejecting explicit Bound: false', async () => {
+        const { provider, savedMessages } = createSupportsAudienceHarness();
+        const approver = makeUser(APPROVER_ID, 'Approver');
+        const action = new PublishSpaceSharedUpdateAction();
+
+        // AgentRunner dispatch carries RunScope and omits ActionParam.Bound
+        const agentRunnerRes = await action.Run({
+            Action: { ID: 'A1', Name: PUBLISH_SPACE_SHARED_UPDATE_ACTION } as RunActionParams['Action'],
+            ContextUser: approver,
+            Provider: provider,
+            Filters: [],
+            RunScope: {
+                PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                PrimaryScopeRecordID: SPACE_CHAT_ID,
+                SecondaryScopes: null,
+            },
+            Params: [
+                { Name: 'SpaceID', Type: 'Input', Value: ROOT_SPACE_ID },
+                { Name: 'Message', Type: 'Input', Value: 'Runner-bound publish' },
+                { Name: 'ConversationID', Type: 'Input', Value: CONVERSATION_ID },
+            ],
+        } as SpaceRunActionParams);
+        assert.equal(agentRunnerRes.Success, true, agentRunnerRes.Message);
+        assert.equal(savedMessages.length, 1);
+        assert.equal(savedMessages[0].UserID, PRINCIPAL_ID);
+
+        // Explicit Bound: false must still be rejected as spoofing even with RunScope
+        const explicitFalseRes = await action.Run({
+            Action: { ID: 'A1', Name: PUBLISH_SPACE_SHARED_UPDATE_ACTION } as RunActionParams['Action'],
+            ContextUser: approver,
+            Provider: provider,
+            Filters: [],
+            RunScope: {
+                PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                PrimaryScopeRecordID: SPACE_CHAT_ID,
+                SecondaryScopes: null,
+            },
+            Params: [
+                { Name: 'SpaceID', Type: 'Input', Value: ROOT_SPACE_ID, Bound: false },
+                { Name: 'Message', Type: 'Input', Value: 'Spoofed' },
+                { Name: 'ConversationID', Type: 'Input', Value: CONVERSATION_ID },
+            ],
+        } as SpaceRunActionParams);
+        assert.equal(explicitFalseRes.Success, false);
+        assert.equal(explicitFalseRes.ResultCode, 'SERVER_BOUND_SCOPE_SPOOFING');
     });
 });
