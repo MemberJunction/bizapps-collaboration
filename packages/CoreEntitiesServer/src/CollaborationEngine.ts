@@ -39,15 +39,22 @@ import {
     type GetSpaceNoticesResult,
     type GetSpaceUnreadNoticeCountsInput,
     type GetSpaceUnreadNoticeCountsResult,
+    type GetUserNotificationPreferencesInput,
+    type GetUserNotificationPreferencesResult,
     type PersonaSecurityProbeInput,
     type PersonaSecurityProbeResult,
     type PublishSpaceNoticeEventInput,
     type PublishSpaceNoticeEventResult,
+    type RouteCollaborationNotificationsInput,
+    type RouteCollaborationNotificationsResult,
     type SpaceParticipantRoleAuditInput,
     type SpaceParticipantRoleAuditResult,
     type StaffRoleAuditInput,
     type StaffRoleAuditResult,
+    type UpdateUserNotificationPreferencesInput,
+    type UpdateUserNotificationPreferencesResult,
 } from '@mj-biz-apps/collaboration-engine-base';
+import { EnsureCollaborationCommsV2TransportRegistered } from './comms-v2-notifications.js';
 import type {
     mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
     mjBizAppsCollaborationSpaceGrantEntity,
@@ -374,5 +381,35 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         provider?: IMetadataProvider,
     ): Promise<AdvanceSpaceNoticeWatermarkResult> {
         return this.Base.AdvanceSpaceNoticeWatermark(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Routes an NT-1 notification through MJ Comms v2 after batched preference enforcement. */
+    public async RouteCollaborationNotifications(
+        input: RouteCollaborationNotificationsInput,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<RouteCollaborationNotificationsResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.RouteCollaborationNotifications(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Resolves the acting user's Collaboration & MJ notification preferences. */
+    public async GetUserNotificationPreferences(
+        input: GetUserNotificationPreferencesInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetUserNotificationPreferencesResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.GetUserNotificationPreferences(this.resolveNoticeActingUser(contextUser, provider), input, provider);
+    }
+
+    /** Updates the acting user's Collaboration notification preferences via UserInfoEngine / User Settings. */
+    public async UpdateUserNotificationPreferences(
+        input: UpdateUserNotificationPreferencesInput,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<UpdateUserNotificationPreferencesResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.UpdateUserNotificationPreferences(input, this.resolveNoticeActingUser(contextUser, provider), provider);
     }
 }

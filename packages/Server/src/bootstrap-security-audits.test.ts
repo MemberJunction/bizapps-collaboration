@@ -9,14 +9,23 @@ import {
     BootEntityGrantInventoryOperation,
     CollaborationPersonaSecurityProbe,
     CollaborationPersonaSecurityVerifier,
+    GET_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY,
+    GetCollaborationCommsV2DirectMessageDispatcher,
+    GetCollaborationCommsV2Transport,
+    GetUserNotificationPreferencesOperation,
+    MJCommsV2NotificationTransport,
     PERSONA_SECURITY_PROBE_KEY,
     PERSONA_SECURITY_PROBE_OPERATION_KEY,
     PERSONA_SECURITY_VERIFIER_KEY,
     PersonaSecurityProbeOperation,
+    ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY,
+    RouteCollaborationNotificationsOperation,
     SPACE_PARTICIPANT_ROLE_AUDIT_OPERATION_KEY,
     SpaceParticipantRoleAuditOperation,
     STAFF_ROLE_AUDIT_OPERATION_KEY,
     StaffRoleAuditOperation,
+    UPDATE_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY,
+    UpdateUserNotificationPreferencesOperation,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 
 // @memberjunction/server evaluates LoadConfig() on module load; provide benign non-secret
@@ -71,5 +80,23 @@ describe('Server bootstrap security audit registration', () => {
         assert.ok(op3 instanceof PersonaSecurityProbeOperation);
         assert.ok(probe3 instanceof CollaborationPersonaSecurityProbe);
         assert.ok(verifier3 instanceof CollaborationPersonaSecurityVerifier);
+
+        const opRoute = MJGlobal.Instance.ClassFactory.CreateInstance<RouteCollaborationNotificationsOperation>(
+            BaseRemotableOperation,
+            ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY,
+        );
+        const opGetPrefs = MJGlobal.Instance.ClassFactory.CreateInstance<GetUserNotificationPreferencesOperation>(
+            BaseRemotableOperation,
+            GET_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY,
+        );
+        const opUpdatePrefs = MJGlobal.Instance.ClassFactory.CreateInstance<UpdateUserNotificationPreferencesOperation>(
+            BaseRemotableOperation,
+            UPDATE_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY,
+        );
+        assert.ok(opRoute instanceof RouteCollaborationNotificationsOperation);
+        assert.ok(opGetPrefs instanceof GetUserNotificationPreferencesOperation);
+        assert.ok(opUpdatePrefs instanceof UpdateUserNotificationPreferencesOperation);
+        assert.ok(GetCollaborationCommsV2Transport() instanceof MJCommsV2NotificationTransport);
+        assert.ok(typeof GetCollaborationCommsV2DirectMessageDispatcher() === 'function');
     });
 });

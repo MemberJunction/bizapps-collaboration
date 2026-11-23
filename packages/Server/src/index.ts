@@ -24,6 +24,7 @@ import {
     LoadTaskAttributionEntityServer,
     LoadSpaceMeetingsAgendaProvider,
     LoadCollaborationAIRunLockdown,
+    LoadCollaborationNotificationOperations,
     LoadCollaborationSecurityAuditOperations,
     LoadCollaborationSpaceNoticeOperations,
     LoadCollaborationChatWritePermissionProvider,
@@ -31,6 +32,7 @@ import {
     LoadCollaborationSpaceItemArtifactPermissionDelegate,
     LoadSpaceAudienceActions,
 } from '@mj-biz-apps/collaboration-core-entities-server';
+import { InstallCollaborationCommsV2Bridge } from './comms-v2-bridge.js';
 import './generated/generated.js';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -109,6 +111,8 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadCollaborationAIRunLockdown();
     LoadCollaborationSecurityAuditOperations();
     LoadCollaborationSpaceNoticeOperations();
+    LoadCollaborationNotificationOperations();
+    InstallCollaborationCommsV2Bridge();
     LoadSpaceNoticeEventEntityServer();
     LoadSpaceNoticeWatermarkEntityServer();
     LoadSpaceDigestCheckpointEntityServer();
