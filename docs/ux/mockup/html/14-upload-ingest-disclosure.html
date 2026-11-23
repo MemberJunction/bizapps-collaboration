@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Discovery — Library &amp; Upload Ingest Disclosure (XS-8)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="../base.css">
+<style>
+  body { width: 1440px; height: 900px; }
+  .lib { display: grid; grid-template-columns: 206px minmax(0, 1fr); min-height: 0; flex: 1; }
+  .folders { padding: 16px 10px 16px 14px; border-right: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; gap: 1px; }
+  .fold { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 9px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--mj-text-secondary); }
+  .fold.on { background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); font-weight: 600; }
+  .files { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .disclosure-box {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 12px 14px; border-radius: var(--mj-radius-md);
+    border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);
+  }
+  .disclosure-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .disclosure-lead { display: flex; align-items: flex-start; gap: 10px; }
+  .disclosure-badge {
+    width: 28px; height: 28px; border-radius: var(--mj-radius-sm);
+    display: inline-grid; place-items: center;
+    background: var(--mj-status-info-bg); color: var(--mj-status-info-text);
+    border: 1px solid var(--mj-border-default);
+  }
+  .disclosure-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding-top: 10px; border-top: 1px solid var(--mj-border-subtle); }
+  .disclosure-card { padding: 10px; border-radius: var(--mj-radius-sm); border: 1px solid var(--mj-border-subtle); background: var(--mj-bg-surface); }
+  .modal-backdrop { position: fixed; inset: 0; background: var(--mj-bg-overlay); display: grid; place-items: center; }
+  .modal-card { width: 540px; border-radius: var(--mj-radius-lg); background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); box-shadow: var(--mj-shadow-2xl); padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .dropzone { border: 2px dashed var(--mj-border-strong); border-radius: var(--mj-radius-md); padding: 18px; text-align: center; background: var(--mj-bg-surface-sunken); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <span class="mark"></span>
+    <span class="app-pill"><i class="fa-solid fa-people-roof"></i>Collaboration</span>
+    <span class="spacer"></span>
+    <span class="av c1 md">AL</span>
+  </header>
+  <div class="body">
+    <main class="main">
+      <div class="lib">
+        <aside class="folders">
+          <div class="fold on"><i class="fa-solid fa-layer-group"></i>All material</div>
+        </aside>
+        <section class="files">
+          <div class="disclosure-box">
+            <div class="disclosure-head">
+              <div class="disclosure-lead">
+                <span class="disclosure-badge"><i class="fa-solid fa-shield-halved"></i></span>
+                <div>
+                  <div class="fw6 fs13">Upload ingest and visibility model</div>
+                  <div class="fs12 muted">Uploaded files are stored in MemberJunction Storage, indexed for space-scoped search and assistant answers, and governed by shared band reach.</div>
+                </div>
+              </div>
+              <span class="btn sm"><i class="fa-solid fa-chevron-down"></i>Ingest details</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="modal-backdrop">
+  <div class="modal-card">
+    <div class="fw7 fs14">Add document to Discovery</div>
+    <div class="dropzone">
+      <i class="fa-solid fa-cloud-arrow-up"></i>
+      <div class="fs13 fw6">Click to upload or drag and drop</div>
+    </div>
+    <div class="disclosure-box">
+      <div class="disclosure-head">
+        <div class="disclosure-lead">
+          <span class="disclosure-badge"><i class="fa-solid fa-shield-halved"></i></span>
+          <div>
+            <div class="fw6 fs13">Upload ingest and visibility model <span class="chip shared">Shared band</span></div>
+            <div class="fs12 muted">Uploaded files in Discovery are stored in MemberJunction Storage, indexed for space-scoped search and assistant answers, and governed by shared band reach.</div>
+          </div>
+        </div>
+        <span class="btn sm"><i class="fa-solid fa-chevron-up"></i>Hide details</span>
+      </div>
+      <div class="disclosure-grid">
+        <div class="disclosure-card">
+          <div class="fw6 fs12"><i class="fa-solid fa-cloud-arrow-up"></i> Ingest and storage</div>
+          <div class="fs12 muted">Files uploaded to Discovery are written to MemberJunction Storage and attached to the space library as a tracked item.</div>
+        </div>
+        <div class="disclosure-card">
+          <div class="fw6 fs12"><i class="fa-solid fa-magnifying-glass-chart"></i> Extraction and indexing</div>
+          <div class="fs12 muted">Uploaded files are extracted, chunked, and indexed by the Content Pipeline for space-scoped search and assistant answers.</div>
+        </div>
+        <div class="disclosure-card">
+          <div class="fw6 fs12"><i class="fa-solid fa-eye"></i> Participant visibility scope</div>
+          <div class="fs12 muted">Shared band items are visible to every active member who reaches this space, including external space participants.</div>
+        </div>
+        <div class="disclosure-card">
+          <div class="fw6 fs12"><i class="fa-solid fa-clock-rotate-left"></i> Retention and removal boundaries</div>
+          <div class="fs12 muted">Removing a participant seat revokes access immediately, and deleting the last item removes indexed chunks and tombstones its content item.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

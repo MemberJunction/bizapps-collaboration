@@ -110,6 +110,16 @@ export function startGalleryServer(port = 4250) {
           <a class="btn-link" href="/frame/04?theme=dark" target="_blank"><i class="fa-solid fa-moon"></i> Dark</a>
         </div>
       </div>
+      <div class="row">
+        <div>
+          <div style="font-weight: 700; font-size: 15px;">Frame 09 — Upload Ingest Disclosure (XS-8)</div>
+          <div style="font-size: 13px; color: var(--mj-text-secondary, #64748b); margin-top: 4px;">Upload dialog and library inline ingest, indexing, visibility scope, and retention disclosure</div>
+        </div>
+        <div class="links">
+          <a class="btn-link" href="/frame/09" target="_blank"><i class="fa-solid fa-sun"></i> Light</a>
+          <a class="btn-link" href="/frame/09?theme=dark" target="_blank"><i class="fa-solid fa-moon"></i> Dark</a>
+        </div>
+      </div>
     </div>
   </div>
 </body>

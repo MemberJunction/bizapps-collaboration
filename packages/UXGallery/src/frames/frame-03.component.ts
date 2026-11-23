@@ -6,6 +6,7 @@ import {
   CollabSpaceTabsComponent,
   CollabSpaceLibraryComponent,
   CollabAudiencePillComponent,
+  CollabUploadDialogComponent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
@@ -20,6 +21,7 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
     CollabSpaceTabsComponent,
     CollabSpaceLibraryComponent,
     CollabAudiencePillComponent,
+    CollabUploadDialogComponent,
     MJButtonDirective,
   ],
   template: `
@@ -60,7 +62,7 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
                 [TotalPeople]="f.header.totalPeople"
                 [Summary]="f.header.audienceSummary"
               ></mjc-audience-pill>
-              <button mjButton Variant="primary" Size="md"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload</button>
+              <button mjButton Variant="primary" Size="md" data-testid="frame-03-upload-btn" (click)="showUploadDialog = true"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload</button>
             </div>
             <mjc-space-tabs
               [Tabs]="f.header.tabs"
@@ -89,6 +91,17 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
           ></mjc-space-library>
         </main>
       </div>
+      @if (showUploadDialog) {
+        <mjc-upload-dialog
+          [SpaceName]="f.header.title"
+          [SpaceId]="'discovery'"
+          [AllowLinks]="true"
+          [AllowedBands]="['Shared', 'Team']"
+          [StartBand]="'Shared'"
+          (CancelRequested)="showUploadDialog = false"
+          (SubmitRequested)="showUploadDialog = false"
+        ></mjc-upload-dialog>
+      }
     </div>
   `,
   styles: [`
@@ -224,4 +237,5 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
 export class Frame03Component {
   readonly f = FRAME_03_FIXTURE;
   activeTab = FRAME_03_FIXTURE.header.activeTabId;
+  showUploadDialog = false;
 }
