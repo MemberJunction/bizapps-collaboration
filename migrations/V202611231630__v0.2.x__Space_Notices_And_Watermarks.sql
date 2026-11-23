@@ -481,22 +481,22 @@ EXEC [${mjSchema}].[spSetDefaultColumnWidthWhereNeeded] @ExcludedSchemaNames='sy
 INSERT INTO [${mjSchema}].[EntityFieldValue] ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
 SELECT v.[ID], v.[EntityFieldID], v.[Sequence], v.[Value], v.[Code], GETUTCDATE(), GETUTCDATE()
 FROM (VALUES
-    (CAST('e8v10001-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 1, 'Share', 'Share'),
-    (CAST('e8v10002-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 2, 'StatusChanged', 'StatusChanged'),
-    (CAST('e8v10003-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 3, 'Mention', 'Mention'),
-    (CAST('e8v10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 4, 'Reply', 'Reply'),
-    (CAST('e8v10005-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 5, 'Task', 'Task'),
-    (CAST('e8v10006-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 6, 'Approval', 'Approval'),
-    (CAST('e8v10007-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 7, 'Announcement', 'Announcement'),
-    (CAST('e8v10008-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 8, 'System', 'System'),
-    (CAST('e8v10009-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10005-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 1, 'Shared', 'Shared'),
-    (CAST('e8v10010-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10005-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 2, 'Team', 'Team'),
-    (CAST('e8v30001-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 1, 'Daily', 'Daily'),
-    (CAST('e8v30002-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 2, 'Weekly', 'Weekly'),
-    (CAST('e8v30003-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 3, 'Immediate', 'Immediate'),
-    (CAST('e8v30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 4, 'Custom', 'Custom'),
-    (CAST('e8v30005-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30009-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 1, 'Active', 'Active'),
-    (CAST('e8v30006-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30009-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 2, 'Paused', 'Paused')
+    (CAST('f9e10001-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 1, 'Share', 'Share'),
+    (CAST('f9e10002-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 2, 'StatusChanged', 'StatusChanged'),
+    (CAST('f9e10003-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 3, 'Mention', 'Mention'),
+    (CAST('f9e10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 4, 'Reply', 'Reply'),
+    (CAST('f9e10005-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 5, 'Task', 'Task'),
+    (CAST('f9e10006-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 6, 'Approval', 'Approval'),
+    (CAST('f9e10007-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 7, 'Announcement', 'Announcement'),
+    (CAST('f9e10008-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 8, 'System', 'System'),
+    (CAST('f9e10009-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10005-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 1, 'Shared', 'Shared'),
+    (CAST('f9e10010-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), CAST('e8a10005-4f50-4a6b-8c9d-0e1f2a3b4c51' AS uniqueidentifier), 2, 'Team', 'Team'),
+    (CAST('f9e30001-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 1, 'Daily', 'Daily'),
+    (CAST('f9e30002-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 2, 'Weekly', 'Weekly'),
+    (CAST('f9e30003-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 3, 'Immediate', 'Immediate'),
+    (CAST('f9e30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 4, 'Custom', 'Custom'),
+    (CAST('f9e30005-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30009-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 1, 'Active', 'Active'),
+    (CAST('f9e30006-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), CAST('e8a30009-4f50-4a6b-8c9d-0e1f2a3b4c53' AS uniqueidentifier), 2, 'Paused', 'Paused')
 ) AS v([ID], [EntityFieldID], [Sequence], [Value], [Code])
 WHERE NOT EXISTS (SELECT 1 FROM [${mjSchema}].[EntityFieldValue] AS efv WHERE efv.[ID] = v.[ID]);
 

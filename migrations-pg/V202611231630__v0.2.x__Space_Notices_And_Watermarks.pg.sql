@@ -1025,22 +1025,22 @@ DECLARE
 BEGIN
     FOR v_val IN
         SELECT * FROM (VALUES
-            ('e8v10001-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 1, 'Share', 'Share'),
-            ('e8v10002-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 2, 'StatusChanged', 'StatusChanged'),
-            ('e8v10003-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 3, 'Mention', 'Mention'),
-            ('e8v10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 4, 'Reply', 'Reply'),
-            ('e8v10005-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 5, 'Task', 'Task'),
-            ('e8v10006-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 6, 'Approval', 'Approval'),
-            ('e8v10007-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 7, 'Announcement', 'Announcement'),
-            ('e8v10008-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 8, 'System', 'System'),
-            ('e8v10009-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10005-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 1, 'Shared', 'Shared'),
-            ('e8v10010-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10005-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 2, 'Team', 'Team'),
-            ('e8v30001-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 1, 'Daily', 'Daily'),
-            ('e8v30002-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 2, 'Weekly', 'Weekly'),
-            ('e8v30003-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 3, 'Immediate', 'Immediate'),
-            ('e8v30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 4, 'Custom', 'Custom'),
-            ('e8v30005-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30009-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 1, 'Active', 'Active'),
-            ('e8v30006-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30009-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 2, 'Paused', 'Paused')
+            ('f9e10001-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 1, 'Share', 'Share'),
+            ('f9e10002-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 2, 'StatusChanged', 'StatusChanged'),
+            ('f9e10003-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 3, 'Mention', 'Mention'),
+            ('f9e10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 4, 'Reply', 'Reply'),
+            ('f9e10005-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 5, 'Task', 'Task'),
+            ('f9e10006-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 6, 'Approval', 'Approval'),
+            ('f9e10007-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 7, 'Announcement', 'Announcement'),
+            ('f9e10008-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10004-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 8, 'System', 'System'),
+            ('f9e10009-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10005-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 1, 'Shared', 'Shared'),
+            ('f9e10010-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 'e8a10005-4f50-4a6b-8c9d-0e1f2a3b4c51'::UUID, 2, 'Team', 'Team'),
+            ('f9e30001-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 1, 'Daily', 'Daily'),
+            ('f9e30002-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 2, 'Weekly', 'Weekly'),
+            ('f9e30003-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 3, 'Immediate', 'Immediate'),
+            ('f9e30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30004-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 4, 'Custom', 'Custom'),
+            ('f9e30005-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30009-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 1, 'Active', 'Active'),
+            ('f9e30006-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 'e8a30009-4f50-4a6b-8c9d-0e1f2a3b4c53'::UUID, 2, 'Paused', 'Paused')
         ) AS v(id, ef_id, seq, val, code)
     LOOP
         IF NOT EXISTS (SELECT 1 FROM ${mjSchema}."EntityFieldValue" WHERE "ID" = v_val.id) THEN
