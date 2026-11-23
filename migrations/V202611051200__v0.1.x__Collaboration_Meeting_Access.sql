@@ -2,7 +2,7 @@
 -- BizApps Collaboration: B23 One-walk SQL access function for Space Meetings
 -- ============================================================================
 
-CREATE OR ALTER FUNCTION [${flyway:defaultSchema}].[fnCollaborationMeetingAccess](@UserID UNIQUEIDENTIFIER)
+CREATE FUNCTION [${flyway:defaultSchema}].[fnCollaborationMeetingAccess](@UserID UNIQUEIDENTIFIER)
 RETURNS @Reach TABLE (
     MeetingID UNIQUEIDENTIFIER NULL,
     SeriesID UNIQUEIDENTIFIER NULL,
@@ -106,17 +106,9 @@ BEGIN
 END;
 GO
 
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.extended_properties
-    WHERE major_id = OBJECT_ID(N'[${flyway:defaultSchema}].[fnCollaborationMeetingAccess]')
-      AND name = N'MS_Description'
-)
-BEGIN
-    EXEC sp_addextendedproperty
-        @name = N'MS_Description',
-        @value = N'One-walk reach function for meetings and series linked to spaces the caller reaches through fnCollaborationAccess.',
-        @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-        @level1type = N'FUNCTION', @level1name = N'fnCollaborationMeetingAccess';
-END;
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'One-walk reach function for meetings and series linked to spaces the caller reaches through fnCollaborationAccess.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'FUNCTION', @level1name = N'fnCollaborationMeetingAccess';
 GO
