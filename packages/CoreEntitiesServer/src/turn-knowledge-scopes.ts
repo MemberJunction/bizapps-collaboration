@@ -359,9 +359,23 @@ export async function resolveTurnKnowledgeScopes(
     const nativeScopeId = normalizeReceiptUuid(COLLABORATION_SPACE_SCOPE_ID)!;
     const now = params.now ?? new Date();
 
-    const inForceGrants = params.configuration.Grants.KnowledgeSource.filter(
-        (grant) => params.audience === 'Team' || grant.Band === 'Shared',
-    );
+    // Align effective band precedence per ContentSourceID with ResolveSpaceConfiguration /
+    // resolveEffectiveKnowledgeSourceBandsBySpace and SQL fnEffectiveKnowledgeSourceGrants
+    // (last/highest-sequence grant in effective order wins).
+    const effectiveBandByContentSourceId = new Map<string, SourceReceiptBand>();
+    for (const grant of params.configuration.Grants.KnowledgeSource) {
+        const csId = normalizeReceiptUuid(stripRecordKeyPrefix(grant.TargetRecordID));
+        if (!csId) continue;
+        const grantBand: SourceReceiptBand = grant.Band === 'Team' ? 'Team' : 'Shared';
+        effectiveBandByContentSourceId.set(csId, grantBand);
+    }
+
+    const inForceGrants = params.configuration.Grants.KnowledgeSource.filter((grant) => {
+        const csId = normalizeReceiptUuid(stripRecordKeyPrefix(grant.TargetRecordID));
+        if (!csId) return false;
+        const effectiveBand = effectiveBandByContentSourceId.get(csId) ?? (grant.Band === 'Team' ? 'Team' : 'Shared');
+        return params.audience === 'Team' || effectiveBand === 'Shared';
+    });
 
     const grantedContentSourceIds: string[] = [];
     const grantedContentSourceSet = new Set<string>();
@@ -373,12 +387,8 @@ export async function resolveTurnKnowledgeScopes(
         const csId = normalizeReceiptUuid(stripRecordKeyPrefix(grant.TargetRecordID));
         if (!csId) continue;
 
-        const prevBand = maxBandByContentSourceId.get(csId);
-        const nextBand: SourceReceiptBand =
-            grant.Band === 'Team' && params.audience === 'Team' ? 'Team' : 'Shared';
-        if (!prevBand || nextBand === 'Shared') {
-            maxBandByContentSourceId.set(csId, nextBand);
-        }
+        const effectiveBand = effectiveBandByContentSourceId.get(csId) ?? (grant.Band === 'Team' ? 'Team' : 'Shared');
+        maxBandByContentSourceId.set(csId, effectiveBand);
         if (!grantSequenceByContentSourceId.has(csId)) {
             grantSequenceByContentSourceId.set(csId, grant.Sequence ?? 0);
         }

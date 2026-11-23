@@ -2,8 +2,9 @@ import {
     BaseEntity,
     LogError,
     RunView,
+    UserInfo,
+    UserRoleInfo,
     type IMetadataProvider,
-    type UserInfo,
 } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
@@ -592,20 +593,149 @@ async function runClaimedTurn(
     }));
     const participantUserIds = retrieval.audienceUserIds;
 
-    // Re-evaluate granted knowledge scopes against every hydrated reader in the conversation's audience
-    const hydratedAudienceUsers: UserInfo[] = [];
+    // Re-evaluate granted knowledge scopes against every hydrated reader in the conversation's audience (CR-4: fail closed)
+    interface HydratedUserRow {
+        ID: string;
+        Name: string | null;
+        Email: string | null;
+        IsActive?: boolean | null;
+    }
+    interface HydratedUserRoleRow {
+        ID: string;
+        UserID: string;
+        RoleID: string;
+        Role: string | null;
+    }
+
+    const normalizedParticipantIds: string[] = [];
+    const seenParticipantIds = new Set<string>();
+    let audienceHydrationFailed = participantUserIds.length === 0;
     for (const pid of participantUserIds) {
-        if (pid.toLowerCase() === user.ID.toLowerCase()) {
-            hydratedAudienceUsers.push(user);
-        } else {
-            const cachedUser = (UserCache.Users ?? []).find((u: UserInfo) => u.ID.toLowerCase() === pid.toLowerCase());
-            if (cachedUser) {
-                hydratedAudienceUsers.push(cachedUser);
-            }
+        const cleanPid = parseUuid(pid);
+        if (!cleanPid) {
+            audienceHydrationFailed = true;
+            break;
+        }
+        const lowerPid = cleanPid.toLowerCase();
+        if (!seenParticipantIds.has(lowerPid)) {
+            seenParticipantIds.add(lowerPid);
+            normalizedParticipantIds.push(lowerPid);
         }
     }
-    const audienceAuthorizedScopes =
-        hydratedAudienceUsers.length > 1
+
+    const hydratedById = new Map<string, UserInfo>();
+    const callerNormalized = parseUuid(user.ID)?.toLowerCase();
+    if (callerNormalized) {
+        hydratedById.set(callerNormalized, user);
+    }
+    for (const cachedUser of UserCache.Users ?? []) {
+        const cachedNormalized = parseUuid(cachedUser?.ID)?.toLowerCase();
+        if (cachedNormalized && !hydratedById.has(cachedNormalized)) {
+            hydratedById.set(cachedNormalized, cachedUser);
+        }
+    }
+
+    const missingAudienceIds = audienceHydrationFailed
+        ? []
+        : normalizedParticipantIds.filter((pid) => !hydratedById.has(pid));
+
+    if (!audienceHydrationFailed && missingAudienceIds.length > 0) {
+        const inClause = missingAudienceIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+        try {
+            const [userRows, roleRows] = await Promise.all([
+                readEveryRow<HydratedUserRow>(
+                    view,
+                    {
+                        EntityName: 'MJ: Users',
+                        ExtraFilter: `ID IN (${inClause})`,
+                        Fields: ['ID', 'Name', 'Email', 'IsActive'],
+                    },
+                    system,
+                    input.rosterPageSize,
+                ),
+                readEveryRow<HydratedUserRoleRow>(
+                    view,
+                    {
+                        EntityName: 'MJ: User Roles',
+                        ExtraFilter: `UserID IN (${inClause})`,
+                        Fields: ['ID', 'UserID', 'RoleID', 'Role'],
+                    },
+                    system,
+                    input.rosterPageSize,
+                ),
+            ]);
+
+            const rolesByUserId = new Map<string, UserRoleInfo[]>();
+            for (const roleRow of roleRows) {
+                const uid = parseUuid(roleRow.UserID)?.toLowerCase();
+                if (!uid) continue;
+                const list = rolesByUserId.get(uid) ?? [];
+                list.push(
+                    new UserRoleInfo({
+                        ID: roleRow.ID,
+                        UserID: roleRow.UserID,
+                        RoleID: roleRow.RoleID,
+                        Role: roleRow.Role ?? undefined,
+                    }),
+                );
+                rolesByUserId.set(uid, list);
+            }
+
+            for (const userRow of userRows) {
+                const uid = parseUuid(userRow.ID)?.toLowerCase();
+                if (!uid || userRow.IsActive === false) continue;
+                hydratedById.set(
+                    uid,
+                    new UserInfo(provider, {
+                        ID: userRow.ID,
+                        Name: userRow.Name ?? undefined,
+                        Email: userRow.Email ?? undefined,
+                        IsActive: userRow.IsActive ?? true,
+                        UserRoles: rolesByUserId.get(uid) ?? [],
+                    }),
+                );
+            }
+        } catch (hydrationError) {
+            audienceHydrationFailed = true;
+            LogError(
+                `executeSpaceChatTurn: failed to hydrate missing audience users for space ${spaceId}; withholding extra knowledge scopes (fail closed): ${hydrationError instanceof Error ? hydrationError.message : String(hydrationError)}`,
+            );
+        }
+    }
+
+    const hydratedAudienceUsers: UserInfo[] = [];
+    if (!audienceHydrationFailed) {
+        for (const pid of normalizedParticipantIds) {
+            const hydrated = hydratedById.get(pid);
+            if (!hydrated) {
+                audienceHydrationFailed = true;
+                break;
+            }
+            hydratedAudienceUsers.push(hydrated);
+        }
+    }
+
+    const allAudienceVerified =
+        !audienceHydrationFailed &&
+        normalizedParticipantIds.length > 0 &&
+        hydratedAudienceUsers.length === normalizedParticipantIds.length;
+
+    const audienceAuthorizedScopes = !allAudienceVerified
+        ? {
+              nativeScope: turnKnowledgeScopes.nativeScope,
+              grantedScopes: [],
+              searchScopeIds: [COLLABORATION_SPACE_SCOPE_ID],
+              scopeById: new Map(),
+              scopeByContentSourceId: new Map(),
+              contentSourceNamesById: new Map(),
+              maxBandByContentSourceId: new Map(),
+              rejectedScopes: turnKnowledgeScopes.grantedScopes.map((s) => ({
+                  scopeId: s.scopeId,
+                  scopeName: s.scopeName,
+                  reason: 'Failed closed: one or more conversation audience users could not be hydrated',
+              })),
+          }
+        : hydratedAudienceUsers.length > 1 || hydratedAudienceUsers[0]?.ID.toLowerCase() !== callerId.toLowerCase()
             ? await resolveTurnKnowledgeScopes({
                   provider,
                   systemUser: system,
@@ -619,27 +749,31 @@ async function runClaimedTurn(
     toolsGiven.searchScopeIds = audienceAuthorizedScopes.searchScopeIds;
     toolsGiven.grantedKnowledgeScopeNames = audienceAuthorizedScopes.grantedScopes.map((s) => s.scopeName);
 
-    const multiScopeSearchResult = await dispatchMultiScopeTurnSearch(
-        {
-            query: rankingQuery || stripMentionMarkup(messageText),
-            spaceId,
-            spaceChatId: foundChat.ID,
-            maxResults: input.topK ?? 20,
-            nativeScope: audienceAuthorizedScopes.nativeScope,
-            grantedScopes: audienceAuthorizedScopes.grantedScopes,
-            scopeById: audienceAuthorizedScopes.scopeById,
-            scopeByContentSourceId: audienceAuthorizedScopes.scopeByContentSourceId,
-            contentSourceNamesById: audienceAuthorizedScopes.contentSourceNamesById,
-            maxBandByContentSourceId: audienceAuthorizedScopes.maxBandByContentSourceId,
-            searchScopeIds: audienceAuthorizedScopes.searchScopeIds,
-            ...(hydratedAudienceUsers.length > 0 && hydratedAudienceUsers.length === participantUserIds.length
-                ? { audienceUsers: hydratedAudienceUsers }
-                : {}),
-            contextUser: user,
-            provider,
-        },
-        input.multiScopeSearch,
-    );
+    const multiScopeSearchResult = allAudienceVerified
+        ? await dispatchMultiScopeTurnSearch(
+              {
+                  query: rankingQuery || stripMentionMarkup(messageText),
+                  spaceId,
+                  spaceChatId: foundChat.ID,
+                  maxResults: input.topK ?? 20,
+                  nativeScope: audienceAuthorizedScopes.nativeScope,
+                  grantedScopes: audienceAuthorizedScopes.grantedScopes,
+                  scopeById: audienceAuthorizedScopes.scopeById,
+                  scopeByContentSourceId: audienceAuthorizedScopes.scopeByContentSourceId,
+                  contentSourceNamesById: audienceAuthorizedScopes.contentSourceNamesById,
+                  maxBandByContentSourceId: audienceAuthorizedScopes.maxBandByContentSourceId,
+                  searchScopeIds: audienceAuthorizedScopes.searchScopeIds,
+                  audienceUsers: hydratedAudienceUsers,
+                  contextUser: user,
+                  provider,
+              },
+              input.multiScopeSearch,
+          )
+        : {
+              extraKnowledgeCandidates: [],
+              grantedKnowledgeHits: [],
+              nativeToolHits: [],
+          };
 
     // 10. Write reply as system user (Item 5 / A19 Part 2)
     const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
