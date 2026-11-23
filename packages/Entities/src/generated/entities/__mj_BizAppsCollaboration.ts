@@ -304,6 +304,256 @@ export const mjBizAppsCollaborationSpaceAgentSourceReceiptSchema = z.object({
 export type mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType = z.infer<typeof mjBizAppsCollaborationSpaceAgentSourceReceiptSchema>;
 
 /**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Notice Events
+ */
+export const mjBizAppsCollaborationSpaceNoticeEventSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SpaceID: z.string().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space in which the notice event occurred.`),
+    ActorUserID: z.string().nullable().describe(`
+        * * Field Name: ActorUserID
+        * * Display Name: Actor User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The acting user who triggered the event, or NULL for system-generated events.`),
+    EventKind: z.union([z.literal('Share'), z.literal('StatusChanged'), z.literal('Mention'), z.literal('Reply'), z.literal('Task'), z.literal('Approval'), z.literal('Announcement'), z.literal('System')]).describe(`
+        * * Field Name: EventKind
+        * * Display Name: Event Kind
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Share
+    *   * StatusChanged
+    *   * Mention
+    *   * Reply
+    *   * Task
+    *   * Approval
+    *   * Announcement
+    *   * System
+        * * Description: Event category: Share, StatusChanged, Mention, Reply, Task, Approval, Announcement, or System.`),
+    Band: z.union([z.literal('Shared'), z.literal('Team')]).describe(`
+        * * Field Name: Band
+        * * Display Name: Band
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Shared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Shared
+    *   * Team
+        * * Description: Visibility band (Shared or Team) governing which space members may read this notice event.`),
+    Title: z.string().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Short domain-neutral notice headline.`),
+    Body: z.string().nullable().describe(`
+        * * Field Name: Body
+        * * Display Name: Body
+        * * SQL Data Type: nvarchar(max)
+        * * Description: Optional detailed notice summary text.`),
+    TargetEntityID: z.string().nullable().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Optional target MJ Entity ID for deep-linking to the underlying record (polymorphic pair with TargetRecordID).`),
+    TargetRecordID: z.string().nullable().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Optional canonical target record key (e.g. ID|<uuid>) paired with TargetEntityID.`),
+    MetadataJSON: z.string().nullable().describe(`
+        * * Field Name: MetadataJSON
+        * * Display Name: Metadata JSON
+        * * SQL Data Type: nvarchar(max)
+        * * Description: Optional structured JSON payload carrying additional event context.`),
+    EventTimestamp: z.date().describe(`
+        * * Field Name: EventTimestamp
+        * * Display Name: Event Timestamp
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: UTC timestamp at which the notice event occurred, used with ID as the deterministic composite keyset cursor.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Space: z.string().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+    ActorUser: z.string().nullable().describe(`
+        * * Field Name: ActorUser
+        * * Display Name: Actor User
+        * * SQL Data Type: nvarchar(100)`),
+    TargetEntity: z.string().nullable().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type mjBizAppsCollaborationSpaceNoticeEventEntityType = z.infer<typeof mjBizAppsCollaborationSpaceNoticeEventSchema>;
+
+/**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Notice Watermarks
+ */
+export const mjBizAppsCollaborationSpaceNoticeWatermarkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SpaceID: z.string().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space this read watermark applies to.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The member whose read watermark is tracked.`),
+    LastReadEventTimestamp: z.date().describe(`
+        * * Field Name: LastReadEventTimestamp
+        * * Display Name: Last Read Event Timestamp
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp component of the member's monotonic composite read watermark (LastReadEventTimestamp, LastReadEventID).`),
+    LastReadEventID: z.string().nullable().describe(`
+        * * Field Name: LastReadEventID
+        * * Display Name: Last Read Event ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Tie-breaker SpaceNoticeEvent ID component of the member's monotonic composite read watermark.`),
+    LastReadAt: z.date().describe(`
+        * * Field Name: LastReadAt
+        * * Display Name: Last Read At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: UTC timestamp when the member last advanced this watermark.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Space: z.string().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type mjBizAppsCollaborationSpaceNoticeWatermarkEntityType = z.infer<typeof mjBizAppsCollaborationSpaceNoticeWatermarkSchema>;
+
+/**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Digest Checkpoints
+ */
+export const mjBizAppsCollaborationSpaceDigestCheckpointSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The digest recipient user.`),
+    SpaceID: z.string().nullable().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: Optional specific space scope for the digest checkpoint, or NULL for a cross-space digest.`),
+    Cadence: z.union([z.literal('Daily'), z.literal('Weekly'), z.literal('Immediate'), z.literal('Custom')]).describe(`
+        * * Field Name: Cadence
+        * * Display Name: Cadence
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Daily
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Daily
+    *   * Weekly
+    *   * Immediate
+    *   * Custom
+        * * Description: Digest cadence: Daily, Weekly, Immediate, or Custom.`),
+    LastDeliveredTimestamp: z.date().describe(`
+        * * Field Name: LastDeliveredTimestamp
+        * * Display Name: Last Delivered Timestamp
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp component of the last delivered digest composite keyset cursor.`),
+    LastDeliveredRecordID: z.string().nullable().describe(`
+        * * Field Name: LastDeliveredRecordID
+        * * Display Name: Last Delivered Record ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Tie-breaker record ID component of the last delivered digest composite keyset cursor.`),
+    LastDeliveredAt: z.date().describe(`
+        * * Field Name: LastDeliveredAt
+        * * Display Name: Last Delivered At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: UTC timestamp when the last digest delivery completed.`),
+    ItemsIncludedCount: z.number().describe(`
+        * * Field Name: ItemsIncludedCount
+        * * Display Name: Items Included Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of reach-verified items included in the last delivered digest.`),
+    Status: z.union([z.literal('Active'), z.literal('Paused')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Paused
+        * * Description: Checkpoint status: Active or Paused.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Space: z.string().nullable().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type mjBizAppsCollaborationSpaceDigestCheckpointEntityType = z.infer<typeof mjBizAppsCollaborationSpaceDigestCheckpointSchema>;
+
+/**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Anchors
  */
 export const mjBizAppsCollaborationSpaceAnchorSchema = z.object({
@@ -1879,6 +2129,157 @@ export class mjBizAppsCollaborationSpaceAgentSourceReceiptEntity extends BaseEnt
     }
 }
 
+/**
+ * MJ_BizApps_Collaboration: Space Notice Events - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceNoticeEvent
+ * * Base View: vwSpaceNoticeEvents
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Notice Events')
+export class mjBizAppsCollaborationSpaceNoticeEventEntity extends BaseEntity<mjBizAppsCollaborationSpaceNoticeEventEntityType> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    get ID(): string { return this.Get('ID'); }
+    set ID(value: string) { this.Set('ID', value); }
+
+    get SpaceID(): string { return this.Get('SpaceID'); }
+    set SpaceID(value: string) { this.Set('SpaceID', value); }
+
+    get ActorUserID(): string | null { return this.Get('ActorUserID'); }
+    set ActorUserID(value: string | null) { this.Set('ActorUserID', value); }
+
+    get EventKind(): 'Share' | 'StatusChanged' | 'Mention' | 'Reply' | 'Task' | 'Approval' | 'Announcement' | 'System' { return this.Get('EventKind'); }
+    set EventKind(value: 'Share' | 'StatusChanged' | 'Mention' | 'Reply' | 'Task' | 'Approval' | 'Announcement' | 'System') { this.Set('EventKind', value); }
+
+    get Band(): 'Shared' | 'Team' { return this.Get('Band'); }
+    set Band(value: 'Shared' | 'Team') { this.Set('Band', value); }
+
+    get Title(): string { return this.Get('Title'); }
+    set Title(value: string) { this.Set('Title', value); }
+
+    get Body(): string | null { return this.Get('Body'); }
+    set Body(value: string | null) { this.Set('Body', value); }
+
+    get TargetEntityID(): string | null { return this.Get('TargetEntityID'); }
+    set TargetEntityID(value: string | null) { this.Set('TargetEntityID', value); }
+
+    get TargetRecordID(): string | null { return this.Get('TargetRecordID'); }
+    set TargetRecordID(value: string | null) { this.Set('TargetRecordID', value); }
+
+    get MetadataJSON(): string | null { return this.Get('MetadataJSON'); }
+    set MetadataJSON(value: string | null) { this.Set('MetadataJSON', value); }
+
+    get EventTimestamp(): Date { return this.Get('EventTimestamp'); }
+    set EventTimestamp(value: Date) { this.Set('EventTimestamp', value); }
+
+    get __mj_CreatedAt(): Date { return this.Get('__mj_CreatedAt'); }
+    get __mj_UpdatedAt(): Date { return this.Get('__mj_UpdatedAt'); }
+    get Space(): string { return this.Get('Space'); }
+    get ActorUser(): string | null { return this.Get('ActorUser'); }
+    get TargetEntity(): string | null { return this.Get('TargetEntity'); }
+}
+
+/**
+ * MJ_BizApps_Collaboration: Space Notice Watermarks - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceNoticeWatermark
+ * * Base View: vwSpaceNoticeWatermarks
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Notice Watermarks')
+export class mjBizAppsCollaborationSpaceNoticeWatermarkEntity extends BaseEntity<mjBizAppsCollaborationSpaceNoticeWatermarkEntityType> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    get ID(): string { return this.Get('ID'); }
+    set ID(value: string) { this.Set('ID', value); }
+
+    get SpaceID(): string { return this.Get('SpaceID'); }
+    set SpaceID(value: string) { this.Set('SpaceID', value); }
+
+    get UserID(): string { return this.Get('UserID'); }
+    set UserID(value: string) { this.Set('UserID', value); }
+
+    get LastReadEventTimestamp(): Date { return this.Get('LastReadEventTimestamp'); }
+    set LastReadEventTimestamp(value: Date) { this.Set('LastReadEventTimestamp', value); }
+
+    get LastReadEventID(): string | null { return this.Get('LastReadEventID'); }
+    set LastReadEventID(value: string | null) { this.Set('LastReadEventID', value); }
+
+    get LastReadAt(): Date { return this.Get('LastReadAt'); }
+    set LastReadAt(value: Date) { this.Set('LastReadAt', value); }
+
+    get __mj_CreatedAt(): Date { return this.Get('__mj_CreatedAt'); }
+    get __mj_UpdatedAt(): Date { return this.Get('__mj_UpdatedAt'); }
+    get Space(): string { return this.Get('Space'); }
+    get User(): string { return this.Get('User'); }
+}
+
+/**
+ * MJ_BizApps_Collaboration: Space Digest Checkpoints - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceDigestCheckpoint
+ * * Base View: vwSpaceDigestCheckpoints
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Digest Checkpoints')
+export class mjBizAppsCollaborationSpaceDigestCheckpointEntity extends BaseEntity<mjBizAppsCollaborationSpaceDigestCheckpointEntityType> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    get ID(): string { return this.Get('ID'); }
+    set ID(value: string) { this.Set('ID', value); }
+
+    get UserID(): string { return this.Get('UserID'); }
+    set UserID(value: string) { this.Set('UserID', value); }
+
+    get SpaceID(): string | null { return this.Get('SpaceID'); }
+    set SpaceID(value: string | null) { this.Set('SpaceID', value); }
+
+    get Cadence(): 'Daily' | 'Weekly' | 'Immediate' | 'Custom' { return this.Get('Cadence'); }
+    set Cadence(value: 'Daily' | 'Weekly' | 'Immediate' | 'Custom') { this.Set('Cadence', value); }
+
+    get LastDeliveredTimestamp(): Date { return this.Get('LastDeliveredTimestamp'); }
+    set LastDeliveredTimestamp(value: Date) { this.Set('LastDeliveredTimestamp', value); }
+
+    get LastDeliveredRecordID(): string | null { return this.Get('LastDeliveredRecordID'); }
+    set LastDeliveredRecordID(value: string | null) { this.Set('LastDeliveredRecordID', value); }
+
+    get LastDeliveredAt(): Date { return this.Get('LastDeliveredAt'); }
+    set LastDeliveredAt(value: Date) { this.Set('LastDeliveredAt', value); }
+
+    get ItemsIncludedCount(): number { return this.Get('ItemsIncludedCount'); }
+    set ItemsIncludedCount(value: number) { this.Set('ItemsIncludedCount', value); }
+
+    get Status(): 'Active' | 'Paused' { return this.Get('Status'); }
+    set Status(value: 'Active' | 'Paused') { this.Set('Status', value); }
+
+    get __mj_CreatedAt(): Date { return this.Get('__mj_CreatedAt'); }
+    get __mj_UpdatedAt(): Date { return this.Get('__mj_UpdatedAt'); }
+    get User(): string { return this.Get('User'); }
+    get Space(): string | null { return this.Get('Space'); }
+}
+
 
 /**
  * MJ_BizApps_Collaboration: Space Anchors - strongly typed entity sub-class
@@ -3013,7 +3414,6 @@ export class mjBizAppsCollaborationSpaceMemberPinEntity extends BaseEntity<mjBiz
         return this.Get('TargetEntity');
     }
 }
-
 
 /**
  * MJ_BizApps_Collaboration: Space Members - strongly typed entity sub-class

@@ -65,6 +65,21 @@ import {
     SpaceSubtypeDirectory,
 } from '@mj-biz-apps/collaboration-entities';
 import type { MJApplicationSettingEntity } from '@memberjunction/core-entities';
+import {
+    ADVANCE_SPACE_NOTICE_WATERMARK_OPERATION_KEY,
+    type AdvanceSpaceNoticeWatermarkInput,
+    type AdvanceSpaceNoticeWatermarkResult,
+    GET_SPACE_NOTICES_OPERATION_KEY,
+    GET_SPACE_UNREAD_NOTICE_COUNTS_OPERATION_KEY,
+    type GetSpaceNoticesInput,
+    type GetSpaceNoticesResult,
+    type GetSpaceUnreadNoticeCountsInput,
+    type GetSpaceUnreadNoticeCountsResult,
+    invokeCollaborationRemoteOperation,
+    PUBLISH_SPACE_NOTICE_EVENT_OPERATION_KEY,
+    type PublishSpaceNoticeEventInput,
+    type PublishSpaceNoticeEventResult,
+} from './space-notices.js';
 
 const normalizeKey = (key: string | null | undefined): string => (key ?? '').trim().toLowerCase();
 
@@ -943,6 +958,74 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 liveSnapshot,
             );
         });
+    }
+
+    /**
+     * Publishes a single fan-out-on-read Space Notice Event row (`O(1)` write) via the registered
+     * `Collaboration.PublishSpaceNoticeEvent` `BaseRemotableOperation`.
+     */
+    public async PublishSpaceNoticeEvent(
+        input: PublishSpaceNoticeEventInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PublishSpaceNoticeEventResult> {
+        return invokeCollaborationRemoteOperation<PublishSpaceNoticeEventInput, PublishSpaceNoticeEventResult>(
+            PUBLISH_SPACE_NOTICE_EVENT_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Resolves fan-out-on-read space notice events and per-member unread status using batched
+     * `RunView` (`ResultType: 'simple'`) and per-member watermarks.
+     */
+    public async GetSpaceNotices(
+        input: GetSpaceNoticesInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetSpaceNoticesResult> {
+        return invokeCollaborationRemoteOperation<GetSpaceNoticesInput, GetSpaceNoticesResult>(
+            GET_SPACE_NOTICES_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Computes per-space unread notice counts across reachable spaces using batched `RunView`
+     * (`ResultType: 'simple'`) and per-member watermarks.
+     */
+    public async GetSpaceUnreadNoticeCounts(
+        input: GetSpaceUnreadNoticeCountsInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetSpaceUnreadNoticeCountsResult> {
+        return invokeCollaborationRemoteOperation<GetSpaceUnreadNoticeCountsInput, GetSpaceUnreadNoticeCountsResult>(
+            GET_SPACE_UNREAD_NOTICE_COUNTS_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Monotonically advances the caller's per-space notice watermark `(LastReadEventTimestamp, LastReadEventID)`
+     * via the registered `Collaboration.AdvanceSpaceNoticeWatermark` `BaseRemotableOperation`.
+     */
+    public async AdvanceSpaceNoticeWatermark(
+        input: AdvanceSpaceNoticeWatermarkInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<AdvanceSpaceNoticeWatermarkResult> {
+        return invokeCollaborationRemoteOperation<AdvanceSpaceNoticeWatermarkInput, AdvanceSpaceNoticeWatermarkResult>(
+            ADVANCE_SPACE_NOTICE_WATERMARK_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
     }
 }
 

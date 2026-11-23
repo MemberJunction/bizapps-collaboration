@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { BaseRemotableOperation } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import {
+    COLLABORATION_POLYMORPHIC_FK_SPECS,
     LoadCollaborationSecurityAuditOperations,
     PARTICIPANT_ROLE_ID,
     runSpaceParticipantRoleAudit,
@@ -49,7 +50,7 @@ describe('XS-1 Space Participant Role Audit', () => {
         expect(result.Findings).toEqual([]);
         expect(result.Dialect).toBe('mssql');
         expect(result.Stats.MembersChecked).toBe(world.SpaceMembers.length);
-        expect(result.Stats.PolymorphicEntitiesChecked).toBe(5);
+        expect(result.Stats.PolymorphicEntitiesChecked).toBe(COLLABORATION_POLYMORPHIC_FK_SPECS.length);
         expect(result.Stats.PolymorphicLinksChecked).toBeGreaterThanOrEqual(5);
         expect(world.GetEntityObjectCallCount).toBe(0);
         expect(world.CapturedRunViewCalls.length).toBeGreaterThan(0);
