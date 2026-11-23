@@ -23,9 +23,11 @@ export interface WithheldAction {
 
 export interface TurnTools {
     Audience: ChatAudience;
-    /** The action grants given to the agent: in force for the audience, with no binding. */
+    /** The action grants given to the agent: in force for the audience, with no binding (plus bound actions when CX-3 is active). */
     Actions: EffectiveGrant[];
-    /** The action grants in force but withheld because they bind a parameter (A16). */
+    /** The action grants in force that carry server-side bindings when CX-3 bound action grants are enabled. */
+    BoundActions: WithheldAction[];
+    /** The action grants in force but withheld because they bind a parameter (before A16). */
     WithheldActions: WithheldAction[];
     /** The query and view grants *Run space data* may run for this audience. */
     DataGrants: EffectiveGrant[];
@@ -35,13 +37,22 @@ export interface TurnTools {
     KnowledgeSourceIDs: string[];
 }
 
+export interface TurnToolsOptions {
+    /** When true, action grants with server-side bindings are exposed via BoundActions instead of withheld. */
+    includeBoundActions?: boolean;
+}
+
 const inForce = (grants: readonly EffectiveGrant[], audience: ChatAudience): EffectiveGrant[] =>
     grants.filter((grant) => audience === 'Team' || grant.Band === 'Shared');
 
 const boundNamesOf = (grant: EffectiveGrant): string[] => Object.keys(grant.Bindings ?? {});
 
 /** The tools of a turn, from the one configuration and the conversation's audience. */
-export function turnToolsFor(configuration: EffectiveSpaceConfiguration, audience: ChatAudience): TurnTools {
+export function turnToolsFor(
+    configuration: EffectiveSpaceConfiguration,
+    audience: ChatAudience,
+    options?: TurnToolsOptions,
+): TurnTools {
     const actions = inForce(configuration.Grants.Action, audience);
     const views = inForce(configuration.Grants.View, audience);
     const knowledge: string[] = [];
@@ -49,10 +60,16 @@ export function turnToolsFor(configuration: EffectiveSpaceConfiguration, audienc
         const id = grant.TargetRecordID.trim().toUpperCase();
         if (id && !knowledge.includes(id)) knowledge.push(id);
     }
+    const unboundActions = actions.filter((grant) => boundNamesOf(grant).length === 0);
+    const boundActionEntries = actions
+        .filter((grant) => boundNamesOf(grant).length > 0)
+        .map((grant) => ({ grant, boundNames: boundNamesOf(grant) }));
+    const includeBound = options?.includeBoundActions === true;
     return {
         Audience: audience,
-        Actions: actions.filter((grant) => boundNamesOf(grant).length === 0),
-        WithheldActions: actions.filter((grant) => boundNamesOf(grant).length > 0).map((grant) => ({ grant, boundNames: boundNamesOf(grant) })),
+        Actions: includeBound ? actions : unboundActions,
+        BoundActions: includeBound ? boundActionEntries : [],
+        WithheldActions: includeBound ? [] : boundActionEntries,
         DataGrants: [...inForce(configuration.Grants.Query, audience), ...views.filter((grant) => boundNamesOf(grant).length === 0)],
         WithheldViews: views.filter((grant) => boundNamesOf(grant).length > 0),
         KnowledgeSourceIDs: knowledge,

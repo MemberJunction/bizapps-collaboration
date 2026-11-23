@@ -18,12 +18,20 @@ export type BindingSource =
     | { kind: 'space'; field: SpaceBindingField }
     | { kind: 'config'; path: string }
     | { kind: 'user'; field: UserBindingField }
+    | { kind: 'root'; field: 'ID' | 'EntityID' | 'RecordID' }
+    | { kind: 'band' }
+    | { kind: 'deliveryPrincipal' }
     | { kind: 'value'; value: string | number | boolean };
 
 /** Reads an expression into its source, or says what is wrong with it. `name` is the bound parameter's name, for the message. */
 export function bindingSource(name: string, expression: BindingExpression): { ok: true; source: BindingSource } | { ok: false; error: string } {
     if ('Value' in expression) return { ok: true, source: { kind: 'value', value: expression.Value } };
     const from = expression.From;
+    if (from === 'Root.ID') return { ok: true, source: { kind: 'root', field: 'ID' } };
+    if (from === 'Root.EntityID') return { ok: true, source: { kind: 'root', field: 'EntityID' } };
+    if (from === 'Root.RecordID') return { ok: true, source: { kind: 'root', field: 'RecordID' } };
+    if (from === 'Space.Band') return { ok: true, source: { kind: 'band' } };
+    if (from === 'DeliveryPrincipal.ID') return { ok: true, source: { kind: 'deliveryPrincipal' } };
     if (from.startsWith('Anchor:')) {
         const rest = from.slice('Anchor:'.length);
         const dot = rest.indexOf('.');

@@ -90,6 +90,7 @@ export type {
     CollaborationSettings,
     ChatWhoCanWrite,
     ConfigurationValue,
+    DeliveryPrincipalConfig,
     EffectiveSpaceRules,
     ISpaceConfiguration,
     ISpaceRules,
@@ -233,7 +234,43 @@ export {
 } from './detail-fields.js';
 export { mimeTypeForFileName } from './file-types.js';
 export { agentGrantFor, agentRunSettingsFor, audienceOfConversationKind, turnToolsFor } from './turn-tools.js';
-export type { AgentRunSettings, ChatAudience, TurnTools, WithheldAction } from './turn-tools.js';
+export type { AgentRunSettings, ChatAudience, TurnTools, TurnToolsOptions, WithheldAction } from './turn-tools.js';
+export {
+    buildBoundActionGrantExposure,
+    buildBoundActionPromptCatalog,
+    collectHiddenBoundParamNames,
+    DEFAULT_HIDDEN_BOUND_PARAM_NAMES,
+    enforceBoundActionParameters,
+    redactActionParametersForAgent,
+    resolveNonLooseningDeliveryPrincipal,
+    type ActionMetadataDescriptor,
+    type ActionParamDefinition,
+    type BoundActionEnforcementResult,
+    type BoundActionGrantExposure,
+    type BoundActionPromptCatalogItem,
+    type BoundParamPrimitive,
+    type BoundParamValue,
+    type BoundParamValuesMap,
+    type DeliveryPrincipalLevelInput,
+    type ExposedAgentActionParam,
+    type HiddenBoundParamOverridePolicy,
+    type NonLooseningPrincipalResolution,
+} from './bound-agent-action-grants.js';
+export {
+    evaluateApprovalPromotionGate,
+    evaluateDraftApprovalTaskVisibility,
+    type ApprovalPromotionGateInput,
+    type ApprovalPromotionGateVerdict,
+    type ApprovalTaskStatus,
+    type DraftVisibilityDecision,
+} from './approval-promotion.js';
+export {
+    evaluateSpaceDocAccess,
+    filterVisibleSpaceDocs,
+    type SpaceDocAccessInput,
+    type SpaceDocAccessVerdict,
+    type SpaceDocOperation,
+} from './docs-band.js';
 export {
     allowedBandsForSpace,
     hasStructuralChatScopeAccess,

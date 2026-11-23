@@ -16,6 +16,16 @@ export type ConfigurationValue =
 /** Write policy for space chats: non-loosening across Type -> Root -> Space. */
 export type ChatWhoCanWrite = 'Contributors' | 'TeamOnly' | 'Owners';
 
+/** Per-root delivery principal configuration (CA-4): non-loosening across Type -> Root -> Space. */
+export interface DeliveryPrincipalConfig {
+    /** Configured MJ User ID attributed to promoted / outbound SupportsAudience outputs for this root. */
+    UserID?: string | null;
+    /** Optional allowlist of permitted principal User IDs (sub-spaces may narrow, never widen). */
+    AllowedPrincipalUserIDs?: string[];
+    /** Must remain false/undefined: never silently fall back to the approving user's personal identity. */
+    AllowFallbackToCaller?: false;
+}
+
 /** Declarative scoped prompt part entry that may live in SpaceType/Space configuration. */
 export interface ScopedPromptPartConfigEntry {
     ID?: string | null;
@@ -54,7 +64,11 @@ export interface CollaborationSettings {
     Agents?: {
         /** How this level's SpaceAgent rows combine with the list above. Default 'Extend'. */
         ListMode?: 'Extend' | 'Replace';
+        /** When true, action grants with server-side bindings are exposed to space agents with hidden bound params stripped (CX-3). */
+        EnableBoundActionGrants?: boolean;
     };
+    /** Per-root delivery principal configuration (CA-4). */
+    DeliveryPrincipal?: DeliveryPrincipalConfig;
     /** Word overrides: tab labels, e.g. { Tabs: { Library: 'Papers', People: 'Members' } }, and the two bands' names (item 53). */
     Labels?: {
         Tabs?: Record<string, string>;
@@ -118,6 +132,12 @@ export interface EffectiveSpaceRules {
     };
     Agents: {
         ListMode: 'Extend' | 'Replace';
+        EnableBoundActionGrants?: boolean;
+    };
+    DeliveryPrincipal?: {
+        UserID: string | null;
+        AllowedPrincipalUserIDs?: string[];
+        AllowFallbackToCaller: false;
     };
     Labels?: { Tabs?: Record<string, string> };
     Extensions: Record<string, Record<string, ConfigurationValue>>;
@@ -285,6 +305,12 @@ export interface ResolvedCollaborationSettings {
     };
     Agents: {
         ListMode: 'Extend' | 'Replace';
+        EnableBoundActionGrants?: boolean;
+    };
+    DeliveryPrincipal?: {
+        UserID: string | null;
+        AllowedPrincipalUserIDs?: string[];
+        AllowFallbackToCaller: false;
     };
     Labels?: {
         Tabs?: Record<string, string>;
@@ -316,6 +342,7 @@ const KNOWN_SETTINGS_KEYS = new Set([
     'Chats',
     'PromptParts',
     'Agents',
+    'DeliveryPrincipal',
     'Labels',
     'Children',
     'SpaceOverridable',
@@ -324,6 +351,8 @@ const KNOWN_SETTINGS_KEYS = new Set([
     'DataReach',
     'Extensions',
 ]);
+
+const CONFIG_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Validates any CollaborationSettings JSON object against the shape and rules.
@@ -414,12 +443,39 @@ export function ValidateCollaborationSettings(
         } else {
             const agents = c['Agents'] as Record<string, unknown>;
             for (const k of Object.keys(agents)) {
-                if (!['ListMode'].includes(k)) {
+                if (!['ListMode', 'EnableBoundActionGrants'].includes(k)) {
                     errors.push(`Unknown Agents key: ${k}`);
                 }
             }
             if (agents['ListMode'] !== undefined && !['Extend', 'Replace'].includes(agents['ListMode'] as string)) {
                 errors.push(`Invalid Agents.ListMode: ${String(agents['ListMode'])}`);
+            }
+            if (agents['EnableBoundActionGrants'] !== undefined && typeof agents['EnableBoundActionGrants'] !== 'boolean') {
+                errors.push('Agents.EnableBoundActionGrants must be a boolean.');
+            }
+        }
+    }
+
+    if (c['DeliveryPrincipal'] !== undefined) {
+        const dp = c['DeliveryPrincipal'] as DeliveryPrincipalConfig | null;
+        if (!dp || typeof dp !== 'object' || Array.isArray(dp)) {
+            errors.push('DeliveryPrincipal must be an object.');
+        } else {
+            for (const k of Object.keys(dp)) {
+                if (!['UserID', 'AllowedPrincipalUserIDs', 'AllowFallbackToCaller'].includes(k)) {
+                    errors.push(`Unknown DeliveryPrincipal key: ${k}`);
+                }
+            }
+            if (dp.UserID !== undefined && dp.UserID !== null && (typeof dp.UserID !== 'string' || !CONFIG_UUID_RE.test(dp.UserID.trim()))) {
+                errors.push('DeliveryPrincipal.UserID must be a valid UUID string or null.');
+            }
+            if (dp.AllowedPrincipalUserIDs !== undefined) {
+                if (!Array.isArray(dp.AllowedPrincipalUserIDs) || dp.AllowedPrincipalUserIDs.some((id) => typeof id !== 'string' || !CONFIG_UUID_RE.test(id.trim()))) {
+                    errors.push('DeliveryPrincipal.AllowedPrincipalUserIDs must be an array of valid UUID strings.');
+                }
+            }
+            if (dp.AllowFallbackToCaller !== undefined && dp.AllowFallbackToCaller !== false) {
+                errors.push('DeliveryPrincipal.AllowFallbackToCaller cannot be true; fallback to caller identity is forbidden.');
             }
         }
     }
@@ -548,6 +604,28 @@ export function ValidateCollaborationSettings(
             if (agents['ListMode'] !== undefined && !isAllowed('Agents.ListMode')) {
                 errors.push("Agents.ListMode cannot be overridden by space: not in type's SpaceOverridable.");
             }
+            if (agents['EnableBoundActionGrants'] !== undefined && !isAllowed('Agents.EnableBoundActionGrants')) {
+                errors.push("Agents.EnableBoundActionGrants cannot be overridden by space: not in type's SpaceOverridable.");
+            }
+        }
+        if (c['DeliveryPrincipal'] !== undefined) {
+            if (!isAllowed('DeliveryPrincipal') && !isAllowed('DeliveryPrincipal.UserID')) {
+                errors.push("DeliveryPrincipal cannot be overridden by space: not in type's SpaceOverridable.");
+            } else {
+                const spaceDp = c['DeliveryPrincipal'] as DeliveryPrincipalConfig | null;
+                const typeAllowed = typeConfig?.DeliveryPrincipal?.AllowedPrincipalUserIDs;
+                if (spaceDp?.AllowedPrincipalUserIDs !== undefined) {
+                    if (!typeAllowed || spaceDp.AllowedPrincipalUserIDs.some((id) => !typeAllowed.some((tId) => tId.toLowerCase() === id.toLowerCase()))) {
+                        errors.push('DeliveryPrincipal.AllowedPrincipalUserIDs on a space cannot widen the space type allowlist.');
+                    }
+                }
+                if (spaceDp?.UserID && typeAllowed && typeAllowed.length > 0) {
+                    const match = typeAllowed.some((tId) => tId.toLowerCase() === spaceDp.UserID!.toLowerCase());
+                    if (!match) {
+                        errors.push('DeliveryPrincipal.UserID on a space must belong to the space type AllowedPrincipalUserIDs.');
+                    }
+                }
+            }
         }
         if (c['Grants'] && typeof c['Grants'] === 'object') {
             for (const kind of Object.keys(c['Grants'] as object)) {
@@ -671,6 +749,40 @@ export function ResolveCollaborationSettings(
         s => s.Agents?.ListMode,
         DEFAULT_COLLABORATION_SETTINGS.Agents.ListMode
     );
+    const enableBoundActionGrants = resolveScalar(
+        'Agents.EnableBoundActionGrants',
+        s => s.Agents?.EnableBoundActionGrants,
+        undefined
+    );
+
+    const resolveDeliveryPrincipal = (): ResolvedCollaborationSettings['DeliveryPrincipal'] => {
+        // Non-loosening: type/app allowlist acts as ceiling if specified.
+        const typeAllowed = typeConfig?.DeliveryPrincipal?.AllowedPrincipalUserIDs ?? appConfig.DeliveryPrincipal?.AllowedPrincipalUserIDs;
+        let allowedPrincipalUserIDs: string[] | undefined = typeAllowed ? [...typeAllowed] : undefined;
+        let resolvedUserId: string | null = null;
+        if (isOverridable('DeliveryPrincipal') || isOverridable('DeliveryPrincipal.UserID')) {
+            for (const s of spaces) {
+                const candidate = s.DeliveryPrincipal?.UserID;
+                if (candidate && (!allowedPrincipalUserIDs || allowedPrincipalUserIDs.some((a) => a.toLowerCase() === candidate.toLowerCase()))) {
+                    resolvedUserId = candidate;
+                    break;
+                }
+            }
+        }
+        if (!resolvedUserId && typeConfig?.DeliveryPrincipal?.UserID) {
+            resolvedUserId = typeConfig.DeliveryPrincipal.UserID;
+        }
+        if (!resolvedUserId && appConfig.DeliveryPrincipal?.UserID) {
+            resolvedUserId = appConfig.DeliveryPrincipal.UserID;
+        }
+        if (!resolvedUserId && !allowedPrincipalUserIDs) return undefined;
+        return {
+            UserID: resolvedUserId,
+            ...(allowedPrincipalUserIDs ? { AllowedPrincipalUserIDs: allowedPrincipalUserIDs } : {}),
+            AllowFallbackToCaller: false,
+        };
+    };
+    const deliveryPrincipal = resolveDeliveryPrincipal();
 
     // Tab keys merge without regard to case: the app's 'Library' and a type's 'library' are one key, and the nearer level wins
     const mergeTabs = (into: Record<string, string>, from: Record<string, string> | undefined): Record<string, string> => {
@@ -734,7 +846,9 @@ export function ResolveCollaborationSettings(
         },
         Agents: {
             ListMode: listMode,
+            ...(enableBoundActionGrants !== undefined ? { EnableBoundActionGrants: enableBoundActionGrants } : {}),
         },
+        ...(deliveryPrincipal ? { DeliveryPrincipal: deliveryPrincipal } : {}),
         Labels: tabs || bands ? { ...(tabs ? { Tabs: tabs } : {}), ...(bands ? { Bands: bands } : {}) } : undefined,
         Children: typeConfig?.Children,
         Extensions: extensions,

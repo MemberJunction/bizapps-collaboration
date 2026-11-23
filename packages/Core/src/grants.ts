@@ -23,9 +23,22 @@ export function isGrantKind(value: unknown): value is GrantKind {
     return typeof value === 'string' && (GRANT_KINDS as readonly string[]).includes(value);
 }
 
-/** Where a bound value comes from (D27). A literal is a `Value`; anything else is resolved on the server. */
+/** Where a bound value comes from (D27 / CX-3 / CA-4). A literal is a `Value`; anything else is resolved on the server. */
 export type BindingExpression =
-    | { From: `Anchor:${string}` | `Space.${string}` | `Config:${string}` | 'User.ID' | 'User.Email' | 'User.PersonID' }
+    | {
+          From:
+              | `Anchor:${string}`
+              | `Space.${string}`
+              | `Config:${string}`
+              | 'User.ID'
+              | 'User.Email'
+              | 'User.PersonID'
+              | 'Root.ID'
+              | 'Root.EntityID'
+              | 'Root.RecordID'
+              | 'Space.Band'
+              | 'DeliveryPrincipal.ID';
+      }
     | { Value: string | number | boolean };
 
 /** A grant's bindings: a parameter or property name of the target, mapped to where its value comes from. */
@@ -56,7 +69,7 @@ export const AGENT_LIMIT_NAMES = ['MaxCostPerRun', 'MaxTokensPerRun', 'MaxIterat
 export type AgentLimitName = (typeof AGENT_LIMIT_NAMES)[number];
 
 const FROM_PREFIXES = ['Anchor:', 'Space.', 'Config:'] as const;
-const FROM_EXACT = ['User.ID', 'User.Email', 'User.PersonID'] as const;
+const FROM_EXACT = ['User.ID', 'User.Email', 'User.PersonID', 'Root.ID', 'Root.EntityID', 'Root.RecordID', 'Space.Band', 'DeliveryPrincipal.ID'] as const;
 
 /** Reads one binding expression, or says what is wrong with it. */
 export function parseBindingExpression(name: string, raw: unknown): { ok: true; expression: BindingExpression } | { ok: false; error: string } {
