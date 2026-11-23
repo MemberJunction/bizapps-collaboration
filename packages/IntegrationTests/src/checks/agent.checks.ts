@@ -1,8 +1,12 @@
-import { CompositeKey, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, RunView, type UserInfo } from '@memberjunction/core';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { SearchEngine } from '@memberjunction/search-engine';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { audienceOfConversationKind, noteDocument } from '@mj-biz-apps/collaboration-core';
+import {
+    audienceOfConversationKind,
+    hasStructuralChatScopeAccess,
+    noteDocument,
+} from '@mj-biz-apps/collaboration-core';
 import {
     collaborationFileStore,
     createSpaceConversation,
@@ -14,11 +18,13 @@ import {
     loadSpaceConfiguration,
     postSpaceMessage,
     resolveSpaceAgentRetrieval,
+    resolveStructuralChatScope,
     resolveTurnTools,
     COLLABORATION_SPACE_SCOPE_ID,
     SCOPED_SEARCH_ACTION_ID,
     uploadSpaceFile,
 } from '@mj-biz-apps/collaboration-core-entities-server';
+import sql from 'mssql';
 import type {
     mjBizAppsCollaborationSpaceItemEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
@@ -2484,6 +2490,224 @@ const checks: NamedCheck[] = [
                         ? [() => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, devSeatId!, "AG15 Dev's temporary seat on Discovery")]
                         : []),
                 ]);
+            }
+        },
+    },
+    {
+        Id: 'agent.AG16',
+        Name: 'AG16 — CS-1 fnCollaborationChatScope returns (SpaceID, Band) pairs via structural Audience reach across spaces/bands with out-of-audience isolation and O(1) cost regardless of audience cardinality',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            if (isClientTransport(ctx)) {
+                return;
+            }
+            Assert(ctx.Provider instanceof DatabaseProviderBase, 'Server harness provider must extend DatabaseProviderBase');
+            if (!(ctx.Provider instanceof DatabaseProviderBase)) {
+                return;
+            }
+            const dbProvider = ctx.Provider;
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const harper = await GetPersonaUser(ctx, 'harper');
+            const remy = await GetPersonaUser(ctx, 'remy');
+            const pat = await GetPersonaUser(ctx, 'pat');
+
+            const stamp = Date.now();
+            const createdChats: Array<{ convId: string; chatId: string }> = [];
+
+            const measureSpaceMemberLogicalReads = async (
+                tx: sql.Transaction,
+                primaryId: string,
+                userId: string,
+            ): Promise<{ pairs: Array<{ SpaceID: string; Band: string }>; logicalReads: number }> => {
+                const req = new sql.Request(tx);
+                req.input('primaryId', sql.UniqueIdentifier, primaryId);
+                req.input('userId', sql.UniqueIdentifier, userId);
+                let spaceMemberReads = 0;
+                req.on('info', (info: { message?: string }) => {
+                    const msg = info.message ?? '';
+                    const match = /Table 'SpaceMember'.*?logical reads (\d+)/i.exec(msg);
+                    if (match) {
+                        spaceMemberReads += Number(match[1]);
+                    }
+                });
+                const res = await req.query<{ SpaceID: string; Band: string }>(`
+                    SET STATISTICS IO ON;
+                    SELECT CONVERT(NVARCHAR(36), [SpaceID]) AS [SpaceID], [Band]
+                    FROM [__mj_BizAppsCollaboration].[fnCollaborationChatScope](@primaryId, @userId)
+                    ORDER BY [SpaceID] ASC, [Band] ASC;
+                    SET STATISTICS IO OFF;
+                `);
+                return { pairs: res.recordset ?? [], logicalReads: spaceMemberReads };
+            };
+
+            try {
+                const nwGen = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    Name: `ag16-nw-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(nwGen.ok && !!nwGen.conversationId && !!nwGen.spaceChatId, 'Ada opens Northwind General chat for AG16');
+                if (!nwGen.ok || !nwGen.conversationId || !nwGen.spaceChatId) throw new Error('Northwind General creation failed');
+                createdChats.push({ convId: nwGen.conversationId, chatId: nwGen.spaceChatId });
+
+                const nwPriv = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    Name: `ag16-nw-priv-${stamp}`,
+                    Kind: 'Private',
+                });
+                Assert(nwPriv.ok && !!nwPriv.conversationId && !!nwPriv.spaceChatId, 'Ada opens Northwind Private chat for AG16');
+                if (!nwPriv.ok || !nwPriv.conversationId || !nwPriv.spaceChatId) throw new Error('Northwind Private creation failed');
+                createdChats.push({ convId: nwPriv.conversationId, chatId: nwPriv.spaceChatId });
+
+                const discPriv = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `ag16-disc-priv-${stamp}`,
+                    Kind: 'Private',
+                });
+                Assert(discPriv.ok && !!discPriv.conversationId && !!discPriv.spaceChatId, 'Ada opens Discovery Private chat for AG16');
+                if (!discPriv.ok || !discPriv.conversationId || !discPriv.spaceChatId) throw new Error('Discovery Private creation failed');
+                createdChats.push({ convId: discPriv.conversationId, chatId: discPriv.spaceChatId });
+
+                const beaAsst = await createSpaceConversation(ctx.Provider, bea, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `ag16-bea-asst-${stamp}`,
+                    Kind: 'Assistant',
+                });
+                Assert(beaAsst.ok && !!beaAsst.conversationId && !!beaAsst.spaceChatId, 'Bea opens Discovery Assistant chat for AG16');
+                if (!beaAsst.ok || !beaAsst.conversationId || !beaAsst.spaceChatId) throw new Error('Bea Assistant creation failed');
+                createdChats.push({ convId: beaAsst.conversationId, chatId: beaAsst.spaceChatId });
+
+                // 1. General chat on Northwind for Ada: strictly Shared across expected subtree (never Team, Delivery, Closed-past, Harbor)
+                const nwGenAda = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: nwGen.spaceChatId,
+                    userId: ada.ID,
+                    contextUser: ada,
+                });
+                Assert(
+                    nwGenAda.spaceIds.length === EXPECTED_ADA_NORTHWIND_SPACES.size &&
+                        nwGenAda.spaceIds.every((id) => EXPECTED_ADA_NORTHWIND_SPACES.has(id)),
+                    `Northwind General SpaceIDs match expected Ada subtree (${nwGenAda.spaceIds.join(',')})`,
+                );
+                Assert(
+                    nwGenAda.pairs.every((p) => p.Band === 'Shared') && nwGenAda.pairs.length === EXPECTED_ADA_NORTHWIND_SPACES.size,
+                    'Northwind General chat emits strictly Shared pairs even for Team owner Ada',
+                );
+                Assert(!hasStructuralChatScopeAccess(nwGenAda, DELIVERY_SPACE_ID, 'Shared'), 'Delivery (ExcludedFromParentScope) is excluded');
+                Assert(!hasStructuralChatScopeAccess(nwGenAda, CLOSED_PAST_SPACE_ID, 'Shared'), 'Closed-past (ExcludedEntirely) is excluded');
+                Assert(!hasStructuralChatScopeAccess(nwGenAda, HARBOR_SPACE_ID, 'Shared'), 'Sibling Harbor space is excluded');
+
+                // 2. Private chat on Northwind for Ada: emits both Shared and Team pairs across reachable spaces
+                const nwPrivAda = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: nwPriv.spaceChatId,
+                    userId: ada.ID,
+                    contextUser: ada,
+                });
+                Assert(
+                    nwPrivAda.pairs.length === EXPECTED_ADA_NORTHWIND_SPACES.size * 2,
+                    `Northwind Private chat emits both Shared and Team pairs (${nwPrivAda.pairs.length} pairs)`,
+                );
+                Assert(hasStructuralChatScopeAccess(nwPrivAda, NORTHWIND_SPACE_ID, 'Team'), 'Northwind Private allows Team for Ada');
+                Assert(hasStructuralChatScopeAccess(nwPrivAda, DISCOVERY_SPACE_ID, 'Team'), 'Discovery inherits Team in Northwind Private for Ada');
+                Assert(hasStructuralChatScopeAccess(nwPrivAda, FIELD_NOTES_SPACE_ID, 'Team'), 'Field notes inherits Team in Northwind Private for Ada');
+
+                // 3. Discovery Private chat for Shared-only client Bea -> empty reach (fail closed)
+                const discPrivBea = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: discPriv.spaceChatId,
+                    userId: bea.ID,
+                    contextUser: bea,
+                });
+                Assert(discPrivBea.pairs.length === 0, 'Shared-only Bea gets 0 pairs on Discovery Private chat');
+
+                // 4. Discovery Assistant chat owned by Bea: Bea gets Shared on Discovery+Field notes; Ada (non-owner) gets 0 pairs
+                const beaAsstBea = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: beaAsst.spaceChatId,
+                    userId: bea.ID,
+                    contextUser: bea,
+                });
+                Assert(
+                    beaAsstBea.pairs.length === EXPECTED_BEA_DISCOVERY_SPACES.size &&
+                        beaAsstBea.pairs.every((p) => p.Band === 'Shared') &&
+                        beaAsstBea.spaceIds.every((id) => EXPECTED_BEA_DISCOVERY_SPACES.has(id)),
+                    'Bea Assistant chat resolves Shared reach across Discovery and Field notes',
+                );
+                const beaAsstAda = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: beaAsst.spaceChatId,
+                    userId: ada.ID,
+                    contextUser: ada,
+                });
+                Assert(beaAsstAda.pairs.length === 0, 'Non-owner Ada gets 0 pairs on Bea Assistant chat');
+
+                // 5. Out-of-audience / removed / invited / malformed isolation
+                for (const [label, outsider] of [
+                    ['Harper (Harbor outsider)', harper],
+                    ['Remy (Removed)', remy],
+                    ['Pat (Invited)', pat],
+                ] as const) {
+                    const outRes = await resolveStructuralChatScope({
+                        provider: dbProvider,
+                        primaryScopeRecordId: nwGen.spaceChatId,
+                        userId: outsider.ID,
+                        contextUser: outsider,
+                    });
+                    Assert(outRes.pairs.length === 0, `${label} gets 0 pairs on Northwind General chat`);
+                }
+                const invalidRes = await resolveStructuralChatScope({
+                    provider: dbProvider,
+                    primaryScopeRecordId: "' OR '1'='1",
+                    userId: ada.ID,
+                    contextUser: ada,
+                });
+                Assert(invalidRes.pairs.length === 0, 'Malformed PrimaryScopeRecordID fails closed with 0 pairs');
+
+                // 6. Constant-cost O(1) verification regardless of audience member count (rolled-back transaction)
+                const pool = ctx.Pool;
+                Assert(!!pool, 'Server harness provides SQL connection pool for cardinality test');
+                if (pool) {
+                    const tx = new sql.Transaction(pool);
+                    await tx.begin();
+                    try {
+                        const baseline = await measureSpaceMemberLogicalReads(tx, discPriv.spaceChatId, ada.ID);
+                        Assert(baseline.pairs.length === 4, `Baseline Discovery Private Ada pairs = 4 (saw ${baseline.pairs.length})`);
+
+                        await new sql.Request(tx)
+                            .input('spaceId', sql.UniqueIdentifier, DISCOVERY_SPACE_ID)
+                            .query(`
+                                DECLARE @guestRole UNIQUEIDENTIFIER = (SELECT TOP 1 [ID] FROM [__mj_BizAppsCollaboration].[SpaceRoleType] WHERE [Code] = N'guest');
+                                DECLARE @i INT = 1;
+                                WHILE @i <= 250
+                                BEGIN
+                                    DECLARE @uid UNIQUEIDENTIFIER = NEWID();
+                                    INSERT INTO [__mj].[User] ([ID], [Name], [Email], [Type], [IsActive])
+                                    VALUES (@uid, N'AG16 Scale User ' + CAST(@i AS NVARCHAR(10)), N'ag16-scale-' + CAST(@i AS NVARCHAR(10)) + N'@example.invalid', N'User', 1);
+                                    INSERT INTO [__mj_BizAppsCollaboration].[SpaceMember] ([SpaceID], [UserID], [SpaceRoleTypeID], [Band], [Status])
+                                    VALUES (@spaceId, @uid, @guestRole, N'Shared', N'Active');
+                                    SET @i = @i + 1;
+                                END
+                            `);
+
+                        const scaled = await measureSpaceMemberLogicalReads(tx, discPriv.spaceChatId, ada.ID);
+                        Assert(
+                            JSON.stringify(scaled.pairs) === JSON.stringify(baseline.pairs),
+                            'Adding 250 Discovery audience members produces identical (SpaceID, Band) pairs',
+                        );
+                        Assert(
+                            scaled.logicalReads <= baseline.logicalReads + 4,
+                            `SpaceMember logical reads stayed O(1) across +250 members (baseline=${baseline.logicalReads}, scaled=${scaled.logicalReads})`,
+                        );
+                    } finally {
+                        await tx.rollback();
+                    }
+                }
+            } finally {
+                for (const chat of createdChats.reverse()) {
+                    await cleanupConversation(ctx.Provider, ctx.User, chat.convId, chat.chatId);
+                }
             }
         },
     },
