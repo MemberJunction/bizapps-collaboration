@@ -80,6 +80,13 @@ export const S9_STRICT_TYPE_FILES = [
     'packages/Server/src/comms-v2-bridge.ts',
     'packages/Server/src/bootstrap-security-audits.test.ts',
     'packages/IntegrationTests/src/__tests__/s10-slice2-comms-v2-notifications.integration.spec.ts',
+    // Sub-Epic S10 Slice 3 strict-typed modules and tests
+    'packages/Core/src/space-digests.ts',
+    'packages/Core/src/space-digests.test.ts',
+    'packages/EngineBase/src/space-digests.ts',
+    'packages/EngineBase/src/__tests__/space-digests.spec.ts',
+    'packages/CoreEntitiesServer/src/__tests__/space-digests-server.spec.ts',
+    'packages/IntegrationTests/src/__tests__/s10-slice3-scoped-digests.integration.spec.ts',
 ];
 
 const STRICT_RULES = [
