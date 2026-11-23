@@ -163,7 +163,8 @@ let nextDisclosureInstanceId = 0;
       [class.compact]="Compact"
       [class.expanded]="isExpanded"
       role="region"
-      [attr.aria-labelledby]="headingId"
+      [attr.aria-labelledby]="Compact ? null : headingId"
+      [attr.aria-label]="Compact ? 'Library upload ingest and visibility model' : null"
       data-testid="upload-ingest-disclosure"
     >
       <div class="disclosure-header">
@@ -204,7 +205,7 @@ let nextDisclosureInstanceId = 0;
           [id]="panelId"
           class="disclosure-panel"
           role="region"
-          [attr.aria-labelledby]="headingId"
+          [attr.aria-label]="Compact ? 'Library upload ingest details' : 'Upload ingest details'"
           data-testid="disclosure-details-panel"
         >
           <div class="disclosure-grid">
@@ -257,7 +258,7 @@ let nextDisclosureInstanceId = 0;
         display: flex;
         align-items: flex-start;
         gap: var(--mj-space-2);
-        flex: 1 1 260px;
+        flex: 1 1 200px;
         min-width: 0;
       }
 
@@ -361,7 +362,7 @@ let nextDisclosureInstanceId = 0;
 
       .disclosure-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
         gap: var(--mj-space-2);
       }
 

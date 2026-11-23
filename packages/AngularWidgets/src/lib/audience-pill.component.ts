@@ -68,6 +68,18 @@ import { AvatarItem } from './types';
       color: var(--mj-text-muted);
       white-space: nowrap;
     }
+    @media (max-width: 640px) {
+      .aud {
+        max-width: 100%;
+        flex-wrap: wrap;
+        height: auto;
+        padding: 6px 10px;
+        gap: 8px;
+      }
+      .aud-t span {
+        white-space: normal;
+      }
+    }
   `]
 })
 export class CollabAudiencePillComponent {

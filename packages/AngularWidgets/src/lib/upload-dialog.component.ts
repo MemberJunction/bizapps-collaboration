@@ -56,6 +56,13 @@ export interface CollabUploadSubmitPayload {
             <div class="form-group">
               <label class="f-label">File</label>
               @if (!selectedFile) {
+                <input
+                  #fileInput
+                  type="file"
+                  class="hidden-file-input"
+                  aria-label="Choose a file to upload"
+                  (change)="onFileSelected($event)"
+                />
                 <div
                   class="dropzone"
                   [class.dragover]="isDragging"
@@ -70,13 +77,7 @@ export interface CollabUploadSubmitPayload {
                   (keydown.enter)="fileInput.click()"
                   (keydown.space)="fileInput.click(); $event.preventDefault()"
                 >
-                  <input
-                    #fileInput
-                    type="file"
-                    class="hidden-file-input"
-                    (change)="onFileSelected($event)"
-                  />
-                  <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                  <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i></div>
                   <div class="drop-text"><b>Click to upload</b> or drag and drop</div>
                   <div class="drop-sub">PDF, DOCX, XLSX, PPTX, PNG, JPG (up to {{ formatBytes(MaxBytes) }})</div>
                   @if (fileError) {
@@ -401,6 +402,14 @@ export interface CollabUploadSubmitPayload {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    @media (max-width: 640px) {
+      .form-row {
+        flex-direction: column;
+      }
+      .form-group.half {
+        width: 100%;
+      }
     }
   `],
 })

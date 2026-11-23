@@ -42,7 +42,7 @@ export interface LibrarySmartView {
   template: `
     <div class="lib">
       <!-- Left sidebar: Collections and Smart Views -->
-      <aside class="folders">
+      <nav class="folders" aria-label="Library collections">
         <div
           class="fold"
           [mjClickable]="'All material'"
@@ -98,7 +98,7 @@ export interface LibrarySmartView {
             </div>
           }
         </div>
-      </aside>
+      </nav>
 
       <!-- Center section: Files table and tools -->
       <section class="files">
@@ -403,7 +403,8 @@ export interface LibrarySmartView {
     }
 
     .table-card {
-      overflow: hidden;
+      overflow-x: auto;
+      overflow-y: hidden;
       border-radius: 12px;
       border: 1px solid var(--mj-border-default);
       background: var(--mj-bg-surface);
@@ -496,6 +497,40 @@ export interface LibrarySmartView {
     .fs12 { font-size: 12px; }
     .fs13 { font-size: 13px; }
     .muted { color: var(--mj-text-muted); }
+
+    @media (max-width: 1024px) {
+      .lib {
+        grid-template-columns: 190px minmax(0, 1fr);
+      }
+      mjc-item-preview {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .lib {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .folders {
+        border-right: 0;
+        border-bottom: 1px solid var(--mj-border-default);
+        padding: 12px 14px;
+      }
+      .files {
+        padding: 12px 14px;
+      }
+      .lib-tools {
+        flex-wrap: wrap;
+      }
+      .search-input {
+        width: 100%;
+        flex: 1 1 100%;
+      }
+      .seg {
+        max-width: 100%;
+        overflow-x: auto;
+      }
+    }
   `],
 })
 export class CollabSpaceLibraryComponent {

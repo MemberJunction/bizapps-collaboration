@@ -80,6 +80,13 @@ import { TabItem } from './types';
       color: var(--mj-text-primary);
       border-bottom-color: var(--mj-brand-primary);
     }
+    @media (max-width: 768px) {
+      .tabs {
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        margin-top: 10px;
+      }
+    }
   `]
 })
 export class CollabSpaceTabsComponent {

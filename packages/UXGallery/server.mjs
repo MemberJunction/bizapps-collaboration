@@ -25,6 +25,12 @@ export function startGalleryServer(port = 4250) {
             const pathname = reqUrl.pathname;
             const theme = reqUrl.searchParams.get('theme') === 'dark' ? 'dark' : 'light';
 
+            if (pathname === '/health') {
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ status: 'ok' }));
+                return;
+            }
+
             if (pathname === '/favicon.ico') {
                 res.writeHead(204);
                 res.end();
@@ -59,69 +65,77 @@ export function startGalleryServer(port = 4250) {
 <html lang="en" data-theme="${theme}">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MemberJunction Collaboration — UX Gallery</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="/gallery.css">
   <style>
-    body { margin: 0; padding: 40px; font-family: Inter, sans-serif; background: var(--mj-bg-page, #f8fafc); color: var(--mj-text-primary, #0f172a); }
-    .card { background: var(--mj-bg-surface, #fff); border: 1px solid var(--mj-border-default, #e2e8f0); border-radius: 12px; padding: 24px; max-width: 800px; margin: 0 auto; box-shadow: var(--mj-shadow-sm, 0 1px 3px rgba(0,0,0,0.05)); }
+    body { margin: 0; padding: 40px; font-family: var(--mj-font-family); background: var(--mj-bg-page); color: var(--mj-text-primary); }
+    .card { display: block; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 12px; padding: 24px; max-width: 800px; width: 100%; margin: 0 auto; box-shadow: var(--mj-shadow-sm); }
     h1 { font-size: 24px; margin-top: 0; margin-bottom: 8px; }
-    p { color: var(--mj-text-secondary, #475569); line-height: 1.5; margin-bottom: 24px; }
+    h2 { font-weight: 700; font-size: 15px; margin: 0; }
+    p { color: var(--mj-text-secondary); line-height: 1.5; margin-bottom: 24px; }
     .grid { display: flex; flex-direction: column; gap: 12px; }
-    .row { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border: 1px solid var(--mj-border-default, #e2e8f0); border-radius: 8px; background: var(--mj-bg-surface, #fff); text-decoration: none; color: inherit; transition: all 0.15s ease; }
-    .row:hover { border-color: var(--mj-brand-primary, #0076b6); background: var(--mj-bg-surface-hover, #f1f5f9); }
-    .links { display: flex; gap: 12px; }
-    .btn-link { font-size: 13.5px; font-weight: 600; color: var(--mj-brand-primary, #0076b6); text-decoration: none; padding: 4px 8px; border-radius: 6px; }
-    .btn-link:hover { background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 10%, transparent); text-decoration: none; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border: 1px solid var(--mj-border-default); border-radius: 8px; background: var(--mj-bg-surface); text-decoration: none; color: inherit; transition: all 0.15s ease; }
+    .row:hover { border-color: var(--mj-brand-primary); background: var(--mj-bg-surface-hover); }
+    .row-desc { font-size: 13px; color: var(--mj-text-secondary); margin-top: 4px; }
+    .links { display: flex; gap: 12px; flex-shrink: 0; }
+    .btn-link { font-size: 13.5px; font-weight: 600; color: var(--mj-brand-primary); text-decoration: none; padding: 4px 8px; border-radius: 6px; }
+    .btn-link:hover { background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); text-decoration: none; }
+    @media (max-width: 640px) {
+      body { padding: 16px; }
+      .card { padding: 16px; }
+      .row { flex-direction: column; align-items: flex-start; }
+    }
   </style>
 </head>
 <body>
-  <div class="card">
+  <main class="card">
     <h1>MemberJunction Collaboration — UX Gallery (Slice A)</h1>
-    <p>Live smoke test harness for Angular L1/L2 components rendered at full 1440×900 resolution with MemberJunction design tokens.</p>
+    <p>Live smoke test harness for Angular L1/L2 components rendered across desktop, tablet, and mobile viewports with MemberJunction design tokens.</p>
     <div class="grid">
       <div class="row">
         <div>
-          <div style="font-weight: 700; font-size: 15px;">Frame 02 — Space Overview (Discovery)</div>
-          <div style="font-size: 13px; color: var(--mj-text-secondary, #64748b); margin-top: 4px;">Attentional needs-you strip, shared deliverables, team working set, ask box, and room preview</div>
+          <h2>Frame 02 — Space Overview (Discovery)</h2>
+          <div class="row-desc">Attentional needs-you strip, shared deliverables, team working set, ask box, and room preview</div>
         </div>
         <div class="links">
-          <a class="btn-link" href="/frame/02" target="_blank"><i class="fa-solid fa-sun"></i> Light</a>
-          <a class="btn-link" href="/frame/02?theme=dark" target="_blank"><i class="fa-solid fa-moon"></i> Dark</a>
+          <a class="btn-link" href="/frame/02" target="_blank"><i class="fa-solid fa-sun" aria-hidden="true"></i> Light</a>
+          <a class="btn-link" href="/frame/02?theme=dark" target="_blank"><i class="fa-solid fa-moon" aria-hidden="true"></i> Dark</a>
         </div>
       </div>
       <div class="row">
         <div>
-          <div style="font-weight: 700; font-size: 15px;">Frame 03 — Space Library</div>
-          <div style="font-size: 13px; color: var(--mj-text-secondary, #64748b); margin-top: 4px;">Collection sidebar, smart views, file table with citation metrics, and document preview drawer</div>
+          <h2>Frame 03 — Space Library</h2>
+          <div class="row-desc">Collection sidebar, smart views, file table with citation metrics, and document preview drawer</div>
         </div>
         <div class="links">
-          <a class="btn-link" href="/frame/03" target="_blank"><i class="fa-solid fa-sun"></i> Light</a>
-          <a class="btn-link" href="/frame/03?theme=dark" target="_blank"><i class="fa-solid fa-moon"></i> Dark</a>
+          <a class="btn-link" href="/frame/03" target="_blank"><i class="fa-solid fa-sun" aria-hidden="true"></i> Light</a>
+          <a class="btn-link" href="/frame/03?theme=dark" target="_blank"><i class="fa-solid fa-moon" aria-hidden="true"></i> Dark</a>
         </div>
       </div>
       <div class="row">
         <div>
-          <div style="font-weight: 700; font-size: 15px;">Frame 04 — Share Check Dialog</div>
-          <div style="font-size: 13px; color: var(--mj-text-secondary, #64748b); margin-top: 4px;">Promotion modal overlay, audience grid, PII check findings, note, effects, and actions</div>
+          <h2>Frame 04 — Share Check Dialog</h2>
+          <div class="row-desc">Promotion modal overlay, audience grid, PII check findings, note, effects, and actions</div>
         </div>
         <div class="links">
-          <a class="btn-link" href="/frame/04" target="_blank"><i class="fa-solid fa-sun"></i> Light</a>
-          <a class="btn-link" href="/frame/04?theme=dark" target="_blank"><i class="fa-solid fa-moon"></i> Dark</a>
+          <a class="btn-link" href="/frame/04" target="_blank"><i class="fa-solid fa-sun" aria-hidden="true"></i> Light</a>
+          <a class="btn-link" href="/frame/04?theme=dark" target="_blank"><i class="fa-solid fa-moon" aria-hidden="true"></i> Dark</a>
         </div>
       </div>
       <div class="row">
         <div>
-          <div style="font-weight: 700; font-size: 15px;">Frame 09 — Upload Ingest Disclosure (XS-8)</div>
-          <div style="font-size: 13px; color: var(--mj-text-secondary, #64748b); margin-top: 4px;">Upload dialog and library inline ingest, indexing, visibility scope, and retention disclosure</div>
+          <h2>Frame 09 — Upload Ingest Disclosure (XS-8)</h2>
+          <div class="row-desc">Upload dialog and library inline ingest, indexing, visibility scope, and retention disclosure</div>
         </div>
         <div class="links">
-          <a class="btn-link" href="/frame/09" target="_blank"><i class="fa-solid fa-sun"></i> Light</a>
-          <a class="btn-link" href="/frame/09?theme=dark" target="_blank"><i class="fa-solid fa-moon"></i> Dark</a>
+          <a class="btn-link" href="/frame/09" target="_blank"><i class="fa-solid fa-sun" aria-hidden="true"></i> Light</a>
+          <a class="btn-link" href="/frame/09?theme=dark" target="_blank"><i class="fa-solid fa-moon" aria-hidden="true"></i> Dark</a>
         </div>
       </div>
     </div>
-  </div>
+  </main>
 </body>
 </html>`;
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -137,6 +151,7 @@ export function startGalleryServer(port = 4250) {
 <html lang="en" data-theme="${theme}">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <base href="/">
   <title>Collaboration UX Gallery — Frame ${frameId}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">

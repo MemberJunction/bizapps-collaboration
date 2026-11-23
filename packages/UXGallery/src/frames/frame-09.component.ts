@@ -27,12 +27,12 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
   template: `
     <div class="shell">
       <header class="topbar">
-        <span class="mark"></span>
-        <span class="app-pill"><i class="fa-solid fa-people-roof"></i>{{ f.topbar.appName }}<i class="fa-solid fa-chevron-down caret"></i></span>
+        <span class="mark" aria-hidden="true"></span>
+        <span class="app-pill"><i class="fa-solid fa-people-roof" aria-hidden="true"></i>{{ f.topbar.appName }}<i class="fa-solid fa-chevron-down caret" aria-hidden="true"></i></span>
         <span class="spacer"></span>
-        <span class="search"><i class="fa-solid fa-magnifying-glass"></i>Search everything…<span class="kbd">⌘K</span></span>
-        <span class="icon-btn"><i class="fa-regular fa-bell"></i><span class="dot"></span></span>
-        <span class="av c1 md" title="Ada Lovell">{{ f.topbar.userInitials }}</span>
+        <span class="search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search everything…<span class="kbd">⌘K</span></span>
+        <button type="button" class="icon-btn" aria-label="Notifications"><i class="fa-regular fa-bell" aria-hidden="true"></i><span class="dot" aria-hidden="true"></span></button>
+        <span class="av c1 md" title="Ada Lovell" aria-label="Ada Lovell">{{ f.topbar.userInitials }}</span>
       </header>
 
       <div class="body">
@@ -113,34 +113,41 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
   styles: [`
     :host {
       display: block;
-      width: 1440px;
-      height: 900px;
-      overflow: hidden;
+      width: 100%;
+      min-height: 100vh;
       position: relative;
     }
     .shell {
       display: grid;
       grid-template-rows: 56px 1fr;
-      width: 1440px;
-      height: 900px;
-      overflow: hidden;
+      width: 100%;
+      min-height: 100vh;
       position: relative;
     }
     .body {
       display: grid;
-      grid-template-columns: 252px 1fr;
+      grid-template-columns: 252px minmax(0, 1fr);
       min-height: 0;
-      overflow: hidden;
     }
     .main {
       min-width: 0;
       min-height: 0;
-      overflow: hidden;
       display: flex;
       flex-direction: column;
       background: var(--mj-bg-page);
     }
-    .row { display: flex; align-items: center; }
+    @media (min-width: 1025px) {
+      :host,
+      .shell {
+        height: 100vh;
+        overflow: hidden;
+      }
+      .body,
+      .main {
+        overflow: hidden;
+      }
+    }
+    .row { display: flex; align-items: center; flex-wrap: wrap; }
     .gap8 { gap: 8px; }
     .topbar {
       display: flex;
@@ -155,6 +162,7 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
     .topbar .mark {
       width: 34px;
       height: 19px;
+      flex-shrink: 0;
       background: url('/assets/mj-mark.svg') center/contain no-repeat;
     }
     :host-context([data-theme="dark"]) .topbar .mark,
@@ -172,6 +180,7 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
       color: var(--mj-brand-primary);
       font-weight: 600;
       font-size: 13.5px;
+      white-space: nowrap;
     }
     .app-pill .caret {
       font-size: 10px;
@@ -180,12 +189,14 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
     }
     .topbar .spacer {
       flex: 1;
+      min-width: 0;
     }
     .search {
       display: flex;
       align-items: center;
       gap: 8px;
       width: 300px;
+      max-width: 100%;
       height: 34px;
       padding: 0 10px;
       border: 1px solid var(--mj-border-default);
@@ -208,11 +219,15 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
       position: relative;
       width: 34px;
       height: 34px;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
       border-radius: var(--mj-radius-md);
       display: inline-grid;
       place-items: center;
       color: var(--mj-text-secondary);
       font-size: 15px;
+      flex-shrink: 0;
     }
     .icon-btn .dot {
       position: absolute;
@@ -235,6 +250,27 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
       color: var(--mj-brand-on-primary);
       background: var(--mj-brand-primary);
       user-select: none;
+      flex-shrink: 0;
+    }
+    @media (max-width: 1024px) {
+      .body {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      mjc-space-rail {
+        display: none;
+      }
+      .search {
+        width: 200px;
+      }
+    }
+    @media (max-width: 640px) {
+      .topbar {
+        gap: 8px;
+        padding: 0 12px;
+      }
+      .search {
+        display: none;
+      }
     }
   `],
 })

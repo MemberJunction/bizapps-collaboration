@@ -13,7 +13,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CollabAvatarComponent, CollabBandChipComponent, CollabFileIconComponent, MJButtonDirective, SharedGenericModule],
   template: `
-    <aside class="drawer">
+    <section class="drawer" aria-label="Document preview">
       <div class="row gap10 header-row">
         <mjc-file-icon [Kind]="Kind" Size="md" />
         <div class="grow">
@@ -123,7 +123,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           }
         </div>
       }
-    </aside>
+    </section>
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
@@ -145,6 +145,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       overflow: hidden;
       width: 318px;
       box-sizing: border-box;
+    }
+
+    @media (max-width: 1024px) {
+      .drawer {
+        width: 100%;
+        border-left: 0;
+        border-top: 1px solid var(--mj-border-default);
+      }
     }
 
     .row {
