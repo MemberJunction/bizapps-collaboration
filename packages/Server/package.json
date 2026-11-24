@@ -1,7 +1,7 @@
 {
   "name": "@mj-biz-apps/collaboration-server",
   "type": "module",
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "description": "BizApps Collaboration server bootstrap.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   },
   "license": "BUSL-1.1",
   "dependencies": {
-    "@mj-biz-apps/collaboration-actions": "0.1.0",
-    "@mj-biz-apps/collaboration-core": "0.1.0",
-    "@mj-biz-apps/collaboration-core-entities-server": "0.1.0",
-    "@mj-biz-apps/collaboration-entities": "0.1.0",
+    "@mj-biz-apps/collaboration-actions": "6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-core": "6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-core-entities-server": "6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-entities": "6.3.0-edge.1",
     "class-validator": "^0.14.3"
   },
   "peerDependencies": {
@@ -32,7 +32,7 @@
     "@memberjunction/global": "^6.3.0-edge.1",
     "@memberjunction/server": "^6.3.0-edge.1",
     "@memberjunction/storage": "^6.3.0-edge.1",
-    "@mj-biz-apps/common-entities": "^5.65.0"
+    "@mj-biz-apps/common-entities": ">=5.65.0 <7.0.0"
   },
   "devDependencies": {
     "@memberjunction/communication-engine": "6.3.0-edge.1",

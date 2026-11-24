@@ -1,7 +1,7 @@
 {
   "name": "@mj-biz-apps/collaboration-integration-tests",
   "private": true,
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "type": "module",
   "description": "Loads the Collaboration sample world through the entity gates.",
   "license": "BUSL-1.1",

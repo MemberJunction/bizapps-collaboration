@@ -2,7 +2,7 @@
   "name": "@mj-biz-apps/collaboration-example-space-types-entities",
   "private": true,
   "type": "module",
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "description": "Private reference implementation: the example space type's subtype entity (ExampleBoard), shared by the server and the browser.",
   "license": "BUSL-1.1",
   "main": "dist/index.js",

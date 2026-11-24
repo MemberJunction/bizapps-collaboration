@@ -1,7 +1,7 @@
 {
   "name": "@mj-biz-apps/collaboration-entities",
   "type": "module",
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "description": "Generated entity classes and the shared Collaboration rules.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,7 +21,7 @@
     "@memberjunction/global": "^6.3.0-edge.1"
   },
   "dependencies": {
-    "@mj-biz-apps/collaboration-core": "0.1.0",
+    "@mj-biz-apps/collaboration-core": "6.3.0-edge.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

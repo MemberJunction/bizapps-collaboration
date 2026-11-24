@@ -86,16 +86,16 @@ importers:
   packages/Angular:
     dependencies:
       '@mj-biz-apps/collaboration-core':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Core
       '@mj-biz-apps/collaboration-engine-base':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../EngineBase
       '@mj-biz-apps/collaboration-entities':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Entities
       '@mj-biz-apps/collaboration-ng-widgets':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../AngularWidgets
     devDependencies:
       '@angular/animations':
@@ -198,10 +198,10 @@ importers:
   packages/AngularWidgets:
     dependencies:
       '@mj-biz-apps/collaboration-core':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Core
       '@mj-biz-apps/collaboration-entities':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Entities
     devDependencies:
       '@angular/animations':
@@ -280,13 +280,13 @@ importers:
   packages/CoreEntitiesServer:
     dependencies:
       '@mj-biz-apps/collaboration-core':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Core
       '@mj-biz-apps/collaboration-engine-base':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../EngineBase
       '@mj-biz-apps/collaboration-entities':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Entities
     devDependencies:
       '@memberjunction/actions':
@@ -347,10 +347,10 @@ importers:
   packages/EngineBase:
     dependencies:
       '@mj-biz-apps/collaboration-core':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Core
       '@mj-biz-apps/collaboration-entities':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Entities
     devDependencies:
       '@memberjunction/core':
@@ -372,7 +372,7 @@ importers:
   packages/Entities:
     dependencies:
       '@mj-biz-apps/collaboration-core':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Core
       zod:
         specifier: ^3.25.76
@@ -391,7 +391,7 @@ importers:
   packages/ExampleSpaceTypes/Angular:
     dependencies:
       '@mj-biz-apps/collaboration-example-space-types-entities':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Entities
     devDependencies:
       '@angular/common':
@@ -434,13 +434,13 @@ importers:
         specifier: 6.3.0-edge.1
         version: 6.3.0-edge.1(f5517fe63f1c615d5901e88463cf954b)
       '@mj-biz-apps/collaboration-core':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../../Core
       '@mj-biz-apps/collaboration-entities':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../../Entities
       '@mj-biz-apps/collaboration-ng-widgets':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../../AngularWidgets
       typescript:
         specifier: 5.9.3
@@ -474,7 +474,7 @@ importers:
         specifier: ^6.3.0-edge.1
         version: 6.3.0-edge.1
       '@mj-biz-apps/collaboration-example-space-types-entities':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Entities
       class-validator:
         specifier: ^0.14.3
@@ -490,13 +490,13 @@ importers:
         specifier: 6.3.0-edge.1
         version: 6.3.0-edge.1(@aws-sdk/credential-provider-node@3.972.92)(@aws-sdk/credential-providers@3.1138.0)(@azure/identity@4.13.3)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.5)(axios@1.20.0)(encoding@0.1.13)(playwright@1.58.1)(socks@2.8.10)(typescript@5.9.3)(vitest@4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(jsdom@26.1.0)(vite@7.3.6(@types/node@24.10.11)(lightningcss@1.33.0)))
       '@mj-biz-apps/collaboration-core':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../../Core
       '@mj-biz-apps/collaboration-core-entities-server':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../../CoreEntitiesServer
       '@mj-biz-apps/collaboration-entities':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../../Entities
       '@types/node':
         specifier: 24.10.11
@@ -599,16 +599,16 @@ importers:
   packages/Server:
     dependencies:
       '@mj-biz-apps/collaboration-actions':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Actions
       '@mj-biz-apps/collaboration-core':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Core
       '@mj-biz-apps/collaboration-core-entities-server':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../CoreEntitiesServer
       '@mj-biz-apps/collaboration-entities':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Entities
       class-validator:
         specifier: ^0.14.3
@@ -669,13 +669,13 @@ importers:
         specifier: ^6.3.0-edge.1
         version: 6.3.0-edge.1(f5517fe63f1c615d5901e88463cf954b)
       '@mj-biz-apps/collaboration-core':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../Core
       '@mj-biz-apps/collaboration-example-space-types-ng':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../ExampleSpaceTypes/Angular
       '@mj-biz-apps/collaboration-ng-widgets':
-        specifier: 0.1.0
+        specifier: 6.3.0-edge.1
         version: link:../AngularWidgets
     devDependencies:
       '@angular/compiler':
@@ -8889,7 +8889,7 @@ packages:
     engines: {node: '>=20'}
 
   xlsx@https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz:
-    resolution: {integrity: sha512-oLDq3jw7AcLqKWH2AhCpVTZl8mf6X2YReP+Neh0SJUzV/BdZYjth94tG5toiMB1PPrYtxOCfaoUCkvtuH+3AJA==, tarball: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz}
+    resolution: {tarball: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz}
     version: 0.20.3
     engines: {node: '>=0.8'}
     hasBin: true
