@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MJTabListDirective, MJTabListRequest } from '@memberjunction/ng-ui-components';
+import { MJTabListDirective } from '@memberjunction/ng-ui-components';
 import { TabItem } from './types';
 
 @Component({
@@ -11,8 +11,9 @@ import { TabItem } from './types';
     <div
       class="tabs"
       mjTabList
+      [attr.aria-label]="AriaLabel"
       (TabActivateRequested)="onTabActivateRequested($event)">
-      @for (tab of Tabs; track tab.id; let idx = $index) {
+      @for (tab of Tabs; track tab.id) {
         <button
           type="button"
           role="tab"
@@ -21,9 +22,9 @@ import { TabItem } from './types';
           [attr.aria-selected]="tab.id === ActiveTab"
           (click)="selectTab(tab.id)">
           @if (tab.iconClass) {
-            <i [class]="tab.iconClass"></i>
+            <i [class]="tab.iconClass" aria-hidden="true"></i>
           }
-          {{ tab.label }}
+          <span>{{ tab.label }}</span>
           @if (tab.count !== undefined && tab.count !== null) {
             <span class="c">{{ tab.count }}</span>
           }
@@ -41,50 +42,72 @@ import { TabItem } from './types';
     }
     .tabs {
       display: flex;
-      gap: 22px;
-      margin-top: 14px;
-      border-bottom: none;
+      align-items: center;
+      overflow-x: auto;
+      gap: 4px;
+      scrollbar-width: none;
+    }
+    .tabs::-webkit-scrollbar {
+      display: none;
     }
     .tab {
+      flex: none;
+      position: relative;
       display: inline-flex;
       align-items: center;
       gap: 7px;
-      padding: 9px 1px 11px;
-      font-weight: 550;
-      font-size: 13.5px;
+      padding: 8px 12px 10px;
+      font-weight: 600;
+      font-size: 13px;
       line-height: inherit;
-      color: var(--mj-text-muted);
-      border: none;
-      border-bottom: 2px solid transparent;
-      background: none;
+      color: var(--mj-text-secondary);
+      border: 0;
+      background: transparent;
       cursor: pointer;
       user-select: none;
       box-sizing: border-box;
       font-family: inherit;
+      white-space: nowrap;
+      transition: color 0.15s ease;
     }
     .tab:hover {
       color: var(--mj-text-primary);
     }
     .tab i {
-      font-size: 13px;
+      font-size: 12.5px;
     }
     .tab .c {
-      font-size: 11.5px;
+      font-size: 11px;
       font-weight: 600;
-      color: var(--mj-text-muted);
+      color: var(--mj-text-secondary);
       background: var(--mj-bg-surface-sunken);
-      border-radius: 99px;
-      padding: 0 7px;
+      border-radius: var(--mj-radius-full);
+      padding: 0 6px;
+      line-height: 1.5;
     }
+    .tab[aria-selected="true"],
     .tab.active {
-      color: var(--mj-text-primary);
-      border-bottom-color: var(--mj-brand-primary);
+      color: var(--mj-brand-primary);
+    }
+    .tab[aria-selected="true"]::after,
+    .tab.active::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      border-block-end: 3px solid var(--mj-brand-primary);
+      border-radius: 3px 3px 0 0;
+    }
+    .tab[aria-selected="true"] .c,
+    .tab.active .c {
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+      color: var(--mj-brand-primary);
     }
     @media (max-width: 768px) {
       .tabs {
-        flex-wrap: wrap;
-        gap: 6px 14px;
-        margin-top: 10px;
+        gap: 2px;
+      }
+      .tab {
+        padding: 8px 10px 10px;
       }
     }
   `]
@@ -92,6 +115,7 @@ import { TabItem } from './types';
 export class CollabSpaceTabsComponent {
   @Input() Tabs: TabItem[] = [];
   @Input() ActiveTab = '';
+  @Input() AriaLabel = 'Space sections';
   @Output() TabSelectRequested = new EventEmitter<string>();
 
   selectTab(tabId: string): void {

@@ -1,5 +1,4 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { CommonModule } from '@angular/common';
 import { CollabTypeTileComponent } from './type-tile.component';
 import type { SpaceHeaderChipDescriptor } from './base-space-type-ui-driver';
@@ -8,76 +7,97 @@ import { BreadcrumbItem } from './types';
 @Component({
   selector: 'mjc-space-header',
   standalone: true,
-  imports: [CommonModule, CollabTypeTileComponent, MJClickableDirective],
+  imports: [CommonModule, CollabTypeTileComponent],
   template: `
-    <section class="space-head" [style.background-image]="BackgroundImageUrl ? 'linear-gradient(to bottom, color-mix(in srgb, var(--mj-bg-surface-card) 88%, transparent), var(--mj-bg-surface-card)), url(' + BackgroundImageUrl + ')' : null">
-      @if (Breadcrumbs && Breadcrumbs.length > 0) {
-        <div class="crumbs">
-          @for (c of Breadcrumbs; track c.label; let last = $last) {
-            @if (!last) {
-              <span class="crumb-link" [mjClickable]="c.label" (click)="onCrumbClick(c)">{{ c.label }}</span>
-              <i class="fa-solid fa-chevron-right"></i>
-            } @else {
-              <b>{{ c.label }}</b>
+    <section
+      class="space-head"
+      [style.background-image]="BackgroundImageUrl ? 'linear-gradient(to bottom, color-mix(in srgb, var(--mj-bg-surface-card) 88%, transparent), var(--mj-bg-surface-card)), url(' + BackgroundImageUrl + ')' : null">
+
+      <!-- Row 1: Identity (Breadcrumbs + Icon + Title + Chips) + Presence & Actions -->
+      <div class="masthead-top">
+        <div class="masthead-identity">
+          <mjc-type-tile
+            [IconClass]="TypeIconClass || 'fa-solid fa-compass'"
+            [Color]="TypeColor || ''"
+            [IsClosed]="Status === 'Closed'"
+            Size="lg">
+          </mjc-type-tile>
+          <div class="grow">
+            @if (Breadcrumbs && Breadcrumbs.length > 0) {
+              <nav class="crumbs" aria-label="Breadcrumbs">
+                <ol>
+                  @for (c of Breadcrumbs; track c.label; let last = $last) {
+                    <li>
+                      @if (!last) {
+                        <button type="button" class="crumb-link" (click)="onCrumbClick(c)">{{ c.label }}</button>
+                      } @else {
+                        <span class="crumb-current" aria-current="page">{{ c.label }}</span>
+                      }
+                    </li>
+                  }
+                </ol>
+              </nav>
             }
-          }
-        </div>
-      }
-      <div class="top" [style.margin-top]="Breadcrumbs && Breadcrumbs.length > 0 ? '10px' : '0'">
-        <mjc-type-tile
-          [IconClass]="TypeIconClass || 'fa-solid fa-compass'"
-          [Color]="TypeColor || ''"
-          [IsClosed]="Status === 'Closed'"
-          Size="xl">
-        </mjc-type-tile>
-        <div class="grow">
-          <div class="title-row">
-            <h1 class="h1">{{ Title }}
-              @if (ShowStar) {
-                <button type="button" class="star" [class.on]="IsStarred" [disabled]="StarBusy" [attr.aria-pressed]="IsStarred" [attr.aria-label]="IsStarred ? 'Unstar this space' : 'Star this space'" [title]="IsStarred ? 'Starred: in your favorites' : 'Star this space'" (click)="StarToggleRequested.emit()">
-                  <i [class]="IsStarred ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
-                </button>
-              }
-            </h1>
-            @if (TypeName) {
-              <span class="chip plain">{{ TypeName }}</span>
-            }
-            @if (Status === 'Active') {
-              <span class="chip ok"><i class="fa-solid fa-circle" style="font-size:6px"></i>Active</span>
-            } @else if (Status === 'Paused') {
-              <span class="chip warn"><i class="fa-solid fa-pause" style="font-size:8px"></i>Paused</span>
-            } @else if (Status === 'Closed') {
-              <span class="chip plain">Closed</span>
-            } @else if (Status) {
-              <span class="chip plain">{{ Status }}</span>
-            }
-            @for (chip of Chips; track chip.key) {
-              <span [class]="'chip ' + (chip.variant || 'plain')" [style.border-color]="chip.color || null">
-                @if (chip.icon) {
-                  <i [class]="chip.icon" aria-hidden="true"></i>
+            <div class="title-row">
+              <h1 class="h1">{{ Title }}
+                @if (ShowStar) {
+                  <button
+                    type="button"
+                    class="star"
+                    [class.on]="IsStarred"
+                    [disabled]="StarBusy"
+                    [attr.aria-pressed]="IsStarred"
+                    [attr.aria-label]="IsStarred ? 'Unstar this space' : 'Star this space'"
+                    [title]="IsStarred ? 'Starred: in your favorites' : 'Star this space'"
+                    (click)="StarToggleRequested.emit()">
+                    <i [class]="IsStarred ? 'fa-solid fa-star' : 'fa-regular fa-star'" aria-hidden="true"></i>
+                  </button>
                 }
-                <span>{{ chip.label }}</span>
-              </span>
-            }
-            <ng-content select="[chips]"></ng-content>
-          </div>
-          @if (Subtitle) {
-            <div class="sub">
-              @for (part of subtitleParts; track $index; let last = $last) {
-                <span>{{ part }}</span>
-                @if (!last) {
-                  <span class="dotsep"></span>
-                }
+              </h1>
+              @if (TypeName) {
+                <span class="chip plain">{{ TypeName }}</span>
               }
+              @if (Status === 'Active') {
+                <span class="chip ok"><i class="fa-solid fa-circle status-dot" aria-hidden="true"></i>Active</span>
+              } @else if (Status === 'Paused') {
+                <span class="chip warn"><i class="fa-solid fa-pause status-ic" aria-hidden="true"></i>Paused</span>
+              } @else if (Status === 'Closed') {
+                <span class="chip plain">Closed</span>
+              } @else if (Status) {
+                <span class="chip plain">{{ Status }}</span>
+              }
+              @for (chip of Chips; track chip.key) {
+                <span [class]="'chip ' + (chip.variant || 'plain')" [style.border-color]="chip.color || null">
+                  @if (chip.icon) {
+                    <i [class]="chip.icon" aria-hidden="true"></i>
+                  }
+                  <span>{{ chip.label }}</span>
+                </span>
+              }
+              <ng-content select="[chips]"></ng-content>
             </div>
-          }
+            @if (Subtitle) {
+              <div class="sub">
+                @for (part of subtitleParts; track $index; let last = $last) {
+                  <span>{{ part }}</span>
+                  @if (!last) {
+                    <span class="dotsep" aria-hidden="true"></span>
+                  }
+                }
+              </div>
+            }
+          </div>
         </div>
         <div class="actions">
           <ng-content select="[actions]"></ng-content>
         </div>
       </div>
-      <ng-content select="mjc-space-tabs"></ng-content>
-      <ng-content select="[tabs]"></ng-content>
+
+      <!-- Row 2: Single Flush Horizontal Tablist -->
+      <div class="masthead-tabs">
+        <ng-content select="mjc-space-tabs"></ng-content>
+        <ng-content select="[tabs]"></ng-content>
+      </div>
     </section>
   `,
   styles: [`
@@ -95,55 +115,107 @@ import { BreadcrumbItem } from './types';
     .space-head {
       background: var(--mj-bg-surface);
       border-bottom: 1px solid var(--mj-border-default);
-      padding: 16px 28px 0;
+      padding: 12px 24px 0;
       box-sizing: border-box;
     }
-    .crumbs {
+    .masthead-top {
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-size: 12.5px;
-      color: var(--mj-text-muted);
-      font-weight: 500;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding-bottom: 8px;
     }
-    .crumbs i {
-      font-size: 9px;
-      color: var(--mj-text-disabled);
-    }
-    .crumbs b {
-      color: var(--mj-text-secondary);
-      font-weight: 600;
-    }
-    .top {
+    .masthead-identity {
       display: flex;
-      align-items: flex-start;
-      gap: 14px;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      flex: 1 1 320px;
     }
     .grow {
       flex: 1;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
+
+    /* Accessible Breadcrumbs */
+    .crumbs ol {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--mj-text-muted);
+      font-weight: 500;
+    }
+    .crumbs > ol > li {
+      display: inline-flex;
+      align-items: center;
+    }
+    .crumbs > ol > li + li::before {
+      content: "›" / "";
+      margin-inline-end: 6px;
+      color: var(--mj-text-muted);
+    }
+    .crumb-link {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      color: var(--mj-text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+    .crumb-link:hover {
+      color: var(--mj-brand-primary);
+      text-decoration: underline;
+    }
+    .crumb-current {
+      color: var(--mj-text-secondary);
+      font-weight: 600;
+    }
+
     .title-row {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-top: 2px;
+      gap: 8px;
       flex-wrap: wrap;
     }
     .h1 {
-      font-size: 24px;
+      font-size: 20px;
       font-weight: 700;
-      letter-spacing: -0.015em;
+      letter-spacing: -0.02em;
       margin: 0;
       color: var(--mj-text-primary);
+      line-height: 1.25;
     }
-    .star { border: 0; background: transparent; cursor: pointer; margin-left: 8px; font-size: 18px; color: var(--mj-text-muted, #6b7280); vertical-align: middle; padding: 0 4px; }
-    .star.on { color: var(--mj-status-warning, #f59e0b); }
-    .star:disabled { opacity: .6; cursor: default; }
+    .star {
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      margin-left: 6px;
+      font-size: 16px;
+      color: var(--mj-text-muted);
+      vertical-align: middle;
+      padding: 0 3px;
+    }
+    .star.on {
+      color: var(--mj-status-warning);
+    }
+    .star:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
     .sub {
       color: var(--mj-text-secondary);
-      font-size: 13px;
-      margin-top: 3px;
+      font-size: 12.5px;
       display: flex;
       align-items: center;
       gap: 0;
@@ -154,24 +226,30 @@ import { BreadcrumbItem } from './types';
       display: flex;
       gap: 8px;
       align-items: center;
-      padding-top: 6px;
+      flex-wrap: wrap;
     }
     .dotsep {
       width: 3px;
       height: 3px;
-      border-radius: 9px;
+      border-radius: var(--mj-radius-full);
       background: var(--mj-text-disabled);
       display: inline-block;
-      margin: 0 8px;
+      margin: 0 7px;
       vertical-align: middle;
+    }
+    .status-dot {
+      font-size: 6px;
+    }
+    .status-ic {
+      font-size: 8px;
     }
     .chip {
       display: inline-flex;
       align-items: center;
       gap: 5px;
       height: 22px;
-      padding: 0 8px;
-      border-radius: 99px;
+      padding: 0 9px;
+      border-radius: var(--mj-radius-full);
       font-size: 11.5px;
       font-weight: 600;
       white-space: nowrap;
@@ -181,23 +259,14 @@ import { BreadcrumbItem } from './types';
       box-sizing: border-box;
       user-select: none;
     }
-    .crumb-link {
-      cursor: pointer;
-      color: var(--mj-text-secondary, #475569);
-      transition: color 0.15s;
-    }
-    .crumb-link:hover {
-      color: var(--mj-brand-primary, #0076b6);
-      text-decoration: underline;
-    }
     .chip.plain {
-      background: var(--mj-bg-surface-sunken, #f1f5f9);
+      background: var(--mj-bg-surface-sunken);
       border-color: transparent;
     }
     .chip.ok {
-      color: var(--mj-status-success-text, #15803d);
-      background: var(--mj-status-success-bg, #f0fdf4);
-      border-color: color-mix(in srgb, var(--mj-status-success, #22c55e) 35%, transparent);
+      color: var(--mj-status-success-text);
+      background: var(--mj-status-success-bg);
+      border-color: color-mix(in srgb, var(--mj-status-success) 35%, transparent);
     }
     .chip.warn {
       color: var(--mj-status-warning-text);
@@ -209,18 +278,19 @@ import { BreadcrumbItem } from './types';
       background: var(--mj-status-info-bg);
       border-color: var(--mj-status-info-border);
     }
+    .masthead-tabs {
+      display: block;
+    }
     @media (max-width: 768px) {
       .space-head {
-        padding: 12px 16px 0;
+        padding: 10px 16px 0;
       }
-      .top {
-        flex-wrap: wrap;
+      .masthead-top {
         gap: 10px;
       }
       .actions {
         margin-left: 0;
         width: 100%;
-        flex-wrap: wrap;
       }
     }
   `]
@@ -249,9 +319,8 @@ export class CollabSpaceHeaderComponent {
 
   get subtitleParts(): string[] {
     if (!this.Subtitle) return [];
-    // If subtitle contains bullet or dot separator, split on it
     if (this.Subtitle.includes('·')) {
-      return this.Subtitle.split('·').map(s => s.trim());
+      return this.Subtitle.split('·').map((s) => s.trim());
     }
     return [this.Subtitle];
   }

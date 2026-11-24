@@ -1,5 +1,6 @@
 import '@angular/compiler';
 import { afterEach, describe, it, expect, vi } from 'vitest';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { ConversationStreamingService } from '@memberjunction/ng-conversations';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabAvatarStackComponent } from './avatar-stack.component.ts';
@@ -192,21 +193,44 @@ describe('CollabSpaceTabsComponent', () => {
   });
 });
 
-describe('CollabSpaceRailComponent open conversation', () => {
+describe('CollabSpaceChatComponent conversation switcher', () => {
   const ID = 'A1B2C3D4-0000-4000-8000-000000000001';
 
-  it('is the open one when the URL and the row differ only in case', () => {
-    const comp = new CollabSpaceRailComponent();
+  it('matches the active conversation case-insensitively across UUID casing differences', () => {
+    const comp = new CollabSpaceChatComponent();
     comp.ActiveConversationId = ID.toLowerCase();
     expect(comp.IsActiveConversation(ID)).toBe(true);
   });
 
-  it('is not the open one for another conversation, or when none is open', () => {
-    const comp = new CollabSpaceRailComponent();
+  it('returns false for another conversation or when none is active', () => {
+    const comp = new CollabSpaceChatComponent();
     comp.ActiveConversationId = ID;
     expect(comp.IsActiveConversation('B1B2C3D4-0000-4000-8000-000000000002')).toBe(false);
     comp.ActiveConversationId = '';
     expect(comp.IsActiveConversation(ID)).toBe(false);
+  });
+
+  it('emits ConversationSelectRequested and NewConversationRequested', () => {
+    const comp = new CollabSpaceChatComponent();
+    const INTERNAL = 'B1B2C3D4-0000-4000-8000-00000000000B';
+    comp.Conversations = [
+      { id: ID, name: 'General', kind: 'General', band: 'Shared' },
+      { id: INTERNAL, name: 'Internal Sync', kind: 'Private', band: 'Team' },
+    ];
+    comp.ActiveConversationId = ID.toLowerCase();
+
+    let selectedConv = '';
+    let newConvoEmitted = false;
+    comp.ConversationSelectRequested.subscribe((id) => { selectedConv = id; });
+    comp.NewConversationRequested.subscribe(() => { newConvoEmitted = true; });
+
+    comp.onSelectConversation(INTERNAL);
+    comp.onNewConversation();
+
+    expect(selectedConv).toBe(INTERNAL);
+    expect(newConvoEmitted).toBe(true);
+    expect(comp.IsActiveConversation(comp.Conversations[0].id)).toBe(true);
+    expect(comp.IsActiveConversation(comp.Conversations[1].id)).toBe(false);
   });
 });
 
@@ -324,43 +348,71 @@ describe('CollabSpaceRailComponent', () => {
     expect(comp.visibleSpaces.map(s => s.id)).toEqual(['northwind', 'discovery', 'fieldnotes', 'delivery', 'closed', 'committee']);
   });
 
-  it('toggles collapsed rail state and emits NewConversationRequested', () => {
-    const comp = new CollabSpaceRailComponent();
-    expect(comp.isCollapsed).toBe(false);
-    comp.toggleCollapse();
-    expect(comp.isCollapsed).toBe(true);
-    comp.toggleCollapse();
-    expect(comp.isCollapsed).toBe(false);
-
-    let newConvoEmitted = false;
-    comp.NewConversationRequested.subscribe(() => {
-      newConvoEmitted = true;
-    });
-    comp.onNewConversation();
-    expect(newConvoEmitted).toBe(true);
+  it('toggles collapsed rail state and persists { width, collapsed, expandedIds } via UserInfoEngine', () => {
+    const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+    const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    try {
+      const comp = new CollabSpaceRailComponent();
+      comp.Spaces = [
+        { id: 'hub-1', name: 'Hub One', iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: true },
+        { id: 'room-1', name: 'Room One', iconClass: 'fa-solid fa-rocket', level: 1, hasChildren: false, isExpanded: false },
+      ];
+      comp.ngOnInit();
+      expect(comp.isCollapsed).toBe(false);
+      comp.toggleCollapse();
+      expect(comp.isCollapsed).toBe(true);
+      expect(setSpy).toHaveBeenLastCalledWith(
+        'Collaboration.SpaceRailPrefs',
+        JSON.stringify({ width: 260, collapsed: true, expandedIds: ['hub-1'] }),
+      );
+      comp.toggleCollapse();
+      expect(comp.isCollapsed).toBe(false);
+    } finally {
+      setSpy.mockRestore();
+      getSpy.mockRestore();
+    }
   });
 
-  it('binds conversations with their bands, and highlights the open one when the URL differs in case', () => {
-    const comp = new CollabSpaceRailComponent();
-    const GENERAL = 'A1B2C3D4-0000-4000-8000-00000000000A';
-    const INTERNAL = 'B1B2C3D4-0000-4000-8000-00000000000B';
-    comp.Conversations = [
-      { id: GENERAL, name: 'General', kind: 'General', band: 'Shared' },
-      { id: INTERNAL, name: 'Internal Sync', kind: 'Private', band: 'Team' },
-    ];
-    comp.ActiveConversationId = GENERAL.toLowerCase();
+  it('auto-collapses when only 1 space is accessible and no explicit preference was saved, and respects saved preferences', () => {
+    const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    try {
+      const comp = new CollabSpaceRailComponent();
+      comp.Spaces = [
+        { id: 'only-space', name: 'Solo Space', iconClass: 'fa-solid fa-compass', level: 0, hasChildren: false, isExpanded: false },
+      ];
+      comp.ngOnInit();
+      expect(comp.isCollapsed).toBe(true);
 
-    let selectedConv = '';
-    comp.ConversationSelectRequested.subscribe(id => {
-      selectedConv = id;
-    });
+      getSpy.mockReturnValue(JSON.stringify({ width: 310, collapsed: false, expandedIds: ['hub-a'] }));
+      const withPref = new CollabSpaceRailComponent();
+      withPref.Spaces = [
+        { id: 'only-space', name: 'Solo Space', iconClass: 'fa-solid fa-compass', level: 0, hasChildren: false, isExpanded: false },
+      ];
+      withPref.ngOnInit();
+      expect(withPref.isCollapsed).toBe(false);
+      expect(withPref.navWidth).toBe(310);
+    } finally {
+      getSpy.mockRestore();
+    }
+  });
 
-    comp.onConversationClick(INTERNAL);
-    expect(selectedConv).toBe(INTERNAL);
-    expect(comp.Conversations[0].band).toBe('Shared');
-    expect(comp.Conversations[1].band).toBe('Team');
-    expect(comp.IsActiveConversation(comp.Conversations[0].id)).toBe(true);
-    expect(comp.IsActiveConversation(comp.Conversations[1].id)).toBe(false);
+  it('auto-expands the ancestor chain when ActiveSpaceId is a nested child space', () => {
+    const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    try {
+      const comp = new CollabSpaceRailComponent();
+      const parent: RailSpaceNode = { id: 'hub-1', name: 'Parent Hub', iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: false };
+      const child: RailSpaceNode = { id: 'room-1', name: 'Child Room', iconClass: 'fa-solid fa-rocket', level: 1, hasChildren: false, isExpanded: false };
+      comp.Spaces = [parent, child];
+      expect(comp.visibleSpaces.map((s) => s.id)).toEqual(['hub-1']);
+
+      comp.ActiveSpaceId = 'ROOM-1';
+      comp.ngOnChanges({ ActiveSpaceId: new SimpleChange('', 'ROOM-1', false) });
+      expect(comp.isNodeExpanded(parent)).toBe(true);
+      expect(comp.visibleSpaces.map((s) => s.id)).toEqual(['hub-1', 'room-1']);
+      expect(comp.IsActiveSpace(child.id)).toBe(true);
+    } finally {
+      getSpy.mockRestore();
+    }
   });
 });
 

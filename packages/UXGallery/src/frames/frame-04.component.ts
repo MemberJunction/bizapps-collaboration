@@ -41,7 +41,6 @@ import { FRAME_04_FIXTURE } from '../fixtures/frame-04.fixture';
           [Spaces]="f.rail.spaces"
           [ActiveSpaceId]="'discovery'"
           [InboxCount]="f.rail.inboxCount"
-          [TaskCount]="f.rail.taskCount"
           [MyTaskCount]="f.rail.taskCount"
         ></mjc-space-rail>
 

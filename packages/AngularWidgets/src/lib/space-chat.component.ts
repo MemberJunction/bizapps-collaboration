@@ -18,6 +18,7 @@ import {
 } from '@angular/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   ConversationsModule,
   ConversationStreamingService,
@@ -37,7 +38,7 @@ import {
   MJMenuTriggerDirective,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import type { SpaceBand, SpaceChatAnswerSourceReceipt, SpaceMemberModel } from './types';
+import type { SpaceBand, SpaceChatAnswerSourceReceipt, SpaceConversationItem, SpaceMemberModel } from './types';
 import {
   CollabAnswerSourceReceiptsComponent,
   canDisplaySourceReceiptInAudience,
@@ -393,6 +394,53 @@ export class CollabChatScopeBarComponent {
   ],
   template: `
     <div class="chat-container">
+      @if (Conversations.length > 0 || (CanStartConversation && !IsReadOnly)) {
+        <nav class="chat-convo-strip" aria-label="Space conversations" data-testid="space-chat-conversation-strip">
+          <div class="convo-strip-list">
+            @for (c of Conversations; track c.id) {
+              <button
+                type="button"
+                class="convo-chip"
+                data-testid="chat-conversation-chip"
+                [class.active]="IsActiveConversation(c.id)"
+                [attr.aria-current]="IsActiveConversation(c.id) ? 'true' : null"
+                [title]="c.name"
+                (click)="onSelectConversation(c.id)">
+                @if (c.kind === 'Private') {
+                  <i class="fa-solid fa-lock convo-ic lock-ic" aria-hidden="true"></i>
+                } @else if (c.kind === 'Agent' || c.kind === 'Assistant') {
+                  <i class="fa-solid fa-robot convo-ic robot-ic" aria-hidden="true"></i>
+                } @else {
+                  <span class="convo-hash" aria-hidden="true">#</span>
+                }
+                <span class="convo-name">{{ c.name }}</span>
+                <span
+                  class="convo-band-dot"
+                  [class.shared]="c.band === 'Shared'"
+                  [class.team]="c.band === 'Team'"
+                  [title]="c.band === 'Shared' ? 'Everyone in this space can see it' : 'Team only'"
+                  aria-hidden="true">
+                </span>
+                @if (c.unreadCount && c.unreadCount > 0) {
+                  <span class="convo-unread">{{ c.unreadCount }}</span>
+                }
+              </button>
+            }
+          </div>
+          @if (CanStartConversation && !IsReadOnly) {
+            <button
+              type="button"
+              class="convo-new-btn"
+              data-testid="chat-new-conversation-btn"
+              (click)="onNewConversation()"
+              title="Start a new conversation"
+              aria-label="New Conversation">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              <span>New Conversation</span>
+            </button>
+          }
+        </nav>
+      }
       @if (IsPending) {
         <div class="chat-pending" role="status" aria-live="polite">
           <mj-loading Size="small" [ShowText]="false"></mj-loading>
@@ -888,6 +936,126 @@ export class CollabChatScopeBarComponent {
         height: 100%;
         min-height: 0;
         position: relative;
+      }
+
+      .chat-convo-strip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 16px;
+        background: var(--mj-bg-surface-sunken);
+        border-bottom: 1px solid var(--mj-border-default);
+        flex-shrink: 0;
+      }
+
+      .convo-strip-list {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        min-width: 0;
+        flex: 1;
+      }
+      .convo-strip-list::-webkit-scrollbar {
+        display: none;
+      }
+
+      .convo-chip {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: var(--mj-radius-md);
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
+        font-size: 12.5px;
+        font-weight: 500;
+        font-family: inherit;
+        cursor: pointer;
+        max-width: 220px;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      }
+      .convo-chip:hover {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
+      }
+      .convo-chip.active {
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        font-weight: 600;
+      }
+      .convo-ic {
+        font-size: 11px;
+        flex-shrink: 0;
+      }
+      .convo-ic.lock-ic {
+        color: var(--mjc-team);
+      }
+      .convo-ic.robot-ic {
+        color: var(--mj-brand-tertiary);
+      }
+      .convo-hash {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--mj-text-muted);
+        flex-shrink: 0;
+      }
+      .convo-chip.active .convo-hash {
+        color: var(--mj-brand-primary);
+      }
+      .convo-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .convo-band-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: var(--mj-radius-full);
+        flex-shrink: 0;
+      }
+      .convo-band-dot.shared {
+        background: var(--mjc-shared);
+      }
+      .convo-band-dot.team {
+        background: var(--mjc-team);
+      }
+      .convo-unread {
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 0 5px;
+        border-radius: var(--mj-radius-full);
+        background: var(--mj-brand-primary);
+        color: var(--mj-brand-on-primary);
+        flex-shrink: 0;
+      }
+
+      .convo-new-btn {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 11px;
+        border-radius: var(--mj-radius-md);
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      }
+      .convo-new-btn:hover {
+        background: var(--mj-bg-surface-hover);
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
       }
 
       .space-chat-header-wrap {
@@ -1919,6 +2087,8 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   @Input() public EnableDecisionRouting = false;
   @Input() public CanStartConversation = false;
   @Input() public HasConversations = false;
+  @Input() public Conversations: readonly SpaceConversationItem[] = [];
+  @Input() public ActiveConversationId = '';
   @Input() public MentionPeople: readonly MentionPerson[] | null = null;
   @Input() public AgentHistoryFrom: Date | null = null;
   @Input() public AgentTurnHandler: AgentTurnHandler | null = null;
@@ -1932,12 +2102,22 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   @Input() public SourceReceipts: readonly SpaceChatAnswerSourceReceipt[] = [];
 
   @Output() public NewConversationRequested = new EventEmitter<void>();
+  @Output() public ConversationSelectRequested = new EventEmitter<string>();
   @Output() public ComposerDraftConsumed = new EventEmitter<void>();
   @Output() public PendingMessageConsumed = new EventEmitter<void>();
   @Output() public RetrievalScopeChanged = new EventEmitter<'ThisSpace' | 'Subtree' | 'Everything'>();
   @Output() public CitationClicked = new EventEmitter<SpaceChatCitationModel>();
   @Output() public SourceReceiptOpenRequested = new EventEmitter<SpaceChatAnswerSourceReceipt>();
   @Output() public AfterAgentTurnCompleted = new EventEmitter<void>();
+
+  public IsActiveConversation(conversationId: string): boolean {
+    const activeId = this.ActiveConversationId || this.ConversationId || '';
+    return !!activeId && UUIDsEqual(activeId, conversationId);
+  }
+
+  public onSelectConversation(conversationId: string): void {
+    this.ConversationSelectRequested.emit(conversationId);
+  }
 
   public onNewConversation(): void {
     this.NewConversationRequested.emit();

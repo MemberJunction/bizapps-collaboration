@@ -38,9 +38,9 @@ function probe(page: Page, key: Expectation): Locator {
         // A conversation that can't be posted in shows a lock in the chat's header (a closed space, or no seat that lets them post), not a banner
         case 'readOnlyLock': return page.locator('mjc-space-chat .read-only-lock').first();
         case 'composer': return page.locator('mj-conversation-chat-area').locator('textarea, [contenteditable="true"]').first();
-        // Both the expanded and the collapsed rail: found by their icon and label, never by visible text
-        case 'newConversationButton': return page.locator('mjc-space-rail').locator('button[aria-label="New Conversation"]').first();
-        case 'settingsLink': return page.locator('mjc-space-rail').locator('.space-nav-link:has(i.fa-sliders)').first();
+        // Conversations live in the Chat tab's switcher strip; Settings lives in the horizontal space tabs
+        case 'newConversationButton': return page.locator('mjc-space-chat').locator('button[aria-label="New Conversation"]').first();
+        case 'settingsLink': return page.locator('mjc-space-tabs').locator('[role="tab"]:has(i.fa-sliders)').first();
     }
 }
 
@@ -56,8 +56,8 @@ async function openSpace(page: Page, persona: Persona, tab: string): Promise<voi
  * The world seeds a General conversation in each such space; when the rail lists none, the row fails with that said.
  */
 async function openFirstConversation(page: Page, persona: Persona): Promise<void> {
-    const first = page.locator('mjc-space-rail .convo-link').first();
-    await expect(first, `${persona.label}: the rail lists no conversation, so the composer and the lock can't be probed`).toBeVisible();
+    const first = page.locator('mjc-space-chat [data-testid="chat-conversation-chip"]').first();
+    await expect(first, `${persona.label}: the Chat tab lists no conversation, so the composer and the lock can't be probed`).toBeVisible();
     await first.click();
     // The chat area itself, not its wrapper: the wrapper is always there, so waiting for it proves the click did nothing
     await expect(page.locator('mjc-space-chat mj-conversation-chat-area')).toBeVisible();
