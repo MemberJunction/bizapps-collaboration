@@ -39,7 +39,6 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
           [Spaces]="f.rail.spaces"
           [ActiveSpaceId]="'discovery'"
           [InboxCount]="f.rail.inboxCount"
-          [TaskCount]="f.rail.taskCount"
           [MyTaskCount]="f.rail.taskCount"
         ></mjc-space-rail>
 

@@ -242,12 +242,13 @@ describe('the rail, rendered', () => {
       fixture.detectChanges();
       await fixture.whenStable();
 
-      const el = fixture.nativeElement as HTMLElement;
-      expect(el.querySelector('nav.appnav')?.classList.contains('collapsed')).toBe(true);
-      const tile = el.querySelector<HTMLButtonElement>('.collapsed-space-tile')!;
-      expect(tile.getAttribute('title')).toBe('Solo Space');
-      tile.click();
-      expect(opened).toHaveBeenCalledWith('solo-1');
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('nav.appnav')?.classList.contains('collapsed')).toBe(true);
+    expect(el.textContent).toContain('Solo Space');
+    const tile = el.querySelector<HTMLButtonElement>('.collapsed-space-tile')!;
+    expect(tile.getAttribute('title')).toBe('Solo Space');
+    tile.click();
+    expect(opened).toHaveBeenCalledWith('solo-1');
     } finally {
       getSpy.mockRestore();
     }
@@ -324,6 +325,30 @@ describe('space overview band-intelligence and compact empty states, rendered', 
 
     el.querySelector<HTMLButtonElement>('[data-testid="overview-unified-empty"] .quick-action-btn')!.click();
     expect(uploadRequested).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders both SharedItems and TeamItems inside the single unified card when HasSharedBand is false (e.g. StaffOnly space with published org docs)', async () => {
+    const fixture = TestBed.createComponent(CollabSpaceOverviewComponent);
+    fixture.componentRef.setInput('SpaceName', 'Methodology Hub');
+    fixture.componentRef.setInput('HasSharedBand', false);
+    fixture.componentRef.setInput('CanSeeTeamSide', true);
+    fixture.componentRef.setInput('SharedItems', [
+      { id: 'doc-pub-1', kind: 'doc', title: 'Reference Architecture Playbook', meta: 'Playbooks', stamp: 'Today' },
+    ]);
+    fixture.componentRef.setInput('TeamItems', [
+      { id: 'doc-team-1', kind: 'doc', title: 'Draft Checklist', author: 'Ada', timestamp: '1h ago' },
+    ]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="overview-shared-band"]')).toBeNull();
+    const unified = el.querySelector('[data-testid="overview-unified-band"]');
+    expect(unified).not.toBeNull();
+    expect(el.querySelector('[data-testid="overview-unified-empty"]')).toBeNull();
+    expect(unified!.textContent).toContain('2 items');
+    expect(unified!.textContent).toContain('Reference Architecture Playbook');
+    expect(unified!.textContent).toContain('Draft Checklist');
   });
 
   it('uses compact 1-row quick-start strips instead of giant empty states when dual-band lists are empty', async () => {

@@ -187,12 +187,12 @@ export interface SubSpaceSummary {
                     <span class="fw7 fs14">Space documents</span>
                     <mjc-band-chip Band="Team" Label="Team only" />
                   </div>
-                  <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Only the team can see these' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }}</div>
+                  <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Only the team can see these' }} · {{ UnifiedDocumentCount }} {{ UnifiedDocumentCount === 1 ? 'item' : 'items' }}</div>
                 </div>
                 <a class="link fs12 open-lib-link" [mjClickable]="'Open library'" (click)="onOpenLibrary($event)">Open library</a>
               </div>
 
-              @if (TeamItems.length === 0) {
+              @if (SharedItems.length === 0 && TeamItems.length === 0) {
                 <div class="quick-empty-strip" data-testid="overview-unified-empty">
                   <span class="quick-empty-ic team"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></span>
                   <span class="quick-empty-copy">No documents in this space yet</span>
@@ -207,22 +207,41 @@ export interface SubSpaceSummary {
                   </div>
                 </div>
               } @else {
-                <div class="trows">
-                  @for (item of TeamItems; track item.id) {
-                    <mjc-item-row
-                      [Item]="item"
-                      [Title]="item.title"
-                      [Author]="item.author"
-                      [Timestamp]="item.timestamp"
-                      [Kind]="item.kind"
-                      [FlagCount]="item.flagCount"
-                      [StatusLabel]="item.statusLabel"
-                      [CanShare]="false"
-                      (RowSelectRequested)="onItemSelected(item)"
-                      (ShareRequested)="onShareRequested(item)"
-                    />
-                  }
-                </div>
+                @if (SharedItems.length > 0) {
+                  <div class="deliv-grid">
+                    @for (item of SharedItems; track item.id) {
+                      <mjc-item-card
+                        [Item]="item"
+                        [Title]="item.title"
+                        [Meta]="item.meta"
+                        [Stamp]="item.stamp"
+                        [Kind]="item.kind"
+                        [Openers]="item.openers"
+                        [CitationCount]="item.citationCount"
+                        [IsImage]="item.isImage || false"
+                        (ItemSelectRequested)="onItemSelected(item)"
+                      />
+                    }
+                  </div>
+                }
+                @if (TeamItems.length > 0) {
+                  <div class="trows">
+                    @for (item of TeamItems; track item.id) {
+                      <mjc-item-row
+                        [Item]="item"
+                        [Title]="item.title"
+                        [Author]="item.author"
+                        [Timestamp]="item.timestamp"
+                        [Kind]="item.kind"
+                        [FlagCount]="item.flagCount"
+                        [StatusLabel]="item.statusLabel"
+                        [CanShare]="false"
+                        (RowSelectRequested)="onItemSelected(item)"
+                        (ShareRequested)="onShareRequested(item)"
+                      />
+                    }
+                  </div>
+                }
               }
             </div>
           }
@@ -765,6 +784,11 @@ export class CollabSpaceOverviewComponent {
   public get SharedSubtitle(): string {
     if (this.SharedBandSubtitle) return this.SharedBandSubtitle;
     return `${this.SharedAudienceCount} ${this.SharedAudienceCount === 1 ? 'person' : 'people'} can see these`;
+  }
+
+  /** Total document count shown on a single-band Team-only space (covers both published and working items). */
+  public get UnifiedDocumentCount(): number {
+    return this.SharedItems.length + (this.TeamTotalCount || this.TeamItems.length);
   }
 
   public clearAskBox(): void {

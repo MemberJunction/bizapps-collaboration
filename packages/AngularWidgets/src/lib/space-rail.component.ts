@@ -5,7 +5,7 @@ import { MJButtonDirective, MJClickableDirective } from '@memberjunction/ng-ui-c
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { CollabTypeTileComponent } from './type-tile.component';
-import { RailSpaceNode } from './types';
+import { RailSpaceNode, SpaceBand, SpaceConversationItem, TabItem } from './types';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 const RAIL_PREF_KEY = 'Collaboration.SpaceRailPrefs';
@@ -216,6 +216,7 @@ export interface SpaceRailPref {
                 [IsClosed]="!!s.isLocked"
                 Size="sm">
               </mjc-type-tile>
+              <span class="sr-only">{{ s.name }}</span>
               @if (s.unread) {
                 <span class="collapsed-dot hot" aria-hidden="true"></span>
               }
@@ -732,11 +733,47 @@ export class CollabSpaceRailComponent implements OnInit, OnChanges {
   /** The + that starts a space is offered only to someone the host says may start one. */
   @Input() CanCreateSpace = false;
 
+  /** @deprecated The rail always renders the persistent hierarchical Space Tree; space tabs live in `<mjc-space-tabs>`. */
+  @Input() Mode: 'home' | 'space' = 'home';
+  /** @deprecated Kept for additive backward compatibility with existing callers; unused by the Space Tree rail. */
+  @Input() SpaceTitle = '';
+  /** @deprecated Kept for additive backward compatibility with existing callers; unused by the Space Tree rail. */
+  @Input() SpaceIcon = 'fa-shapes';
+  /** @deprecated Kept for additive backward compatibility with existing callers; unused by the Space Tree rail. */
+  @Input() SpaceBand: SpaceBand = 'Shared';
+  /** @deprecated Kept for additive backward compatibility with existing callers; tabs live in `<mjc-space-tabs>`. */
+  @Input() ActiveTab = 'Overview';
+  /** @deprecated Kept for additive backward compatibility with existing callers; tabs live in `<mjc-space-tabs>`. */
+  @Input() Tabs: TabItem[] = [];
+  /** @deprecated Kept for additive backward compatibility with existing callers. */
+  @Input() CanConfigure = false;
+  /** @deprecated Kept for additive backward compatibility; conversations live inside `<mjc-space-chat>`. */
+  @Input() Conversations: SpaceConversationItem[] = [];
+  /** @deprecated Kept for additive backward compatibility; conversations live inside `<mjc-space-chat>`. */
+  @Input() ActiveConversationId = '';
+  /** @deprecated Kept for additive backward compatibility; tab counts live in `<mjc-space-tabs>`. */
+  @Input() LibraryCount = 0;
+  /** @deprecated Kept for additive backward compatibility; use `MyTaskCount` for the My tasks badge. */
+  @Input() TaskCount = 0;
+  /** @deprecated Kept for additive backward compatibility; member count lives in `<mjc-space-tabs>`. */
+  @Input() MemberCount = 0;
+  /** @deprecated Kept for additive backward compatibility; new conversations are started in `<mjc-space-chat>`. */
+  @Input() CanStartConversation = false;
+
   @Output() NavSelectRequested = new EventEmitter<string>();
   @Output() SpaceOpenRequested = new EventEmitter<string>();
   @Output() SpaceToggleRequested = new EventEmitter<RailSpaceNode>();
   @Output() SpaceCreateRequested = new EventEmitter<void>();
   @Output() JumpOpenRequested = new EventEmitter<void>();
+
+  /** @deprecated Kept for additive backward compatibility; tabs emit from `<mjc-space-tabs>`. */
+  @Output() TabSelectRequested = new EventEmitter<string>();
+  /** @deprecated Kept for additive backward compatibility; conversations emit from `<mjc-space-chat>`. */
+  @Output() ConversationSelectRequested = new EventEmitter<string>();
+  /** @deprecated Kept for additive backward compatibility; new conversations emit from `<mjc-space-chat>`. */
+  @Output() NewConversationRequested = new EventEmitter<void>();
+  /** @deprecated Kept for additive backward compatibility; Home is always available in the persistent rail. */
+  @Output() BackToSpacesRequested = new EventEmitter<void>();
 
   @ViewChild('jumpInput') private jumpInput?: ElementRef<HTMLInputElement>;
 
