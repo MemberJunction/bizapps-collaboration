@@ -3,7 +3,8 @@
  * must not block the provider's delete, and what shows it in a space must go first.
  */
 import { describe, it, expect } from 'vitest';
-import { providerFilesPurgeSql } from './purge-world.js';
+import { enterpriseWorldPurgeSql, providerFilesPurgeSql } from './purge-world.js';
+import { MERIDIAN_COMPANY_ID, MERIDIAN_ORG_ID, NORTHSTAR_ORG_ID, SOLSTICE_ORG_ID } from './enterprise-ids.js';
 
 describe('providerFilesPurgeSql', () => {
     const sqlText = providerFilesPurgeSql('__mj', 'F3000001-0000-4000-8000-000000000001');
@@ -48,5 +49,35 @@ describe('providerFilesPurgeSql', () => {
         expect(guard).toBeGreaterThan(0);
         expect(sqlText.indexOf('ContentItem WHERE FileID IN')).toBeGreaterThan(guard);
         expect(sqlText.slice(0, guard)).not.toContain('ContentItem');
+    });
+});
+
+describe('enterpriseWorldPurgeSql', () => {
+    const sqlText = enterpriseWorldPurgeSql(
+        '__mj',
+        "'D2000001-0000-4000-8000-000000000001'",
+        "'C1000001-0000-4000-8000-000000000001'",
+    );
+
+    it('purges enterprise Common rows and mirrored Companies in strict FK-safe order', () => {
+        const steps = [
+            'DELETE FROM [__mj].ScopedPromptPart',
+            'DELETE FROM __mj_BizAppsCommon.ContactMethodConsentHistory',
+            'DELETE FROM __mj_BizAppsCommon.ContactMethodConsent',
+            'DELETE FROM __mj_BizAppsCommon.ContactMethod',
+            'DELETE FROM __mj_BizAppsCommon.Relationship',
+            'DELETE FROM __mj_BizAppsCommon.Organization',
+            'DELETE FROM [__mj].Company',
+        ];
+        const positions = steps.map((needle) => sqlText.indexOf(needle));
+        expect(positions.every((pos) => pos >= 0)).toBe(true);
+        expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    });
+
+    it('targets only the deterministic enterprise organization and company UUIDs', () => {
+        expect(sqlText).toContain(MERIDIAN_ORG_ID);
+        expect(sqlText).toContain(NORTHSTAR_ORG_ID);
+        expect(sqlText).toContain(SOLSTICE_ORG_ID);
+        expect(sqlText).toContain(MERIDIAN_COMPANY_ID);
     });
 });

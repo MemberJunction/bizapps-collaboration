@@ -87,6 +87,13 @@ export const S9_STRICT_TYPE_FILES = [
     'packages/EngineBase/src/__tests__/space-digests.spec.ts',
     'packages/CoreEntitiesServer/src/__tests__/space-digests-server.spec.ts',
     'packages/IntegrationTests/src/__tests__/s10-slice3-scoped-digests.integration.spec.ts',
+    // Cross-stack enterprise world seeder & live Round-2 substrate check bundles
+    'packages/IntegrationTests/src/world/enterprise-ids.ts',
+    'packages/IntegrationTests/src/world/seed-enterprise-world.ts',
+    'packages/IntegrationTests/src/checks/cross-stack-enterprise.checks.ts',
+    'packages/IntegrationTests/src/checks/round2-substrate.checks.ts',
+    'packages/IntegrationTests/src/checks/client/cross-stack-enterprise.client.checks.ts',
+    'packages/IntegrationTests/src/checks/client/round2-substrate.client.checks.ts',
 ];
 
 const STRICT_RULES = [

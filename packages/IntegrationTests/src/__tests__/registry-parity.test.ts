@@ -21,6 +21,8 @@ import '../checks/stage3.checks.js';
 import '../checks/stage4.checks.js';
 import '../checks/space-meetings.checks.js';
 import '../checks/adversarial-persona.checks.js';
+import '../checks/cross-stack-enterprise.checks.js';
+import '../checks/round2-substrate.checks.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../../..');

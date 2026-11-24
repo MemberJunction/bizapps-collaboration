@@ -62,6 +62,7 @@ function createApprovalMockProvider() {
     const decisions: StoredDecision[] = [];
     const activities: Array<{ ID: string; TaskID: string; NewValue: string | null; Description: string | null }> = [];
     const items: StoredItem[] = [];
+    const spaceItemSigners: Array<{ itemId: string; entityId: string; userId: string | null }> = [];
     const artifacts: StoredArtifact[] = [];
     const versions: StoredVersion[] = [];
     const auditLogs: Array<{ userId: string; details: string | null }> = [];
@@ -158,6 +159,7 @@ function createApprovalMockProvider() {
                         return true;
                     },
                     async Save() {
+                        spaceItemSigners.push({ itemId: obj.ID, entityId: obj.EntityID, userId: contextUser?.ID ?? null });
                         const existing = items.find((i) => i.ID === obj.ID);
                         if (obj.Band === 'Shared' && (!existing || existing.Band !== 'Shared')) {
                             obj.PromotedAt = new Date();
@@ -298,11 +300,14 @@ function createApprovalMockProvider() {
                     return ok([{ ID: 'ART-TYPE-MD', Name: 'Markdown Document' }]);
                 case 'MJ_BizApps_Tasks: Task Types':
                     return ok([{ ID: APPROVAL_TYPE_ID, Code: 'APPROVAL_REQUEST' }]);
-                case 'MJ_BizApps_Tasks: Task Decision Outcomes':
+                case 'MJ_BizApps_Tasks: Task Decision Outcomes': {
+                    const filter = String(params.ExtraFilter ?? '');
+                    assert.equal(filter.includes('IsApproval'), false, 'TaskDecisionOutcome schema has no IsApproval column');
                     return ok([
-                        { ID: OUTCOME_APPROVED_ID, Code: 'Approved', IsApproval: true },
-                        { ID: OUTCOME_REJECTED_ID, Code: 'Rejected', IsApproval: false },
+                        { ID: OUTCOME_APPROVED_ID, Code: 'Approved', Name: 'Approved' },
+                        { ID: OUTCOME_REJECTED_ID, Code: 'Rejected', Name: 'Rejected' },
                     ]);
+                }
                 case 'MJ_BizApps_Collaboration: Space Items': {
                     const f = String(params.ExtraFilter ?? '');
                     if (f.includes(`EntityID = '${ENTITY_IDS['MJ_BizApps_Tasks: Tasks']}'`)) {
@@ -326,7 +331,7 @@ function createApprovalMockProvider() {
         },
     };
 
-    return { provider: providerImpl as IMetadataProvider, tasks, links, decisions, activities, items, auditLogs };
+    return { provider: providerImpl as IMetadataProvider, tasks, links, decisions, activities, items, spaceItemSigners, auditLogs };
 }
 
 describe('CA-2 & CA-3: approval-promotion-workflow.spec.ts', () => {
@@ -395,6 +400,9 @@ describe('CA-2 & CA-3: approval-promotion-workflow.spec.ts', () => {
         assert.equal(created.data.band, 'Team');
         assert.equal(created.data.taskLinkIds.length, 3);
         assert.equal(harness.links.some((l) => l.TaskID === created.data.taskId && l.Description === 'TeamDraftSpaceItem'), true);
+        // Both draft and task SpaceItems must be saved under callerUser (never SYSTEM_ID, which fails live reach checks)
+        const taskSpaceItemSigner = harness.spaceItemSigners.find((s) => s.itemId === created.data.taskSpaceItemId);
+        assert.equal(taskSpaceItemSigner?.userId, TEAM_AUTHOR_ID);
 
         // 2. Shared-band participant MUST NOT be able to enumerate or read draft approval tasks
         const sharedList = await listSpaceApprovalTasks({

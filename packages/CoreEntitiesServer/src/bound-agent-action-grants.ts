@@ -241,9 +241,14 @@ export class CollaborationBoundActionGrantRegistry extends BaseSingleton<Collabo
         for (const pRow of paramsRes.Results ?? []) {
             const key = pRow.ActionID.toUpperCase();
             const list = paramMap.get(key) ?? [];
+            const trimmedType = pRow.Type.trim();
+            const normalizedType: ActionParamDefinition['Type'] =
+                trimmedType === 'Input' || trimmedType === 'Output' || trimmedType === 'Both'
+                    ? trimmedType
+                    : 'Input';
             list.push({
                 Name: pRow.Name,
-                Type: pRow.Type,
+                Type: normalizedType,
                 ValueType: pRow.ValueType,
                 IsRequired: Boolean(pRow.IsRequired),
                 IsArray: Boolean(pRow.IsArray),

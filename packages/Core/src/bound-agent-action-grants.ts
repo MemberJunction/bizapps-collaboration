@@ -104,6 +104,11 @@ export type BoundActionEnforcementResult =
 
 const normalizeName = (name: string): string => name.trim().toLowerCase();
 
+function isInputParamType(raw: string): boolean {
+    const trimmed = raw.trim();
+    return trimmed === 'Input' || trimmed === 'Both';
+}
+
 /** Collects all hidden server-bound parameter names (explicit grant bindings + implicit space contextual params). */
 export function collectHiddenBoundParamNames(
     grantBindings: Readonly<Record<string, object | string | number | boolean | null | undefined>> | null | undefined,
@@ -131,7 +136,7 @@ export function redactActionParametersForAgent(
 ): ExposedAgentActionParam[] {
     const visible: ExposedAgentActionParam[] = [];
     for (const param of allParams) {
-        if (param.Type !== 'Input' && param.Type !== 'Both') {
+        if (!isInputParamType(param.Type)) {
             continue;
         }
         if (hiddenNames.has(normalizeName(param.Name))) {
@@ -183,7 +188,7 @@ export function buildBoundActionGrantExposure(
 
     const hiddenBoundNames: string[] = [];
     for (const p of allParams) {
-        if ((p.Type === 'Input' || p.Type === 'Both') && hiddenSet.has(normalizeName(p.Name))) {
+        if (isInputParamType(p.Type) && hiddenSet.has(normalizeName(p.Name))) {
             hiddenBoundNames.push(p.Name);
         }
     }
@@ -266,7 +271,7 @@ export function enforceBoundActionParameters(input: {
         };
     }
 
-    const inputDefs = input.allParams.filter((p) => p.Type === 'Input' || p.Type === 'Both');
+    const inputDefs = input.allParams.filter((p) => isInputParamType(p.Type));
     const boundParamNames: string[] = [];
 
     // Inject authoritative server-bound values using the action's canonical parameter spelling when defined.
