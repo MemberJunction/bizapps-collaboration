@@ -1032,6 +1032,58 @@ describe("The Overview's contributed cards, rendered", () => {
     expect(await render(false)).toEqual(['shared']);
     expect(await render(true)).toEqual(['shared', 'team', 'none']);
   });
+
+  it('places contributed cards into hero (full-width above .ov-grid), main (left column), and rail (right column default) slots while enforcing CanSeeTeamSide', async () => {
+    class HeroStub {}
+    declareComponent(HeroStub, { selector: 'stub-hero-card', template: '<div class="slot-card" data-slot="hero">Hero</div>' });
+    class MainStub {}
+    declareComponent(MainStub, { selector: 'stub-main-card', template: '<div class="slot-card" data-slot="main">Main</div>' });
+    class RailStubCard {}
+    declareComponent(RailStubCard, { selector: 'stub-rail-card', template: '<div class="slot-card" data-slot="rail">Rail</div>' });
+    class DefaultSlotStub {}
+    declareComponent(DefaultSlotStub, { selector: 'stub-default-card', template: '<div class="slot-card" data-slot="default">Default</div>' });
+    class TeamHeroStub {}
+    declareComponent(TeamHeroStub, { selector: 'stub-team-hero-card', template: '<div class="slot-card" data-slot="team-hero">Team Hero</div>' });
+
+    const cards = [
+      { key: 'hero', title: 'Hero', side: 'Shared' as const, placement: 'hero' as const, component: HeroStub },
+      { key: 'team-hero', title: 'Team Hero', side: 'Team' as const, placement: 'hero' as const, component: TeamHeroStub },
+      { key: 'main', title: 'Main', side: 'Shared' as const, placement: 'main' as const, component: MainStub },
+      { key: 'rail', title: 'Rail', side: 'Shared' as const, placement: 'rail' as const, component: RailStubCard },
+      { key: 'default', title: 'Default', side: 'Shared' as const, component: DefaultSlotStub },
+    ];
+
+    const staffFixture = TestBed.createComponent(CollabSpaceOverviewComponent);
+    staffFixture.componentRef.setInput('CanSeeTeamSide', true);
+    staffFixture.componentRef.setInput('ContributedCards', cards);
+    staffFixture.detectChanges();
+    await staffFixture.whenStable();
+
+    const staffEl = staffFixture.nativeElement as HTMLElement;
+    const heroSlot = staffEl.querySelector('[data-testid="overview-hero-slot"]')!;
+    const grid = staffEl.querySelector('.ov-grid')!;
+    const cols = grid.querySelectorAll(':scope > .col');
+    expect(heroSlot).not.toBeNull();
+    // Hero sits above .ov-grid (not inside .ov-grid)
+    expect(grid.contains(heroSlot)).toBe(false);
+    expect(Array.from(heroSlot.querySelectorAll('.slot-card')).map((n) => n.getAttribute('data-slot'))).toEqual(['hero', 'team-hero']);
+    // Main sits in the wide first column
+    const mainSlot = cols[0].querySelector('[data-testid="overview-main-slot"]')!;
+    expect(Array.from(mainSlot.querySelectorAll('.slot-card')).map((n) => n.getAttribute('data-slot'))).toEqual(['main']);
+    // Rail + omitted placement sit in the right column
+    const railSlot = cols[1].querySelector('[data-testid="overview-rail-slot"]')!;
+    expect(Array.from(railSlot.querySelectorAll('.slot-card')).map((n) => n.getAttribute('data-slot'))).toEqual(['rail', 'default']);
+    staffFixture.destroy();
+
+    // Outside viewer: Team-side hero card is filtered out across slots
+    const outsideFixture = TestBed.createComponent(CollabSpaceOverviewComponent);
+    outsideFixture.componentRef.setInput('CanSeeTeamSide', false);
+    outsideFixture.componentRef.setInput('ContributedCards', cards);
+    outsideFixture.detectChanges();
+    await outsideFixture.whenStable();
+    const outsideHero = (outsideFixture.nativeElement as HTMLElement).querySelector('[data-testid="overview-hero-slot"]')!;
+    expect(Array.from(outsideHero.querySelectorAll('.slot-card')).map((n) => n.getAttribute('data-slot'))).toEqual(['hero']);
+  });
 });
 
 describe("a person's photo, rendered", () => {

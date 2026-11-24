@@ -46,6 +46,22 @@ describe("a space's tabs", () => {
         assert.deepEqual(model.tabs.map((t) => t.id).slice(0, 3), ['Overview', 'Library', 'papers']);
     });
 
+    it('records a custom component when a driver overrides a built-in tab key (Overview, Work, Library) while leaving non-overridden built-ins as defaults', () => {
+        class CustomOverviewTab {}
+        class CustomWorkTab {}
+        const driver = (defaults: SpaceTabDescriptor[]): SpaceTabDescriptor[] => [
+            ...defaults.filter((d) => tabKey(d.key) !== 'overview' && tabKey(d.key) !== 'work'),
+            { key: 'overview', label: 'Executive Hub', sortKey: 10, component: CustomOverviewTab as never },
+            { key: 'work', label: 'Work & Tracker', sortKey: 30, component: CustomWorkTab as never },
+        ];
+        const model = buildSpaceTabs({ panels: allPanels, finalize: driver, labelFor: keepLabel });
+        assert.equal(model.tabs.find((t) => t.id === 'Overview')?.label, 'Executive Hub');
+        assert.equal(model.tabs.find((t) => t.id === 'Work')?.label, 'Work & Tracker');
+        assert.equal(model.contributed.get('Overview'), CustomOverviewTab);
+        assert.equal(model.contributed.get('Work'), CustomWorkTab);
+        assert.equal(model.contributed.has('Library'), false);
+    });
+
     it('drops a tab that names no built-in tab and brings nothing to draw', () => {
         const model = buildSpaceTabs({ panels: allPanels, finalize: (d) => [...d, { key: 'ghost', label: 'Ghost' }], labelFor: keepLabel });
         assert.equal(model.tabs.some((t) => t.id === 'ghost'), false);

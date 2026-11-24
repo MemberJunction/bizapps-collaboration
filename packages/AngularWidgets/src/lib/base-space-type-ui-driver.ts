@@ -29,6 +29,8 @@ export interface SpaceTabDescriptor {
     component?: Type<BaseSpaceTab>;
 }
 
+export type SpaceOverviewCardPlacement = 'hero' | 'main' | 'rail';
+
 export interface SpaceOverviewCardDescriptor {
     key: string;
     title: string;
@@ -40,6 +42,13 @@ export interface SpaceOverviewCardDescriptor {
      * doesn't say is a Team card: outside participants never see a card unless its author said they may.
      */
     side?: 'Shared' | 'Team';
+    /**
+     * Layout slot inside `<mjc-space-overview>`:
+     * - `'hero'`: full-width banner above `.ov-grid`
+     * - `'main'`: wide primary column (`.ov-grid > .col:first-child`)
+     * - `'rail'` (default when omitted): right column
+     */
+    placement?: SpaceOverviewCardPlacement;
 }
 
 export interface SpaceHeaderChipDescriptor {
@@ -235,6 +244,8 @@ export interface SpaceContributionMetadata {
     spaceTypes: string[];
     /** For a card: who sees it (see `SpaceOverviewCardDescriptor.side`). */
     side?: 'Shared' | 'Team';
+    /** For a card: layout slot inside `<mjc-space-overview>` (`'hero' | 'main' | 'rail'`). */
+    placement?: SpaceOverviewCardPlacement;
     slot?: string;
     sortKey?: number;
     contributionKey: string;
@@ -274,6 +285,9 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
             icon: typeof raw['icon'] === 'string' ? raw['icon'] : undefined,
             title: typeof raw['title'] === 'string' ? raw['title'] : undefined,
             side: raw['side'] === 'Shared' || raw['side'] === 'Team' ? raw['side'] : undefined,
+            placement: raw['placement'] === 'hero' || raw['placement'] === 'main' || raw['placement'] === 'rail'
+                ? raw['placement']
+                : undefined,
         };
         const key = normalizeContributionKey(meta.contributionKey);
         const existing = map.get(key);
