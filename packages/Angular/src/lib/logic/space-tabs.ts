@@ -39,7 +39,7 @@ export function tabIdFromUrl(key: string): string {
 export interface SpaceTabModel {
     /** In display order. Settings is included here; the screen shows it only to those who may configure. */
     tabs: TabItem[];
-    /** The component of each tab a type or another app contributed, by tab id. Built-in tabs are drawn by the section. */
+    /** The component of each tab a type or another app contributed (including built-in tab overrides), by tab id. Built-in tabs without a custom component are drawn by the section. */
     contributed: ReadonlyMap<string, Type<BaseSpaceTab>>;
 }
 
@@ -78,7 +78,7 @@ export function buildSpaceTabs(input: SpaceTabInputs): SpaceTabModel {
         if (builtIn?.needsData && input.offersData !== true) continue;
         seen.add(key);
         const id = builtIn?.id ?? descriptor.key;
-        if (!builtIn && descriptor.component) contributed.set(id, descriptor.component);
+        if (descriptor.component) contributed.set(id, descriptor.component);
         // A tab without a component that names no built-in tab has nothing to show
         if (!builtIn && !descriptor.component) {
             input.onDropped?.(descriptor.key);

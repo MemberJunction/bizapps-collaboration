@@ -298,6 +298,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             display: flex;
             flex-direction: column;
         }
+        .contributed-tab-stage {
+            flex: 1 1 auto;
+            min-height: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
         .tab-placeholder {
             padding: 32px;
             color: var(--mj-text-secondary, #64748b);
@@ -1005,13 +1012,24 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         @if (isLoadingSpace) {
                                             <mj-loading Text="Loading space..."></mj-loading>
                                         } @else {
+                                        @if (activeTab === 'Overview' && spacePins.length > 0) {
+                                            <div class="pinned-wrap">
+                                                <mjc-pinned-strip [Pins]="spacePins" [Title]="pinnedLabel" (OpenRequested)="onPinOpen($event)" (UnpinRequested)="onUnpin($event)" />
+                                            </div>
+                                        }
+                                        @if (contributedTabComponent; as tabComponent) {
+                                            <div class="contributed-tab-stage" data-testid="contributed-tab-stage">
+                                                <ng-container
+                                                    [mjcContributedTabHost]="tabComponent"
+                                                    [TabInputs]="{ SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode, SpaceName: spaceTitle, CanSchedule: canAddHere, CanSeeTeamSide: canSeeTeamSide, DefaultBand: bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand, AllowedBands: bandChoice?.allowed ?? bothBands }"
+                                                    (CreateMeetingRequested)="onCreateSpaceMeeting($event.draft, $event.instance)"
+                                                    (OpenMeetingChatRequested)="onOpenMeetingChat($event)"
+                                                    (OpenMeetingRequested)="onOpenMeetingRecord($event)"
+                                                ></ng-container>
+                                            </div>
+                                        } @else {
                                         @switch (activeTab) {
                                             @case ('Overview') {
-                                                @if (spacePins.length > 0) {
-                                                    <div class="pinned-wrap">
-                                                        <mjc-pinned-strip [Pins]="spacePins" [Title]="pinnedLabel" (OpenRequested)="onPinOpen($event)" (UnpinRequested)="onUnpin($event)" />
-                                                    </div>
-                                                }
                                                 <mjc-space-overview
                                                     #spaceOverview
                                                     [SpaceId]="activeSpaceId"
@@ -1342,17 +1360,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     </section>
                                                 }
                                             }
-                                            @default {
-                                                @if (contributedTabComponent; as tabComponent) {
-                                                    <ng-container
-                                                        [mjcContributedTabHost]="tabComponent"
-                                                        [TabInputs]="{ SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode, SpaceName: spaceTitle, CanSchedule: canAddHere, DefaultBand: bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand, AllowedBands: bandChoice?.allowed ?? bothBands }"
-                                                        (CreateMeetingRequested)="onCreateSpaceMeeting($event.draft, $event.instance)"
-                                                        (OpenMeetingChatRequested)="onOpenMeetingChat($event)"
-                                                        (OpenMeetingRequested)="onOpenMeetingRecord($event)"
-                                                    ></ng-container>
-                                                }
-                                            }
+                                        }
                                         }
                                         }
                                     </div>
@@ -1845,8 +1853,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return (space && CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID)?.Code) || '';
     }
 
-    /** The component of the contributed tab that is open, or null when a built-in tab is. */
+    /** The component of the contributed tab (or built-in tab override) that is open, or null when a default built-in view is shown. */
     public get contributedTabComponent(): SpaceTabDescriptor['component'] | null {
+        if (this.activeTab === 'Settings' && !this.showsSettings) return null;
         return this.spaceTabModel?.contributed.get(this.activeTab) ?? null;
     }
 
@@ -2001,11 +2010,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }, (err) => this.logOnce(`tabs:${space.ID}`, `The UI driver of space type '${code}' failed building the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`),
         // The labels the type's own settings give, which need no driver: a driver that failed doesn't take them away
         (key, label) => new BaseSpaceTypeUIDriver().GetTabLabel(ctx, key, label));
-        const cardFactory = (reg: { SubClass: SpaceOverviewCardDescriptor['component'] | object }, meta: { contributionKey: string; title?: string; sortKey?: number; side?: 'Shared' | 'Team' }): SpaceOverviewCardDescriptor => ({
+        const cardFactory = (reg: { SubClass: SpaceOverviewCardDescriptor['component'] | object }, meta: { contributionKey: string; title?: string; sortKey?: number; side?: 'Shared' | 'Team'; placement?: SpaceOverviewCardDescriptor['placement'] }): SpaceOverviewCardDescriptor => ({
             key: meta.contributionKey,
             title: meta.title ?? meta.contributionKey,
             sortKey: meta.sortKey,
             side: meta.side,
+            placement: meta.placement,
             component: reg.SubClass as SpaceOverviewCardDescriptor['component'],
         });
         const settingsSectionFactory = (reg: { SubClass: SpaceSettingsSectionDescriptor['component'] | object }, meta: { contributionKey: string; title?: string; label?: string; sortKey?: number }): SpaceSettingsSectionDescriptor => ({

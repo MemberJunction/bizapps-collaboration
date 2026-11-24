@@ -11,6 +11,7 @@ export type {
     SpaceUIContext,
     SpaceTabDescriptor,
     SpaceOverviewCardDescriptor,
+    SpaceOverviewCardPlacement,
     SpaceHeaderChipDescriptor,
     SpaceHeaderActionDescriptor,
     SpaceSettingsSectionDescriptor,

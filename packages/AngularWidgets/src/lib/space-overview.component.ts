@@ -53,6 +53,17 @@ export interface SubSpaceSummary {
   ],
   template: `
     <div class="page ov">
+      <!-- Full-width Hero contributed cards above the 2-column grid -->
+      @if (HeroContributedCards.length > 0) {
+        <div class="ov-hero-slot" data-testid="overview-hero-slot">
+          @for (card of HeroContributedCards; track card.key) {
+            @if (card.component) {
+              <ng-container *ngComponentOutlet="card.component; inputs: { SpaceId: SpaceId, Sequence: card.sortKey ?? 0 }"></ng-container>
+            }
+          }
+        </div>
+      }
+
       <div class="ov-grid">
         <div class="col">
           <!-- Attention / Needs-you strip -->
@@ -69,6 +80,17 @@ export interface SubSpaceSummary {
                   [ActionLabel]="item.actionLabel"
                   (ActionRequested)="onNeedsYouAction(item)"
                 />
+              }
+            </div>
+          }
+
+          <!-- Main-column contributed cards -->
+          @if (MainContributedCards.length > 0) {
+            <div class="ov-main-cards" data-testid="overview-main-slot">
+              @for (card of MainContributedCards; track card.key) {
+                @if (card.component) {
+                  <ng-container *ngComponentOutlet="card.component; inputs: { SpaceId: SpaceId, Sequence: card.sortKey ?? 0 }"></ng-container>
+                }
               }
             </div>
           }
@@ -293,11 +315,15 @@ export interface SubSpaceSummary {
             <div class="card ask-unavailable" role="status">No assistant is available in this space right now.</div>
           }
 
-          <!-- Cards the type and other apps contribute: mounted with the space they belong to -->
-          @for (card of UniqueContributedCards; track card.key) {
-            @if (card.component) {
-              <ng-container *ngComponentOutlet="card.component; inputs: { SpaceId: SpaceId, Sequence: card.sortKey ?? 0 }"></ng-container>
-            }
+          <!-- Rail-column contributed cards (default when placement is omitted or 'rail') -->
+          @if (RailContributedCards.length > 0) {
+            <div class="ov-rail-cards" data-testid="overview-rail-slot">
+              @for (card of RailContributedCards; track card.key) {
+                @if (card.component) {
+                  <ng-container *ngComponentOutlet="card.component; inputs: { SpaceId: SpaceId, Sequence: card.sortKey ?? 0 }"></ng-container>
+                }
+              }
+            </div>
           }
 
           <!-- What the space's type keeps of its own (a subtype), read-only; drawn by the host -->
@@ -382,6 +408,23 @@ export interface SubSpaceSummary {
 
     .ov {
       padding: 18px 24px 28px;
+    }
+
+    .ov-hero-slot {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 18px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .ov-main-cards,
+    .ov-rail-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 0;
     }
 
     .ov-grid {
@@ -730,6 +773,21 @@ export class CollabSpaceOverviewComponent {
       seen.add(key);
       return true;
     });
+  }
+
+  /** Full-width cards rendered above the 2-column grid (`placement === 'hero'`). */
+  public get HeroContributedCards(): readonly SpaceOverviewCardDescriptor[] {
+    return this.UniqueContributedCards.filter((card) => card.placement === 'hero');
+  }
+
+  /** Cards rendered in the wide primary left column (`placement === 'main'`). */
+  public get MainContributedCards(): readonly SpaceOverviewCardDescriptor[] {
+    return this.UniqueContributedCards.filter((card) => card.placement === 'main');
+  }
+
+  /** Cards rendered in the right rail column (`placement === 'rail'` or omitted). */
+  public get RailContributedCards(): readonly SpaceOverviewCardDescriptor[] {
+    return this.UniqueContributedCards.filter((card) => !card.placement || card.placement === 'rail');
   }
   /** The space's type keeps details of its own (a subtype): the host draws them, read-only, in the `[mjcAbout]` slot. */
   @Input() public HasAbout = false;

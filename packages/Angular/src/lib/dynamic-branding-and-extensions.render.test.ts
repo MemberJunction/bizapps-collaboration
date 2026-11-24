@@ -1129,4 +1129,94 @@ describe('CX-12 Terminal Closed vs Resumable Paused UI Reopen Alignment', () => 
         expect(tabCounts.get('Chat')).toBe(2);
         expect(tabCounts.get('People')).toBe(6);
     });
+
+    it('renders full-width custom BaseSpaceTab components when a UI driver overrides built-in Overview or Work tabs (preserving pinned strip on Overview)', async () => {
+        class CustomOverviewTabComponent {
+            public SpaceId = '';
+        }
+        declareComponent(CustomOverviewTabComponent, {
+            selector: 'cx-custom-overview-tab',
+            template: `<div class="custom-overview-body">Custom Full-Width Overview for {{ SpaceId }}</div>`,
+            inputs: ['SpaceId'],
+        });
+
+        class CustomWorkTabComponent {
+            public SpaceId = '';
+        }
+        declareComponent(CustomWorkTabComponent, {
+            selector: 'cx-custom-work-tab',
+            template: `<div class="custom-work-body">Custom Full-Width Work for {{ SpaceId }}</div>`,
+            inputs: ['SpaceId'],
+        });
+
+        class BuiltInOverrideDriver extends BaseSpaceTypeUIDriver {
+            public override GetTabs(_ctx: SpaceUIContext, defaultTabs: SpaceTabDescriptor[]): SpaceTabDescriptor[] {
+                return [
+                    ...defaultTabs.filter((t) => t.key.toLowerCase() !== 'overview' && t.key.toLowerCase() !== 'work'),
+                    { key: 'overview', label: 'Executive Hub', sortKey: 10, component: CustomOverviewTabComponent as never },
+                    { key: 'work', label: 'Work & Tracker', sortKey: 30, component: CustomWorkTabComponent as never },
+                ];
+            }
+        }
+
+        MJGlobal.Instance.ClassFactory.Register(BaseSpaceTypeUIDriver, BuiltInOverrideDriver, 'cx-builtin-override-driver', 1);
+
+        const spaceEntityInfo = buildSpaceEntityInfo();
+        const loadedSpace = new mjBizAppsCollaborationSpaceEntity(spaceEntityInfo);
+        loadedSpace.ID = SPACE_ID;
+        loadedSpace.Name = 'Executive Hub Space';
+        loadedSpace.SpaceTypeID = TYPE_ID;
+        vi.spyOn(loadedSpace, 'Load').mockResolvedValue(true);
+
+        const spaceTypeInfo = buildEntityInfoWithFields(
+            'entity-space-types-override',
+            'MJ_BizApps_Collaboration: Space Types',
+            ['ID', 'Code', 'Name', 'UIDriverClass', 'MessagingPanel', 'LibraryPanel', 'WorkPanel', 'DefaultBand'],
+        );
+        const spaceType = new mjBizAppsCollaborationSpaceTypeEntity(spaceTypeInfo);
+        spaceType.ID = TYPE_ID;
+        spaceType.Code = 'executive-hub';
+        spaceType.Name = 'Executive Hub';
+        spaceType.UIDriverClass = 'cx-builtin-override-driver';
+        spaceType.MessagingPanel = true;
+        spaceType.LibraryPanel = true;
+        spaceType.WorkPanel = true;
+
+        const { providerStub } = createProviderMock({
+            spaceEntityInfo,
+            rawSpaces: [{ ID: SPACE_ID, Name: 'Executive Hub Space', SpaceTypeID: TYPE_ID, OwnerID: USER_ID }],
+            loadSpaceEntity: async () => loadedSpace,
+            spaceType,
+            statusEntities: [],
+        });
+
+        configureProductionSectionTestBed({ queryParams: { view: 'home' } });
+        spyOnSectionProviders(providerStub);
+        const fixture = TestBed.createComponent(CollaborationSectionResource);
+        const comp = fixture.componentInstance;
+        comp.Data = { Configuration: { tabId: 'tab-1', queryParams: { view: 'home' } } } as CollaborationSectionResource['Data'];
+        fixture.detectChanges();
+        await flushAsyncWork();
+
+        comp.onSpaceOpenRequested(SPACE_ID);
+        await flushAsyncWork();
+        comp.spacePins = [{ id: 'p1', kind: 'Record', title: 'Pinned Charter', subtitle: 'Note', iconClass: 'fa-solid fa-note-sticky', target: 'note:1', spaceId: SPACE_ID, spaceName: 'Executive Hub Space' }];
+        comp['changeDetector'].markForCheck();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        const hostEl = fixture.nativeElement as HTMLElement;
+        // Overview override mounts full-width custom component instead of default mjc-space-overview, keeping pinned strip above it
+        expect(hostEl.querySelector('mjc-space-overview')).toBeNull();
+        expect(hostEl.querySelector('.pinned-wrap')).not.toBeNull();
+        expect(hostEl.querySelector('[data-testid="contributed-tab-stage"] .custom-overview-body')?.textContent).toContain(`Custom Full-Width Overview for ${SPACE_ID}`);
+
+        // Switching to overridden Work tab mounts custom Work component full-width instead of default mjc-space-work
+        comp.onTabSelectRequested('Work');
+        comp['changeDetector'].markForCheck();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(hostEl.querySelector('mjc-space-work')).toBeNull();
+        expect(hostEl.querySelector('[data-testid="contributed-tab-stage"] .custom-work-body')?.textContent).toContain(`Custom Full-Width Work for ${SPACE_ID}`);
+    });
 });
