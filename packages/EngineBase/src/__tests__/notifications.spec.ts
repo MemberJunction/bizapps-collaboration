@@ -80,13 +80,17 @@ const TEAM_USER_ID = '11111111-1111-4111-8111-111111111102';
 const SHARED_USER_ID = '11111111-1111-4111-8111-111111111103';
 const QUIET_USER_ID = '11111111-1111-4111-8111-111111111104';
 const MUTED_USER_ID = '11111111-1111-4111-8111-111111111105';
+const OBSERVER_USER_ID = '11111111-1111-4111-8111-111111111106';
 const OUTSIDER_ID = '11111111-1111-4111-8111-111111111199';
 
 const ROLE_TEAM_ID = '22222222-2222-4222-8222-222222222201';
 const ROLE_SHARED_ID = '22222222-2222-4222-8222-222222222202';
+const ROLE_OBSERVER_ID = '22222222-2222-4222-8222-222222222203';
 const STATUS_OPEN_ID = '33333333-3333-4333-8333-333333333301';
+const STATUS_READONLY_ID = '33333333-3333-4333-8333-333333333302';
 const SPACE_ROOT_ID = '44444444-4444-4444-8444-444444444401';
 const SPACE_CHILD_ID = '44444444-4444-4444-8444-444444444402';
+const SPACE_READONLY_ID = '44444444-4444-4444-8444-444444444403';
 const SPACE_TYPE_ID = '55555555-5555-4555-8555-555555555501';
 
 const TYPE_MENTION_ID = '66666666-6666-4666-8666-666666666601';
@@ -117,7 +121,7 @@ function matchesFilter(row: MockRow, rawFilter: string | undefined): boolean {
             const val = rawVal.startsWith("'") && rawVal.endsWith("'") ? rawVal.slice(1, -1).replace(/''/g, "'") : rawVal;
             const actual = row[field as keyof MockRow];
             if (typeof actual === 'boolean') {
-                if ((val === '1' || val === 'true') !== actual) return false;
+                if ((val === '1' || val.toLowerCase() === 'true') !== actual) return false;
             } else if (String(actual ?? '').toLowerCase() !== val.toLowerCase()) {
                 return false;
             }
@@ -209,19 +213,32 @@ function createNotificationStore(): NotificationStore {
                 InheritsMembership: true,
                 StatusID: STATUS_OPEN_ID,
             },
+            {
+                ID: SPACE_READONLY_ID,
+                Name: 'Archived ReadOnly Space',
+                ParentID: null,
+                SpaceTypeID: SPACE_TYPE_ID,
+                OwnerID: ACTOR_ID,
+                InheritsMembership: false,
+                StatusID: STATUS_READONLY_ID,
+            },
         ],
         spaceMembers: [
             { ID: '70000001-0000-4000-8000-000000000001', SpaceID: SPACE_ROOT_ID, UserID: TEAM_USER_ID, SpaceRoleTypeID: ROLE_TEAM_ID, Band: 'Team', Status: 'Active' },
             { ID: '70000001-0000-4000-8000-000000000002', SpaceID: SPACE_ROOT_ID, UserID: SHARED_USER_ID, SpaceRoleTypeID: ROLE_SHARED_ID, Band: 'Shared', Status: 'Active' },
             { ID: '70000001-0000-4000-8000-000000000003', SpaceID: SPACE_ROOT_ID, UserID: QUIET_USER_ID, SpaceRoleTypeID: ROLE_TEAM_ID, Band: 'Team', Status: 'Active' },
             { ID: '70000001-0000-4000-8000-000000000004', SpaceID: SPACE_ROOT_ID, UserID: MUTED_USER_ID, SpaceRoleTypeID: ROLE_TEAM_ID, Band: 'Team', Status: 'Active' },
+            { ID: '70000001-0000-4000-8000-000000000005', SpaceID: SPACE_ROOT_ID, UserID: OBSERVER_USER_ID, SpaceRoleTypeID: ROLE_OBSERVER_ID, Band: 'Shared', Status: 'Active' },
+            { ID: '70000001-0000-4000-8000-000000000006', SpaceID: SPACE_READONLY_ID, UserID: TEAM_USER_ID, SpaceRoleTypeID: ROLE_TEAM_ID, Band: 'Team', Status: 'Active' },
         ],
         spaceRoleTypes: [
             { ID: ROLE_TEAM_ID, CanSeeTeamBand: true, IsOwnerRole: false, CanContribute: true, IsActive: true },
             { ID: ROLE_SHARED_ID, CanSeeTeamBand: false, IsOwnerRole: false, CanContribute: true, IsActive: true },
+            { ID: ROLE_OBSERVER_ID, CanSeeTeamBand: false, IsOwnerRole: false, CanContribute: false, IsActive: true },
         ],
         spaceTypeStatuses: [
             { ID: STATUS_OPEN_ID, Visible: true, ReadOnly: false },
+            { ID: STATUS_READONLY_ID, Visible: true, ReadOnly: true },
         ],
         users: [
             { ID: ACTOR_ID, Name: 'Actor', Email: 'actor@example.com', Type: 'User', IsActive: true },
@@ -229,6 +246,7 @@ function createNotificationStore(): NotificationStore {
             { ID: SHARED_USER_ID, Name: 'Shared Member', Email: 'shared@example.com', Type: 'User', IsActive: true },
             { ID: QUIET_USER_ID, Name: 'Quiet Member', Email: 'quiet@example.com', Type: 'User', IsActive: true },
             { ID: MUTED_USER_ID, Name: 'Muted Member', Email: 'muted@example.com', Type: 'User', IsActive: true },
+            { ID: OBSERVER_USER_ID, Name: 'Observer Member', Email: 'observer@example.com', Type: 'User', IsActive: true },
             { ID: OUTSIDER_ID, Name: 'Outsider', Email: 'outsider@example.com', Type: 'User', IsActive: true },
         ],
         notificationTypes: [
@@ -554,5 +572,135 @@ describe('NT-1 Comms v2 EngineBase routing & UserInfoEngine preference enforceme
             expect(dispatchedRequests.every((r) => r.Payload.RecipientUserID !== SHARED_USER_ID)).toBe(true);
             expect(dispatchedRequests.some((r) => r.Payload.EventType === eventType)).toBe(true);
         }
+    });
+
+    it('prevents non-system ActorUserID/ActorName spoofing and enforces CanContribute & non-ReadOnly space status (CR-1)', async () => {
+        const store = createNotificationStore();
+        const provider = createProvider(store);
+        const sharedCaller = makeUser(SHARED_USER_ID);
+
+        // Non-system caller attempting to spoof TEAM_USER_ID as ActorUserID to suppress delivery to TEAM_USER_ID
+        const res = await runRouteCollaborationNotifications(provider, sharedCaller, {
+            Event: {
+                EventType: 'Mention',
+                SpaceID: SPACE_ROOT_ID,
+                Band: 'Shared',
+                Title: 'Attempted spoof',
+                ActorUserID: TEAM_USER_ID,
+                ActorName: 'Spoofed Team Member',
+            },
+            RecipientUserIDs: [TEAM_USER_ID, SHARED_USER_ID],
+            IncludeSpaceMembers: false,
+            Now: '2026-11-23T18:00:00.000Z',
+        });
+
+        expect(res.Success).toBe(true);
+        // TEAM_USER_ID MUST still receive the notification (not suppressed as ExcludedActor!)
+        const teamOutcome = res.Deliveries.find((d) => d.RecipientUserID === TEAM_USER_ID);
+        expect(teamOutcome?.Dispatched).toBe(true);
+        expect(dispatchedRequests.length).toBe(1);
+        expect(dispatchedRequests[0].Payload.TemplateData.ActorName).toBe(sharedCaller.Name);
+        // Server derived ActorUserID = SHARED_USER_ID so SHARED_USER_ID (caller) was suppressed as ExcludedActor
+        const callerOutcome = res.Deliveries.find((d) => d.RecipientUserID === SHARED_USER_ID);
+        expect(callerOutcome?.SuppressionReasons).toContain('ExcludedActor');
+
+        // System caller (Type: 'Owner') MAY specify an explicit ActorUserID/ActorName
+        dispatchedRequests.length = 0;
+        const systemCaller = makeUser(ACTOR_ID, { type: 'Owner' });
+        const sysRes = await runRouteCollaborationNotifications(provider, systemCaller, {
+            Event: {
+                EventType: 'Mention',
+                SpaceID: SPACE_ROOT_ID,
+                Band: 'Shared',
+                Title: 'System delegated event',
+                ActorUserID: TEAM_USER_ID,
+                ActorName: 'Delegated Team Member',
+            },
+            RecipientUserIDs: [TEAM_USER_ID, SHARED_USER_ID],
+            IncludeSpaceMembers: false,
+            Now: '2026-11-23T18:00:00.000Z',
+        });
+        expect(sysRes.Success).toBe(true);
+        expect(sysRes.Deliveries.find((d) => d.RecipientUserID === TEAM_USER_ID)?.SuppressionReasons).toContain('ExcludedActor');
+        expect(sysRes.Deliveries.find((d) => d.RecipientUserID === SHARED_USER_ID)?.Dispatched).toBe(true);
+        expect(dispatchedRequests[0].Payload.TemplateData.ActorName).toBe('Delegated Team Member');
+
+        // Non-contributing role (CanContribute = false) rejected
+        await expect(
+            runRouteCollaborationNotifications(provider, makeUser(OBSERVER_USER_ID), {
+                Event: {
+                    EventType: 'Mention',
+                    SpaceID: SPACE_ROOT_ID,
+                    Band: 'Shared',
+                    Title: 'Observer cannot notify',
+                },
+                RecipientUserIDs: [TEAM_USER_ID],
+                IncludeSpaceMembers: false,
+            }),
+        ).rejects.toThrow(/contribution permission/i);
+
+        // Non-owner in ReadOnly status space rejected
+        await expect(
+            runRouteCollaborationNotifications(provider, makeUser(TEAM_USER_ID), {
+                Event: {
+                    EventType: 'Mention',
+                    SpaceID: SPACE_READONLY_ID,
+                    Band: 'Shared',
+                    Title: 'Cannot notify in read-only space',
+                },
+                RecipientUserIDs: [ACTOR_ID],
+                IncludeSpaceMembers: false,
+            }),
+        ).rejects.toThrow(/read-only status/i);
+
+        // Space owner IS permitted even when ReadOnly = true
+        const ownerRes = await runRouteCollaborationNotifications(provider, makeUser(ACTOR_ID), {
+            Event: {
+                EventType: 'StatusChanged',
+                SpaceID: SPACE_READONLY_ID,
+                Band: 'Shared',
+                Title: 'Owner notice in read-only space',
+            },
+            RecipientUserIDs: [TEAM_USER_ID],
+            IncludeSpaceMembers: false,
+            Now: '2026-11-23T18:00:00.000Z',
+        });
+        expect(ownerRes.Success).toBe(true);
+        expect(ownerRes.DispatchedCount).toBe(1);
+    });
+
+    it('generates double-quoted PostgreSQL ExtraFilter SQL across notification routing and preferences (CR-4)', async () => {
+        const store = createNotificationStore();
+        const pgProvider = createProvider(store);
+        Object.defineProperty(pgProvider, 'PlatformKey', { value: 'postgresql', configurable: true });
+        const actor = makeUser(ACTOR_ID);
+
+        await runGetUserNotificationPreferences(pgProvider, makeUser(TEAM_USER_ID));
+        await runUpdateUserNotificationPreferences(pgProvider, makeUser(TEAM_USER_ID), {
+            Patch: { Channels: { Email: false } },
+        });
+        await runRouteCollaborationNotifications(pgProvider, actor, {
+            Event: {
+                EventType: 'Mention',
+                SpaceID: SPACE_CHILD_ID,
+                Band: 'Shared',
+                Title: 'Postgres dialect check',
+            },
+            IncludeSpaceMembers: true,
+            Now: '2026-11-23T18:00:00.000Z',
+            Dialect: 'postgresql',
+        });
+
+        const filters = store.runViewCalls.map((c) => c.ExtraFilter ?? '').filter((f) => f.length > 0);
+        expect(filters.length).toBeGreaterThan(0);
+        expect(filters.every((f) => !/\[[A-Za-z0-9_]+\]/.test(f))).toBe(true);
+        expect(filters.some((f) => f.includes('"Status" = \'Active\''))).toBe(true);
+        expect(filters.some((f) => f.includes('"NotificationTypeID" ='))).toBe(true);
+        expect(filters.some((f) => f.includes('"Setting" ='))).toBe(true);
+        expect(
+            filters.every(
+                (f) => !/(^|[^"])\b(?:ID|SpaceID|UserID|Status|NotificationTypeID|Setting)\b/.test(f),
+            ),
+        ).toBe(true);
     });
 });

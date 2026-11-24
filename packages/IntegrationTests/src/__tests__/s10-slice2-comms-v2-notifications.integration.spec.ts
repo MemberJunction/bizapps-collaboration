@@ -103,7 +103,7 @@ function matchesWorldFilter(row: WorldRow, filterRaw: string | undefined): boole
             const val = rawVal.startsWith("'") && rawVal.endsWith("'") ? rawVal.slice(1, -1).replace(/''/g, "'") : rawVal;
             const actual = row[field as keyof WorldRow];
             if (typeof actual === 'boolean') {
-                if ((val === '1' || val === 'true') !== actual) return false;
+                if ((val === '1' || val.toLowerCase() === 'true') !== actual) return false;
             } else if (String(actual ?? '').toLowerCase() !== val.toLowerCase()) {
                 return false;
             }
@@ -461,5 +461,33 @@ describe('S10 Slice 2 World-Data-Model NT-1 Comms v2 Integration', () => {
             expect(map.get(SAM_STAFF_ID.toLowerCase())?.Dispatched).toBe(true);
             expect(dispatchedPayloads.some((p) => p.Payload.EventType === eventType)).toBe(true);
         }
+
+        // 3. CR-1 security regression: non-system caller cannot spoof ActorUserID/ActorName,
+        //    and non-contributing role / ReadOnly space status callers are rejected.
+        dispatchedPayloads.length = 0;
+        const casey = makeWorldUser(CASEY_EXT_ID);
+        const spoofAttempt = await engine.RouteCollaborationNotifications(
+            {
+                Event: {
+                    EventType: 'Mention',
+                    SpaceID: ROOT_SPACE_ID,
+                    Band: 'Shared',
+                    Title: 'Spoof attempt integration test',
+                    ActorUserID: SAM_STAFF_ID,
+                    ActorName: 'Impersonated Sam',
+                },
+                RecipientUserIDs: [SAM_STAFF_ID, CASEY_EXT_ID],
+                IncludeSpaceMembers: false,
+                Now: '2026-11-23T18:00:00.000Z',
+            },
+            casey,
+            provider,
+        );
+        expect(spoofAttempt.Success).toBe(true);
+        const spoofMap = new Map(spoofAttempt.Deliveries.map((d) => [d.RecipientUserID, d]));
+        // SAM_STAFF_ID must still receive the notification (not excluded as actor!)
+        expect(spoofMap.get(SAM_STAFF_ID.toLowerCase())?.Dispatched).toBe(true);
+        expect(spoofMap.get(CASEY_EXT_ID.toLowerCase())?.SuppressionReasons).toContain('ExcludedActor');
+        expect(dispatchedPayloads[0].Payload.TemplateData.ActorName).toBe(casey.Name);
     });
 });

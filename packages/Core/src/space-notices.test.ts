@@ -63,6 +63,16 @@ describe('CS-4 space notices pure rules', () => {
                 { EventTimestamp: '2026-11-23T12:00:00.1234560Z', EventID: EVT_4 },
             ) > 0,
         );
+        // Sub-millisecond DATETIMEOFFSET(7) tick truncation: Date-truncated watermark (.123Z)
+        // referencing the exact same EventID must treat that exact event as read while keeping newer sub-ms events unread.
+        const subMsEvent = makeEvent({ ID: EVT_1, EventTimestamp: '2026-11-23T12:00:00.1234567Z' });
+        const laterSubMsEvent = makeEvent({ ID: EVT_2, EventTimestamp: '2026-11-23T12:00:00.1239000Z' });
+        const truncatedWatermark = { EventTimestamp: new Date('2026-11-23T12:00:00.123Z'), EventID: EVT_1 };
+        const subMsCursor = { EventTimestamp: subMsEvent.EventTimestamp, EventID: subMsEvent.ID };
+        assert.equal(compareNoticeCursors(subMsCursor, truncatedWatermark), 0);
+        assert.equal(isNoticeEventUnread(subMsEvent, truncatedWatermark), false);
+        assert.equal(shouldAdvanceWatermark(truncatedWatermark, subMsCursor), false);
+        assert.equal(isNoticeEventUnread(laterSubMsEvent, truncatedWatermark), true);
     });
 
     it('resolves identical-timestamp watermark boundaries accurately', () => {

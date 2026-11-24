@@ -28,12 +28,14 @@ import {
     LoadSpaceNoticeEventEntityServer,
     LoadSpaceNoticeWatermarkEntityServer,
     PUBLISH_SPACE_NOTICE_EVENT_OPERATION_KEY,
+    RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
     SPACE_DIGEST_CHECKPOINT_ENTITY,
     SPACE_NOTICE_EVENT_ENTITY,
     SPACE_NOTICE_WATERMARK_ENTITY,
     SpaceDigestCheckpointEntityServer,
     SpaceNoticeEventEntityServer,
     SpaceNoticeWatermarkEntityServer,
+    UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY,
 } from '../../dist/index.js';
 
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
@@ -400,7 +402,7 @@ describe('S10 Slice 1 CoreEntitiesServer guards and CollaborationEngine delegati
         assert.equal(forwardRes.Success, true);
     });
 
-    it('enforces self-ownership and non-negative ItemsIncludedCount in SpaceDigestCheckpointEntityServer', async () => {
+    it('enforces ServerOperationScopeManager write authority, self-ownership, non-negative count, and monotonic cursor progression in SpaceDigestCheckpointEntityServer (CR-2)', async () => {
         const entityInfo = makeNoticeEntityInfo('E8A1C2D3-4F50-4A6B-8C9D-0E1F2A3B4C53', SPACE_DIGEST_CHECKPOINT_ENTITY, [
             { Name: 'ID', IsPrimaryKey: true, AllowsNull: false, DefaultValue: 'newsequentialid()' },
             { Name: 'UserID', AllowsNull: false },
@@ -412,32 +414,166 @@ describe('S10 Slice 1 CoreEntitiesServer guards and CollaborationEngine delegati
             { Name: 'ItemsIncludedCount', Type: 'int', Length: 4, AllowsNull: false, DefaultValue: '0' },
             { Name: 'Status', Type: 'nvarchar', Length: 20, AllowsNull: false, DefaultValue: 'Active' },
         ]);
-        const provider: Partial<IMetadataProvider & IEntityDataProvider> = {
+        const existingCheckpointId = '77777777-7777-4777-8777-777777777201';
+        const existingRow: StoredRow & {
+            Cadence: string;
+            LastDeliveredTimestamp: string;
+            LastDeliveredRecordID: string;
+            LastDeliveredAt: string;
+            ItemsIncludedCount: number;
+            Status: string;
+        } = {
+            ID: existingCheckpointId,
+            UserID: MEMBER_USER_ID,
+            SpaceID: SPACE_ID,
+            Cadence: 'Daily',
+            LastDeliveredTimestamp: '2026-06-05T12:00:00.000Z',
+            LastDeliveredRecordID: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000010',
+            LastDeliveredAt: '2026-06-05T12:00:00.000Z',
+            ItemsIncludedCount: 2,
+            Status: 'Active',
+        };
+        const provider: Partial<IMetadataProvider & IRunViewProvider & IEntityDataProvider> = {
             ProviderType: ProviderType.Database,
             Entities: [entityInfo],
+            EntityByID: (id: string) => (id.toLowerCase() === entityInfo.ID.toLowerCase() ? entityInfo : undefined),
+            GetEntityObject: async <T>(_name: string): Promise<T> =>
+                new SpaceDigestCheckpointEntityServer(entityInfo, provider as IEntityDataProvider) as T,
+            Load: async () => existingRow,
+            RunView: async <T>(_params: RunViewParams): Promise<RunViewResult<T>> => ({
+                Success: true,
+                Results: [existingRow] as T[],
+                UserViewRunID: '',
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: '',
+            }),
         };
 
+        const member = makeUser(MEMBER_USER_ID, 'User');
         const cp = new SpaceDigestCheckpointEntityServer(entityInfo, provider as IEntityDataProvider);
-        cp.ContextCurrentUser = makeUser(MEMBER_USER_ID, 'User');
-        cp.UserID = OTHER_USER_ID;
+        cp.ContextCurrentUser = member;
+        cp.UserID = MEMBER_USER_ID;
+        cp.SpaceID = SPACE_ID;
         cp.Cadence = 'Daily';
         cp.Status = 'Active';
-        cp.ItemsIncludedCount = 5;
+        cp.ItemsIncludedCount = 3;
         cp.LastDeliveredTimestamp = new Date('2026-06-01T08:00:00.000Z');
         cp.LastDeliveredAt = new Date('2026-06-01T08:00:00.000Z');
 
-        const wrongUser = await cp.ValidateAsync();
+        // Direct client CRUD & un-scoped non-Owner calls must be rejected
+        const directClientBlocked = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+            cp.ValidateAsync(),
+        );
+        assert.equal(directClientBlocked.Success, false);
+        assert.ok(directClientBlocked.Errors.some((e) => e.Message.includes('UpdateSpaceDigestCheckpoint')));
+
+        const unscopedBlocked = await cp.ValidateAsync();
+        assert.equal(unscopedBlocked.Success, false);
+
+        // Inside UpdateSpaceDigestCheckpoint scope: cross-user and negative count still fail, valid passes
+        cp.UserID = OTHER_USER_ID;
+        const wrongUser = await ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY,
+                source: 'ServerEngine',
+                allowedEntities: [SPACE_DIGEST_CHECKPOINT_ENTITY],
+                userId: member.ID,
+            },
+            () => cp.ValidateAsync(),
+        );
         assert.equal(wrongUser.Success, false);
 
         cp.UserID = MEMBER_USER_ID;
         cp.ItemsIncludedCount = -1;
-        const negativeCount = await cp.ValidateAsync();
+        const negativeCount = await ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY,
+                source: 'ServerEngine',
+                allowedEntities: [SPACE_DIGEST_CHECKPOINT_ENTITY],
+                userId: member.ID,
+            },
+            () => cp.ValidateAsync(),
+        );
         assert.equal(negativeCount.Success, false);
         assert.ok(negativeCount.Errors.some((e) => e.Source === 'ItemsIncludedCount'));
 
         cp.ItemsIncludedCount = 3;
-        const ok = await cp.ValidateAsync();
+        const ok = await ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY,
+                source: 'ServerEngine',
+                allowedEntities: [SPACE_DIGEST_CHECKPOINT_ENTITY],
+                userId: member.ID,
+            },
+            () => cp.ValidateAsync(),
+        );
         assert.equal(ok.Success, true);
+
+        // Inside RunScopedSpaceDigests scope: server can update another member's checkpoint
+        cp.UserID = OTHER_USER_ID;
+        const runDigestScopeOk = await ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+                source: 'ServerEngine',
+                allowedEntities: [SPACE_DIGEST_CHECKPOINT_ENTITY],
+                userId: member.ID,
+            },
+            () => cp.ValidateAsync(),
+        );
+        assert.equal(runDigestScopeOk.Success, true);
+
+        // Load existing saved checkpoint (IsSaved === true) and verify composite cursor regression refusal
+        cp.ContextCurrentUser = systemUser;
+        const loaded = await cp.Load(existingCheckpointId);
+        assert.equal(loaded, true);
+        cp.ContextCurrentUser = member;
+        cp.UserID = MEMBER_USER_ID;
+
+        // Earlier timestamp rejected
+        cp.LastDeliveredTimestamp = new Date('2026-06-04T12:00:00.000Z');
+        cp.LastDeliveredRecordID = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000099';
+        const regressTs = await ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+                source: 'ServerEngine',
+                allowedEntities: [SPACE_DIGEST_CHECKPOINT_ENTITY],
+                userId: member.ID,
+            },
+            () => cp.ValidateAsync(),
+        );
+        assert.equal(regressTs.Success, false);
+        assert.ok(regressTs.Errors.some((e) => e.Message.includes('regression')));
+
+        // Same timestamp with lower LastDeliveredRecordID rejected
+        cp.LastDeliveredTimestamp = new Date('2026-06-05T12:00:00.000Z');
+        cp.LastDeliveredRecordID = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001';
+        const regressId = await ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+                source: 'ServerEngine',
+                allowedEntities: [SPACE_DIGEST_CHECKPOINT_ENTITY],
+                userId: member.ID,
+            },
+            () => cp.ValidateAsync(),
+        );
+        assert.equal(regressId.Success, false);
+        assert.ok(regressId.Errors.some((e) => e.Message.includes('regression')));
+
+        // Monotonic forward advance passes
+        cp.LastDeliveredTimestamp = new Date('2026-06-05T12:00:00.000Z');
+        cp.LastDeliveredRecordID = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000011';
+        const forwardOk = await ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+                source: 'ServerEngine',
+                allowedEntities: [SPACE_DIGEST_CHECKPOINT_ENTITY],
+                userId: member.ID,
+            },
+            () => cp.ValidateAsync(),
+        );
+        assert.equal(forwardOk.Success, true);
     });
 
     it('delegates CS-4 Publish/Get/UnreadCount/AdvanceWatermark through CollaborationEngine.Instance', async () => {

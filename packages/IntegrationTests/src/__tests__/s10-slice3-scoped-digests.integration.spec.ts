@@ -189,7 +189,7 @@ function matchesWorldFilter(row: WorldDigestRow, rawFilter: string | undefined):
             const val = rawVal.startsWith("'") && rawVal.endsWith("'") ? rawVal.slice(1, -1).replace(/''/g, "'") : rawVal;
             const actual = row[field as keyof WorldDigestRow];
             if (typeof actual === 'boolean') {
-                if ((val === '1' || val === 'true') !== actual) return false;
+                if ((val === '1' || val.toLowerCase() === 'true') !== actual) return false;
             } else if (String(actual ?? '').toLowerCase() !== val.toLowerCase()) {
                 return false;
             }
@@ -535,5 +535,93 @@ describe('S10 Slice 3 World-Data-Model NT-2 Scoped Digests Integration', () => {
         expect(repeatRun.DeliveredCount).toBe(0);
         expect(repeatRun.EmptySuppressedCount).toBe(2);
         expect(dispatched.length).toBe(0);
+
+        // CR-2 + CR-3 integration check: multi-space SpaceIDs creates per-space checkpoints without mutating SpaceID IS NULL,
+        // and UpdateSpaceDigestCheckpoint rejects reachless spaces and cursor regressions.
+        const thirdSpaceId = 'C2000001-0000-4000-8000-000000000099';
+        spaces.push({
+            ID: thirdSpaceId,
+            Name: 'Third Restricted Space',
+            ParentID: null,
+            SpaceTypeID: SPACE_TYPE_ID,
+            OwnerID: ADA_OWNER_ID,
+            InheritsMembership: false,
+            StatusID: STATUS_ACTIVE_ID,
+            __mj_CreatedAt: '2026-01-01T00:00:00.000Z',
+        });
+        events.push({
+            ID: 'e0000001-0000-4000-8000-000000000fff',
+            SpaceID: ROOT_SPACE_ID,
+            ActorUserID: ADA_OWNER_ID,
+            EventKind: 'Share',
+            Band: 'Shared',
+            Title: 'Multi-space root notice',
+            EventTimestamp: '2026-11-24T06:00:00.000Z',
+        });
+        events.push({
+            ID: 'e0000001-0000-4000-8000-000000001000',
+            SpaceID: CHILD_SPACE_ID,
+            ActorUserID: ADA_OWNER_ID,
+            EventKind: 'Share',
+            Band: 'Shared',
+            Title: 'Multi-space child notice',
+            EventTimestamp: '2026-11-24T06:05:00.000Z',
+        });
+
+        const caseyUser = makeWorldUser(CASEY_EXT_ID);
+        await expect(
+            CollaborationEngine.Instance.UpdateSpaceDigestCheckpoint(
+                { SpaceID: thirdSpaceId, Cadence: 'Daily', Status: 'Paused' },
+                caseyUser,
+                provider,
+            ),
+        ).rejects.toThrow(/active reach/i);
+
+        const globalCpBefore = checkpoints.find(
+            (c) => (c.UserID ?? '').toLowerCase() === CASEY_EXT_ID.toLowerCase() && c.SpaceID === null,
+        );
+        const globalTsBefore = globalCpBefore?.LastDeliveredTimestamp;
+
+        const multiSpaceRun = await CollaborationEngine.Instance.RunScopedSpaceDigests(
+            {
+                Cadence: 'Daily',
+                SpaceIDs: [ROOT_SPACE_ID, CHILD_SPACE_ID],
+                RecipientUserIDs: [CASEY_EXT_ID],
+                ForceWindow: true,
+                Now: '2026-11-24T07:00:00.000Z',
+            },
+            ada,
+            provider,
+        );
+        expect(multiSpaceRun.Success).toBe(true);
+        expect(multiSpaceRun.DeliveredCount).toBe(1);
+        // 79 historical Shared events + 2 new events across ROOT_SPACE_ID and CHILD_SPACE_ID (independent of global checkpoint)
+        expect(multiSpaceRun.Outcomes[0].ItemsIncludedCount).toBe(81);
+        // Global SpaceID IS NULL checkpoint remained untouched by the multi-space SpaceIDs run
+        const globalCpAfter = checkpoints.find(
+            (c) => (c.UserID ?? '').toLowerCase() === CASEY_EXT_ID.toLowerCase() && c.SpaceID === null,
+        );
+        expect(globalCpAfter?.LastDeliveredTimestamp).toBe(globalTsBefore);
+        // Per-space checkpoints were written for ROOT_SPACE_ID and CHILD_SPACE_ID
+        const caseySpaceCps = checkpoints.filter(
+            (c) => (c.UserID ?? '').toLowerCase() === CASEY_EXT_ID.toLowerCase() && c.SpaceID !== null,
+        );
+        expect(caseySpaceCps.length).toBe(2);
+
+        // Re-running multi-space SpaceIDs sees per-space checkpoints and suppresses empty digest
+        const multiSpaceRepeat = await CollaborationEngine.Instance.RunScopedSpaceDigests(
+            {
+                Cadence: 'Daily',
+                SpaceIDs: [ROOT_SPACE_ID, CHILD_SPACE_ID],
+                RecipientUserIDs: [CASEY_EXT_ID],
+                ForceWindow: true,
+                Now: '2026-11-24T07:30:00.000Z',
+            },
+            ada,
+            provider,
+        );
+        expect(multiSpaceRepeat.Success).toBe(true);
+        expect(multiSpaceRepeat.DeliveredCount).toBe(0);
+        expect(multiSpaceRepeat.EmptySuppressedCount).toBe(1);
     });
 });

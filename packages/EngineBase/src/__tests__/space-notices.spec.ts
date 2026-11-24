@@ -237,7 +237,7 @@ function matchesSimpleFilter(row: TestRecord, filterRaw: string | undefined): bo
             const val = rawVal.startsWith("'") && rawVal.endsWith("'") ? rawVal.slice(1, -1) : rawVal;
             const actual = field === 'ID' ? row.ID : (row[field as keyof TestRecord] as string | boolean | null | undefined);
             if (typeof actual === 'boolean') {
-                if ((val === '1' || val === 'true') !== actual) return false;
+                if ((val === '1' || val.toLowerCase() === 'true') !== actual) return false;
             } else if ((actual ?? '').toString().toLowerCase() !== val.toLowerCase()) {
                 return false;
             }
@@ -752,5 +752,63 @@ describe('CS-4 Fan-Out-on-Read Space Notices Engine', () => {
             provider,
         );
         expect(marked.Advanced).toBe(true);
+    });
+
+    it('marks sub-millisecond DATETIMEOFFSET(7) events read after watermark advance and quotes PostgreSQL ExtraFilters cleanly', async () => {
+        const store = createInitialStore();
+        const subMsEventId = 'dddddddd-dddd-4ddd-8ddd-000000000001';
+        const laterSubMsEventId = 'dddddddd-dddd-4ddd-8ddd-000000000002';
+        store.noticeEvents.push(
+            {
+                ID: subMsEventId,
+                SpaceID: SPACE_ROOT_ID,
+                ActorUserID: OWNER_ID,
+                EventKind: 'Announcement',
+                Band: 'Shared',
+                Title: 'Sub-ms precision notice',
+                EventTimestamp: '2026-06-15T14:00:00.1234567Z',
+            },
+            {
+                ID: laterSubMsEventId,
+                SpaceID: SPACE_ROOT_ID,
+                ActorUserID: OWNER_ID,
+                EventKind: 'Announcement',
+                Band: 'Shared',
+                Title: 'Later same-ms notice',
+                EventTimestamp: '2026-06-15T14:00:00.1239999Z',
+            },
+        );
+        const provider = createMockProvider(store);
+        const extUser = makeUser(EXT_MEMBER_ID);
+
+        const adv = await runAdvanceSpaceNoticeWatermark(provider, extUser, {
+            SpaceID: SPACE_ROOT_ID,
+            EventID: subMsEventId,
+            Dialect: 'postgresql',
+        });
+        expect(adv.Success).toBe(true);
+        expect(adv.Advanced).toBe(true);
+
+        store.capturedRunViewCalls.length = 0;
+        const feed = await runGetSpaceNotices(provider, extUser, {
+            SpaceID: SPACE_ROOT_ID,
+            Dialect: 'postgresql',
+        });
+        const firstNotice = feed.Notices.find((n) => n.ID === subMsEventId);
+        const secondNotice = feed.Notices.find((n) => n.ID === laterSubMsEventId);
+        expect(firstNotice?.IsUnread).toBe(false);
+        expect(secondNotice?.IsUnread).toBe(true);
+        expect(feed.TotalUnreadCount).toBe(1);
+
+        const counts = await runGetSpaceUnreadNoticeCounts(provider, extUser, { Dialect: 'postgresql' });
+        expect(counts.UnreadCountBySpace[SPACE_ROOT_ID]).toBe(1);
+
+        const filters = store.capturedRunViewCalls
+            .map((c) => c.ExtraFilter ?? '')
+            .filter((f) => f.length > 0);
+        expect(filters.some((f) => f.includes('"InheritsMembership" = TRUE'))).toBe(true);
+        expect(filters.every((f) => !f.includes('InheritsMembership = 1'))).toBe(true);
+        expect(filters.every((f) => !/\[[A-Za-z0-9_]+\]/.test(f))).toBe(true);
+        expect(filters.every((f) => !/(^|[^"])\b(?:UserID|OwnerID|SpaceID|Status|ParentID|InheritsMembership|ID)\b/.test(f))).toBe(true);
     });
 });

@@ -218,7 +218,7 @@ function matchesDigestMockFilter(row: DigestMockRow, rawFilter: string | undefin
             const val = rawVal.startsWith("'") && rawVal.endsWith("'") ? rawVal.slice(1, -1).replace(/''/g, "'") : rawVal;
             const actual = row[field as keyof DigestMockRow];
             if (typeof actual === 'boolean') {
-                if ((val === '1' || val === 'true') !== actual) return false;
+                if ((val === '1' || val.toLowerCase() === 'true') !== actual) return false;
             } else if (String(actual ?? '').toLowerCase() !== val.toLowerCase()) {
                 return false;
             }
@@ -820,5 +820,272 @@ describe('NT-2 EngineBase Scoped Digests, Composite Keyset Pagination & Fail-Clo
         );
         expect(afterPause.Outcomes[0].SuppressionReason).toBe('CheckpointPaused');
         expect(dispatched.length).toBe(0);
+    });
+
+    it('rejects reachless SpaceID and composite cursor regression in runUpdateSpaceDigestCheckpoint (CR-2)', async () => {
+        const spaceThreeId = '22222222-2222-4222-8222-222222222299';
+        const { provider, store } = createDigestMockHarness({});
+        // Add a third space that SHARED_MEMBER_ID has NO reach in
+        store.spaces.push({
+            ID: spaceThreeId,
+            Name: 'Restricted Space',
+            ParentID: null,
+            SpaceTypeID: SPACE_TYPE_ID,
+            OwnerID: ADMIN_ID,
+            InheritsMembership: false,
+            StatusID: STATUS_OPEN_ID,
+            __mj_CreatedAt: '2026-01-01T00:00:00.000Z',
+        });
+
+        const sharedUser = makeUser(SHARED_MEMBER_ID);
+
+        // Caller without reach in spaceThreeId MUST be rejected
+        await expect(
+            runUpdateSpaceDigestCheckpoint(provider, sharedUser, {
+                SpaceID: spaceThreeId,
+                Cadence: 'Daily',
+                LastDeliveredTimestamp: '2026-11-23T10:00:00.000Z',
+                LastDeliveredRecordID: 'aaaaaaaa-0000-4000-8000-000000000010',
+            }),
+        ).rejects.toThrow(/active reach/i);
+        expect(store.checkpoints.length).toBe(0);
+
+        // Authorized space succeeds and sets cursor at (10:00:00.000Z, ...0010)
+        const created = await runUpdateSpaceDigestCheckpoint(provider, sharedUser, {
+            SpaceID: SPACE_ROOT_ID,
+            Cadence: 'Daily',
+            LastDeliveredTimestamp: '2026-11-23T10:00:00.000Z',
+            LastDeliveredRecordID: 'aaaaaaaa-0000-4000-8000-000000000010',
+        });
+        expect(created.Success).toBe(true);
+        expect(created.Checkpoint?.SpaceID).toBe(SPACE_ROOT_ID);
+
+        // Earlier timestamp regression rejected
+        await expect(
+            runUpdateSpaceDigestCheckpoint(provider, sharedUser, {
+                SpaceID: SPACE_ROOT_ID,
+                Cadence: 'Daily',
+                LastDeliveredTimestamp: '2026-11-23T09:59:59.000Z',
+                LastDeliveredRecordID: 'aaaaaaaa-0000-4000-8000-000000000099',
+            }),
+        ).rejects.toThrow(/regression/i);
+
+        // Same timestamp with lower LastDeliveredRecordID rejected
+        await expect(
+            runUpdateSpaceDigestCheckpoint(provider, sharedUser, {
+                SpaceID: SPACE_ROOT_ID,
+                Cadence: 'Daily',
+                LastDeliveredTimestamp: '2026-11-23T10:00:00.000Z',
+                LastDeliveredRecordID: 'aaaaaaaa-0000-4000-8000-000000000005',
+            }),
+        ).rejects.toThrow(/regression/i);
+
+        // Advancing within same millisecond to higher RecordID succeeds
+        const advanced = await runUpdateSpaceDigestCheckpoint(provider, sharedUser, {
+            SpaceID: SPACE_ROOT_ID,
+            Cadence: 'Daily',
+            LastDeliveredTimestamp: '2026-11-23T10:00:00.000Z',
+            LastDeliveredRecordID: 'aaaaaaaa-0000-4000-8000-000000000020',
+        });
+        expect(advanced.Success).toBe(true);
+        expect(advanced.Checkpoint?.LastDeliveredRecordID).toBe('aaaaaaaa-0000-4000-8000-000000000020');
+    });
+
+    it('uses composite compareNoticeCursors for lowerBoundCursor and isolates multi-space SpaceIDs checkpoints from SpaceID IS NULL (CR-3)', async () => {
+        const spaceThreeId = '22222222-2222-4222-8222-222222222203';
+        const sameMsTs = '2026-11-23T10:00:00.000Z';
+        const evt1 = 'aaaaaaaa-0000-4000-8000-000000000001';
+        const evt2 = 'aaaaaaaa-0000-4000-8000-000000000002';
+        const evt3 = 'aaaaaaaa-0000-4000-8000-000000000003';
+        const evtSpace3 = 'aaaaaaaa-0000-4000-8000-000000000004';
+
+        // Case A: Two explicit recipients share identical LastDeliveredTimestamp (same epochMs),
+        // with TEAM_MEMBER_ID at evt2 (higher ID) listed FIRST and SHARED_MEMBER_ID at evt1 (lower ID) listed SECOND.
+        // lowerBoundCursor MUST pick (sameMsTs, evt1) so evt2 is still scanned for SHARED_MEMBER_ID!
+        const tieHarness = createDigestMockHarness({
+            events: [
+                {
+                    ID: evt1,
+                    SpaceID: SPACE_ROOT_ID,
+                    ActorUserID: ADMIN_ID,
+                    EventKind: 'Share',
+                    Band: 'Shared',
+                    Title: 'Tie Event 1',
+                    EventTimestamp: sameMsTs,
+                },
+                {
+                    ID: evt2,
+                    SpaceID: SPACE_ROOT_ID,
+                    ActorUserID: ADMIN_ID,
+                    EventKind: 'Share',
+                    Band: 'Shared',
+                    Title: 'Tie Event 2',
+                    EventTimestamp: sameMsTs,
+                },
+                {
+                    ID: evt3,
+                    SpaceID: SPACE_ROOT_ID,
+                    ActorUserID: ADMIN_ID,
+                    EventKind: 'Share',
+                    Band: 'Shared',
+                    Title: 'Tie Event 3',
+                    EventTimestamp: sameMsTs,
+                },
+            ],
+            checkpoints: [
+                {
+                    ID: '90000000-0000-4000-8000-000000000001',
+                    UserID: TEAM_MEMBER_ID,
+                    SpaceID: SPACE_ROOT_ID,
+                    Cadence: 'Daily',
+                    LastDeliveredTimestamp: sameMsTs,
+                    LastDeliveredRecordID: evt2,
+                    LastDeliveredAt: '2026-11-23T10:01:00.000Z',
+                    ItemsIncludedCount: 2,
+                    Status: 'Active',
+                },
+                {
+                    ID: '90000000-0000-4000-8000-000000000002',
+                    UserID: SHARED_MEMBER_ID,
+                    SpaceID: SPACE_ROOT_ID,
+                    Cadence: 'Daily',
+                    LastDeliveredTimestamp: sameMsTs,
+                    LastDeliveredRecordID: evt1,
+                    LastDeliveredAt: '2026-11-23T10:01:00.000Z',
+                    ItemsIncludedCount: 1,
+                    Status: 'Active',
+                },
+            ],
+        });
+
+        const adminUser = makeUser(ADMIN_ID, { type: 'Owner' });
+        const tieRes = await runRunScopedSpaceDigests(tieHarness.provider, adminUser, {
+            Cadence: 'Daily',
+            SpaceID: SPACE_ROOT_ID,
+            RecipientUserIDs: [TEAM_MEMBER_ID, SHARED_MEMBER_ID],
+            ForceWindow: true,
+            Now: '2026-11-23T12:00:00.000Z',
+        });
+        expect(tieRes.Success).toBe(true);
+        const tieByUser = new Map(tieRes.Outcomes.map((o) => [o.RecipientUserID, o]));
+        expect(tieByUser.get(TEAM_MEMBER_ID)?.Items.map((i) => i.EventID)).toEqual([evt3]);
+        // SHARED_MEMBER_ID MUST receive both evt2 AND evt3 (evt2 was NOT dropped by lowerBoundCursor!)
+        expect(tieByUser.get(SHARED_MEMBER_ID)?.Items.map((i) => i.EventID)).toEqual([evt2, evt3]);
+
+        // Case B: Multi-space SpaceIDs ([SPACE_ROOT_ID, SPACE_CHILD_ID]) MUST manage per-space checkpoints
+        // and MUST NEVER read or mutate the global (SpaceID IS NULL) checkpoint, preserving spaceThreeId events.
+        const multiHarness = createDigestMockHarness({
+            events: [
+                {
+                    ID: evt1,
+                    SpaceID: SPACE_ROOT_ID,
+                    ActorUserID: ADMIN_ID,
+                    EventKind: 'Share',
+                    Band: 'Shared',
+                    Title: 'Root notice',
+                    EventTimestamp: '2026-11-23T10:00:00.000Z',
+                },
+                {
+                    ID: evt2,
+                    SpaceID: SPACE_CHILD_ID,
+                    ActorUserID: ADMIN_ID,
+                    EventKind: 'Share',
+                    Band: 'Shared',
+                    Title: 'Child notice',
+                    EventTimestamp: '2026-11-23T10:05:00.000Z',
+                },
+                {
+                    ID: evtSpace3,
+                    SpaceID: spaceThreeId,
+                    ActorUserID: ADMIN_ID,
+                    EventKind: 'Share',
+                    Band: 'Shared',
+                    Title: 'Unscoped third space notice',
+                    EventTimestamp: '2026-11-23T09:00:00.000Z',
+                },
+            ],
+        });
+        multiHarness.store.spaces.push({
+            ID: spaceThreeId,
+            Name: 'Third Space',
+            ParentID: null,
+            SpaceTypeID: SPACE_TYPE_ID,
+            OwnerID: ADMIN_ID,
+            InheritsMembership: false,
+            StatusID: STATUS_OPEN_ID,
+            __mj_CreatedAt: '2026-01-01T00:00:00.000Z',
+        });
+        multiHarness.store.members.push({
+            ID: '77777777-0000-4000-8000-000000000099',
+            SpaceID: spaceThreeId,
+            UserID: SHARED_MEMBER_ID,
+            SpaceRoleTypeID: ROLE_SHARED_ID,
+            Band: 'Shared',
+            Status: 'Active',
+            __mj_CreatedAt: '2026-01-01T00:00:00.000Z',
+        });
+
+        const multiRes = await runRunScopedSpaceDigests(multiHarness.provider, adminUser, {
+            Cadence: 'Daily',
+            SpaceIDs: [SPACE_ROOT_ID, SPACE_CHILD_ID],
+            RecipientUserIDs: [SHARED_MEMBER_ID],
+            Now: '2026-11-23T11:00:00.000Z',
+        });
+        expect(multiRes.Success).toBe(true);
+        expect(multiRes.Outcomes[0].ItemsIncludedCount).toBe(2);
+        expect(multiRes.CheckpointsAdvancedCount).toBe(2);
+        // Zero SpaceID IS NULL checkpoint queries or writes during multi-space SpaceIDs run
+        const cpQueries = multiHarness.queries.filter((q) => q.EntityName === SPACE_DIGEST_CHECKPOINT_ENTITY);
+        expect(cpQueries.every((q) => !String(q.ExtraFilter ?? '').includes('IS NULL'))).toBe(true);
+        expect(multiHarness.store.checkpoints.some((c) => c.SpaceID === null)).toBe(false);
+        expect(multiHarness.store.checkpoints.map((c) => c.SpaceID).sort()).toEqual(
+            [SPACE_ROOT_ID, SPACE_CHILD_ID].sort(),
+        );
+
+        // Subsequent unscoped run STILL delivers evtSpace3 (global SpaceID IS NULL checkpoint was not corrupted!)
+        const unscopedRes = await runRunScopedSpaceDigests(multiHarness.provider, adminUser, {
+            Cadence: 'Daily',
+            RecipientUserIDs: [SHARED_MEMBER_ID],
+            Now: '2026-11-23T12:00:00.000Z',
+        });
+        expect(unscopedRes.Success).toBe(true);
+        expect(unscopedRes.Outcomes[0].Items.some((i) => i.EventID === evtSpace3)).toBe(true);
+    });
+
+    it('emits PostgreSQL-compatible quoted identifiers and TRUE boolean predicates in ExtraFilter (CR-4)', async () => {
+        const { provider, queries } = createDigestMockHarness({
+            events: [
+                {
+                    ID: 'dddddddd-0000-4000-8000-000000000001',
+                    SpaceID: SPACE_CHILD_ID,
+                    ActorUserID: ADMIN_ID,
+                    EventKind: 'Share',
+                    Band: 'Shared',
+                    Title: 'Postgres digest check',
+                    EventTimestamp: '2026-11-23T10:00:00.000Z',
+                },
+            ],
+        });
+        Object.defineProperty(provider, 'PlatformKey', { value: 'postgresql', configurable: true });
+        const adminUser = makeUser(ADMIN_ID, { type: 'Owner' });
+
+        const res = await runRunScopedSpaceDigests(provider, adminUser, {
+            Cadence: 'Daily',
+            SpaceID: SPACE_ROOT_ID,
+            IncludeChildSpaces: true,
+            RecipientUserIDs: [SHARED_MEMBER_ID],
+            Now: '2026-11-23T12:00:00.000Z',
+            Dialect: 'postgresql',
+        });
+        expect(res.Success).toBe(true);
+        expect(res.DeliveredCount).toBe(1);
+
+        const filters = queries.map((q) => q.ExtraFilter ?? '').filter((f) => f.length > 0);
+        expect(filters.some((f) => f.includes('"InheritsMembership" = TRUE'))).toBe(true);
+        expect(filters.some((f) => f.includes('"Status" = \'Active\''))).toBe(true);
+        expect(filters.some((f) => f.includes('"NotificationTypeID" ='))).toBe(true);
+        expect(filters.some((f) => f.includes('"Setting" ='))).toBe(true);
+        expect(filters.every((f) => !f.includes('InheritsMembership = 1'))).toBe(true);
+        expect(filters.every((f) => !/\[[A-Za-z0-9_]+\]/.test(f))).toBe(true);
     });
 });

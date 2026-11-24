@@ -355,5 +355,18 @@ describe('S10 Slice 3 CoreEntitiesServer NT-2 Scoped Digests & CollaborationEngi
         assert.equal(result.Outcomes[0].Items[0].Title, 'Shared quarterly memo');
         assert.equal(checkpoints.length, 1);
         assert.equal(checkpoints[0].ItemsIncludedCount, 1);
+
+        // UpdateSpaceDigestCheckpoint rejects non-reachable space and cursor regression via CollaborationEngine
+        const unreachableSpaceId = '22222222-2222-4222-8222-222222222499';
+        const memberUser = makeUser(MEMBER_USER_ID, 'User');
+        await assert.rejects(
+            () =>
+                CollaborationEngine.Instance.UpdateSpaceDigestCheckpoint(
+                    { SpaceID: unreachableSpaceId, Cadence: 'Daily', Status: 'Paused' },
+                    memberUser,
+                    providerImpl as IMetadataProvider,
+                ),
+            /active reach/i,
+        );
     });
 });
