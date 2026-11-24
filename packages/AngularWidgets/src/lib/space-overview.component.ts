@@ -10,7 +10,7 @@ import { CollabNeedsYouCardComponent } from './needs-you-card.component';
 import { CollabItemCardComponent } from './item-card.component';
 import { CollabItemRowComponent } from './item-row.component';
 import { CollabAskBoxComponent } from './ask-box.component';
-import { MJClickableDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface RoomMiniMessage {
@@ -48,7 +48,6 @@ export interface SubSpaceSummary {
     CollabItemCardComponent,
     CollabItemRowComponent,
     CollabAskBoxComponent,
-    MJEmptyStateComponent,
     MJClickableDirective,
     NgComponentOutlet,
   ],
@@ -74,79 +73,190 @@ export interface SubSpaceSummary {
             </div>
           }
 
-          <!-- Shared with Client band -->
-          @if (ShowLibraryLink) {
-          <div class="card band-card shared-band">
-            <div class="band-h">
-              <span class="band-ic">
-                <i class="fa-solid fa-eye"></i>
-              </span>
-              <div class="grow">
-                <div class="fw7 fs14">{{ SharedTitle }}</div>
-                <div class="fs12 band-sub">{{ SharedSubtitle }}</div>
+          <!-- Dual-Band Mode: Shared Band + Optional Team Band -->
+          @if (ShowLibraryLink && HasSharedBand) {
+            <div class="card band-card shared-band" data-testid="overview-shared-band">
+              <div class="band-h">
+                <span class="band-ic">
+                  <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                </span>
+                <div class="grow">
+                  <div class="fw7 fs14">{{ SharedTitle }}</div>
+                  <div class="fs12 band-sub">{{ SharedSubtitle }}</div>
+                </div>
+                @if (ShowPreviewAs && ClientPersonaName) {
+                  <a class="link fs12 preview-link" [mjClickable]="'Preview as ' + ClientPersonaName" (click)="onPreviewAsPersona($event)">
+                    <i class="fa-solid fa-eye" aria-hidden="true"></i>&nbsp;Preview as {{ ClientPersonaName }}
+                  </a>
+                } @else {
+                  <a class="link fs12 open-lib-link" [mjClickable]="'Open library'" (click)="onOpenLibrary($event)">Open library</a>
+                }
               </div>
-              @if (ShowPreviewAs && ClientPersonaName) {
-                <a class="link fs12 preview-link" [mjClickable]="'Preview as ' + ClientPersonaName" (click)="onPreviewAsPersona($event)">
-                  <i class="fa-solid fa-eye"></i>&nbsp;Preview as {{ ClientPersonaName }}
-                </a>
+
+              @if (SharedItems.length === 0) {
+                <div class="quick-empty-strip" data-testid="overview-shared-empty">
+                  <span class="quick-empty-ic"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></span>
+                  <span class="quick-empty-copy">No shared documents yet</span>
+                  <div class="quick-empty-actions">
+                    @if (CanUpload) {
+                      <button type="button" class="quick-action-btn" (click)="onUploadRequested($event)">
+                        <i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i>
+                        <span>Upload</span>
+                      </button>
+                    }
+                    <button type="button" class="quick-action-link" (click)="onOpenLibrary($event)">Open library</button>
+                  </div>
+                </div>
+              } @else {
+                <div class="deliv-grid">
+                  @for (item of SharedItems; track item.id) {
+                    <mjc-item-card
+                      [Item]="item"
+                      [Title]="item.title"
+                      [Meta]="item.meta"
+                      [Stamp]="item.stamp"
+                      [Kind]="item.kind"
+                      [Openers]="item.openers"
+                      [CitationCount]="item.citationCount"
+                      [IsImage]="item.isImage || false"
+                      (ItemSelectRequested)="onItemSelected(item)"
+                    />
+                  }
+                </div>
               }
             </div>
-            @if (SharedItems.length === 0) {
-              <mj-empty-state Icon="fa-solid fa-folder-open" Title="Nothing shared yet" Message="Files shared to everyone in this space appear here."></mj-empty-state>
+
+            @if (CanSeeTeamSide) {
+              <div class="card band-card team-band" data-testid="overview-team-band">
+                <div class="band-h">
+                  <span class="band-ic team">
+                    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                  </span>
+                  <div class="grow">
+                    <div class="fw7 fs14">Team only</div>
+                    <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Only the team can see these' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }} · never quoted to {{ ClientOrgName || 'outside participants' }}</div>
+                  </div>
+                  <a class="link fs12 open-lib-link" [mjClickable]="'Open library'" (click)="onOpenLibrary($event)">Open library</a>
+                </div>
+
+                @if (TeamItems.length === 0) {
+                  <div class="quick-empty-strip" data-testid="overview-team-empty">
+                    <span class="quick-empty-ic team"><i class="fa-solid fa-lock" aria-hidden="true"></i></span>
+                    <span class="quick-empty-copy">No team documents yet</span>
+                    <div class="quick-empty-actions">
+                      @if (CanUpload) {
+                        <button type="button" class="quick-action-btn" (click)="onUploadRequested($event)">
+                          <i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i>
+                          <span>Upload</span>
+                        </button>
+                      }
+                      <button type="button" class="quick-action-link" (click)="onOpenLibrary($event)">Open library</button>
+                    </div>
+                  </div>
+                } @else {
+                  <div class="trows">
+                    @for (item of TeamItems; track item.id) {
+                      <mjc-item-row
+                        [Item]="item"
+                        [Title]="item.title"
+                        [Author]="item.author"
+                        [Timestamp]="item.timestamp"
+                        [Kind]="item.kind"
+                        [FlagCount]="item.flagCount"
+                        [StatusLabel]="item.statusLabel"
+                        [CanShare]="item.canShare !== false"
+                        (RowSelectRequested)="onItemSelected(item)"
+                        (ShareRequested)="onShareRequested(item)"
+                      />
+                    }
+                  </div>
+                }
+              </div>
             }
-            <div class="deliv-grid">
-              @for (item of SharedItems; track item.id) {
-                <mjc-item-card
-                  [Item]="item"
-                  [Title]="item.title"
-                  [Meta]="item.meta"
-                  [Stamp]="item.stamp"
-                  [Kind]="item.kind"
-                  [Openers]="item.openers"
-                  [CitationCount]="item.citationCount"
-                  [IsImage]="item.isImage || false"
-                  (ItemSelectRequested)="onItemSelected(item)"
-                />
-              }
-            </div>
-          </div>
           }
 
-          <!-- Team Working Set band -->
-          @if (CanSeeTeamSide && ShowLibraryLink) {
-          <div class="card band-card team-band">
-            <div class="band-h">
-              <span class="band-ic team">
-                <i class="fa-solid fa-lock"></i>
-              </span>
-              <div class="grow">
-                <div class="fw7 fs14">Team only</div>
-                <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Only the team can see these' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }} · never quoted to {{ ClientOrgName || 'outside participants' }}</div>
-              </div>
-              @if (ShowLibraryLink) {
+          <!-- Single-Band Team-Only Mode: Unified Space Documents Surface (Zero Shared Box) -->
+          @if (ShowLibraryLink && !HasSharedBand && CanSeeTeamSide) {
+            <div class="card band-card unified-band" data-testid="overview-unified-band">
+              <div class="band-h">
+                <span class="band-ic team">
+                  <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
+                </span>
+                <div class="grow">
+                  <div class="unified-title-line">
+                    <span class="fw7 fs14">Space documents</span>
+                    <mjc-band-chip Band="Team" Label="Team only" />
+                  </div>
+                  <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Only the team can see these' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }}</div>
+                </div>
                 <a class="link fs12 open-lib-link" [mjClickable]="'Open library'" (click)="onOpenLibrary($event)">Open library</a>
+              </div>
+
+              @if (TeamItems.length === 0) {
+                <div class="quick-empty-strip" data-testid="overview-unified-empty">
+                  <span class="quick-empty-ic team"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></span>
+                  <span class="quick-empty-copy">No documents in this space yet</span>
+                  <div class="quick-empty-actions">
+                    @if (CanUpload) {
+                      <button type="button" class="quick-action-btn" (click)="onUploadRequested($event)">
+                        <i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i>
+                        <span>Upload</span>
+                      </button>
+                    }
+                    <button type="button" class="quick-action-link" (click)="onOpenLibrary($event)">Open library</button>
+                  </div>
+                </div>
+              } @else {
+                <div class="trows">
+                  @for (item of TeamItems; track item.id) {
+                    <mjc-item-row
+                      [Item]="item"
+                      [Title]="item.title"
+                      [Author]="item.author"
+                      [Timestamp]="item.timestamp"
+                      [Kind]="item.kind"
+                      [FlagCount]="item.flagCount"
+                      [StatusLabel]="item.statusLabel"
+                      [CanShare]="false"
+                      (RowSelectRequested)="onItemSelected(item)"
+                      (ShareRequested)="onShareRequested(item)"
+                    />
+                  }
+                </div>
               }
             </div>
-            @if (TeamItems.length === 0) {
-              <mj-empty-state Icon="fa-solid fa-lock" Title="No team files yet" Message="Files only the team can see appear here."></mj-empty-state>
-            }
-            <div class="trows">
-              @for (item of TeamItems; track item.id) {
-                <mjc-item-row
-                  [Item]="item"
-                  [Title]="item.title"
-                  [Author]="item.author"
-                  [Timestamp]="item.timestamp"
-                  [Kind]="item.kind"
-                  [FlagCount]="item.flagCount"
-                  [StatusLabel]="item.statusLabel"
-                  [CanShare]="item.canShare !== false"
-                  (RowSelectRequested)="onItemSelected(item)"
-                  (ShareRequested)="onShareRequested(item)"
-                />
+          }
+
+          <!-- Sub-spaces -->
+          @if ((SubSpaces && SubSpaces.length > 0) || CanAddSubSpace) {
+            <div class="card sub-card">
+              <div class="card-h">
+                <span class="h3">Inside {{ SpaceName }}</span>
+                @if (CanAddSubSpace) {
+                  <a class="link add-sub-link" [mjClickable]="'Add a sub-space'" (click)="onNewSubSpace($event)">+ Sub-space</a>
+                }
+              </div>
+              @if (!SubSpaces || SubSpaces.length === 0) {
+                <div class="quick-empty-strip compact-sub">
+                  <span class="quick-empty-copy">No sub-spaces yet.</span>
+                </div>
+              } @else {
+                <div class="sub-grid">
+                  @for (sub of SubSpaces; track sub.id) {
+                    <div class="sub-row" [mjClickable]="sub.name" (click)="onSubSpaceSelected(sub)">
+                      <mjc-type-tile [IconClass]="sub.iconClass" [Color]="sub.color" Size="lg" />
+                      <div class="grow">
+                        <div class="fw6 fs13">{{ sub.name }}</div>
+                        @if (sub.description) {
+                          <div class="fs12 muted sub-desc">{{ sub.description }}</div>
+                        }
+                      </div>
+                      <i class="fa-solid fa-chevron-right muted fs12" aria-hidden="true"></i>
+                    </div>
+                  }
+                </div>
               }
             </div>
-          </div>
           }
         </div>
 
@@ -162,53 +272,6 @@ export interface SubSpaceSummary {
             />
           } @else if (CanStartConversation) {
             <div class="card ask-unavailable" role="status">No assistant is available in this space right now.</div>
-          }
-
-          <!-- Discussion Card -->
-          @if (ShowChatLink) {
-          <div class="card room-card">
-            <div class="card-h">
-              <span class="h3">Discussion</span>
-              <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Team only' : 'Everyone') + ' · ' + AudienceCount" />
-              @if (ShowChatLink) {
-                <a class="link open-chat-link" [mjClickable]="'Open chat'" (click)="onOpenChat($event)">Open chat</a>
-              }
-            </div>
-            @if (RoomMessages.length === 0) {
-              <mj-empty-state Icon="fa-solid fa-comments" Title="No messages yet" [Message]="CanStartConversation ? 'Start a conversation from the ask box or the Chat tab.' : 'No messages yet.'"></mj-empty-state>
-            }
-            <div class="mini-msgs">
-              @for (msg of RoomMessages; track msg.id || $index) {
-                <div class="mm">
-                  @if (msg.isAssistant) {
-                    <span class="ai-av sm">
-                      <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true">
-                        <path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/>
-                        <path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/>
-                      </svg>
-                    </span>
-                  } @else {
-                    <mjc-avatar
-                      [Avatar]="{ initials: msg.senderInitials || '', avatarUrl: msg.senderAvatarUrl, colorClass: msg.senderColorClass || 'c1', isOutside: msg.isOutside }"
-                      Size="sm"
-                    />
-                  }
-                  <div class="grow">
-                    <div class="fs12">
-                      <b>{{ msg.senderName }}</b>
-                      <span class="muted timestamp">&nbsp;{{ msg.timestamp }}</span>
-                    </div>
-                    <div class="fs12-5 secondary clamp">
-                      @if (msg.hasMention) {
-                        <span class="mention">{{ msg.mentionText }}</span><span>&nbsp;</span>
-                      }
-                      <span>{{ msg.text }}</span>
-                    </div>
-                  </div>
-                </div>
-              }
-            </div>
-          </div>
           }
 
           <!-- Cards the type and other apps contribute: mounted with the space they belong to -->
@@ -230,26 +293,53 @@ export interface SubSpaceSummary {
             </div>
           }
 
-          <!-- Sub-spaces -->
-          @if ((SubSpaces && SubSpaces.length > 0) || CanAddSubSpace) {
-            <div class="card sub-card">
+          <!-- Discussion Card -->
+          @if (ShowChatLink) {
+            <div class="card room-card">
               <div class="card-h">
-                <span class="h3">Inside {{ SpaceName }}</span>
-                @if (CanAddSubSpace) {
-                  <a class="link add-sub-link" [mjClickable]="'Add a sub-space'" (click)="onNewSubSpace($event)">+ Sub-space</a>
-                }
+                <span class="h3">Discussion</span>
+                <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Team only' : 'Everyone') + ' · ' + AudienceCount" />
+                <a class="link open-chat-link" [mjClickable]="'Open chat'" (click)="onOpenChat($event)">Open chat</a>
               </div>
-              @if (!SubSpaces || SubSpaces.length === 0) {
-                <div class="fs12 muted">No sub-spaces yet.</div>
-              }
-              @for (sub of SubSpaces; track sub.id) {
-                <div class="sub-row" [mjClickable]="sub.name" (click)="onSubSpaceSelected(sub)">
-                  <mjc-type-tile [IconClass]="sub.iconClass" [Color]="sub.color" Size="lg" />
-                  <div class="grow">
-                    <div class="fw6 fs13">{{ sub.name }}</div>
-                    <div class="fs12 muted">{{ sub.description }}</div>
-                  </div>
-                  <i class="fa-solid fa-chevron-right muted fs12"></i>
+              @if (RoomMessages.length === 0) {
+                <div class="quick-empty-strip compact-chat" data-testid="overview-chat-empty">
+                  <span class="quick-empty-ic"><i class="fa-solid fa-comments" aria-hidden="true"></i></span>
+                  <span class="quick-empty-copy">{{ CanStartConversation ? 'No messages yet' : 'No recent messages' }}</span>
+                  @if (CanStartConversation) {
+                    <button type="button" class="quick-action-link" (click)="onOpenChat($event)">Start chat</button>
+                  }
+                </div>
+              } @else {
+                <div class="mini-msgs">
+                  @for (msg of RoomMessages; track msg.id || $index) {
+                    <div class="mm">
+                      @if (msg.isAssistant) {
+                        <span class="ai-av sm">
+                          <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true">
+                            <path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/>
+                            <path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/>
+                          </svg>
+                        </span>
+                      } @else {
+                        <mjc-avatar
+                          [Avatar]="{ initials: msg.senderInitials || '', avatarUrl: msg.senderAvatarUrl, colorClass: msg.senderColorClass || 'c1', isOutside: msg.isOutside }"
+                          Size="sm"
+                        />
+                      }
+                      <div class="grow">
+                        <div class="fs12">
+                          <b>{{ msg.senderName }}</b>
+                          <span class="muted timestamp">&nbsp;{{ msg.timestamp }}</span>
+                        </div>
+                        <div class="fs12-5 secondary clamp">
+                          @if (msg.hasMention) {
+                            <span class="mention">{{ msg.mentionText }}</span><span>&nbsp;</span>
+                          }
+                          <span>{{ msg.text }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
                 </div>
               }
             </div>
@@ -268,16 +358,29 @@ export interface SubSpaceSummary {
       font-family: var(--mj-font-family, Inter, sans-serif);
       font-size: 14px;
       line-height: var(--mjc-line-height);
+      container-type: inline-size;
     }
 
     .ov {
-      padding: 18px 28px;
+      padding: 18px 24px 28px;
     }
 
     .ov-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 340px;
+      grid-template-columns: minmax(0, 1fr) 360px;
       gap: 18px;
+    }
+
+    @media (max-width: 960px) {
+      .ov-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @container (max-width: 820px) {
+      .ov-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .col {
@@ -289,15 +392,21 @@ export interface SubSpaceSummary {
 
     .attn {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 10px;
     }
 
     .card {
-      border-radius: 12px;
+      border-radius: var(--mj-radius-lg);
       border: 1px solid var(--mj-border-default);
       background: var(--mj-bg-surface);
       box-shadow: var(--mj-shadow-sm);
+    }
+
+    .ask-unavailable {
+      padding: 12px 14px;
+      font-size: 12.5px;
+      color: var(--mj-text-muted);
     }
 
     .band-card {
@@ -308,7 +417,7 @@ export interface SubSpaceSummary {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 12px 16px;
+      padding: 11px 16px;
     }
 
     .shared-band {
@@ -327,7 +436,7 @@ export interface SubSpaceSummary {
     .band-ic {
       width: 30px;
       height: 30px;
-      border-radius: 9px;
+      border-radius: var(--mj-radius-md);
       display: grid;
       place-items: center;
       color: var(--mjc-on-strong);
@@ -347,9 +456,101 @@ export interface SubSpaceSummary {
       }
     }
 
+    .unified-band {
+      .band-h {
+        border-bottom: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface-card);
+      }
+    }
+
+    .unified-title-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Compact 1-Row Quick-Start Empty Strip (~48px tall, zero giant dropzones) */
+    .quick-empty-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      min-height: 46px;
+      box-sizing: border-box;
+      background: var(--mj-bg-surface);
+      flex-wrap: wrap;
+    }
+    .quick-empty-strip.compact-chat,
+    .quick-empty-strip.compact-sub {
+      padding: 6px 16px 12px;
+      min-height: 38px;
+    }
+    .quick-empty-ic {
+      width: 26px;
+      height: 26px;
+      border-radius: var(--mj-radius-sm);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .quick-empty-ic.team {
+      color: var(--mjc-team);
+    }
+    .quick-empty-copy {
+      font-size: 12.5px;
+      color: var(--mj-text-secondary);
+      flex: 1;
+      min-width: 120px;
+    }
+    .quick-empty-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .quick-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--mj-radius-md);
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-primary);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .quick-action-btn:hover {
+      background: var(--mj-bg-surface-hover);
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-brand-primary);
+    }
+    .quick-action-link {
+      border: 0;
+      background: transparent;
+      padding: 4px 6px;
+      color: var(--mj-brand-primary);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .quick-action-link:hover {
+      text-decoration: underline;
+    }
+
     .deliv-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
       gap: 12px;
       padding: 14px 16px 16px;
     }
@@ -369,11 +570,11 @@ export interface SubSpaceSummary {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 14px 16px 10px;
+      padding: 12px 16px 8px;
     }
 
     .h3 {
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 700;
       color: var(--mj-text-primary);
       margin: 0;
@@ -415,22 +616,42 @@ export interface SubSpaceSummary {
     }
 
     .mention {
-      color: var(--mj-brand-primary, #0076b6);
-      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+      color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
       padding: 1px 5px;
-      border-radius: 4px;
+      border-radius: var(--mj-radius-sm);
       font-weight: 600;
       font-size: 11.5px;
       display: inline-block;
       margin-right: 2px;
     }
 
+    .sub-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+      padding: 4px 16px 14px;
+    }
+
     .sub-row {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 4px 16px 14px;
+      padding: 10px 12px;
+      border-radius: var(--mj-radius-md);
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-card);
       cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .sub-row:hover {
+      border-color: var(--mj-brand-primary);
+      background: var(--mj-bg-surface-hover);
+    }
+    .sub-desc {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .grow {
@@ -457,7 +678,7 @@ export interface SubSpaceSummary {
       width: 18px;
       height: 18px;
       font-size: 9px;
-      border-radius: 5px;
+      border-radius: var(--mj-radius-sm);
       display: inline-grid;
       place-items: center;
       background: linear-gradient(135deg, var(--mjc-ai-from), var(--mjc-ai-to));
@@ -472,7 +693,10 @@ export class CollabSpaceOverviewComponent {
   /** False when the space's type has no Library (or Chat): the entry points to it aren't offered. */
   @Input() public ShowLibraryLink = true;
   @Input() public ShowChatLink = true;
-  /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
+  /** False for Team-only spaces where outside sharing is not enabled: renders a single unified Space documents surface instead of a Shared + Team split. */
+  @Input() public HasSharedBand = true;
+  /** True when the current viewer may upload files directly from the Overview quick-start strip. */
+  @Input() public CanUpload = false;
   /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
   @Input() public ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
 
@@ -526,6 +750,7 @@ export class CollabSpaceOverviewComponent {
   @Output() public ShareRequested = new EventEmitter<ItemRowModel>();
   @Output() public PreviewAsRequested = new EventEmitter<string>();
   @Output() public OpenLibraryRequested = new EventEmitter<void>();
+  @Output() public UploadRequested = new EventEmitter<void>();
   @Output() public OpenChatRequested = new EventEmitter<void>();
   @Output() public NewSubSpaceRequested = new EventEmitter<void>();
   @Output() public SubSpaceSelectRequested = new EventEmitter<SubSpaceSummary>();
@@ -566,6 +791,11 @@ export class CollabSpaceOverviewComponent {
   public onOpenLibrary(event?: MouseEvent): void {
     event?.preventDefault();
     this.OpenLibraryRequested.emit();
+  }
+
+  public onUploadRequested(event?: MouseEvent): void {
+    event?.preventDefault();
+    this.UploadRequested.emit();
   }
 
   public onOpenChat(event?: MouseEvent): void {

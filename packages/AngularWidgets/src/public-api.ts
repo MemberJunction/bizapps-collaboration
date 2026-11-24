@@ -35,7 +35,7 @@ export { CollabBandChipComponent } from './lib/band-chip.component';
 export { CollabAudiencePillComponent } from './lib/audience-pill.component';
 export { CollabSpaceHeaderComponent } from './lib/space-header.component';
 export { CollabSpaceTabsComponent } from './lib/space-tabs.component';
-export { CollabSpaceRailComponent } from './lib/space-rail.component';
+export { CollabSpaceRailComponent, type SpaceRailPref } from './lib/space-rail.component';
 export { CollabFileIconComponent } from './lib/file-icon.component';
 export { CollabItemCardComponent } from './lib/item-card.component';
 export { CollabSpaceNotesComponent } from './lib/space-notes.component';

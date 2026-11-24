@@ -33,8 +33,11 @@ import { CollabHomeListComponent, type HomeListRow } from './home-list.component
 import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
+import { CollabSpaceHeaderComponent } from './space-header.component.ts';
+import { CollabSpaceTabsComponent } from './space-tabs.component.ts';
 import { CollabSpacePeopleComponent } from './space-people.component.ts';
 import { CollabSpaceRailComponent } from './space-rail.component.ts';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabUploadDialogComponent } from './upload-dialog.component.ts';
 import { SpaceMeetingsTabComponent } from './space-meetings-tab.component.ts';
@@ -169,50 +172,210 @@ describe('the Team row, rendered', () => {
 });
 
 describe('the rail, rendered', () => {
-  it('lists conversations only for a space whose type has a Chat tab', async () => {
-    const chat = { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments' };
-    const overview = { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' };
-    const without = TestBed.createComponent(CollabSpaceRailComponent);
-    without.componentRef.setInput('Mode', 'space');
-    without.componentRef.setInput('Tabs', [overview]);
-    without.detectChanges();
-    expect((without.nativeElement as HTMLElement).textContent).not.toContain('CONVERSATIONS');
-    without.destroy();
-    const withChat = TestBed.createComponent(CollabSpaceRailComponent);
-    withChat.componentRef.setInput('Mode', 'space');
-    withChat.componentRef.setInput('Tabs', [overview, chat]);
-    withChat.detectChanges();
-    expect((withChat.nativeElement as HTMLElement).textContent).toContain('CONVERSATIONS');
+  it('renders a persistent collapsible space tree without duplicate workspace tabs and auto-expands the active child space ancestors', async () => {
+    const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+    try {
+      const fixture = TestBed.createComponent(CollabSpaceRailComponent);
+      fixture.componentRef.setInput('ActiveNav', 'space');
+      fixture.componentRef.setInput('ActiveSpaceId', 'child-room');
+      fixture.componentRef.setInput('Spaces', [
+        { id: 'parent-hub', name: 'Parent Hub', iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: false },
+        { id: 'child-room', name: 'Child Room', iconClass: 'fa-solid fa-rocket', level: 1, hasChildren: false, isExpanded: false },
+      ]);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.textContent).not.toContain('WORKSPACE');
+      expect(el.textContent).not.toContain('CONVERSATIONS');
+      expect(el.textContent).toContain('Parent Hub');
+      expect(el.textContent).toContain('Child Room');
+      const activeNode = el.querySelector<HTMLElement>('.tree-item.active');
+      expect(activeNode?.textContent).toContain('Child Room');
+
+      // Collapse into 56px compact icon rail showing clickable space tiles, Home, and Jump buttons
+      const toggleBtn = el.querySelector<HTMLButtonElement>('[data-testid="rail-collapse-toggle"]')!;
+      toggleBtn.click();
+      fixture.detectChanges();
+      expect(el.querySelector('nav.appnav')?.classList.contains('collapsed')).toBe(true);
+      expect(el.querySelectorAll('.collapsed-space-tile').length).toBe(2);
+      expect(el.querySelector('[data-testid="rail-jump-btn"]')).not.toBeNull();
+      expect(setSpy).toHaveBeenCalledWith(
+        'Collaboration.SpaceRailPrefs',
+        expect.stringContaining('"collapsed":true'),
+      );
+    } finally {
+      getSpy.mockRestore();
+      setSpy.mockRestore();
+    }
   });
 
-
-  it("badges My tasks with the viewer's own count, never the open space's task count", async () => {
-    const fixture = TestBed.createComponent(CollabSpaceRailComponent);
-    fixture.componentRef.setInput('Mode', 'home');
-    fixture.componentRef.setInput('TaskCount', 3);
-    fixture.componentRef.setInput('MyTaskCount', 0);
-    fixture.detectChanges();
-    const myTasks = () => Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.nav-item')).find((b) => b.textContent?.includes('My tasks'))!;
-    expect(myTasks().querySelector('.count')).toBeNull();
-    fixture.componentRef.setInput('MyTaskCount', 1);
-    fixture.detectChanges();
-    expect(myTasks().querySelector('.count')?.textContent?.trim()).toBe('1');
+  it("badges My tasks with the viewer's own count", async () => {
+    const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    try {
+      const fixture = TestBed.createComponent(CollabSpaceRailComponent);
+      fixture.componentRef.setInput('ActiveNav', 'home');
+      fixture.componentRef.setInput('MyTaskCount', 0);
+      fixture.detectChanges();
+      const myTasks = () => Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.nav-item')).find((b) => b.textContent?.includes('My tasks'))!;
+      expect(myTasks().querySelector('.count')).toBeNull();
+      fixture.componentRef.setInput('MyTaskCount', 3);
+      fixture.detectChanges();
+      expect(myTasks().querySelector('.count')?.textContent?.trim()).toBe('3');
+    } finally {
+      getSpy.mockRestore();
+    }
   });
 
-  it('lets the collapsed space tile be operated from the keyboard', async () => {
-    const fixture = TestBed.createComponent(CollabSpaceRailComponent);
-    fixture.componentRef.setInput('SpaceTitle', 'Northwind');
-    fixture.componentRef.setInput('Mode', 'space');
-    fixture.componentInstance.isCollapsed = true;
-    const back = vi.fn();
-    fixture.componentInstance.BackToSpacesRequested.subscribe(back);
+  it('auto-collapses to compact icon rail when user has access to only 1 space and no explicit preference is saved', async () => {
+    const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    try {
+      const fixture = TestBed.createComponent(CollabSpaceRailComponent);
+      fixture.componentRef.setInput('ActiveNav', 'space');
+      fixture.componentRef.setInput('ActiveSpaceId', 'solo-1');
+      fixture.componentRef.setInput('Spaces', [
+        { id: 'solo-1', name: 'Solo Space', iconClass: 'fa-solid fa-compass', level: 0, hasChildren: false, isExpanded: false },
+      ]);
+      const opened = vi.fn();
+      fixture.componentInstance.SpaceOpenRequested.subscribe(opened);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('nav.appnav')?.classList.contains('collapsed')).toBe(true);
+      const tile = el.querySelector<HTMLButtonElement>('.collapsed-space-tile')!;
+      expect(tile.getAttribute('title')).toBe('Solo Space');
+      tile.click();
+      expect(opened).toHaveBeenCalledWith('solo-1');
+    } finally {
+      getSpy.mockRestore();
+    }
+  });
+});
+
+describe('space header and tabs, rendered', () => {
+  it('renders accessible breadcrumbs with <nav><ol> and aria-current="page" on the terminal crumb', async () => {
+    const fixture = TestBed.createComponent(CollabSpaceHeaderComponent);
+    fixture.componentRef.setInput('Title', 'Project Room Alpha');
+    fixture.componentRef.setInput('TypeName', 'Project');
+    fixture.componentRef.setInput('Status', 'Active');
+    fixture.componentRef.setInput('Breadcrumbs', [
+      { label: 'Spaces' },
+      { label: 'Parent Hub', spaceId: 'hub-1' },
+      { label: 'Project Room Alpha' },
+    ]);
+    const selected = vi.fn();
+    fixture.componentInstance.BreadcrumbSelectRequested.subscribe(selected);
     fixture.detectChanges();
     await fixture.whenStable();
-    const tile = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.collapsed-tile')!;
-    expect(tile.getAttribute('role')).toBe('button');
-    expect(tile.getAttribute('tabindex')).toBe('0');
-    tile.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    expect(back).toHaveBeenCalledTimes(1);
+
+    const el = fixture.nativeElement as HTMLElement;
+    const nav = el.querySelector('nav[aria-label="Breadcrumbs"]');
+    expect(nav).not.toBeNull();
+    const items = nav!.querySelectorAll('ol > li');
+    expect(items.length).toBe(3);
+    expect(items[2].querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('Project Room Alpha');
+    const parentBtn = items[1].querySelector<HTMLButtonElement>('button.crumb-link')!;
+    parentBtn.click();
+    expect(selected).toHaveBeenCalledWith({ label: 'Parent Hub', spaceId: 'hub-1' });
+  });
+
+  it('renders accessible horizontal tablist with aria-selected and inline counts', async () => {
+    const fixture = TestBed.createComponent(CollabSpaceTabsComponent);
+    fixture.componentRef.setInput('Tabs', [
+      { id: 'Overview', label: 'Overview' },
+      { id: 'Library', label: 'Documents', count: 5 },
+      { id: 'Chat', label: 'Chat', count: 2 },
+    ]);
+    fixture.componentRef.setInput('ActiveTab', 'Library');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const tabs = Array.from(el.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    expect(tabs.length).toBe(3);
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[1].querySelector('.c')?.textContent?.trim()).toBe('5');
+    expect(tabs[0].getAttribute('aria-selected')).toBe('false');
+  });
+});
+
+describe('space overview band-intelligence and compact empty states, rendered', () => {
+  it('hides the Shared band completely and renders a single unified Team-only card when HasSharedBand is false', async () => {
+    const fixture = TestBed.createComponent(CollabSpaceOverviewComponent);
+    fixture.componentRef.setInput('SpaceName', 'Internal Methodology Hub');
+    fixture.componentRef.setInput('HasSharedBand', false);
+    fixture.componentRef.setInput('CanSeeTeamSide', true);
+    fixture.componentRef.setInput('CanUpload', true);
+    fixture.componentRef.setInput('SharedItems', []);
+    fixture.componentRef.setInput('TeamItems', []);
+    const uploadRequested = vi.fn();
+    fixture.componentInstance.UploadRequested.subscribe(uploadRequested);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="overview-shared-band"]')).toBeNull();
+    expect(el.textContent).not.toContain('Shared with everyone in this space');
+    expect(el.querySelector('[data-testid="overview-unified-band"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="overview-unified-empty"]')).not.toBeNull();
+    expect(el.querySelector('mj-empty-state')).toBeNull();
+
+    el.querySelector<HTMLButtonElement>('[data-testid="overview-unified-empty"] .quick-action-btn')!.click();
+    expect(uploadRequested).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses compact 1-row quick-start strips instead of giant empty states when dual-band lists are empty', async () => {
+    const fixture = TestBed.createComponent(CollabSpaceOverviewComponent);
+    fixture.componentRef.setInput('SpaceName', 'Client Engagement');
+    fixture.componentRef.setInput('HasSharedBand', true);
+    fixture.componentRef.setInput('CanSeeTeamSide', true);
+    fixture.componentRef.setInput('SharedItems', []);
+    fixture.componentRef.setInput('TeamItems', []);
+    fixture.componentRef.setInput('RoomMessages', []);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="overview-shared-empty"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="overview-team-empty"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="overview-chat-empty"]')).not.toBeNull();
+    expect(el.querySelector('mj-empty-state')).toBeNull();
+  });
+});
+
+describe('space chat conversation switcher, rendered', () => {
+  it('renders conversation switcher chips and + New Conversation button inside the Chat tab', async () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', 'conv-1');
+    fixture.componentRef.setInput('ActiveConversationId', 'conv-1');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.componentRef.setInput('CanStartConversation', true);
+    fixture.componentRef.setInput('Conversations', [
+      { id: 'conv-1', name: 'General', kind: 'General', band: 'Shared' },
+      { id: 'conv-2', name: 'Team Sync', kind: 'Private', band: 'Team' },
+    ]);
+    const selected = vi.fn();
+    const created = vi.fn();
+    fixture.componentInstance.ConversationSelectRequested.subscribe(selected);
+    fixture.componentInstance.NewConversationRequested.subscribe(created);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const strip = el.querySelector('[data-testid="space-chat-conversation-strip"]');
+    expect(strip).not.toBeNull();
+    const chips = Array.from(strip!.querySelectorAll<HTMLButtonElement>('[data-testid="chat-conversation-chip"]'));
+    expect(chips.length).toBe(2);
+    expect(chips[0].getAttribute('aria-current')).toBe('true');
+    chips[1].click();
+    expect(selected).toHaveBeenCalledWith('conv-2');
+    strip!.querySelector<HTMLButtonElement>('[data-testid="chat-new-conversation-btn"]')!.click();
+    expect(created).toHaveBeenCalledTimes(1);
   });
 });
 

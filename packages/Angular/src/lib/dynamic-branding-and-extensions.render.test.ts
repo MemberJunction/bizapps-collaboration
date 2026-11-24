@@ -138,35 +138,17 @@ declareComponent(CustomSpaceTabComponent, {
 });
 
 class RailStub {
-    public Mode = 'home';
     public ActiveNav = 'home';
     public Spaces: object[] = [];
     public ActiveSpaceId = '';
-    public SpaceTitle = '';
-    public SpaceIcon = '';
-    public SpaceBand = 'Shared';
-    public ActiveTab = 'Overview';
-    public Tabs: object[] = [];
-    public Conversations: object[] = [];
-    public CanConfigure = false;
-    public ActiveConversationId = '';
-    public CanStartConversation = false;
-    public LibraryCount = 0;
-    public TaskCount = 0;
     public MyTaskCount = 0;
-    public MemberCount = 0;
     public InboxCount = 0;
     public CanCreateSpace = false;
 }
 declareComponent(RailStub, {
     selector: 'mjc-space-rail',
     template: `<nav class="rail-stub"></nav>`,
-    inputs: [
-        'Mode', 'ActiveNav', 'Spaces', 'ActiveSpaceId', 'SpaceTitle', 'SpaceIcon',
-        'SpaceBand', 'ActiveTab', 'Tabs', 'Conversations', 'CanConfigure',
-        'ActiveConversationId', 'CanStartConversation', 'LibraryCount', 'TaskCount',
-        'MyTaskCount', 'MemberCount', 'InboxCount', 'CanCreateSpace',
-    ],
+    inputs: ['ActiveNav', 'Spaces', 'ActiveSpaceId', 'MyTaskCount', 'InboxCount', 'CanCreateSpace'],
 });
 
 class AudiencePillStub {
@@ -1101,5 +1083,50 @@ describe('CX-12 Terminal Closed vs Resumable Paused UI Reopen Alignment', () => 
         expect(collabSource).toContain('<mj-page-layout>');
         expect(collabSource).toContain('this.NotifyLoadComplete()');
         expect(collabSource).not.toContain('Welcome to Collaboration');
+    });
+
+    it('derives overviewHasSharedBand accurately for Team-only vs dual-band spaces and attaches inline tab badge counts', () => {
+        const collabSource = readFileSync(resolve(here, 'collaboration-section.component.ts'), 'utf8');
+        const railTagMatch = collabSource.match(/<mjc-space-rail[\s\S]*?\/>/);
+        expect(railTagMatch).not.toBeNull();
+        expect(railTagMatch![0]).not.toContain('[Tabs]');
+        expect(railTagMatch![0]).not.toContain('[Mode]');
+        expect(collabSource).toContain('[HasSharedBand]="overviewHasSharedBand"');
+        expect(collabSource).toContain('[Conversations]="spaceConversations"');
+
+        configureProductionSectionTestBed({});
+        const fixture = TestBed.createComponent(CollaborationSectionResource);
+        const comp = fixture.componentInstance;
+
+        // Team-only space (staff viewer, Team audience, Team default band, 0 shared items) -> HasSharedBand = false
+        comp.activeSpaceId = SPACE_ID;
+        comp.spaceAudienceBand = 'Team';
+        comp.typeDefaultBand = 'Team';
+        comp.overviewSharedItems = [];
+        vi.spyOn(comp, 'canSeeTeamSide', 'get').mockReturnValue(true);
+        expect(comp.overviewHasSharedBand).toBe(false);
+
+        // Dual-band space with outside participants -> HasSharedBand = true
+        comp.spaceAudienceBand = 'Shared';
+        expect(comp.overviewHasSharedBand).toBe(true);
+
+        // External / Shared-only viewer always sees the Shared band
+        comp.spaceAudienceBand = 'Team';
+        vi.spyOn(comp, 'canSeeTeamSide', 'get').mockReturnValue(false);
+        expect(comp.overviewHasSharedBand).toBe(true);
+
+        // Inline badge counts populate on built-in tabs when counts are positive
+        comp.libraryTotalCount = 4;
+        comp.taskCount = 2;
+        comp.spaceConversations = [
+            { id: 'c1', name: 'General', kind: 'General', band: 'Shared' },
+            { id: 'c2', name: 'Team Sync', kind: 'Private', band: 'Team' },
+        ];
+        comp.headerTotalPeople = 6;
+        const tabCounts = new Map(comp.tabs.map((t) => [t.id, t.count]));
+        expect(tabCounts.get('Library')).toBe(4);
+        expect(tabCounts.get('Work')).toBe(2);
+        expect(tabCounts.get('Chat')).toBe(2);
+        expect(tabCounts.get('People')).toBe(6);
     });
 });

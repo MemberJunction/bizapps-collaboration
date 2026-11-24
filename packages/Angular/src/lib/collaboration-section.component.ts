@@ -43,7 +43,7 @@ import { SpaceDetailsViewComponent } from './space-details-view.component';
 import { newSpaceKinds, subSpaceKinds, type NewSpaceKind } from './logic/new-space-types.js';
 import { closeConsequence, readFromPayload, type CloseConsequenceState } from './logic/close-consequence.js';
 import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabIdFromUrl, type SpaceTabModel } from './logic/space-tabs.js';
-import { railFlags, railModeFor } from './logic/rail-flags.js';
+import { railFlags } from './logic/rail-flags.js';
 import { seatActions } from './logic/seat-actions.js';
 import { grantableRoles, type RoleOption } from './logic/grantable-roles.js';
 import { accessChain, nearestSeats } from './logic/reached-people.js';
@@ -695,33 +695,16 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                 } @else {
                     <div class="mjc-shell">
                         <mjc-space-rail
-                            [Mode]="railMode"
                             [ActiveNav]="activeView"
                             [Spaces]="spaces"
-                            [ActiveSpaceId]="activeSpaceId"
-                            [SpaceTitle]="spaceTitle"
-                            [SpaceIcon]="headerTypeIcon"
-                            [SpaceBand]="spaceAudienceBand"
-                            [ActiveTab]="activeTab"
-                            [Tabs]="tabs"
-                            [Conversations]="spaceConversations"
-                            [CanConfigure]="showsSettings"
-                            [ActiveConversationId]="activeConversationId"
-                            [CanStartConversation]="canStartConversation"
-                            [LibraryCount]="libraryTotalCount"
-                            [TaskCount]="taskCount"
+                            [ActiveSpaceId]="activeView === 'space' ? activeSpaceId : ''"
                             [MyTaskCount]="myTaskCount"
-                            [MemberCount]="headerTotalPeople"
                             [InboxCount]="0"
                             [CanCreateSpace]="canCreateSpace"
                             (SpaceCreateRequested)="openNewSpaceDialog()"
                             (SpaceOpenRequested)="onSpaceOpenRequested($event)"
                             (SpaceToggleRequested)="onSpaceToggleRequested($event)"
                             (NavSelectRequested)="onNavSelectRequested($event)"
-                            (TabSelectRequested)="onTabSelectRequested($event)"
-                            (ConversationSelectRequested)="onSpaceConversationSelected($event)"
-                            (NewConversationRequested)="openNewConversationDialog()"
-                            (BackToSpacesRequested)="onBackToSpacesRequested()"
                         />
 
                         <main class="main">
@@ -1035,6 +1018,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [ContributedCards]="overviewContributedCards"
                                                     [ShowLibraryLink]="hasTab('Library')"
                                                     [ShowChatLink]="hasTab('Chat')"
+                                                    [HasSharedBand]="overviewHasSharedBand"
+                                                    [CanUpload]="canAddHere && hasTab('Library')"
                                                     [SpaceName]="spaceTitle"
                                                     [FirmName]="firmName"
                                                     [ClientOrgName]="clientOrgName"
@@ -1055,6 +1040,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [HasAbout]="hasDetails"
                                                     [AboutTitle]="aboutTitle"
                                                     (OpenLibraryRequested)="onOpenLibraryRequested()"
+                                                    (UploadRequested)="onUploadClicked()"
                                                     (OpenChatRequested)="onOpenChatRequested()"
                                                     (ItemSelectRequested)="onItemSelected($event)"
                                                     (ShareRequested)="onShareRequested($event)"
@@ -1178,6 +1164,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [EnableDecisionRouting]="chatDecisionRoutingAvailable"
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed"
                                                     [HasConversations]="spaceConversations.length > 0"
+                                                    [Conversations]="spaceConversations"
+                                                    [ActiveConversationId]="activeConversationId"
                                                     [MentionPeople]="chatMentionPeople"
                                                     [SpaceMembers]="spaceMembers"
                                                     [AgentHistoryFrom]="chatAgentHistoryFrom"
@@ -1198,6 +1186,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     (PendingMessageConsumed)="pendingChatMessage = null; pendingChatMessageConversationId = null"
                                                     (LinkedItemOpenRequested)="onOpenLinkedWorkstreamItem($event)"
                                                     (RecordLinkOpenRequested)="onOpenRecordLink($event)"
+                                                    (ConversationSelectRequested)="onSpaceConversationSelected($event)"
                                                     (NewConversationRequested)="openNewConversationDialog()"
                                                 />
                                             }
@@ -1748,7 +1737,24 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             finalize: (defaults) => defaults,
             labelFor: (_key, label) => label,
         });
-        return model.tabs.filter(tab => tab.id !== 'Settings' || this.showsSettings);
+        return model.tabs
+            .filter(tab => tab.id !== 'Settings' || this.showsSettings)
+            .map(tab => {
+                if (tab.count !== undefined && tab.count !== null) return tab;
+                const count = this.badgeCountForTab(tab.id);
+                return count > 0 ? { ...tab, count } : tab;
+            });
+    }
+
+    private badgeCountForTab(tabId: string): number {
+        switch (tabId) {
+            case 'Library': return this.libraryTotalCount;
+            case 'Work': return this.taskCount;
+            case 'Chat': return this.spaceConversations.length;
+            case 'Notes': return this.spaceNotes.length;
+            case 'People': return this.headerTotalPeople;
+            default: return 0;
+        }
     }
 
     /** The tab model of the space shown, built when it is selected. Null until then. */
@@ -2981,6 +2987,31 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public get sharedBandLabel(): string { return this.bandLabel('Shared'); }
     public get teamBandLabel(): string { return this.bandLabel('Team'); }
+
+    /** True when the active space has a Shared band (outside sharing); false for Team-only spaces. */
+    public get overviewHasSharedBand(): boolean {
+        if (!this.canSeeTeamSide) return true;
+        const config = this.configurationOf(this.activeSpaceId);
+        if (config?.Audience === 'StaffOnly') return false;
+        const space = this.activeSpaceRecord;
+        const type = space ? CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID) : undefined;
+        if (type?.Configuration) {
+            try {
+                const parsed = JSON.parse(type.Configuration) as { Seats?: { Audience?: string } };
+                if (parsed?.Seats?.Audience === 'StaffOnly') return false;
+            } catch {
+                // malformed type configuration falls back to audience-band check below
+            }
+        }
+        if (
+            this.spaceAudienceBand === 'Team'
+            && (this.typeDefaultBand === 'Team' || type?.DefaultBand === 'Team')
+            && this.overviewSharedItems.length === 0
+        ) {
+            return false;
+        }
+        return true;
+    }
     public get notesLabel(): string { return this.tabs.find((tab) => tab.id === 'Notes')?.label ?? 'Notes'; }
     public get pinnedLabel(): string { return 'Pinned'; }
 
@@ -4652,11 +4683,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
         this.syncStateWithAgent();
         this.RefreshView();
-    }
-
-    /** The rail on the page shown: the home rail on Home and the global pages, the space rail on a space. */
-    public get railMode(): 'home' | 'space' {
-        return railModeFor(this.activeView);
     }
 
     private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
