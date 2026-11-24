@@ -573,8 +573,7 @@ const checks: NamedCheck[] = [
             try {
                 const first = await EnsureSpaceForRecord({ typeCode: 'workspace', entityName: 'MJ: Files', recordId, spaceName: `${CHECK_SPACE_PREFIX}S10-anchored`, contextUser: dev, provider: ctx.Provider });
                 made.push(first.ID);
-                // A retype takes Configure Spaces, the lifecycle right (the space moves onto the new type's status row) and an owner seat: Dev seats himself
-                await seat(ctx, dev, first.ID, dev.ID, 'owner', 'Team');
+                // A retype takes Configure Spaces, the lifecycle right (the space moves onto the new type's status row) and an owner seat (EnsureSpaceForRecord CX-1 already seats contextUser as owner on Team)
                 const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
                 Assert(await space.Load(first.ID), 'Dev loads the anchored space');
                 space.SpaceTypeID = vault.ID;
