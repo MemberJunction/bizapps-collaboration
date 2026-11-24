@@ -250,7 +250,7 @@ describe('CoreEntitiesServer & Server security audit operation registration', ()
         const generatedEntitiesPath = resolve(repoRoot, 'packages/Entities/src/generated/entities/__mj_BizAppsCollaboration.ts');
         const generatedSrc = readFileSync(generatedEntitiesPath, 'utf8');
         const registeredEntityNames = [...generatedSrc.matchAll(/@RegisterClass\(BaseEntity,\s*'([^']+)'\)/g)].map((m) => m[1]);
-        assert.equal(registeredEntityNames.length, 14);
+        assert.equal(registeredEntityNames.length, 17);
         const registrySet = new Set(COLLABORATION_BOOT_ENTITY_REGISTRY.map((e) => e.EntityName));
         for (const entityName of registeredEntityNames) {
             assert.equal(registrySet.has(entityName), true, `Missing entity '${entityName}' from COLLABORATION_BOOT_ENTITY_REGISTRY`);

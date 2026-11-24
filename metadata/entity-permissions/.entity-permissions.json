@@ -986,5 +986,50 @@
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Source Receipts In Reach"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "E8C10001-4F50-4A6B-8C9D-0E1F2A3B4C51"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Notice Events",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Space Notice Events In Reach"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E8C10002-4F50-4A6B-8C9D-0E1F2A3B4C52"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Notice Watermarks",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Space Notice Watermarks"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E8C10003-4F50-4A6B-8C9D-0E1F2A3B4C53"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Digest Checkpoints",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Space Digest Checkpoints"
+    }
   }
 ]

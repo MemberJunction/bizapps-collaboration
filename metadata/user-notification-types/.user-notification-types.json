@@ -46,5 +46,85 @@
       "DefaultSMS": 0,
       "AllowUserPreference": 1
     }
+  },
+  {
+    "_comments": [
+      "NT-1 notification when a member is @mentioned in a space conversation, note, or item."
+    ],
+    "primaryKey": {
+      "ID": "4A6D8B1E-2C3F-4E5A-9B7C-1D2E3F4A5B01"
+    },
+    "fields": {
+      "Name": "Collaboration: Mention",
+      "Description": "A member was mentioned in a space conversation, note, or task.",
+      "DefaultInApp": 1,
+      "DefaultEmail": 0,
+      "DefaultSMS": 0,
+      "AllowUserPreference": 1
+    }
+  },
+  {
+    "_comments": [
+      "NT-1 notification when a reply is posted to a thread or comment in a space."
+    ],
+    "primaryKey": {
+      "ID": "4A6D8B1E-2C3F-4E5A-9B7C-1D2E3F4A5B02"
+    },
+    "fields": {
+      "Name": "Collaboration: Reply",
+      "Description": "A new reply was posted to a conversation thread or comment in a space.",
+      "DefaultInApp": 1,
+      "DefaultEmail": 0,
+      "DefaultSMS": 0,
+      "AllowUserPreference": 1
+    }
+  },
+  {
+    "_comments": [
+      "NT-1 notification when a space task is assigned, updated, or completed."
+    ],
+    "primaryKey": {
+      "ID": "4A6D8B1E-2C3F-4E5A-9B7C-1D2E3F4A5B03"
+    },
+    "fields": {
+      "Name": "Collaboration: Task",
+      "Description": "A task in a space was assigned or updated.",
+      "DefaultInApp": 1,
+      "DefaultEmail": 0,
+      "DefaultSMS": 0,
+      "AllowUserPreference": 1
+    }
+  },
+  {
+    "_comments": [
+      "NT-1 notification when a space approval request or decision requires attention or completes."
+    ],
+    "primaryKey": {
+      "ID": "4A6D8B1E-2C3F-4E5A-9B7C-1D2E3F4A5B04"
+    },
+    "fields": {
+      "Name": "Collaboration: Approval",
+      "Description": "An approval request or decision occurred in a space.",
+      "DefaultInApp": 1,
+      "DefaultEmail": 0,
+      "DefaultSMS": 0,
+      "AllowUserPreference": 1
+    }
+  },
+  {
+    "_comments": [
+      "NT-2 scheduled scoped digest summarizing reach-verified space activity for a member."
+    ],
+    "primaryKey": {
+      "ID": "4A6D8B1E-2C3F-4E5A-9B7C-1D2E3F4A5B05"
+    },
+    "fields": {
+      "Name": "Collaboration: Digest",
+      "Description": "Scheduled scoped digest of reach-verified notices and updates across spaces.",
+      "DefaultInApp": 1,
+      "DefaultEmail": 1,
+      "DefaultSMS": 0,
+      "AllowUserPreference": 1
+    }
   }
 ]

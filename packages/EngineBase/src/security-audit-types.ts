@@ -131,6 +131,21 @@ export function buildUuidEqualsFilter(fieldName: string, id: string, dialect: Sq
     return `${quoteAuditIdentifier(fieldName, dialect)} = '${clean}'`;
 }
 
+/** Builds a dual-dialect equality filter over a boolean column (`1`/`0` on SQL Server, `TRUE`/`FALSE` on PostgreSQL). */
+export function buildBooleanEqualsFilter(fieldName: string, value: boolean, dialect: SqlDialect): string {
+    const col = quoteAuditIdentifier(fieldName, dialect);
+    if (dialect === 'postgresql') {
+        return `${col} = ${value ? 'TRUE' : 'FALSE'}`;
+    }
+    return `${col} = ${value ? '1' : '0'}`;
+}
+
+/** Builds a dual-dialect string equality filter with single-quote escaping. */
+export function buildStringEqualsFilter(fieldName: string, value: string, dialect: SqlDialect): string {
+    const escaped = value.replace(/'/g, "''");
+    return `${quoteAuditIdentifier(fieldName, dialect)} = '${escaped}'`;
+}
+
 export interface SimpleRowPageQuery {
     EntityName: string;
     ExtraFilter?: string;

@@ -29,6 +29,9 @@ import { mjBizAppsCollaborationSpaceNoteFormComponent } from "./Entities/mjBizAp
 import { mjBizAppsCollaborationSpaceRoleTypeFormComponent } from "./Entities/mjBizAppsCollaborationSpaceRoleType/mjbizappscollaborationspaceroletype.form.component";
 import { mjBizAppsCollaborationSpaceTypeFormComponent } from "./Entities/mjBizAppsCollaborationSpaceType/mjbizappscollaborationspacetype.form.component";
 import { mjBizAppsCollaborationSpaceTypeStatusFormComponent } from "./Entities/mjBizAppsCollaborationSpaceTypeStatus/mjbizappscollaborationspacetypestatus.form.component";
+import { mjBizAppsCollaborationSpaceNoticeEventFormComponent } from "./Entities/mjBizAppsCollaborationSpaceNoticeEvent/mjbizappscollaborationspacenoticeevent.form.component";
+import { mjBizAppsCollaborationSpaceNoticeWatermarkFormComponent } from "./Entities/mjBizAppsCollaborationSpaceNoticeWatermark/mjbizappscollaborationspacenoticewatermark.form.component";
+import { mjBizAppsCollaborationSpaceDigestCheckpointFormComponent } from "./Entities/mjBizAppsCollaborationSpaceDigestCheckpoint/mjbizappscollaborationspacedigestcheckpoint.form.component";
    
 
 @NgModule({
@@ -182,7 +185,10 @@ export class GeneratedForms_SubModule_23 { }
 @NgModule({
 declarations: [
     mjBizAppsCollaborationSpaceAgentSourceReceiptFormComponent,
-    mjBizAppsCollaborationSpaceAnchorFormComponent
+    mjBizAppsCollaborationSpaceAnchorFormComponent,
+    mjBizAppsCollaborationSpaceNoticeEventFormComponent,
+    mjBizAppsCollaborationSpaceNoticeWatermarkFormComponent,
+    mjBizAppsCollaborationSpaceDigestCheckpointFormComponent
 ],
 imports: [
     CommonModule,

@@ -65,6 +65,51 @@ import {
     SpaceSubtypeDirectory,
 } from '@mj-biz-apps/collaboration-entities';
 import type { MJApplicationSettingEntity } from '@memberjunction/core-entities';
+import {
+    ADVANCE_SPACE_NOTICE_WATERMARK_OPERATION_KEY,
+    type AdvanceSpaceNoticeWatermarkInput,
+    type AdvanceSpaceNoticeWatermarkResult,
+    GET_SPACE_NOTICES_OPERATION_KEY,
+    GET_SPACE_UNREAD_NOTICE_COUNTS_OPERATION_KEY,
+    type GetSpaceNoticesInput,
+    type GetSpaceNoticesResult,
+    type GetSpaceUnreadNoticeCountsInput,
+    type GetSpaceUnreadNoticeCountsResult,
+    invokeCollaborationRemoteOperation,
+    PUBLISH_SPACE_NOTICE_EVENT_OPERATION_KEY,
+    type PublishSpaceNoticeEventInput,
+    type PublishSpaceNoticeEventResult,
+} from './space-notices.js';
+import {
+    GET_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY,
+    type GetUserNotificationPreferencesInput,
+    type GetUserNotificationPreferencesResult,
+    invokeCollaborationNotificationOperation,
+    readCollaborationPreferencesFromUserInfoEngine,
+    ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY,
+    type RouteCollaborationNotificationsInput,
+    type RouteCollaborationNotificationsResult,
+    UPDATE_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY,
+    type UpdateUserNotificationPreferencesInput,
+    type UpdateUserNotificationPreferencesResult,
+    writeCollaborationPreferencesToUserInfoEngine,
+} from './notifications.js';
+import {
+    invokeCollaborationDigestOperation,
+    PREVIEW_SCOPED_SPACE_DIGEST_OPERATION_KEY,
+    type PreviewScopedSpaceDigestInput,
+    type PreviewScopedSpaceDigestResult,
+    RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+    type RunScopedSpaceDigestsInput,
+    type RunScopedSpaceDigestsResult,
+    UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY,
+    type UpdateSpaceDigestCheckpointInput,
+    type UpdateSpaceDigestCheckpointResult,
+} from './space-digests.js';
+import type {
+    CollaborationUserNotificationPreferences,
+    CollaborationUserNotificationPreferencesPatch,
+} from '@mj-biz-apps/collaboration-core';
 
 const normalizeKey = (key: string | null | undefined): string => (key ?? '').trim().toLowerCase();
 
@@ -943,6 +988,189 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 liveSnapshot,
             );
         });
+    }
+
+    /**
+     * Publishes a single fan-out-on-read Space Notice Event row (`O(1)` write) via the registered
+     * `Collaboration.PublishSpaceNoticeEvent` `BaseRemotableOperation`.
+     */
+    public async PublishSpaceNoticeEvent(
+        input: PublishSpaceNoticeEventInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PublishSpaceNoticeEventResult> {
+        return invokeCollaborationRemoteOperation<PublishSpaceNoticeEventInput, PublishSpaceNoticeEventResult>(
+            PUBLISH_SPACE_NOTICE_EVENT_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Resolves fan-out-on-read space notice events and per-member unread status using batched
+     * `RunView` (`ResultType: 'simple'`) and per-member watermarks.
+     */
+    public async GetSpaceNotices(
+        input: GetSpaceNoticesInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetSpaceNoticesResult> {
+        return invokeCollaborationRemoteOperation<GetSpaceNoticesInput, GetSpaceNoticesResult>(
+            GET_SPACE_NOTICES_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Computes per-space unread notice counts across reachable spaces using batched `RunView`
+     * (`ResultType: 'simple'`) and per-member watermarks.
+     */
+    public async GetSpaceUnreadNoticeCounts(
+        input: GetSpaceUnreadNoticeCountsInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetSpaceUnreadNoticeCountsResult> {
+        return invokeCollaborationRemoteOperation<GetSpaceUnreadNoticeCountsInput, GetSpaceUnreadNoticeCountsResult>(
+            GET_SPACE_UNREAD_NOTICE_COUNTS_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Monotonically advances the caller's per-space notice watermark `(LastReadEventTimestamp, LastReadEventID)`
+     * via the registered `Collaboration.AdvanceSpaceNoticeWatermark` `BaseRemotableOperation`.
+     */
+    public async AdvanceSpaceNoticeWatermark(
+        input: AdvanceSpaceNoticeWatermarkInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<AdvanceSpaceNoticeWatermarkResult> {
+        return invokeCollaborationRemoteOperation<AdvanceSpaceNoticeWatermarkInput, AdvanceSpaceNoticeWatermarkResult>(
+            ADVANCE_SPACE_NOTICE_WATERMARK_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    // ─── NT-1 Comms v2 Notifications & User Preferences ────────────────────────
+
+    /**
+     * Reads the current user's Collaboration notification preferences synchronously via `UserInfoEngine`
+     * (never browser localStorage/sessionStorage).
+     */
+    public GetCurrentUserNotificationPreferences(): CollaborationUserNotificationPreferences {
+        return readCollaborationPreferencesFromUserInfoEngine();
+    }
+
+    /**
+     * Persists a preference update for the current user via `UserInfoEngine.SetSettingDebounced`
+     * (and optional immediate flush).
+     */
+    public async SetCurrentUserNotificationPreferences(
+        patch: CollaborationUserNotificationPreferencesPatch,
+        options?: { contextUser?: UserInfo; flush?: boolean },
+    ): Promise<CollaborationUserNotificationPreferences> {
+        return writeCollaborationPreferencesToUserInfoEngine(patch, options);
+    }
+
+    /**
+     * Resolves the authenticated caller's notification preferences via the registered
+     * `Collaboration.GetNotificationPreferences` `BaseRemotableOperation`.
+     */
+    public async GetUserNotificationPreferences(
+        user: UserInfo,
+        input: GetUserNotificationPreferencesInput = {},
+        provider?: IMetadataProvider,
+    ): Promise<GetUserNotificationPreferencesResult> {
+        return invokeCollaborationNotificationOperation<
+            GetUserNotificationPreferencesInput,
+            GetUserNotificationPreferencesResult
+        >(GET_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+    }
+
+    /**
+     * Updates the authenticated caller's notification preferences via the registered
+     * `Collaboration.UpdateNotificationPreferences` `BaseRemotableOperation`.
+     */
+    public async UpdateUserNotificationPreferences(
+        input: UpdateUserNotificationPreferencesInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<UpdateUserNotificationPreferencesResult> {
+        return invokeCollaborationNotificationOperation<
+            UpdateUserNotificationPreferencesInput,
+            UpdateUserNotificationPreferencesResult
+        >(UPDATE_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+    }
+
+    /**
+     * Routes an NT-1 collaboration notification (mention, reply, share, status change, task, approval)
+     * through MJ Comms v2 after batched preference resolution via `Collaboration.RouteNotifications`.
+     */
+    public async RouteCollaborationNotifications(
+        input: RouteCollaborationNotificationsInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<RouteCollaborationNotificationsResult> {
+        return invokeCollaborationNotificationOperation<
+            RouteCollaborationNotificationsInput,
+            RouteCollaborationNotificationsResult
+        >(ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+    }
+
+    // ─── NT-2 Reach-Verified Scoped Digests ────────────────────────────────────
+
+    /**
+     * Executes scheduled NT-2 scoped digests using deterministic composite `(EventTimestamp, ID)`
+     * keyset pagination, fail-closed assembly-time reach verification, and empty-digest suppression.
+     */
+    public async RunScopedSpaceDigests(
+        input: RunScopedSpaceDigestsInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<RunScopedSpaceDigestsResult> {
+        return invokeCollaborationDigestOperation<RunScopedSpaceDigestsInput, RunScopedSpaceDigestsResult>(
+            RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Previews a single member's reach-verified scoped digest without dispatching or advancing checkpoints.
+     */
+    public async PreviewScopedSpaceDigest(
+        input: PreviewScopedSpaceDigestInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PreviewScopedSpaceDigestResult> {
+        return invokeCollaborationDigestOperation<PreviewScopedSpaceDigestInput, PreviewScopedSpaceDigestResult>(
+            PREVIEW_SCOPED_SPACE_DIGEST_OPERATION_KEY,
+            input,
+            provider ?? Metadata.Provider,
+            user,
+        );
+    }
+
+    /**
+     * Updates or pauses/resumes the authenticated caller's `SpaceDigestCheckpoint`.
+     */
+    public async UpdateSpaceDigestCheckpoint(
+        input: UpdateSpaceDigestCheckpointInput,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<UpdateSpaceDigestCheckpointResult> {
+        return invokeCollaborationDigestOperation<
+            UpdateSpaceDigestCheckpointInput,
+            UpdateSpaceDigestCheckpointResult
+        >(UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
     }
 }
 

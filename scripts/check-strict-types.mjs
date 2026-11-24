@@ -57,6 +57,36 @@ export const S9_STRICT_TYPE_FILES = [
     'packages/Server/src/create-space.resolver.ts',
     'packages/Server/src/ensure-space-for-record.resolver.ts',
     'packages/Server/src/index.ts',
+    // Sub-Epic S10 Slice 1 strict-typed modules and tests
+    'packages/Core/src/space-notices.ts',
+    'packages/Core/src/space-notices.test.ts',
+    'packages/EngineBase/src/space-notices.ts',
+    'packages/EngineBase/src/__tests__/space-notices.spec.ts',
+    'packages/CoreEntitiesServer/src/SpaceNoticeEventEntityServer.ts',
+    'packages/CoreEntitiesServer/src/SpaceNoticeWatermarkEntityServer.ts',
+    'packages/CoreEntitiesServer/src/SpaceDigestCheckpointEntityServer.ts',
+    'packages/CoreEntitiesServer/src/__tests__/space-notices-server.spec.ts',
+    'packages/Server/src/schema-entity-parity.test.ts',
+    'packages/IntegrationTests/src/__tests__/s10-slice1-world-data-model.integration.spec.ts',
+    // Sub-Epic S10 Slice 2 strict-typed modules and tests
+    'packages/Core/src/notifications.ts',
+    'packages/Core/src/notifications.test.ts',
+    'packages/EngineBase/src/notifications.ts',
+    'packages/EngineBase/src/CollaborationEngineBase.ts',
+    'packages/EngineBase/src/__tests__/notifications.spec.ts',
+    'packages/CoreEntitiesServer/src/comms-v2-notifications.ts',
+    'packages/CoreEntitiesServer/src/CollaborationEngine.ts',
+    'packages/CoreEntitiesServer/src/__tests__/comms-v2-notifications.spec.ts',
+    'packages/Server/src/comms-v2-bridge.ts',
+    'packages/Server/src/bootstrap-security-audits.test.ts',
+    'packages/IntegrationTests/src/__tests__/s10-slice2-comms-v2-notifications.integration.spec.ts',
+    // Sub-Epic S10 Slice 3 strict-typed modules and tests
+    'packages/Core/src/space-digests.ts',
+    'packages/Core/src/space-digests.test.ts',
+    'packages/EngineBase/src/space-digests.ts',
+    'packages/EngineBase/src/__tests__/space-digests.spec.ts',
+    'packages/CoreEntitiesServer/src/__tests__/space-digests-server.spec.ts',
+    'packages/IntegrationTests/src/__tests__/s10-slice3-scoped-digests.integration.spec.ts',
 ];
 
 const STRICT_RULES = [

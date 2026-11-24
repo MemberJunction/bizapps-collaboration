@@ -17,7 +17,7 @@ import { MaxLength } from 'class-validator';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
-import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity, mjBizAppsCollaborationSpaceAgentSourceReceiptEntity, mjBizAppsCollaborationSpaceAnchorEntity, mjBizAppsCollaborationSpaceChatEntity, mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberPinEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceNoteEntity, mjBizAppsCollaborationSpaceRoleTypeEntity, mjBizAppsCollaborationSpaceTypeStatusEntity, mjBizAppsCollaborationSpaceTypeEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity, mjBizAppsCollaborationSpaceAgentSourceReceiptEntity, mjBizAppsCollaborationSpaceAnchorEntity, mjBizAppsCollaborationSpaceChatEntity, mjBizAppsCollaborationSpaceDigestCheckpointEntity, mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberPinEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceNoteEntity, mjBizAppsCollaborationSpaceNoticeEventEntity, mjBizAppsCollaborationSpaceNoticeWatermarkEntity, mjBizAppsCollaborationSpaceRoleTypeEntity, mjBizAppsCollaborationSpaceTypeStatusEntity, mjBizAppsCollaborationSpaceTypeEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 import { ensurePostgresReceiptContextHook, loadSpaceAgentSourceReceiptById } from '@mj-biz-apps/collaboration-core-entities-server';
     
 
@@ -772,6 +772,366 @@ export class mjBizAppsCollaborationSpaceAgentSourceReceiptResolver extends Resol
         ensurePostgresReceiptContextHook(provider);
         const key = new CompositeKey([{ FieldName: 'ID', Value: ID }]);
         return this.DeleteRecord('MJ_BizApps_Collaboration: Space Agent Source Receipts', key, options, provider, userPayload, pubSub);
+    }
+}
+
+//****************************************************************************
+// ENTITY CLASS & RESOLVER for MJ_BizApps_Collaboration: Space Notice Events
+//****************************************************************************
+@ObjectType({ description: "Fan-out-on-read space notice event stream. Publishing an event writes a single row per space event rather than per-member inbox copies." })
+export class mjBizAppsCollaborationSpaceNoticeEvent_ {
+    @Field()
+    @MaxLength(36)
+    ID: string;
+
+    @Field({ nullable: true, description: "The space in which the notice event occurred." })
+    @MaxLength(36)
+    SpaceID?: string;
+
+    @Field({ nullable: true, description: "The acting user who triggered the event, or NULL for system-generated events." })
+    @MaxLength(36)
+    ActorUserID?: string | null;
+
+    @Field({ nullable: true, description: "Event category: Share, StatusChanged, Mention, Reply, Task, Approval, Announcement, or System." })
+    @MaxLength(50)
+    EventKind?: string;
+
+    @Field({ nullable: true, description: "Visibility band (Shared or Team) governing which space members may read this notice event." })
+    @MaxLength(20)
+    Band?: string;
+
+    @Field({ nullable: true, description: "Short domain-neutral notice headline." })
+    @MaxLength(500)
+    Title?: string;
+
+    @Field({ nullable: true, description: "Optional detailed notice summary text." })
+    Body?: string | null;
+
+    @Field({ nullable: true, description: "Optional target MJ Entity ID for deep-linking to the underlying record (polymorphic pair with TargetRecordID)." })
+    @MaxLength(36)
+    TargetEntityID?: string | null;
+
+    @Field({ nullable: true, description: "Optional canonical target record key (e.g. ID|<uuid>) paired with TargetEntityID." })
+    @MaxLength(450)
+    TargetRecordID?: string | null;
+
+    @Field({ nullable: true, description: "Optional structured JSON payload carrying additional event context." })
+    MetadataJSON?: string | null;
+
+    @Field({ nullable: true, description: "UTC timestamp at which the notice event occurred, used with ID as the deterministic composite keyset cursor." })
+    EventTimestamp?: Date;
+
+    @Field()
+    _mj__CreatedAt: Date;
+
+    @Field()
+    _mj__UpdatedAt: Date;
+
+    @Field({ nullable: true })
+    @MaxLength(200)
+    Space?: string;
+
+    @Field({ nullable: true })
+    @MaxLength(100)
+    ActorUser?: string | null;
+
+    @Field({ nullable: true })
+    @MaxLength(255)
+    TargetEntity?: string | null;
+
+    @Field(() => [String], { nullable: true })
+    ReadableFields___?: string[];
+}
+
+@InputType()
+export class CreatemjBizAppsCollaborationSpaceNoticeEventInput {
+    @Field({ nullable: true }) ID?: string;
+    @Field({ nullable: true }) SpaceID?: string;
+    @Field({ nullable: true }) ActorUserID?: string | null;
+    @Field({ nullable: true }) EventKind?: string;
+    @Field({ nullable: true }) Band?: string;
+    @Field({ nullable: true }) Title?: string;
+    @Field({ nullable: true }) Body?: string | null;
+    @Field({ nullable: true }) TargetEntityID?: string | null;
+    @Field({ nullable: true }) TargetRecordID?: string | null;
+    @Field({ nullable: true }) MetadataJSON?: string | null;
+    @Field({ nullable: true }) EventTimestamp?: Date;
+    @Field(() => RestoreContextInput, { nullable: true }) RestoreContext___?: RestoreContextInput;
+}
+
+@InputType()
+export class UpdatemjBizAppsCollaborationSpaceNoticeEventInput {
+    @Field() ID: string;
+    @Field({ nullable: true }) SpaceID?: string;
+    @Field({ nullable: true }) ActorUserID?: string | null;
+    @Field({ nullable: true }) EventKind?: string;
+    @Field({ nullable: true }) Band?: string;
+    @Field({ nullable: true }) Title?: string;
+    @Field({ nullable: true }) Body?: string | null;
+    @Field({ nullable: true }) TargetEntityID?: string | null;
+    @Field({ nullable: true }) TargetRecordID?: string | null;
+    @Field({ nullable: true }) MetadataJSON?: string | null;
+    @Field({ nullable: true }) EventTimestamp?: Date;
+    @Field(() => [KeyValuePairInput], { nullable: true }) OldValues___?: KeyValuePairInput[];
+    @Field(() => RestoreContextInput, { nullable: true }) RestoreContext___?: RestoreContextInput;
+}
+
+@ObjectType()
+export class RunmjBizAppsCollaborationSpaceNoticeEventViewResult {
+    @Field(() => [mjBizAppsCollaborationSpaceNoticeEvent_]) Results: mjBizAppsCollaborationSpaceNoticeEvent_[];
+    @Field(() => String, { nullable: true }) UserViewRunID?: string;
+    @Field(() => Int, { nullable: true }) RowCount: number;
+    @Field(() => Int, { nullable: true }) TotalRowCount: number;
+    @Field(() => Int, { nullable: true }) ExecutionTime: number;
+    @Field({ nullable: true }) ErrorMessage?: string;
+    @Field(() => Boolean, { nullable: false }) Success: boolean;
+}
+
+@Resolver(mjBizAppsCollaborationSpaceNoticeEvent_)
+export class mjBizAppsCollaborationSpaceNoticeEventResolver extends ResolverBase {
+    @Query(() => RunmjBizAppsCollaborationSpaceNoticeEventViewResult)
+    async RunmjBizAppsCollaborationSpaceNoticeEventViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }), userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceNoticeEventViewResult)
+    async RunmjBizAppsCollaborationSpaceNoticeEventViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }), userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceNoticeEventViewResult)
+    async RunmjBizAppsCollaborationSpaceNoticeEventDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'MJ_BizApps_Collaboration: Space Notice Events';
+        return super.RunDynamicViewGeneric(input, GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }), userPayload, pubSub);
+    }
+
+    @Query(() => mjBizAppsCollaborationSpaceNoticeEvent_, { nullable: true })
+    async mjBizAppsCollaborationSpaceNoticeEvent(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpaceNoticeEvent_ | null> {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Notice Events', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceNoticeEvents')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Notice Events', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Notice Events', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceNoticeEvent_)
+    async CreatemjBizAppsCollaborationSpaceNoticeEvent(@Arg('input', () => CreatemjBizAppsCollaborationSpaceNoticeEventInput) input: CreatemjBizAppsCollaborationSpaceNoticeEventInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return this.CreateRecord('MJ_BizApps_Collaboration: Space Notice Events', input, GetReadWriteProvider(providers), userPayload, pubSub);
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceNoticeEvent_)
+    async UpdatemjBizAppsCollaborationSpaceNoticeEvent(@Arg('input', () => UpdatemjBizAppsCollaborationSpaceNoticeEventInput) input: UpdatemjBizAppsCollaborationSpaceNoticeEventInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return this.UpdateRecord('MJ_BizApps_Collaboration: Space Notice Events', input, GetReadWriteProvider(providers), userPayload, pubSub);
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceNoticeEvent_)
+    async DeletemjBizAppsCollaborationSpaceNoticeEvent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{ FieldName: 'ID', Value: ID }]);
+        return this.DeleteRecord('MJ_BizApps_Collaboration: Space Notice Events', key, options, GetReadWriteProvider(providers), userPayload, pubSub);
+    }
+}
+
+//****************************************************************************
+// ENTITY CLASS & RESOLVER for MJ_BizApps_Collaboration: Space Notice Watermarks
+//****************************************************************************
+@ObjectType({ description: "Per-member read watermark per space enabling O(1) fan-out-on-read unread resolution." })
+export class mjBizAppsCollaborationSpaceNoticeWatermark_ {
+    @Field() @MaxLength(36) ID: string;
+    @Field({ nullable: true }) @MaxLength(36) SpaceID?: string;
+    @Field({ nullable: true }) @MaxLength(36) UserID?: string;
+    @Field({ nullable: true }) LastReadEventTimestamp?: Date;
+    @Field({ nullable: true }) @MaxLength(36) LastReadEventID?: string | null;
+    @Field({ nullable: true }) LastReadAt?: Date;
+    @Field() _mj__CreatedAt: Date;
+    @Field() _mj__UpdatedAt: Date;
+    @Field({ nullable: true }) @MaxLength(200) Space?: string;
+    @Field({ nullable: true }) @MaxLength(100) User?: string;
+    @Field(() => [String], { nullable: true }) ReadableFields___?: string[];
+}
+
+@InputType()
+export class CreatemjBizAppsCollaborationSpaceNoticeWatermarkInput {
+    @Field({ nullable: true }) ID?: string;
+    @Field({ nullable: true }) SpaceID?: string;
+    @Field({ nullable: true }) UserID?: string;
+    @Field({ nullable: true }) LastReadEventTimestamp?: Date;
+    @Field({ nullable: true }) LastReadEventID?: string | null;
+    @Field({ nullable: true }) LastReadAt?: Date;
+    @Field(() => RestoreContextInput, { nullable: true }) RestoreContext___?: RestoreContextInput;
+}
+
+@InputType()
+export class UpdatemjBizAppsCollaborationSpaceNoticeWatermarkInput {
+    @Field() ID: string;
+    @Field({ nullable: true }) SpaceID?: string;
+    @Field({ nullable: true }) UserID?: string;
+    @Field({ nullable: true }) LastReadEventTimestamp?: Date;
+    @Field({ nullable: true }) LastReadEventID?: string | null;
+    @Field({ nullable: true }) LastReadAt?: Date;
+    @Field(() => [KeyValuePairInput], { nullable: true }) OldValues___?: KeyValuePairInput[];
+    @Field(() => RestoreContextInput, { nullable: true }) RestoreContext___?: RestoreContextInput;
+}
+
+@ObjectType()
+export class RunmjBizAppsCollaborationSpaceNoticeWatermarkViewResult {
+    @Field(() => [mjBizAppsCollaborationSpaceNoticeWatermark_]) Results: mjBizAppsCollaborationSpaceNoticeWatermark_[];
+    @Field(() => String, { nullable: true }) UserViewRunID?: string;
+    @Field(() => Int, { nullable: true }) RowCount: number;
+    @Field(() => Int, { nullable: true }) TotalRowCount: number;
+    @Field(() => Int, { nullable: true }) ExecutionTime: number;
+    @Field({ nullable: true }) ErrorMessage?: string;
+    @Field(() => Boolean, { nullable: false }) Success: boolean;
+}
+
+@Resolver(mjBizAppsCollaborationSpaceNoticeWatermark_)
+export class mjBizAppsCollaborationSpaceNoticeWatermarkResolver extends ResolverBase {
+    @Query(() => RunmjBizAppsCollaborationSpaceNoticeWatermarkViewResult)
+    async RunmjBizAppsCollaborationSpaceNoticeWatermarkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }), userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceNoticeWatermarkViewResult)
+    async RunmjBizAppsCollaborationSpaceNoticeWatermarkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }), userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceNoticeWatermarkViewResult)
+    async RunmjBizAppsCollaborationSpaceNoticeWatermarkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'MJ_BizApps_Collaboration: Space Notice Watermarks';
+        return super.RunDynamicViewGeneric(input, GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }), userPayload, pubSub);
+    }
+
+    @Query(() => mjBizAppsCollaborationSpaceNoticeWatermark_, { nullable: true })
+    async mjBizAppsCollaborationSpaceNoticeWatermark(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpaceNoticeWatermark_ | null> {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Notice Watermarks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceNoticeWatermarks')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Notice Watermarks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Notice Watermarks', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceNoticeWatermark_)
+    async CreatemjBizAppsCollaborationSpaceNoticeWatermark(@Arg('input', () => CreatemjBizAppsCollaborationSpaceNoticeWatermarkInput) input: CreatemjBizAppsCollaborationSpaceNoticeWatermarkInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return this.CreateRecord('MJ_BizApps_Collaboration: Space Notice Watermarks', input, GetReadWriteProvider(providers), userPayload, pubSub);
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceNoticeWatermark_)
+    async UpdatemjBizAppsCollaborationSpaceNoticeWatermark(@Arg('input', () => UpdatemjBizAppsCollaborationSpaceNoticeWatermarkInput) input: UpdatemjBizAppsCollaborationSpaceNoticeWatermarkInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return this.UpdateRecord('MJ_BizApps_Collaboration: Space Notice Watermarks', input, GetReadWriteProvider(providers), userPayload, pubSub);
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceNoticeWatermark_)
+    async DeletemjBizAppsCollaborationSpaceNoticeWatermark(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{ FieldName: 'ID', Value: ID }]);
+        return this.DeleteRecord('MJ_BizApps_Collaboration: Space Notice Watermarks', key, options, GetReadWriteProvider(providers), userPayload, pubSub);
+    }
+}
+
+//****************************************************************************
+// ENTITY CLASS & RESOLVER for MJ_BizApps_Collaboration: Space Digest Checkpoints
+//****************************************************************************
+@ObjectType({ description: "Keyset cursor checkpoint per recipient and cadence for scheduled scoped digest delivery." })
+export class mjBizAppsCollaborationSpaceDigestCheckpoint_ {
+    @Field() @MaxLength(36) ID: string;
+    @Field({ nullable: true }) @MaxLength(36) UserID?: string;
+    @Field({ nullable: true }) @MaxLength(36) SpaceID?: string | null;
+    @Field({ nullable: true }) @MaxLength(20) Cadence?: string;
+    @Field({ nullable: true }) LastDeliveredTimestamp?: Date;
+    @Field({ nullable: true }) @MaxLength(36) LastDeliveredRecordID?: string | null;
+    @Field({ nullable: true }) LastDeliveredAt?: Date;
+    @Field(() => Int, { nullable: true }) ItemsIncludedCount?: number;
+    @Field({ nullable: true }) @MaxLength(20) Status?: string;
+    @Field() _mj__CreatedAt: Date;
+    @Field() _mj__UpdatedAt: Date;
+    @Field({ nullable: true }) @MaxLength(100) User?: string;
+    @Field({ nullable: true }) @MaxLength(200) Space?: string | null;
+    @Field(() => [String], { nullable: true }) ReadableFields___?: string[];
+}
+
+@InputType()
+export class CreatemjBizAppsCollaborationSpaceDigestCheckpointInput {
+    @Field({ nullable: true }) ID?: string;
+    @Field({ nullable: true }) UserID?: string;
+    @Field({ nullable: true }) SpaceID?: string | null;
+    @Field({ nullable: true }) Cadence?: string;
+    @Field({ nullable: true }) LastDeliveredTimestamp?: Date;
+    @Field({ nullable: true }) LastDeliveredRecordID?: string | null;
+    @Field({ nullable: true }) LastDeliveredAt?: Date;
+    @Field(() => Int, { nullable: true }) ItemsIncludedCount?: number;
+    @Field({ nullable: true }) Status?: string;
+    @Field(() => RestoreContextInput, { nullable: true }) RestoreContext___?: RestoreContextInput;
+}
+
+@InputType()
+export class UpdatemjBizAppsCollaborationSpaceDigestCheckpointInput {
+    @Field() ID: string;
+    @Field({ nullable: true }) UserID?: string;
+    @Field({ nullable: true }) SpaceID?: string | null;
+    @Field({ nullable: true }) Cadence?: string;
+    @Field({ nullable: true }) LastDeliveredTimestamp?: Date;
+    @Field({ nullable: true }) LastDeliveredRecordID?: string | null;
+    @Field({ nullable: true }) LastDeliveredAt?: Date;
+    @Field(() => Int, { nullable: true }) ItemsIncludedCount?: number;
+    @Field({ nullable: true }) Status?: string;
+    @Field(() => [KeyValuePairInput], { nullable: true }) OldValues___?: KeyValuePairInput[];
+    @Field(() => RestoreContextInput, { nullable: true }) RestoreContext___?: RestoreContextInput;
+}
+
+@ObjectType()
+export class RunmjBizAppsCollaborationSpaceDigestCheckpointViewResult {
+    @Field(() => [mjBizAppsCollaborationSpaceDigestCheckpoint_]) Results: mjBizAppsCollaborationSpaceDigestCheckpoint_[];
+    @Field(() => String, { nullable: true }) UserViewRunID?: string;
+    @Field(() => Int, { nullable: true }) RowCount: number;
+    @Field(() => Int, { nullable: true }) TotalRowCount: number;
+    @Field(() => Int, { nullable: true }) ExecutionTime: number;
+    @Field({ nullable: true }) ErrorMessage?: string;
+    @Field(() => Boolean, { nullable: false }) Success: boolean;
+}
+
+@Resolver(mjBizAppsCollaborationSpaceDigestCheckpoint_)
+export class mjBizAppsCollaborationSpaceDigestCheckpointResolver extends ResolverBase {
+    @Query(() => RunmjBizAppsCollaborationSpaceDigestCheckpointViewResult)
+    async RunmjBizAppsCollaborationSpaceDigestCheckpointViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }), userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceDigestCheckpointViewResult)
+    async RunmjBizAppsCollaborationSpaceDigestCheckpointViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }), userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceDigestCheckpointViewResult)
+    async RunmjBizAppsCollaborationSpaceDigestCheckpointDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'MJ_BizApps_Collaboration: Space Digest Checkpoints';
+        return super.RunDynamicViewGeneric(input, GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }), userPayload, pubSub);
+    }
+
+    @Query(() => mjBizAppsCollaborationSpaceDigestCheckpoint_, { nullable: true })
+    async mjBizAppsCollaborationSpaceDigestCheckpoint(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpaceDigestCheckpoint_ | null> {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Digest Checkpoints', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceDigestCheckpoints')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Digest Checkpoints', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Digest Checkpoints', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceDigestCheckpoint_)
+    async CreatemjBizAppsCollaborationSpaceDigestCheckpoint(@Arg('input', () => CreatemjBizAppsCollaborationSpaceDigestCheckpointInput) input: CreatemjBizAppsCollaborationSpaceDigestCheckpointInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return this.CreateRecord('MJ_BizApps_Collaboration: Space Digest Checkpoints', input, GetReadWriteProvider(providers), userPayload, pubSub);
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceDigestCheckpoint_)
+    async UpdatemjBizAppsCollaborationSpaceDigestCheckpoint(@Arg('input', () => UpdatemjBizAppsCollaborationSpaceDigestCheckpointInput) input: UpdatemjBizAppsCollaborationSpaceDigestCheckpointInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return this.UpdateRecord('MJ_BizApps_Collaboration: Space Digest Checkpoints', input, GetReadWriteProvider(providers), userPayload, pubSub);
+    }
+
+    @Mutation(() => mjBizAppsCollaborationSpaceDigestCheckpoint_)
+    async DeletemjBizAppsCollaborationSpaceDigestCheckpoint(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{ FieldName: 'ID', Value: ID }]);
+        return this.DeleteRecord('MJ_BizApps_Collaboration: Space Digest Checkpoints', key, options, GetReadWriteProvider(providers), userPayload, pubSub);
     }
 }
 

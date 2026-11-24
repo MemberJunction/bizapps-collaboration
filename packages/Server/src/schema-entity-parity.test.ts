@@ -5,6 +5,9 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import {
+    mjBizAppsCollaborationSpaceDigestCheckpointSchema,
+    mjBizAppsCollaborationSpaceNoticeEventSchema,
+    mjBizAppsCollaborationSpaceNoticeWatermarkSchema,
     mjBizAppsCollaborationSpaceSchema,
     mjBizAppsCollaborationSpaceTypeSchema,
 } from '@mj-biz-apps/collaboration-entities';
@@ -92,6 +95,56 @@ describe('GraphQL schema to Entity parity (CR-3)', () => {
         for (const field of spaceTypeGql) {
             if (field === 'ReadableFields___') continue;
             assert.equal(spaceTypeEntityFields.has(field), true, `Unexpected extra field '${field}' on mjBizAppsCollaborationSpaceType_ not in SpaceType entity schema`);
+        }
+    });
+
+    it('maintains full field-name parity for S10 SpaceNoticeEvent, SpaceNoticeWatermark, and SpaceDigestCheckpoint', () => {
+        const fieldsByClass = extractFieldNamesByClass(schemaPath);
+        const normalizeField = (name: string) => name.replace(/^__mj_/, '_mj__');
+
+        const pairs: Array<{
+            gqlTypeName: string;
+            createName: string;
+            updateName: string;
+            schemaShape: Record<string, object>;
+        }> = [
+            {
+                gqlTypeName: 'mjBizAppsCollaborationSpaceNoticeEvent_',
+                createName: 'CreatemjBizAppsCollaborationSpaceNoticeEventInput',
+                updateName: 'UpdatemjBizAppsCollaborationSpaceNoticeEventInput',
+                schemaShape: mjBizAppsCollaborationSpaceNoticeEventSchema.shape,
+            },
+            {
+                gqlTypeName: 'mjBizAppsCollaborationSpaceNoticeWatermark_',
+                createName: 'CreatemjBizAppsCollaborationSpaceNoticeWatermarkInput',
+                updateName: 'UpdatemjBizAppsCollaborationSpaceNoticeWatermarkInput',
+                schemaShape: mjBizAppsCollaborationSpaceNoticeWatermarkSchema.shape,
+            },
+            {
+                gqlTypeName: 'mjBizAppsCollaborationSpaceDigestCheckpoint_',
+                createName: 'CreatemjBizAppsCollaborationSpaceDigestCheckpointInput',
+                updateName: 'UpdatemjBizAppsCollaborationSpaceDigestCheckpointInput',
+                schemaShape: mjBizAppsCollaborationSpaceDigestCheckpointSchema.shape,
+            },
+        ];
+
+        for (const pair of pairs) {
+            const gqlType = fieldsByClass.get(pair.gqlTypeName);
+            const createInput = fieldsByClass.get(pair.createName);
+            const updateInput = fieldsByClass.get(pair.updateName);
+
+            assert.ok(gqlType, `${pair.gqlTypeName} must exist in generated schema`);
+            assert.ok(createInput, `${pair.createName} must exist in generated schema`);
+            assert.ok(updateInput, `${pair.updateName} must exist in generated schema`);
+
+            const entityFields = new Set(Object.keys(pair.schemaShape).map(normalizeField));
+            for (const field of entityFields) {
+                assert.equal(gqlType.has(field), true, `Expected ${pair.gqlTypeName} to contain entity field '${field}'`);
+            }
+            for (const field of gqlType) {
+                if (field === 'ReadableFields___') continue;
+                assert.equal(entityFields.has(field), true, `Unexpected extra field '${field}' on ${pair.gqlTypeName}`);
+            }
         }
     });
 });

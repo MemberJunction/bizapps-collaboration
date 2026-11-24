@@ -123,5 +123,30 @@
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Agent Source Receipts"
     }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ_BizApps_Collaboration: Space Notice Events: TargetRecordID points at TargetEntityID."
+    ],
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Notice Events"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "TargetRecordID",
+            "EntityIDFieldName": "TargetEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Notice Events&Name=TargetRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Notice Events"
+    }
   }
 ]

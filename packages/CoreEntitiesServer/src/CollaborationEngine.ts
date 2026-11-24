@@ -27,19 +27,40 @@ import {
     type SpaceStatusReach,
 } from '@mj-biz-apps/collaboration-core';
 import {
+    type AdvanceSpaceNoticeWatermarkInput,
+    type AdvanceSpaceNoticeWatermarkResult,
     type BootEntityGrantInventoryInput,
     type BootEntityGrantInventoryResult,
     CollaborationAdminEngineBase,
     CollaborationEngineBase,
     COLLABORATION_APP_ID,
     COLLABORATION_SETTINGS_NAME,
+    type GetSpaceNoticesInput,
+    type GetSpaceNoticesResult,
+    type GetSpaceUnreadNoticeCountsInput,
+    type GetSpaceUnreadNoticeCountsResult,
+    type GetUserNotificationPreferencesInput,
+    type GetUserNotificationPreferencesResult,
     type PersonaSecurityProbeInput,
     type PersonaSecurityProbeResult,
+    type PreviewScopedSpaceDigestInput,
+    type PreviewScopedSpaceDigestResult,
+    type PublishSpaceNoticeEventInput,
+    type PublishSpaceNoticeEventResult,
+    type RouteCollaborationNotificationsInput,
+    type RouteCollaborationNotificationsResult,
+    type RunScopedSpaceDigestsInput,
+    type RunScopedSpaceDigestsResult,
     type SpaceParticipantRoleAuditInput,
     type SpaceParticipantRoleAuditResult,
     type StaffRoleAuditInput,
     type StaffRoleAuditResult,
+    type UpdateSpaceDigestCheckpointInput,
+    type UpdateSpaceDigestCheckpointResult,
+    type UpdateUserNotificationPreferencesInput,
+    type UpdateUserNotificationPreferencesResult,
 } from '@mj-biz-apps/collaboration-engine-base';
+import { EnsureCollaborationCommsV2TransportRegistered } from './comms-v2-notifications.js';
 import type {
     mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType,
     mjBizAppsCollaborationSpaceGrantEntity,
@@ -322,5 +343,109 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         provider?: IMetadataProvider,
     ): Promise<PersonaSecurityProbeResult> {
         return this.Admin.RunPersonaSecurityProbe(input, contextUser, provider);
+    }
+
+    private resolveNoticeActingUser(contextUser?: UserInfo, provider?: IMetadataProvider): UserInfo {
+        const user = contextUser ?? this.Base.ContextUser ?? (provider ?? Metadata.Provider).CurrentUser;
+        if (!user) {
+            throw new Error('Space notice operation requires an authenticated ContextUser.');
+        }
+        return user;
+    }
+
+    /** Publishes a single fan-out-on-read Space Notice Event row (`O(1)` write) via CollaborationEngineBase. */
+    public async PublishSpaceNoticeEvent(
+        input: PublishSpaceNoticeEventInput,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PublishSpaceNoticeEventResult> {
+        return this.Base.PublishSpaceNoticeEvent(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Queries fan-out-on-read Space Notices and resolved per-member unread status via CollaborationEngineBase. */
+    public async GetSpaceNotices(
+        input: GetSpaceNoticesInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetSpaceNoticesResult> {
+        return this.Base.GetSpaceNotices(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Computes per-space unread notice counts for the acting member via CollaborationEngineBase. */
+    public async GetSpaceUnreadNoticeCounts(
+        input: GetSpaceUnreadNoticeCountsInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetSpaceUnreadNoticeCountsResult> {
+        return this.Base.GetSpaceUnreadNoticeCounts(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Monotonically advances the acting member's per-space notice watermark via CollaborationEngineBase. */
+    public async AdvanceSpaceNoticeWatermark(
+        input: AdvanceSpaceNoticeWatermarkInput,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<AdvanceSpaceNoticeWatermarkResult> {
+        return this.Base.AdvanceSpaceNoticeWatermark(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Routes an NT-1 notification through MJ Comms v2 after batched preference enforcement. */
+    public async RouteCollaborationNotifications(
+        input: RouteCollaborationNotificationsInput,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<RouteCollaborationNotificationsResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.RouteCollaborationNotifications(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Resolves the acting user's Collaboration & MJ notification preferences. */
+    public async GetUserNotificationPreferences(
+        input: GetUserNotificationPreferencesInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GetUserNotificationPreferencesResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.GetUserNotificationPreferences(this.resolveNoticeActingUser(contextUser, provider), input, provider);
+    }
+
+    /** Updates the acting user's Collaboration notification preferences via UserInfoEngine / User Settings. */
+    public async UpdateUserNotificationPreferences(
+        input: UpdateUserNotificationPreferencesInput,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<UpdateUserNotificationPreferencesResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.UpdateUserNotificationPreferences(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Executes NT-2 reach-verified scoped digests via composite keyset pagination & Comms v2 dispatch. */
+    public async RunScopedSpaceDigests(
+        input: RunScopedSpaceDigestsInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<RunScopedSpaceDigestsResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.RunScopedSpaceDigests(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Previews a single member's reach-verified scoped digest without dispatching or advancing checkpoints. */
+    public async PreviewScopedSpaceDigest(
+        input: PreviewScopedSpaceDigestInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<PreviewScopedSpaceDigestResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.PreviewScopedSpaceDigest(input, this.resolveNoticeActingUser(contextUser, provider), provider);
+    }
+
+    /** Updates or pauses/resumes the acting member's `SpaceDigestCheckpoint`. */
+    public async UpdateSpaceDigestCheckpoint(
+        input: UpdateSpaceDigestCheckpointInput = {},
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<UpdateSpaceDigestCheckpointResult> {
+        EnsureCollaborationCommsV2TransportRegistered();
+        return this.Base.UpdateSpaceDigestCheckpoint(input, this.resolveNoticeActingUser(contextUser, provider), provider);
     }
 }

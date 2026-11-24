@@ -17,16 +17,23 @@ import {
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
     LoadSpaceNoteEntityServer,
+    LoadSpaceNoticeEventEntityServer,
+    LoadSpaceNoticeWatermarkEntityServer,
+    LoadSpaceDigestCheckpointEntityServer,
     LoadCollaborationTaskEntityServer,
     LoadTaskAttributionEntityServer,
     LoadSpaceMeetingsAgendaProvider,
     LoadCollaborationAIRunLockdown,
+    LoadCollaborationDigestOperations,
+    LoadCollaborationNotificationOperations,
     LoadCollaborationSecurityAuditOperations,
+    LoadCollaborationSpaceNoticeOperations,
     LoadCollaborationChatWritePermissionProvider,
     LoadCollaborationPromptComponentResolver,
     LoadCollaborationSpaceItemArtifactPermissionDelegate,
     LoadSpaceAudienceActions,
 } from '@mj-biz-apps/collaboration-core-entities-server';
+import { InstallCollaborationCommsV2Bridge } from './comms-v2-bridge.js';
 import './generated/generated.js';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -104,6 +111,13 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceMeetingsAgendaProvider();
     LoadCollaborationAIRunLockdown();
     LoadCollaborationSecurityAuditOperations();
+    LoadCollaborationSpaceNoticeOperations();
+    LoadCollaborationNotificationOperations();
+    LoadCollaborationDigestOperations();
+    InstallCollaborationCommsV2Bridge();
+    LoadSpaceNoticeEventEntityServer();
+    LoadSpaceNoticeWatermarkEntityServer();
+    LoadSpaceDigestCheckpointEntityServer();
     LoadCollaborationChatWritePermissionProvider();
     LoadCollaborationPromptComponentResolver();
     LoadCollaborationSpaceItemArtifactPermissionDelegate();

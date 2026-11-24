@@ -60,6 +60,7 @@ export const COLLABORATION_POLYMORPHIC_FK_SPECS: readonly PolymorphicFkSpec[] = 
     { EntityName: 'MJ_BizApps_Collaboration: Space Items', PayloadFieldName: 'RecordID', EntityIDFieldName: 'EntityID' },
     { EntityName: 'MJ_BizApps_Collaboration: Space Member Pins', PayloadFieldName: 'TargetRecordID', EntityIDFieldName: 'TargetEntityID' },
     { EntityName: 'MJ_BizApps_Collaboration: Space Agent Source Receipts', PayloadFieldName: 'TargetRecordID', EntityIDFieldName: 'TargetEntityID' },
+    { EntityName: 'MJ_BizApps_Collaboration: Space Notice Events', PayloadFieldName: 'TargetRecordID', EntityIDFieldName: 'TargetEntityID' },
 ];
 
 /**
@@ -92,6 +93,9 @@ export const COLLABORATION_BOOT_ENTITY_REGISTRY: readonly BootEntityGrantPolicyS
     { EntityName: 'MJ_BizApps_Collaboration: Space Notes', BootSource: 'CollaborationSchema', PolicyKind: 'reach-scoped', RequireWriteRlsWhenWritable: true, RequireUiRoleReadFilter: true },
     { EntityName: 'MJ_BizApps_Collaboration: Space Member Pins', BootSource: 'CollaborationSchema', PolicyKind: 'reach-scoped', RequireWriteRlsWhenWritable: true, RequireUiRoleReadFilter: true },
     { EntityName: 'MJ_BizApps_Collaboration: Space Agent Source Receipts', BootSource: 'CollaborationSchema', PolicyKind: 'reach-scoped', RequireWriteRlsWhenWritable: true, RequireUiRoleReadFilter: true },
+    { EntityName: 'MJ_BizApps_Collaboration: Space Notice Events', BootSource: 'CollaborationSchema', PolicyKind: 'reach-scoped', RequireWriteRlsWhenWritable: true, RequireUiRoleReadFilter: true },
+    { EntityName: 'MJ_BizApps_Collaboration: Space Notice Watermarks', BootSource: 'CollaborationSchema', PolicyKind: 'reach-scoped', RequireWriteRlsWhenWritable: true, RequireUiRoleReadFilter: true },
+    { EntityName: 'MJ_BizApps_Collaboration: Space Digest Checkpoints', BootSource: 'CollaborationSchema', PolicyKind: 'reach-scoped', RequireWriteRlsWhenWritable: true, RequireUiRoleReadFilter: true },
 
     // Cross-schema entities granted to Space Participant (`metadata/entity-permissions/.entity-permissions.json`)
     { EntityName: 'MJ_BizApps_Common: People', BootSource: 'ParticipantGrant', PolicyKind: 'reach-scoped', RequireWriteRlsWhenWritable: true },

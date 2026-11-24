@@ -131,9 +131,9 @@ describe('XS-2 Boot Entity Grant Filter Inventory', () => {
         expect(codes.has('INVALID_ENTITY_ID_FIELD_NAME')).toBe(true);
     });
 
-    it('declares all 5 polymorphic FK specs matching Collaboration metadata', () => {
-        expect(COLLABORATION_POLYMORPHIC_FK_SPECS.length).toBe(5);
-        expect(COLLABORATION_BOOT_ENTITY_REGISTRY.length).toBeGreaterThanOrEqual(70);
+    it('declares all 6 polymorphic FK specs matching Collaboration metadata', () => {
+        expect(COLLABORATION_POLYMORPHIC_FK_SPECS.length).toBe(6);
+        expect(COLLABORATION_BOOT_ENTITY_REGISTRY.length).toBeGreaterThanOrEqual(73);
     });
 
     it('registers BootEntityGrantInventoryOperation and enforces ContextUser authorization', async () => {

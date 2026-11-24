@@ -181,6 +181,9 @@ export async function purgeWorld(): Promise<void> {
                 INSERT INTO #chatConvs (ID)
                 SELECT ConversationID FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds}) AND ConversationID IS NOT NULL;
 
+            DELETE FROM __mj_BizAppsCollaboration.SpaceDigestCheckpoint WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
+            DELETE FROM __mj_BizAppsCollaboration.SpaceNoticeWatermark WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
+            DELETE FROM __mj_BizAppsCollaboration.SpaceNoticeEvent WHERE SpaceID IN (${spaceIds}) OR ActorUserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE SpaceID IN (${spaceIds}) OR RecipientUserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
