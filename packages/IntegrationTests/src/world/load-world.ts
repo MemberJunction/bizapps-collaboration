@@ -55,6 +55,7 @@ import { readCsv } from './csv.js';
 import { sqlUuid } from './ids.js';
 import { seedWorldFiles, worldStorageRoot } from './seed-files.js';
 import { seedWorldPlan } from './seed-plan.js';
+import { seedEnterpriseWorld } from './seed-enterprise-world.js';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
@@ -706,7 +707,12 @@ export async function loadWorld(): Promise<void> {
     }
 
     await assertCatalog(provider, system, spaceRows, memberRows, personas, people, spaceIds, types, roles);
+    const enterprise = await seedEnterpriseWorld({ provider, system, actor });
     console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces, ${memberRows.length} seats, and the catalog files match.`);
+    console.log(
+        `Enterprise cross-stack world loaded: Northstar Hub (${enterprise.northstarHubSpaceId}), ` +
+        `Northstar Phase 1 (${enterprise.northstarPhase1SpaceId}), Solstice Hub (${enterprise.solsticeHubSpaceId}).`,
+    );
     console.log('The system user wrote the users, their MemberJunction roles, the People rows, and the world-owned space type.');
     console.log('Each space was saved by its owner. Invited seats were saved by a non-owner who can invite. Removed seats were created, then removed by the owner.');
     await pool.close();

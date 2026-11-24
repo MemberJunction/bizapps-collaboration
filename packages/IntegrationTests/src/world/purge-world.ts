@@ -13,6 +13,14 @@ import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
 import { rm } from 'node:fs/promises';
 import { readCsv } from './csv.js';
+import {
+    ENTERPRISE_COMPANY_IDS,
+    ENTERPRISE_CONTACT_TYPE_ID,
+    ENTERPRISE_ORG_IDS,
+    ENTERPRISE_ORG_TYPE_ID,
+    ENTERPRISE_REL_TYPE_ID,
+    ENTERPRISE_TASK_IDS,
+} from './enterprise-ids.js';
 import { CHECK_SPACE_PREFIX, coreSchema, INVITEE_EMAIL_DOMAIN, sqlUuid } from './ids.js';
 import { worldStorageRoot } from './seed-files.js';
 import { BoxFileStorage } from '@memberjunction/storage';
@@ -79,6 +87,73 @@ export function providerFilesPurgeSql(core: string, providerId: string): string 
             DELETE FROM [${core}].[File] WHERE ID IN (SELECT FileID FROM #providerfiles);`;
 }
 
+/**
+ * FK-safe SQL that removes Cross-Stack Enterprise World rows across `bizapps-common`,
+ * `bizapps-tasks`, `MJ: Companies`, and `MJ: Scoped Prompt Parts` for the seeded organizations
+ * and personas. Runs inside the purge transaction after Collaboration spaces/items are deleted
+ * and before `Common.Person` rows are removed.
+ */
+export function enterpriseWorldPurgeSql(core: string, userIdsSql: string, spaceIdsSql: string): string {
+    const orgIdsSql = ENTERPRISE_ORG_IDS.map((id) => sqlUuid(id, 'enterprise org')).join(',');
+    const companyIdsSql = ENTERPRISE_COMPANY_IDS.map((id) => sqlUuid(id, 'enterprise company')).join(',');
+    return `
+            IF OBJECT_ID('[${core}].ScopedPromptPart') IS NOT NULL
+                DELETE FROM [${core}].ScopedPromptPart WHERE PrimaryScopeRecordID IN (${spaceIdsSql});
+
+            IF OBJECT_ID('__mj_BizAppsCommon.ContactMethod') IS NOT NULL
+            BEGIN
+                SELECT ID INTO #world_contact_methods
+                FROM __mj_BizAppsCommon.ContactMethod
+                WHERE OrganizationID IN (${orgIdsSql})
+                   OR PersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIdsSql}));
+                IF OBJECT_ID('__mj_BizAppsCommon.ContactMethodConsent') IS NOT NULL
+                BEGIN
+                    IF OBJECT_ID('__mj_BizAppsCommon.ContactMethodConsentHistory') IS NOT NULL
+                        DELETE FROM __mj_BizAppsCommon.ContactMethodConsentHistory
+                        WHERE ContactMethodConsentID IN (
+                            SELECT ID FROM __mj_BizAppsCommon.ContactMethodConsent
+                            WHERE ContactMethodID IN (SELECT ID FROM #world_contact_methods)
+                               OR RequestingOrganizationID IN (${orgIdsSql})
+                        );
+                    DELETE FROM __mj_BizAppsCommon.ContactMethodConsent
+                    WHERE ContactMethodID IN (SELECT ID FROM #world_contact_methods)
+                       OR RequestingOrganizationID IN (${orgIdsSql});
+                END
+                DELETE FROM __mj_BizAppsCommon.ContactMethod WHERE ID IN (SELECT ID FROM #world_contact_methods);
+            END
+
+            IF OBJECT_ID('__mj_BizAppsCommon.Relationship') IS NOT NULL
+                DELETE FROM __mj_BizAppsCommon.Relationship
+                WHERE FromOrganizationID IN (${orgIdsSql})
+                   OR ToOrganizationID IN (${orgIdsSql})
+                   OR FromPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIdsSql}))
+                   OR ToPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIdsSql}));
+
+            IF OBJECT_ID('__mj_BizAppsCommon.Organization') IS NOT NULL
+            BEGIN
+                UPDATE __mj_BizAppsCommon.Organization SET ParentID = NULL WHERE ID IN (${orgIdsSql});
+                DELETE FROM __mj_BizAppsCommon.Organization WHERE ID IN (${orgIdsSql});
+            END
+
+            IF OBJECT_ID('__mj_BizAppsCommon.OrganizationType') IS NOT NULL
+                DELETE FROM __mj_BizAppsCommon.OrganizationType
+                WHERE ID = ${sqlUuid(ENTERPRISE_ORG_TYPE_ID, 'enterprise org type')}
+                  AND NOT EXISTS (SELECT 1 FROM __mj_BizAppsCommon.Organization WHERE OrganizationTypeID = ${sqlUuid(ENTERPRISE_ORG_TYPE_ID, 'enterprise org type')});
+
+            IF OBJECT_ID('__mj_BizAppsCommon.RelationshipType') IS NOT NULL
+                DELETE FROM __mj_BizAppsCommon.RelationshipType
+                WHERE ID = ${sqlUuid(ENTERPRISE_REL_TYPE_ID, 'enterprise rel type')}
+                  AND NOT EXISTS (SELECT 1 FROM __mj_BizAppsCommon.Relationship WHERE RelationshipTypeID = ${sqlUuid(ENTERPRISE_REL_TYPE_ID, 'enterprise rel type')});
+
+            IF OBJECT_ID('__mj_BizAppsCommon.ContactType') IS NOT NULL
+                DELETE FROM __mj_BizAppsCommon.ContactType
+                WHERE ID = ${sqlUuid(ENTERPRISE_CONTACT_TYPE_ID, 'enterprise contact type')}
+                  AND NOT EXISTS (SELECT 1 FROM __mj_BizAppsCommon.ContactMethod WHERE ContactTypeID = ${sqlUuid(ENTERPRISE_CONTACT_TYPE_ID, 'enterprise contact type')});
+
+            IF OBJECT_ID('[${core}].Company') IS NOT NULL
+                DELETE FROM [${core}].Company WHERE ID IN (${companyIdsSql});`;
+}
+
 export async function purgeWorld(): Promise<void> {
     const { DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD } = process.env;
     if (!DB_HOST || !DB_DATABASE || !DB_USERNAME || !DB_PASSWORD) throw new Error('Set DB_HOST, DB_DATABASE, DB_USERNAME and DB_PASSWORD.');
@@ -99,12 +174,33 @@ export async function purgeWorld(): Promise<void> {
     // Spaces a check created and did not clean up (its run died first) go with the world; they carry the check marker
     // Only those a check could have made: owned by a world persona, and either a root or a child of a world space
     const personaIds = readCsv(join(dir, 'personas.csv')).map((row) => sqlUuid(row.ID, 'persona')).join(',');
+    const enterpriseTaskIdsSql = ENTERPRISE_TASK_IDS.map((id) => sqlUuid(id, 'enterprise task')).join(',');
+    const enterpriseAnchorRecordIdsSql = ENTERPRISE_TASK_IDS.flatMap((id) => [
+        sqlUuid(id, 'enterprise anchor'),
+        `'ID|${id}'`,
+    ]).join(',');
+    const enterpriseSpaces = await pool.request().query<{ ID: string }>(`
+        WITH anchored AS (
+            SELECT DISTINCT a.SpaceID AS ID
+            FROM __mj_BizAppsCollaboration.SpaceAnchor AS a
+            WHERE a.RecordID IN (${enterpriseAnchorRecordIdsSql})
+            UNION ALL
+            SELECT s.ID
+            FROM __mj_BizAppsCollaboration.Space AS s
+            INNER JOIN anchored ON s.ParentID = anchored.ID
+        )
+        SELECT DISTINCT ID FROM anchored;
+    `);
+    const baseSpaceIds = [
+        worldSpaceIds,
+        ...(enterpriseSpaces.recordset ?? []).map((row) => sqlUuid(row.ID, 'enterprise space')),
+    ].join(',');
     const markedSpaces = await pool.request()
         .input('prefix', sql.NVarChar, `${CHECK_SPACE_PREFIX.replace(/[%_[]/g, '[$&]')}%`)
         .query<{ ID: string }>(
-            `SELECT ID FROM __mj_BizAppsCollaboration.Space WHERE Name LIKE @prefix AND OwnerID IN (${personaIds}) AND (ParentID IS NULL OR ParentID IN (${worldSpaceIds}))`,
+            `SELECT ID FROM __mj_BizAppsCollaboration.Space WHERE Name LIKE @prefix AND OwnerID IN (${personaIds}) AND (ParentID IS NULL OR ParentID IN (${baseSpaceIds}))`,
         );
-    const spaceIds = [worldSpaceIds, ...(markedSpaces.recordset ?? []).map((row) => sqlUuid(row.ID, 'check space'))].join(',');
+    const spaceIds = [baseSpaceIds, ...(markedSpaces.recordset ?? []).map((row) => sqlUuid(row.ID, 'check space'))].join(',');
     // Every file on the Collaboration provider goes with the provider, the world's and any other upload a test host holds
     const stored = await pool.request().query<{ ProviderKey: string | null; Name: string; IsWorld: number }>(`
         SELECT f.ProviderKey AS ProviderKey, f.Name AS Name,
@@ -148,6 +244,10 @@ export async function purgeWorld(): Promise<void> {
                 SELECT roots.TaskID FROM #roots AS roots
                 WHERE roots.TaskID IS NOT NULL
                   AND NOT EXISTS (SELECT 1 FROM #tasks AS known WHERE known.ID = roots.TaskID);
+                INSERT INTO #tasks (ID)
+                SELECT t.ID FROM __mj_BizAppsTasks.Task AS t
+                WHERE t.ID IN (${enterpriseTaskIdsSql})
+                  AND NOT EXISTS (SELECT 1 FROM #tasks AS known WHERE known.ID = t.ID);
                 DECLARE @added int = 1;
                 WHILE @added > 0
                 BEGIN
@@ -173,6 +273,7 @@ export async function purgeWorld(): Promise<void> {
                     DELETE FROM __mj_BizAppsTasks.TaskTagLink WHERE TaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds})));
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskNotificationLog') IS NOT NULL
                     DELETE FROM __mj_BizAppsTasks.TaskNotificationLog WHERE TaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds})));
+                UPDATE __mj_BizAppsTasks.Task SET ParentID = NULL WHERE ID IN (SELECT ID FROM #tasks) OR CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds}));
                 DELETE FROM __mj_BizAppsTasks.Task WHERE ID IN (SELECT ID FROM #tasks) OR CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds}));
             END
 
@@ -201,8 +302,26 @@ export async function purgeWorld(): Promise<void> {
                 UPDATE __mj_BizAppsCollaboration.Space SET StatusID = NULL WHERE ID IN (${spaceIds});
                 DELETE FROM __mj_BizAppsCollaboration.SpaceTypeStatus WHERE SpaceTypeID IN (${typeIds});
             END
+            SELECT DISTINCT i.ArtifactVersionID
+            INTO #world_artifact_versions
+            FROM __mj_BizAppsCollaboration.SpaceItem AS i
+            WHERE i.SpaceID IN (${spaceIds}) AND i.ArtifactVersionID IS NOT NULL;
+
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceAgentSourceReceipt') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceAgentSourceReceipt WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID IN (${spaceIds});
+            IF OBJECT_ID('[${core}].ArtifactVersion') IS NOT NULL
+            BEGIN
+                SELECT DISTINCT v.ID AS VersionID, v.ArtifactID
+                INTO #world_doc_versions
+                FROM [${core}].ArtifactVersion AS v
+                WHERE v.ID IN (SELECT ArtifactVersionID FROM #world_artifact_versions);
+                DELETE FROM [${core}].ArtifactVersion WHERE ID IN (SELECT VersionID FROM #world_doc_versions);
+                DELETE FROM [${core}].Artifact
+                WHERE ID IN (SELECT ArtifactID FROM #world_doc_versions)
+                  AND NOT EXISTS (SELECT 1 FROM [${core}].ArtifactVersion AS left_ WHERE left_.ArtifactID = Artifact.ID);
+            END
             -- The example subtype's rows go before the spaces they specialise: their keys are foreign keys to Space, with no cascade
             IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleBoard') IS NOT NULL
                 DELETE FROM __mj_BizAppsCollabExamples.ExampleBoard WHERE ID IN (${spaceIds});
@@ -247,6 +366,8 @@ export async function purgeWorld(): Promise<void> {
                 DELETE FROM [${core}].ResourcePermission WHERE ResourceRecordID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});
 
             DELETE FROM [${core}].Conversation WHERE ID IN (SELECT ID FROM #conv);
+
+${enterpriseWorldPurgeSql(core, userIds, spaceIds)}
 
             IF OBJECT_ID('__mj_BizAppsCommon.Person') IS NOT NULL
                 DELETE FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds});

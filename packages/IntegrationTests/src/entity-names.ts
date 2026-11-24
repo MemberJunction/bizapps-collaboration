@@ -17,12 +17,30 @@ export const SPACE_NOTICE_WATERMARK_ENTITY = 'MJ_BizApps_Collaboration: Space No
 export const SPACE_DIGEST_CHECKPOINT_ENTITY = 'MJ_BizApps_Collaboration: Space Digest Checkpoints';
 
 export const PERSON_ENTITY = 'MJ_BizApps_Common: People';
+export const ORGANIZATION_ENTITY = 'MJ_BizApps_Common: Organizations';
+export const ORGANIZATION_TYPE_ENTITY = 'MJ_BizApps_Common: Organization Types';
+export const RELATIONSHIP_ENTITY = 'MJ_BizApps_Common: Relationships';
+export const RELATIONSHIP_TYPE_ENTITY = 'MJ_BizApps_Common: Relationship Types';
+export const CONTACT_METHOD_ENTITY = 'MJ_BizApps_Common: Contact Methods';
+export const CONTACT_TYPE_ENTITY = 'MJ_BizApps_Common: Contact Types';
 
 export const TASK_ENTITY = 'MJ_BizApps_Tasks: Tasks';
 export const TASK_ASSIGNMENT_ENTITY = 'MJ_BizApps_Tasks: Task Assignments';
 export const TASK_TYPE_ENTITY = 'MJ_BizApps_Tasks: Task Types';
 export const TASK_LINK_ENTITY = 'MJ_BizApps_Tasks: Task Links';
 export const TASK_ACTIVITY_ENTITY = 'MJ_BizApps_Tasks: Task Activities';
+export const TASK_DECISION_ENTITY = 'MJ_BizApps_Tasks: Task Decisions';
+export const TASK_DECISION_OUTCOME_ENTITY = 'MJ_BizApps_Tasks: Task Decision Outcomes';
+
+export const COMPANY_ENTITY = 'MJ: Companies';
+export const ARTIFACT_ENTITY = 'MJ: Artifacts';
+export const ARTIFACT_VERSION_ENTITY = 'MJ: Artifact Versions';
+export const SCOPED_PROMPT_PART_ENTITY = 'MJ: Scoped Prompt Parts';
+export const ACTION_ENTITY = 'MJ: Actions';
+export const ACTION_PARAM_ENTITY = 'MJ: Action Params';
+export const AUDIT_LOG_ENTITY = 'MJ: Audit Logs';
+export const USER_SETTING_ENTITY = 'MJ: User Settings';
+export const USER_NOTIFICATION_TYPE_ENTITY = 'MJ: User Notification Types';
 
 export const USER_ENTITY = 'MJ: Users';
 export const USER_ROLE_ENTITY = 'MJ: User Roles';

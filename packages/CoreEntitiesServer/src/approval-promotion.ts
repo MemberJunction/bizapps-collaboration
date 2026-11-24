@@ -151,22 +151,21 @@ async function resolveDecisionOutcomeId(
     desired: 'Approved' | 'Rejected',
 ): Promise<string | null> {
     const rv = RunView.FromMetadataProvider(provider);
-    const isApprovalFlag = desired === 'Approved' ? 1 : 0;
-    const res = await rv.RunView<{ ID: string; Code: string; IsApproval?: boolean }>(
+    const res = await rv.RunView<{ ID: string; Code: string; Name: string }>(
         {
             EntityName: TASK_DECISION_OUTCOMES_ENTITY,
-            ExtraFilter: `Code = '${desired}' OR IsApproval = ${isApprovalFlag}`,
-            Fields: ['ID', 'Code', 'IsApproval'],
+            ExtraFilter: `Code = '${desired}' OR Name = '${desired}'`,
+            Fields: ['ID', 'Code', 'Name'],
             ResultType: 'simple',
             MaxRows: 10, // row-cap-ok: small catalog of decision outcomes
         },
         system,
     );
     if (!res.Success || !res.Results?.length) return null;
-    const exact = res.Results.find((r) => r.Code.toLowerCase() === desired.toLowerCase());
-    if (exact) return exact.ID;
-    const byFlag = res.Results.find((r) => Boolean(r.IsApproval) === (desired === 'Approved'));
-    return byFlag?.ID ?? null;
+    const exactCode = res.Results.find((r) => r.Code.toLowerCase() === desired.toLowerCase());
+    if (exactCode) return exactCode.ID;
+    const exactName = res.Results.find((r) => r.Name.toLowerCase() === desired.toLowerCase());
+    return exactName?.ID ?? null;
 }
 
 /**
@@ -263,7 +262,9 @@ export async function createSpaceDraftApprovalTask(
     }
 
     // 3. File the approval Task on the Team band in Space Items (enforces CA-3 SQL + service Team-band privacy!)
-    const taskSpaceItem = await input.provider.GetEntityObject<SpaceItemEntityServer>(ITEMS_ENTITY, system);
+    // Use callerUser (already verified as a Team-band contributor in this space) so SpaceItemEntityServer.Save()
+    // authorizes the item write cleanly against real SQL Server reach rules.
+    const taskSpaceItem = await input.provider.GetEntityObject<SpaceItemEntityServer>(ITEMS_ENTITY, input.callerUser);
     vouchStoredFile(taskSpaceItem);
     taskSpaceItem.NewRecord();
     taskSpaceItem.SpaceID = cleanSpaceId;

@@ -1,72 +1,103 @@
 # @mj-biz-apps/collaboration-integration-tests
 
-Collaboration's integration checks, and the sample world they run against.
+Collaboration's cross-stack integration checks and the deterministic real-world sample dataset (`COLLAB-WORLD` + Cross-Stack Enterprise World) they execute against.
 
-- **Private.** It's never published, and `mj-app.json` doesn't list it.
+- **Private.** Never published, and `mj-app.json` does not list it.
 - **Layer:** `runtime`.
-- **Depends on:** Collaboration's `core`, `entities` and `core-entities-server` packages, and the example types' `-entities` and `-server` packages, from the workspace; MJ's `core`, `core-entities`, `global`, `generic-database-provider`, `graphql-dataprovider`, `sqlserver-dataprovider`, `api-keys`, `storage`, `testing-integration`, `ai-agents`, `ai-core-plus`, `ai-engine-base` and `search-engine`; bizapps-common's and bizapps-tasks' entity packages; and `mssql`.
+- **Depends on:** Collaboration's `core`, `entities`, `engine-base`, and `core-entities-server` packages, and the example types' `-entities` and `-server` packages from the workspace; MJ's `core`, `core-entities`, `global`, `generic-database-provider`, `graphql-dataprovider`, `sqlserver-dataprovider`, `api-keys`, `storage`, `testing-integration`, `ai-agents`, `ai-core-plus`, `ai-engine-base`, and `search-engine`; `bizapps-common`'s and `bizapps-tasks`' entity packages; and `mssql`.
 
-## What's in it
+## Check bundles
 
-**Check bundles.** Each check registers on MJ's `IntegrationCheckRegistry`, and each bundle registers a `Setup` and a `Teardown`. A `Teardown` removes what its checks created, and fails the run when it can't.
+Each check registers on MJ's `IntegrationCheckRegistry`, and each bundle registers a `Setup` and a `Teardown`. A `Teardown` removes everything its checks created and fails the run if any row remains behind.
 
 | Bundle | Server checks | Client checks | What it covers |
 |---|---|---|---|
-| `collab-world` | 4 | 4 | The world loaded as the catalog says |
-| `people-fls` | 3 | 3 | What a participant reads of People |
-| `parent-assignees` | 6 | 6 | Assigning people seated above a space, with the switch on and off |
-| `room` | 12 | 11 | A space's conversations: who reads and starts them, posting, agent replies, and close and reopen |
-| `write-gates` | 10 | 8 | The gates on spaces, seats, items, share notices and item uses, invitations and a change of type |
-| `extensions` | 12 | none | The example types' drivers, and `Children` rules (EX1 to EX12) |
-| `subtypes` | 7 | 4 | A type's own table as an IsA child of Space: a board created in one save, edited, reloaded and deleted (ST1); a type and its subtype going together (ST2); a type refused for naming an entity that isn't a subtype of Spaces (ST3); a change to only the board's own columns refused without *Configure Spaces* and an owner seat (ST4); a save of only the board's quorum reaching its driver with the old value and the new, so lowering an open board's quorum is refused and raising it lands (ST5), and the same for a board loaded and saved on its own, the way a client's save arrives (ST7); and a space created with its subtype, through `CreateSpace` and through `EnsureISAChild`, logging no load error (ST6). Over GraphQL: `CreateSpace` writing the board and its owner seat together (SC1), refusing what a space can't be made from and leaving nothing behind (SC2), the board's own columns saved only with the right (SC3), and the quorum rule on a client's save (SC4) |
-| `row-filters` | 4 | 4 | What each persona reads |
-| `library` | 6 | 8 | The seeded items, uploads and deletes |
-| `agent` | 10 | 7 | The agent's bounded retrieval, its search scope, and turns on the stub agent |
-| `features` | 5 | 5 | Space styling, tasks as items, message history and nesting |
-| `lifecycle` | none | 6 | A close with no access after it: who keeps the row and can reopen it, a closed parent's seats, `GetCloseConsequence`, Home's counts against the person's own reads, Home's lists as the rows behind its counts, and a participant refused when running Home's queries directly (LC1 to LC6) |
+| `collab-world` | 4 | 4 | Base catalog spaces, seats, items, and Sage agent grant (`CW1`–`CW4`) |
+| `people-fls` | 3 | 3 | `MJ_BizApps_Common: People` field-level security allow-list for `Space Participant` (`FLS1`–`FLS3`) |
+| `parent-assignees` | 6 | 6 | Assigning people seated above a space with `AllowParentAssignees` on and off |
+| `room` | 12 | 11 | Space conversations: reading, starting, posting, agent replies, close/reopen |
+| `write-gates` | 10 | 8 | Write gates on spaces, seats, items, share notices, item uses, invitations, and retyping |
+| `extensions` | 12 | none | Example space type server drivers and `Children` rules (`EX1`–`EX12`) |
+| `subtypes` | 7 | 4 | IsA child subtype spaces (`ExampleBoard`), `CreateSpace`, `EnsureISAChild`, and quorum rules |
+| `row-filters` | 6 | 4 | Persona row-level security isolation across spaces, items, files, indexed chunks, and chats |
+| `library` | 7 | 9 | Seeded library items, uploads, content pipeline ingestion, and deletes |
+| `agent` | 17 | 10 | Bounded agent retrieval, search scopes, source receipts, and stub agent turns |
+| `features` | 5 | 5 | Space styling, tasks as items, message history, and nesting |
+| `lifecycle` | none | 6 | Close/archive visibility, `GetCloseConsequence`, Home counts/lists, and participant query guards |
+| `stage1` | 11 | 8 | Statuses, anchors, grants, notes, pins, staff-only types, and retype anchor migration |
+| `stage2` | 5 | 4 | DataReach generated RLS filters, allow-listed columns, and chapter views/queries |
+| `stage3` | 7 | 3 | Audience-cut turn tools, `RunSpaceData`, and common-reach checks |
+| `stage4` | 5 | 4 | Note promotion + audit logging, author-only edits, `GetSpaceComponent`, favorites, and pins |
+| `space-meetings` | 2 | 2 | Space meetings creation, attendee sync, and meeting chats |
+| `adversarial-persona` | 7 | 6 | Adversarial disclosure probes across personas, AI run lockdown, and multi-role confinement |
+| `cross-stack-enterprise` | 6 | 4 | Full `MJ Core` → `bizapps-common` → `bizapps-tasks` → `bizapps-collaboration` real-world multi-org enterprise lifecycle, `EnsureSpaceForRecord` subtyped concurrency/idempotency, dual-band `Docs` + `APPROVAL_REQUEST` `Task`/`TaskLink`/`TaskDecision` promotion, sealed subspace revocation, and adversarial multi-org isolation (`CE1`–`CE6` / `CEC1`–`CEC4`) |
+| `round2-substrate` | 6 | 3 | Live SQL Server & GraphQL verification of Round-2 Collaboration v1 Substrate: `CollaborationChatWritePermissionProvider` (`Chats.WhoCanWrite` + `Paused` lockdown), live `fnCollaborationChatScope` TVF (`StructuralChatScope`), hierarchical `SpaceType -> Root -> Space` Scoped Prompt Parts, `SupportsAudience` bound action grants & anti-spoofing, O(1) fan-out-on-read `Space Notices` + per-persona watermarks, Comms v2 notification routing, and reach-verified idempotent scoped digests (`R2_1`–`R2_6` / `R2C1`–`R2C3`) |
 
-- **Server bundles** (`src/checks/`, entry `src/index.ts`) run in process with Collaboration's server classes loaded.
-- **Client bundles** (`src/checks/client/`, entry `src/client-index.ts`, exported as `./client`) run over GraphQL. They load no server package. `src/persona-provider.ts` signs in as each persona with a user API key it creates.
-- `src/expected-bundles.ts` holds the expected counts. `scripts/assert-check-count.mjs` reads it to fail a run that ran fewer checks.
-- `src/wire.ts` and `src/entity-names.ts` hold the helpers and entity names the checks share.
-- The repo's `mj.config.cjs` points `testing.checkModules` at this package. `metadata-tests/` holds the stub agent, the example space types and their entities' permissions, which the checks need (`pnpm run mj:push:tests`), and `mj test` suite records for eight of the server bundles (COL-00 to COL-07; not `extensions`, `subtypes`, `features` or `lifecycle`).
-- `src/agents/` is the stub agent's driver, **Space Chat Test Stub**, so agent turns need no model key.
+- **Server bundles** (`src/checks/`, entry `src/index.ts`, **138 checks across 19 bundles**) run in-process over `SQLServerDataProvider` with Collaboration's server classes and Round-2 substrate providers loaded.
+- **Client bundles** (`src/checks/client/`, entry `src/client-index.ts`, exported as `./client`, **114 checks across 19 bundles**) run over GraphQL without loading any `*Server` package. `src/persona-provider.ts` signs in as each persona using minted per-persona user API keys.
+- `src/expected-bundles.ts` holds the single source of truth for expected bundle check counts, enforced by `scripts/assert-check-count.mjs`, `registry-parity.test.ts`, and `client-parity.test.ts`.
+- `src/agents/` registers **Space Chat Test Stub** so agent turn checks require no external LLM key.
 
-**The sample world,** `COLLAB-WORLD` (`src/world/`):
-- the catalog is CSV under `src/world/data/`: 13 personas, 15 spaces, 30 seats, 15 files, one agent row (`agents.csv`: MemberJunction's Sage on Northwind, so a person can tag it in that space's chat) and two space types of the world's own;
-- `load-world.ts` loads it through the entity gates, and `purge-world.ts` deletes only its own rows;
-- `seed-plan.ts` adds a small task plan, and `seed-files.ts` stores the world's files in a local directory storage account (`local-directory-storage.ts`, `local-storage-account.ts`).
+## Cross-Stack World Architecture
 
-[`docs/reviewing-the-data.md`](../../docs/reviewing-the-data.md) describes the people and spaces, and how to load the world.
+`load-world.ts` loads two layered, idempotent, deterministic worlds through the real entity gates and server services, and `purge-world.ts` cleanly reverses every seeded row in strict FK-safe order (while keeping base `MJ: Users` accounts):
+
+### 1. Base Catalog (`COLLAB-WORLD`, `src/world/data/*.csv`)
+- 16 personas (`personas.csv`), 19 spaces (`spaces.csv`), 35 seats (`members.csv`), 15 files (`files.csv`), notes (`notes.csv`), pins (`pins.csv`), anchors (`anchors.csv`), example chapters (`chapters.csv`, `chapter-members.csv`), one agent grant (`Sage` on Northwind), and task plans (`seed-plan.ts`).
+
+### 2. Cross-Stack Enterprise World (`src/world/enterprise-ids.ts`, `src/world/seed-enterprise-world.ts`)
+
+Establishes a realistic three-organization consulting/client topology spanning all four stack layers:
+
+| Stack Layer | Seeded Entities & Records |
+|---|---|
+| **MJ Core** | Mirrored `MJ: Companies` (`Meridian Advisory Group`, `Northstar Manufacturing Corp`, `Solstice Logistics Ltd`), `MJ: Artifacts` & `MJ: Artifact Versions` (Markdown Docs), `MJ: Conversations` & `MJ: Conversation Details` |
+| **`bizapps-common`** | Three `Organizations` linked via `LinkedCompanyID`, active Person-to-Organization `Relationships` with job titles, and primary work email `Contact Methods` |
+| **`bizapps-tasks`** | Multi-level `Tasks` hierarchies (`Northstar ERP Modernization Program` → `Phase 1 Cutover Readiness` → `Warehouse Integration Sign-Off`; `Solstice Fleet Telemetry Rollout` → `Cold-Chain Sensor Calibration`), `OrganizationID` scoping, `Task Assignments`, and polymorphic `Task Links` to Collaboration Spaces & Common Organizations |
+| **`bizapps-collaboration`** | Record-bound spaces created via `EnsureSpaceForRecord` (`Northstar ERP Modernization Hub`, child `Northstar Phase 1 Cutover`, rival `Solstice Fleet Telemetry Hub`), dual-band `General` (`Shared`) & `Private` (`Team`) chats, dual-band `Docs` (`Team` internal memo vs. `Shared` deliverables), and fan-out-on-read `Space Notice Events` |
+
+#### Seeded Enterprise Personas & Isolation Matrix
+
+| Persona | Organization (`bizapps-common`) | Role / Title | Collaboration Posture | Isolation Guarantee |
+|---|---|---|---|---|
+| `ada` | Meridian Advisory Group (Internal) | Engagement Owner (`UI`) | Northstar Hub `owner` (`Team`) | Full `Team` + `Shared` access on Northstar; `0` rows on Solstice structural scope |
+| `sam` | Meridian Advisory Group (Internal) | Delivery Contributor (`UI`) | Northstar Hub `member` (`Team`) | Authors `Team` drafts & approval tasks; reads `Team` + `Shared` notices & digests |
+| `dev` | Meridian Advisory Group (Internal) | Engagement Approver (`Developer`) | Northstar Hub `owner` (`Team`) | Holds `Configure Spaces`; approves & promotes `Team` drafts to `Shared` |
+| `casey` | Northstar Manufacturing Corp (Client A) | Client Sponsor (`Space Participant`) | Northstar Hub `client-admin` (`Shared`) | Reads Northstar `Shared` only; `0` Team drafts/chats/notices; `0` Solstice rows |
+| `bea` | Northstar Manufacturing Corp (Client A) | Operations Lead (`Space Participant`) | Northstar Hub `client-member` (`Shared`) | Reads Northstar `Shared` only; unlocks promoted Docs after approval; `0` Solstice rows |
+| `harbor` | Meridian Advisory Group (Internal) | Logistics Account Lead (`UI`) | Solstice Hub `owner` (`Team`) | Owns Solstice Hub; isolated from Northstar |
+| `harper` | Solstice Logistics Ltd (Rival Client B) | Logistics Director (`Space Participant`) | Solstice Hub `client-member` (`Shared`) | Reads Solstice `Shared` only; **ZERO** Northstar spaces, docs, tasks, chats, notices, anchors, or digests |
 
 ## Build and test
 
 ```bash
+# Build IntegrationTests (and example space types)
 pnpm --filter @mj-biz-apps/collaboration-integration-tests run build
+
+# Run unit, parity, cleanup-reporting, and purge-SQL ordering tests (Vitest)
 pnpm --filter @mj-biz-apps/collaboration-integration-tests test
 ```
 
-The build compiles the example types' server entry, runs `tsc`, then copies the world's CSV into `dist/`. The unit tests use Vitest, 56 in all:
-- `registry-parity.test.ts` and `client-parity.test.ts`: each entry registers exactly the expected bundles, checks and lifecycles, and the client entry loads no server class;
-- `cleanup-reporting.test.ts`: a check reports its own error before its clean-up's, and a failed clean-up fails the check.
+## Running the live integration harnesses
 
-**Running the checks** needs a database with Collaboration's migrations, its metadata, the example types' schema, the test metadata and the world loaded ([building the database](../../docs/building-the-database.md)). The client checks also need a running MJAPI with Collaboration's server package and the example types' `/server` entry loaded, started with the stub agent's and the storage driver's entries imported, plus `MJ_API_KEY`, and `MJAPI_URL` or `GRAPHQL_PORT` ([running the harnesses](../../docs/building-the-database.md#running-the-harnesses)). Run each harness from a purge and a fresh load, then again on that load. From the repo root:
+Both harnesses require an isolated database bootstrapped with MJ Core, `bizapps-common` (with `EnableFieldLevelSecurity` on `People`), `bizapps-tasks`, Collaboration migrations + metadata, example space types + test metadata, and the world loaded (see [`docs/building-the-database.md`](../../docs/building-the-database.md)). Never run against a shared live application database.
 
 ```bash
+# Purge and load the deterministic world (base + cross-stack enterprise)
+pnpm --filter @mj-biz-apps/collaboration-integration-tests run purge
+pnpm --filter @mj-biz-apps/collaboration-integration-tests run load
+
+# Run every server bundle + check-count assertion (138 checks across 19 bundles)
 pnpm run test:integration:server
+
+# Run a single server bundle (e.g., cross-stack or Round-2 substrate)
+node test-harnesses/integration.mjs cross-stack-enterprise
+node test-harnesses/integration.mjs round2-substrate
+
+# Run every client bundle over GraphQL + check-count assertion (114 checks across 19 bundles)
+# Requires a running MJAPI pointed at the same isolated database with MJ_API_KEY and MJAPI_URL
 pnpm run test:integration:client
-pnpm run test:integration          # both
+
+# Run both suites
+pnpm run test:integration
 ```
-
-`node test-harnesses/integration.mjs <bundle>` runs one server bundle, without the count assertion.
-
-## Not done yet
-
-- A check for every gate's accepting side, for tasks, invitations, share notices, item uses and band promotion. Some exist (WG6, WG8); the plan lists the rest.
-- The agent turns run on the stub agent, not a model.
-
-## Stage 4 bundles
-
-- `stage4` (server, 5): call 15's promotion and its log, the author-only rule beside it, `GetSpaceComponent` with bound props, the star through MJ's favorites, the world's notes and pins as each persona reads them.
-- `stage4` (client, 3): the promotion over the wire, *Turn into document* through the upload path, the component over the wire.
-- The world seeds `notes.csv`, `pins.csv`, and the example chapter banner (`example-chapter-banner.spec.json`) with its grant on the staff type.

@@ -23,7 +23,7 @@ function expectedCounts() {
     const block = src.match(regex);
     if (!block) throw new Error(`could not find the ${mapName} map in expected-bundles.ts`);
     const counts = new Map();
-    for (const [, name, n] of block[1].matchAll(/'?([a-zA-Z-]+)'?\s*:\s*(\d+)/g)) {
+    for (const [, name, n] of block[1].matchAll(/'?([a-zA-Z0-9-]+)'?\s*:\s*(\d+)/g)) {
         counts.set(name, Number(n));
     }
     if (!counts.size) throw new Error(`the ${mapName} map parsed empty`);

@@ -27,6 +27,8 @@ import './checks/client/stage3.client.checks.js';
 import './checks/client/stage4.client.checks.js';
 import './checks/client/space-meetings.client.checks.js';
 import './checks/client/adversarial-persona.client.checks.js';
+import './checks/client/cross-stack-enterprise.client.checks.js';
+import './checks/client/round2-substrate.client.checks.js';
 
 export * from './entity-names.js';
 export * from './wire.js';

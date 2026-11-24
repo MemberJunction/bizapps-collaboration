@@ -98,7 +98,8 @@ interface AuditEntry {
     status: string;
 }
 
-function createBoundGrantMockProvider() {
+function createBoundGrantMockProvider(options?: { padParamType?: boolean }) {
+    const padType = (t: string): string => (options?.padParamType ? t.padEnd(10, ' ') : t);
     const auditLogs: AuditEntry[] = [];
     const savedDetails: Array<{ ID: string; Message: string; Status: string }> = [];
     let detailSeq = 0;
@@ -342,15 +343,15 @@ function createBoundGrantMockProvider() {
                     ]);
                 case 'MJ: Action Params':
                     return ok([
-                        { ActionID: BOUND_ACTION_ID, Name: 'SpaceID', Type: 'Input', ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden space', DefaultValue: null },
-                        { ActionID: BOUND_ACTION_ID, Name: 'RootEntityID', Type: 'Input', ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden entity', DefaultValue: null },
-                        { ActionID: BOUND_ACTION_ID, Name: 'RootRecordID', Type: 'Input', ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden record', DefaultValue: null },
-                        { ActionID: BOUND_ACTION_ID, Name: 'Band', Type: 'Input', ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden band', DefaultValue: null },
-                        { ActionID: BOUND_ACTION_ID, Name: 'DeliveryPrincipalID', Type: 'Input', ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden principal', DefaultValue: null },
-                        { ActionID: BOUND_ACTION_ID, Name: 'AccountID', Type: 'Input', ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden anchor', DefaultValue: null },
-                        { ActionID: BOUND_ACTION_ID, Name: 'UserNote', Type: 'Input', ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'User message note', DefaultValue: null },
-                        { ActionID: TEAM_BOUND_ACTION_ID, Name: 'SpaceID', Type: 'Input', ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden space', DefaultValue: null },
-                        { ActionID: TEAM_BOUND_ACTION_ID, Name: 'UserNote', Type: 'Input', ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'User message note', DefaultValue: null },
+                        { ActionID: BOUND_ACTION_ID, Name: 'SpaceID', Type: padType('Input'), ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden space', DefaultValue: null },
+                        { ActionID: BOUND_ACTION_ID, Name: 'RootEntityID', Type: padType('Input'), ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden entity', DefaultValue: null },
+                        { ActionID: BOUND_ACTION_ID, Name: 'RootRecordID', Type: padType('Input'), ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden record', DefaultValue: null },
+                        { ActionID: BOUND_ACTION_ID, Name: 'Band', Type: padType('Input'), ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden band', DefaultValue: null },
+                        { ActionID: BOUND_ACTION_ID, Name: 'DeliveryPrincipalID', Type: padType('Input'), ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden principal', DefaultValue: null },
+                        { ActionID: BOUND_ACTION_ID, Name: 'AccountID', Type: padType('Input'), ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden anchor', DefaultValue: null },
+                        { ActionID: BOUND_ACTION_ID, Name: 'UserNote', Type: padType('Input'), ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'User message note', DefaultValue: null },
+                        { ActionID: TEAM_BOUND_ACTION_ID, Name: 'SpaceID', Type: padType('Input'), ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'Hidden space', DefaultValue: null },
+                        { ActionID: TEAM_BOUND_ACTION_ID, Name: 'UserNote', Type: padType('Input'), ValueType: 'Scalar', IsRequired: true, IsArray: false, Description: 'User message note', DefaultValue: null },
                     ]);
                 case 'MJ: Users':
                     return ok([
@@ -617,5 +618,30 @@ describe('CX-3: bound-agent-action-grants.spec.ts', () => {
         const loaded = await loadSpaceConfiguration(provider, ROOT_SPACE_ID, { reader: makeUser(SYSTEM_USER_ID, 'System', 'Owner') });
         const legacyTools = await resolveTurnTools(provider, makeUser(SYSTEM_USER_ID, 'System', 'Owner'), loaded.configuration, 'Shared', AGENT_ID);
         assert.equal(legacyTools.withheld.some((w) => w.includes('waits for A16')), true);
+    });
+
+    it('normalizes NCHAR(10) right-padded ActionParam.Type values returned by SQL Server', async () => {
+        const { provider } = createBoundGrantMockProvider({ padParamType: true });
+        const systemUser = makeUser(SYSTEM_USER_ID, 'System', 'Owner');
+        const teamUser = makeUser(TEAM_USER_ID, 'TeamUser');
+        const { loadSpaceConfiguration } = await import('../../dist/space-configuration.js');
+        const loaded = await loadSpaceConfiguration(provider, ROOT_SPACE_ID, { reader: systemUser });
+
+        const resolved = await CollaborationBoundActionGrantRegistry.Instance.ResolveForTurn({
+            provider,
+            systemUser,
+            spaceId: ROOT_SPACE_ID,
+            audience: 'Shared',
+            loadedConfiguration: loaded,
+            callerUser: teamUser,
+        });
+
+        assert.equal(resolved.exposures.length, 1);
+        assert.deepEqual(
+            resolved.exposures[0].ExposedParams.map((p) => p.Name),
+            ['UserNote'],
+        );
+        assert.equal(resolved.boundActionParams[BOUND_ACTION_ID]['SpaceID'], ROOT_SPACE_ID);
+        assert.equal(resolved.boundActionParams[BOUND_ACTION_ID]['AccountID'], ANCHOR_RECORD_ID);
     });
 });

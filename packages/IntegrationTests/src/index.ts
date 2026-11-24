@@ -8,9 +8,27 @@ import {
     LoadSpaceItemEntityServer,
     LoadShareNoticeEntityServer,
     LoadItemUseEntityServer,
+    LoadSpaceAnchorEntityServer,
+    LoadSpaceGrantEntityServer,
+    LoadSpaceNoteEntityServer,
+    LoadSpaceMemberPinEntityServer,
+    LoadSpaceTypeEntityServer,
+    LoadSpaceTypeStatusEntityServer,
+    LoadSpaceNoticeEventEntityServer,
+    LoadSpaceNoticeWatermarkEntityServer,
+    LoadSpaceDigestCheckpointEntityServer,
+    LoadSpaceAgentSourceReceiptEntityServer,
     LoadCollaborationTaskEntityServer,
+    LoadTaskAttributionEntityServer,
     LoadCollaborationAIRunLockdown,
     LoadCollaborationSecurityAuditOperations,
+    LoadCollaborationSpaceNoticeOperations,
+    LoadCollaborationNotificationOperations,
+    LoadCollaborationDigestOperations,
+    LoadCollaborationChatWritePermissionProvider,
+    LoadCollaborationPromptComponentResolver,
+    LoadCollaborationSpaceItemArtifactPermissionDelegate,
+    LoadSpaceAudienceActions,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 
 LoadScopedSearchAction();
@@ -23,9 +41,27 @@ LoadSpaceMemberEntityServer();
 LoadSpaceItemEntityServer();
 LoadShareNoticeEntityServer();
 LoadItemUseEntityServer();
+LoadSpaceAnchorEntityServer();
+LoadSpaceGrantEntityServer();
+LoadSpaceNoteEntityServer();
+LoadSpaceMemberPinEntityServer();
+LoadSpaceTypeEntityServer();
+LoadSpaceTypeStatusEntityServer();
+LoadSpaceNoticeEventEntityServer();
+LoadSpaceNoticeWatermarkEntityServer();
+LoadSpaceDigestCheckpointEntityServer();
+LoadSpaceAgentSourceReceiptEntityServer();
 LoadCollaborationTaskEntityServer();
+LoadTaskAttributionEntityServer();
 LoadCollaborationAIRunLockdown();
 LoadCollaborationSecurityAuditOperations();
+LoadCollaborationSpaceNoticeOperations();
+LoadCollaborationNotificationOperations();
+LoadCollaborationDigestOperations();
+LoadCollaborationChatWritePermissionProvider();
+LoadCollaborationPromptComponentResolver();
+LoadCollaborationSpaceItemArtifactPermissionDelegate();
+LoadSpaceAudienceActions();
 
 import './agents/index.js';
 import './checks/collab-world.checks.js';
@@ -45,6 +81,8 @@ import './checks/stage3.checks.js';
 import './checks/stage4.checks.js';
 import './checks/space-meetings.checks.js';
 import './checks/adversarial-persona.checks.js';
+import './checks/cross-stack-enterprise.checks.js';
+import './checks/round2-substrate.checks.js';
 
 export * from './entity-names.js';
 export * from './wire.js';
