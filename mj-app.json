@@ -4,7 +4,7 @@
   "name": "mj-bizapps-collaboration",
   "displayName": "BizApps Collaboration",
   "description": "Spaces: the permission boundary and the agent retrieval boundary for collaborative team and outside work.",
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "license": "BUSL-1.1",
   "publisher": {
     "name": "MemberJunction",
@@ -14,11 +14,11 @@
   "mjVersionRange": ">=6.3.0-edge.1 <7.0.0",
   "dependencies": {
     "mj-bizapps-common": {
-      "version": ">=5.65.0 <6.0.0",
+      "version": ">=5.65.0 <7.0.0",
       "repository": "https://github.com/MemberJunction/bizapps-common"
     },
     "mj-bizapps-tasks": {
-      "version": ">=1.14.0 <2.0.0",
+      "version": ">=1.14.0 <7.0.0",
       "repository": "https://github.com/MemberJunction/bizapps-tasks"
     }
   },

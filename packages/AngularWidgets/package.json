@@ -1,7 +1,7 @@
 {
   "name": "@mj-biz-apps/collaboration-ng-widgets",
   "type": "module",
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "description": "Collaboration widgets and composites for spaces, libraries, chats, and members.",
   "main": "dist/public-api.js",
   "types": "dist/public-api.d.ts",
@@ -18,8 +18,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mj-biz-apps/collaboration-core": "0.1.0",
-    "@mj-biz-apps/collaboration-entities": "0.1.0"
+    "@mj-biz-apps/collaboration-core": "6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-entities": "6.3.0-edge.1"
   },
   "peerDependencies": {
     "@angular/animations": "^21.2.22",

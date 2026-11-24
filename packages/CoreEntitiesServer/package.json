@@ -1,7 +1,7 @@
 {
   "name": "@mj-biz-apps/collaboration-core-entities-server",
   "type": "module",
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "description": "Server subclasses that enforce the Collaboration invitation ceiling, band promotion, and tree cycle check.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,9 +16,9 @@
   },
   "license": "BUSL-1.1",
   "dependencies": {
-    "@mj-biz-apps/collaboration-core": "0.1.0",
-    "@mj-biz-apps/collaboration-engine-base": "0.1.0",
-    "@mj-biz-apps/collaboration-entities": "0.1.0"
+    "@mj-biz-apps/collaboration-core": "6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-engine-base": "6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-entities": "6.3.0-edge.1"
   },
   "peerDependencies": {
     "@memberjunction/actions": "^6.3.0-edge.1",
@@ -33,9 +33,9 @@
     "@memberjunction/global": "^6.3.0-edge.1",
     "@memberjunction/notifications": "^6.3.0-edge.1",
     "@memberjunction/storage": "^6.3.0-edge.1",
-    "@mj-biz-apps/common-entities": "^5.65.0",
-    "@mj-biz-apps/tasks-entities": "^1.14.0",
-    "@mj-biz-apps/tasks-entities-server": "^1.14.0"
+    "@mj-biz-apps/common-entities": ">=5.65.0 <7.0.0",
+    "@mj-biz-apps/tasks-entities": ">=1.14.0 <7.0.0",
+    "@mj-biz-apps/tasks-entities-server": ">=1.14.0 <7.0.0"
   },
   "devDependencies": {
     "@memberjunction/actions": "6.3.0-edge.1",

@@ -1,7 +1,7 @@
 {
   "name": "bizapps-collaboration",
   "private": true,
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "description": "BizApps Collaboration — shared spaces for collaborative team and outside work.",
   "license": "BUSL-1.1",
   "devDependencies": {

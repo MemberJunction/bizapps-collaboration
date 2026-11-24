@@ -2,7 +2,7 @@
   "name": "@mj-biz-apps/collaboration-example-space-types-ng",
   "private": true,
   "type": "module",
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "description": "Private reference implementation: the example space type's UI driver, tabs, cards and subtype form (example-board).",
   "license": "BUSL-1.1",
   "main": "dist/index.js",
@@ -13,7 +13,7 @@
     "test": "tsc -p tsconfig.test.json && vitest run"
   },
   "dependencies": {
-    "@mj-biz-apps/collaboration-example-space-types-entities": "0.1.0"
+    "@mj-biz-apps/collaboration-example-space-types-entities": "6.3.0-edge.1"
   },
   "peerDependencies": {
     "@angular/common": "^21.2.22",
@@ -27,9 +27,9 @@
     "@memberjunction/ng-entity-viewer": "^6.3.0-edge.1",
     "@memberjunction/ng-link-directives": "^6.3.0-edge.1",
     "@memberjunction/ng-ui-components": "^6.3.0-edge.1",
-    "@mj-biz-apps/collaboration-core": "^0.1.0",
-    "@mj-biz-apps/collaboration-entities": "^0.1.0",
-    "@mj-biz-apps/collaboration-ng-widgets": "^0.1.0"
+    "@mj-biz-apps/collaboration-core": "^6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-entities": "^6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-ng-widgets": "^6.3.0-edge.1"
   },
   "devDependencies": {
     "@angular/common": "21.2.22",
@@ -45,9 +45,9 @@
     "@memberjunction/ng-entity-viewer": "6.3.0-edge.1",
     "@memberjunction/ng-link-directives": "6.3.0-edge.1",
     "@memberjunction/ng-ui-components": "6.3.0-edge.1",
-    "@mj-biz-apps/collaboration-core": "0.1.0",
-    "@mj-biz-apps/collaboration-entities": "0.1.0",
-    "@mj-biz-apps/collaboration-ng-widgets": "0.1.0",
+    "@mj-biz-apps/collaboration-core": "6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-entities": "6.3.0-edge.1",
+    "@mj-biz-apps/collaboration-ng-widgets": "6.3.0-edge.1",
     "typescript": "5.9.3",
     "vitest": "^4.0.18"
   }

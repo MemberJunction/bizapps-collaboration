@@ -1,7 +1,7 @@
 {
   "name": "@mj-biz-apps/collaboration-core",
   "type": "module",
-  "version": "0.1.0",
+  "version": "6.3.0-edge.1",
   "description": "Pure rules for BizApps Collaboration: invitation ceiling, membership reach, bands, and agent retrieval. No database and no MemberJunction imports, so the same functions run in the browser, the server, and node:test.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
