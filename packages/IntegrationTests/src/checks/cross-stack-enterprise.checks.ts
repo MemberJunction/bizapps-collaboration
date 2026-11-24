@@ -153,11 +153,11 @@ const checks: NamedCheck[] = [
         Name: 'CE1 — Common multi-org enterprise graph, Company mirror, multi-level Tasks hierarchy, and polymorphic TaskLinks exist end to end',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const orgs = await FindRows<{ ID: string; Name: string; LinkedCompanyID: string | null; Status: string }>(
+            const orgs = await FindRows<{ ID: string; Name: string; Status: string }>(
                 ctx,
                 ORGANIZATION_ENTITY,
                 `ID IN ('${MERIDIAN_ORG_ID}', '${NORTHSTAR_ORG_ID}', '${SOLSTICE_ORG_ID}')`,
-                ['ID', 'Name', 'LinkedCompanyID', 'Status'],
+                ['ID', 'Name', 'Status'],
                 undefined,
                 { BypassCache: true },
             );
@@ -177,9 +177,10 @@ const checks: NamedCheck[] = [
                     { BypassCache: true },
                 );
                 Assert(companies.length === 3, `Expected 3 mirrored MJ: Companies rows, found ${companies.length}`);
-                Assert(SameID(byId.get(MERIDIAN_ORG_ID.toLowerCase())?.LinkedCompanyID, MERIDIAN_COMPANY_ID), 'Meridian LinkedCompanyID points to mirrored Company');
-                Assert(SameID(byId.get(NORTHSTAR_ORG_ID.toLowerCase())?.LinkedCompanyID, NORTHSTAR_COMPANY_ID), 'Northstar LinkedCompanyID points to mirrored Company');
-                Assert(SameID(byId.get(SOLSTICE_ORG_ID.toLowerCase())?.LinkedCompanyID, SOLSTICE_COMPANY_ID), 'Solstice LinkedCompanyID points to mirrored Company');
+                const companyById = new Map(companies.map((c) => [c.ID.toLowerCase(), c]));
+                Assert(companyById.get(MERIDIAN_COMPANY_ID.toLowerCase())?.Name === ENTERPRISE_ORG_NAMES.meridian, 'Meridian Company mirror exists');
+                Assert(companyById.get(NORTHSTAR_COMPANY_ID.toLowerCase())?.Name === ENTERPRISE_ORG_NAMES.northstar, 'Northstar Company mirror exists');
+                Assert(companyById.get(SOLSTICE_COMPANY_ID.toLowerCase())?.Name === ENTERPRISE_ORG_NAMES.solstice, 'Solstice Company mirror exists');
             }
 
             // Relationships & Contact Methods across all three organizations
@@ -207,12 +208,12 @@ const checks: NamedCheck[] = [
             );
             Assert(orgContacts.length >= 3, `Expected >= 3 organization contact methods, found ${orgContacts.length}`);
 
-            // Multi-level Tasks hierarchy linked to Common Organizations
-            const tasks = await FindRows<{ ID: string; ParentID: string | null; OrganizationID: string | null; Name: string }>(
+            // Multi-level Tasks hierarchy linked to Common Organizations via polymorphic TaskLinks
+            const tasks = await FindRows<{ ID: string; ParentID: string | null; Name: string }>(
                 ctx,
                 TASK_ENTITY,
                 `ID IN ('${NORTHSTAR_PROGRAM_TASK_ID}', '${NORTHSTAR_PHASE1_TASK_ID}', '${NORTHSTAR_SIGNOFF_TASK_ID}', '${SOLSTICE_PROGRAM_TASK_ID}', '${SOLSTICE_CALIBRATION_TASK_ID}')`,
-                ['ID', 'ParentID', 'OrganizationID', 'Name'],
+                ['ID', 'ParentID', 'Name'],
                 undefined,
                 { BypassCache: true },
             );
@@ -220,8 +221,6 @@ const checks: NamedCheck[] = [
             const taskMap = new Map(tasks.map((t) => [t.ID.toLowerCase(), t]));
             Assert(SameID(taskMap.get(NORTHSTAR_PHASE1_TASK_ID.toLowerCase())?.ParentID, NORTHSTAR_PROGRAM_TASK_ID), 'Phase 1 task is child of Northstar Program');
             Assert(SameID(taskMap.get(NORTHSTAR_SIGNOFF_TASK_ID.toLowerCase())?.ParentID, NORTHSTAR_PHASE1_TASK_ID), 'Sign-off task is grandchild of Northstar Program');
-            Assert(SameID(taskMap.get(NORTHSTAR_PROGRAM_TASK_ID.toLowerCase())?.OrganizationID, NORTHSTAR_ORG_ID), 'Northstar Program is scoped to Northstar Org');
-            Assert(SameID(taskMap.get(SOLSTICE_PROGRAM_TASK_ID.toLowerCase())?.OrganizationID, SOLSTICE_ORG_ID), 'Solstice Program is scoped to Solstice Org');
 
             // Polymorphic TaskLinks connecting Tasks -> Collaboration Spaces and Organizations
             const northstarHubId = await resolveEnterpriseSpaceId(ctx, NORTHSTAR_PROGRAM_TASK_ID, 'Northstar Hub');
@@ -235,6 +234,14 @@ const checks: NamedCheck[] = [
                 { BypassCache: true },
             );
             Assert(links.length >= 5, `Expected >= 5 cross-stack TaskLinks, found ${links.length}`);
+            Assert(
+                links.some((l) => SameID(l.TaskID, NORTHSTAR_PROGRAM_TASK_ID) && l.RecordID.toLowerCase().includes(NORTHSTAR_ORG_ID.toLowerCase())),
+                'Northstar Program Task links polymorphically to Northstar Org',
+            );
+            Assert(
+                links.some((l) => SameID(l.TaskID, SOLSTICE_PROGRAM_TASK_ID) && l.RecordID.toLowerCase().includes(SOLSTICE_ORG_ID.toLowerCase())),
+                'Solstice Program Task links polymorphically to Solstice Org',
+            );
             Assert(
                 links.some((l) => SameID(l.TaskID, NORTHSTAR_PROGRAM_TASK_ID) && l.RecordID.toLowerCase().includes(northstarHubId.toLowerCase())),
                 'Northstar Program Task links polymorphically to Northstar Collaboration Hub',
@@ -264,7 +271,6 @@ const checks: NamedCheck[] = [
                 task.NewRecord();
                 task.Name = `${MARK} Steering Committee Record ${Date.now()}`;
                 task.TypeID = taskTypeId;
-                task.OrganizationID = NORTHSTAR_ORG_ID;
                 task.CreatedByPersonID = adaPerson.ID;
                 task.Status = 'Open';
                 task.Priority = 'High';

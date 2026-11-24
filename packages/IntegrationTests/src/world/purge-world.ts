@@ -175,7 +175,6 @@ export async function purgeWorld(): Promise<void> {
     // Only those a check could have made: owned by a world persona, and either a root or a child of a world space
     const personaIds = readCsv(join(dir, 'personas.csv')).map((row) => sqlUuid(row.ID, 'persona')).join(',');
     const enterpriseTaskIdsSql = ENTERPRISE_TASK_IDS.map((id) => sqlUuid(id, 'enterprise task')).join(',');
-    const enterpriseOrgIdsSql = ENTERPRISE_ORG_IDS.map((id) => sqlUuid(id, 'enterprise org')).join(',');
     const enterpriseAnchorRecordIdsSql = ENTERPRISE_TASK_IDS.flatMap((id) => [
         sqlUuid(id, 'enterprise anchor'),
         `'ID|${id}'`,
@@ -247,7 +246,7 @@ export async function purgeWorld(): Promise<void> {
                   AND NOT EXISTS (SELECT 1 FROM #tasks AS known WHERE known.ID = roots.TaskID);
                 INSERT INTO #tasks (ID)
                 SELECT t.ID FROM __mj_BizAppsTasks.Task AS t
-                WHERE (t.ID IN (${enterpriseTaskIdsSql}) OR t.OrganizationID IN (${enterpriseOrgIdsSql}))
+                WHERE t.ID IN (${enterpriseTaskIdsSql})
                   AND NOT EXISTS (SELECT 1 FROM #tasks AS known WHERE known.ID = t.ID);
                 DECLARE @added int = 1;
                 WHILE @added > 0

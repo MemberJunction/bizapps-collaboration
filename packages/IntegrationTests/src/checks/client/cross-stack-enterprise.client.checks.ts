@@ -81,11 +81,11 @@ const checks: NamedCheck[] = [
         Name: 'CEC1 — over the wire: Common multi-org enterprise graph, Company mirrors, multi-level Tasks, and TaskLinks read cleanly through GraphQL',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const orgs = await FindRows<{ ID: string; Name: string; LinkedCompanyID: string | null }>(
+            const orgs = await FindRows<{ ID: string; Name: string }>(
                 ctx,
                 ORGANIZATION_ENTITY,
                 `ID IN ('${MERIDIAN_ORG_ID}', '${NORTHSTAR_ORG_ID}', '${SOLSTICE_ORG_ID}')`,
-                ['ID', 'Name', 'LinkedCompanyID'],
+                ['ID', 'Name'],
                 undefined,
                 { BypassCache: true },
             );
@@ -167,7 +167,6 @@ const checks: NamedCheck[] = [
                 task.NewRecord();
                 task.Name = `COLLAB-CHECK wire anchor task ${Date.now()}`;
                 task.TypeID = taskType.ID;
-                task.OrganizationID = NORTHSTAR_ORG_ID;
                 task.CreatedByPersonID = adaPerson.ID;
                 task.Status = 'Open';
                 task.Priority = 'Medium';

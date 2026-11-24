@@ -109,12 +109,10 @@ interface TaskSeedSpec {
     id: string;
     name: string;
     description: string;
-    orgId: string;
     parentId: string | null;
     createdByKey: string;
     priority: mjBizAppsTasksTaskEntity['Priority'];
     status: mjBizAppsTasksTaskEntity['Status'];
-    visibility: mjBizAppsTasksTaskEntity['Visibility'];
 }
 
 export interface SeedEnterpriseWorldResult {
@@ -256,7 +254,7 @@ async function ensureOrganization(
     orgTypeId: string,
     spec: OrganizationSeedSpec,
 ): Promise<string> {
-    const linkedCompanyId = await ensureCompanyMirror(provider, system, spec);
+    await ensureCompanyMirror(provider, system, spec);
     const existing = await findSingleId(provider, ORGANIZATION_ENTITY, `ID = '${spec.id}'`, system);
     const org = await new Metadata().GetEntityObject<mjBizAppsCommonOrganizationEntity>(
         ORGANIZATION_ENTITY,
@@ -278,9 +276,6 @@ async function ensureOrganization(
     org.Email = spec.email;
     org.Description = spec.description;
     org.Status = 'Active';
-    if (linkedCompanyId) {
-        org.LinkedCompanyID = linkedCompanyId;
-    }
     if (!(await org.Save())) {
         throw new Error(`Enterprise organization ${spec.name} save failed: ${org.LatestResult?.CompleteMessage ?? 'unknown'}`);
     }
@@ -365,10 +360,8 @@ async function ensureTask(
     task.Description = spec.description;
     task.TypeID = taskTypeId;
     task.ParentID = spec.parentId;
-    task.OrganizationID = spec.orgId;
     task.Status = spec.status;
     task.Priority = spec.priority;
-    task.Visibility = spec.visibility;
     task.CreatedByPersonID = personIdByKey.get(spec.createdByKey) ?? null;
     task.StartedAt = new Date(Date.now() - 5 * 86_400_000);
     task.DueAt = new Date(Date.now() + 21 * 86_400_000);
@@ -683,56 +676,46 @@ export async function seedEnterpriseWorld(input: {
             id: NORTHSTAR_PROGRAM_TASK_ID,
             name: 'Northstar ERP Modernization Program',
             description: 'Multi-quarter ERP modernization program delivered by Meridian Advisory Group for Northstar Manufacturing Corp.',
-            orgId: NORTHSTAR_ORG_ID,
             parentId: null,
             createdByKey: 'ada',
             priority: 'High',
             status: 'InProgress',
-            visibility: 'Organization',
         },
         {
             id: NORTHSTAR_PHASE1_TASK_ID,
             name: 'Northstar Phase 1 Cutover Readiness',
             description: 'Phase 1 plant cutover checklist, architecture brief, and integration rehearsals.',
-            orgId: NORTHSTAR_ORG_ID,
             parentId: NORTHSTAR_PROGRAM_TASK_ID,
             createdByKey: 'ada',
             priority: 'High',
             status: 'InProgress',
-            visibility: 'Team',
         },
         {
             id: NORTHSTAR_SIGNOFF_TASK_ID,
             name: 'Warehouse Integration Sign-Off',
             description: 'Verify barcode scanner sync and ERP order handoff prior to cutover.',
-            orgId: NORTHSTAR_ORG_ID,
             parentId: NORTHSTAR_PHASE1_TASK_ID,
             createdByKey: 'sam',
             priority: 'Medium',
             status: 'Open',
-            visibility: 'Team',
         },
         {
             id: SOLSTICE_PROGRAM_TASK_ID,
             name: 'Solstice Fleet Telemetry Rollout',
             description: 'Cold-chain telemetry rollout delivered for Solstice Logistics Ltd.',
-            orgId: SOLSTICE_ORG_ID,
             parentId: null,
             createdByKey: 'harbor',
             priority: 'High',
             status: 'InProgress',
-            visibility: 'Organization',
         },
         {
             id: SOLSTICE_CALIBRATION_TASK_ID,
             name: 'Cold-Chain Sensor Calibration',
             description: 'Calibrate temperature probes across regional cold-storage depots.',
-            orgId: SOLSTICE_ORG_ID,
             parentId: SOLSTICE_PROGRAM_TASK_ID,
             createdByKey: 'harbor',
             priority: 'Medium',
             status: 'Open',
-            visibility: 'Team',
         },
     ];
 
