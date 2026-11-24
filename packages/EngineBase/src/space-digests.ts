@@ -29,6 +29,7 @@ import {
     type CollaborationUserNotificationPreferences,
     type CommsV2NotificationPayload,
     type CommsV2SuppressedChannel,
+    compareNoticeCursors,
     computeNextDigestCheckpoint,
     createDefaultCollaborationNotificationPreferences,
     type DigestCandidateNotice,
@@ -50,6 +51,7 @@ import {
     normalizeNoticeUuid,
     parseCollaborationNotificationPreferences,
     parseDigestTargetMetadata,
+    type ParsedNoticeTimestamp,
     parseNoticeTimestamp,
     sortNoticeEventsByCompositeKeyset,
     SPACE_CHATS_ENTITY_ID,
@@ -73,6 +75,9 @@ import {
 } from './notifications.js';
 import {
     buildBatchedInFilter,
+    buildBooleanEqualsFilter,
+    buildStringEqualsFilter,
+    buildUuidEqualsFilter,
     chunkDistinctIds,
     detectAuditSqlDialect,
     quoteAuditIdentifier,
@@ -80,6 +85,7 @@ import {
     type SqlDialect,
 } from './security-audit-types.js';
 import {
+    resolveMemberSpaceReach,
     SPACE_DIGEST_CHECKPOINT_ENTITY,
     SPACE_NOTICE_EVENT_ENTITY,
 } from './space-notices.js';
@@ -666,7 +672,7 @@ async function resolveScopedSpacesAndAncestors(
                     rv,
                     {
                         EntityName: SPACES_ENTITY,
-                        ExtraFilter: `${buildBatchedInFilter('ParentID', batch, dialect)} AND InheritsMembership = 1`,
+                        ExtraFilter: `${buildBatchedInFilter('ParentID', batch, dialect)} AND ${buildBooleanEqualsFilter('InheritsMembership', true, dialect)}`,
                         Fields: ['ID', 'Name', 'ParentID', 'SpaceTypeID', 'OwnerID', 'InheritsMembership', 'StatusID', '__mj_CreatedAt'],
                     },
                     readUser,
@@ -1133,14 +1139,12 @@ export async function runRunScopedSpaceDigests(
     const windowEndIso = nowUtc.toISOString();
 
     const requestedSpaceIdsRaw: string[] = [];
-    let primaryScopedSpaceId: string | null = null;
     if (input.SpaceID) {
         const clean = normalizeNoticeUuid(input.SpaceID);
         if (!clean) {
             throw new RemoteOperationError('VALIDATION_ERROR', 'SpaceID must be a valid UUID.');
         }
         requestedSpaceIdsRaw.push(clean);
-        primaryScopedSpaceId = clean;
     }
     if (input.SpaceIDs) {
         for (const raw of input.SpaceIDs) {
@@ -1150,10 +1154,10 @@ export async function runRunScopedSpaceDigests(
             }
             requestedSpaceIdsRaw.push(clean);
         }
-        if (!primaryScopedSpaceId && requestedSpaceIdsRaw.length === 1) {
-            primaryScopedSpaceId = requestedSpaceIdsRaw[0];
-        }
     }
+    const requestedSpaceIds = [...new Set(requestedSpaceIdsRaw)];
+    const isMultiSpaceScoped = requestedSpaceIds.length > 1;
+    const primaryScopedSpaceId: string | null = requestedSpaceIds.length === 1 ? requestedSpaceIds[0] : null;
 
     const explicitRecipientIds: string[] = [];
     const seenExplicit = new Set<string>();
@@ -1196,10 +1200,10 @@ export async function runRunScopedSpaceDigests(
     let statusById = new Map<string, SimpleSpaceTypeStatusRow>();
     let targetSpaceFilterIds: string[] | undefined;
 
-    if (requestedSpaceIdsRaw.length > 0) {
+    if (requestedSpaceIds.length > 0) {
         const scoped = await resolveScopedSpacesAndAncestors(
             rv,
-            requestedSpaceIdsRaw,
+            requestedSpaceIds,
             input.IncludeChildSpaces === true,
             privilegedUser,
             dialect,
@@ -1209,6 +1213,10 @@ export async function runRunScopedSpaceDigests(
         targetSpaceFilterIds = scoped.scopedSeedIds;
         batchedQueryCount += scoped.batchedQueryCount;
     }
+
+    const scopedCheckpointSpaceIds = isMultiSpaceScoped
+        ? (targetSpaceFilterIds && targetSpaceFilterIds.length > 0 ? targetSpaceFilterIds : requestedSpaceIds)
+        : [];
 
     // 2. If explicit recipients are provided and they all already have checkpoints for this scope/cadence,
     //    compute the earliest composite cursor floor so keyset pagination skips historical delivered windows.
@@ -1221,18 +1229,60 @@ export async function runRunScopedSpaceDigests(
     }
 
     const checkpointByUser = new Map<string, SimpleSpaceDigestCheckpointRow>();
-    if (explicitRecipientIds.length > 0) {
+    const checkpointByUserAndSpace = new Map<string, Map<string, SimpleSpaceDigestCheckpointRow>>();
+    const loadCheckpointsForRecipients = async (recipientIds: readonly string[]): Promise<void> => {
+        if (recipientIds.length === 0) return;
         const spaceCol = quoteAuditIdentifier('SpaceID', dialect);
-        const cadenceCol = quoteAuditIdentifier('Cadence', dialect);
+        const cadenceFilter = buildStringEqualsFilter('Cadence', cadence, dialect);
+        if (isMultiSpaceScoped) {
+            for (const userBatch of chunkDistinctIds(recipientIds)) {
+                for (const spaceBatch of chunkDistinctIds(scopedCheckpointSpaceIds)) {
+                    const cpRes = await readEverySimpleRow<SimpleSpaceDigestCheckpointRow>(
+                        rv,
+                        {
+                            EntityName: SPACE_DIGEST_CHECKPOINT_ENTITY,
+                            ExtraFilter: `${buildBatchedInFilter('UserID', userBatch, dialect)} AND ${buildBatchedInFilter('SpaceID', spaceBatch, dialect)} AND ${cadenceFilter}`,
+                            Fields: [
+                                'ID',
+                                'UserID',
+                                'SpaceID',
+                                'Cadence',
+                                'LastDeliveredTimestamp',
+                                'LastDeliveredRecordID',
+                                'LastDeliveredAt',
+                                'ItemsIncludedCount',
+                                'Status',
+                            ],
+                        },
+                        privilegedUser,
+                    );
+                    batchedQueryCount += cpRes.queryCount;
+                    if (!cpRes.ok) {
+                        throw new RemoteOperationError('EXECUTION_ERROR', `Failed to batch-load digest checkpoints: ${cpRes.error}`);
+                    }
+                    for (const row of cpRes.rows) {
+                        const uid = normalizeNoticeUuid(row.UserID);
+                        const sid = normalizeNoticeUuid(row.SpaceID);
+                        if (uid && sid) {
+                            const perSpace = checkpointByUserAndSpace.get(uid) ?? new Map<string, SimpleSpaceDigestCheckpointRow>();
+                            perSpace.set(sid, row);
+                            checkpointByUserAndSpace.set(uid, perSpace);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
         const cpSpacePred = primaryScopedSpaceId
             ? `${spaceCol} = '${primaryScopedSpaceId}'`
             : `${spaceCol} IS NULL`;
-        for (const batch of chunkDistinctIds(explicitRecipientIds)) {
+        for (const batch of chunkDistinctIds(recipientIds)) {
             const cpRes = await readEverySimpleRow<SimpleSpaceDigestCheckpointRow>(
                 rv,
                 {
                     EntityName: SPACE_DIGEST_CHECKPOINT_ENTITY,
-                    ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND ${cpSpacePred} AND ${cadenceCol} = '${escapeSqlLiteral(cadence)}'`,
+                    ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND ${cpSpacePred} AND ${cadenceFilter}`,
                     Fields: [
                         'ID',
                         'UserID',
@@ -1256,22 +1306,47 @@ export async function runRunScopedSpaceDigests(
                 if (uid) checkpointByUser.set(uid, row);
             }
         }
+    };
 
-        if (!lowerBoundCursor && explicitRecipientIds.every((uid) => checkpointByUser.has(uid))) {
-            for (const uid of explicitRecipientIds) {
-                const row = checkpointByUser.get(uid);
-                if (!row) continue;
-                const c: SpaceNoticeCursor = {
-                    EventTimestamp: row.LastDeliveredTimestamp,
-                    EventID: normalizeNoticeUuid(row.LastDeliveredRecordID) ?? ZERO_NOTICE_UUID,
-                };
-                if (!lowerBoundCursor) {
-                    lowerBoundCursor = c;
-                } else {
-                    const cmp =
-                        parseNoticeTimestamp(c.EventTimestamp).epochMs -
-                        parseNoticeTimestamp(lowerBoundCursor.EventTimestamp).epochMs;
-                    if (cmp < 0) lowerBoundCursor = c;
+    if (explicitRecipientIds.length > 0) {
+        await loadCheckpointsForRecipients(explicitRecipientIds);
+
+        if (!lowerBoundCursor) {
+            if (isMultiSpaceScoped) {
+                const allCovered =
+                    scopedCheckpointSpaceIds.length > 0 &&
+                    explicitRecipientIds.every((uid) => {
+                        const perSpace = checkpointByUserAndSpace.get(uid);
+                        return Boolean(perSpace && scopedCheckpointSpaceIds.every((sid) => perSpace.has(sid)));
+                    });
+                if (allCovered) {
+                    for (const uid of explicitRecipientIds) {
+                        const perSpace = checkpointByUserAndSpace.get(uid);
+                        if (!perSpace) continue;
+                        for (const sid of scopedCheckpointSpaceIds) {
+                            const row = perSpace.get(sid);
+                            if (!row) continue;
+                            const c: SpaceNoticeCursor = {
+                                EventTimestamp: row.LastDeliveredTimestamp,
+                                EventID: normalizeNoticeUuid(row.LastDeliveredRecordID) ?? ZERO_NOTICE_UUID,
+                            };
+                            if (!lowerBoundCursor || compareNoticeCursors(c, lowerBoundCursor) < 0) {
+                                lowerBoundCursor = c;
+                            }
+                        }
+                    }
+                }
+            } else if (explicitRecipientIds.every((uid) => checkpointByUser.has(uid))) {
+                for (const uid of explicitRecipientIds) {
+                    const row = checkpointByUser.get(uid);
+                    if (!row) continue;
+                    const c: SpaceNoticeCursor = {
+                        EventTimestamp: row.LastDeliveredTimestamp,
+                        EventID: normalizeNoticeUuid(row.LastDeliveredRecordID) ?? ZERO_NOTICE_UUID,
+                    };
+                    if (!lowerBoundCursor || compareNoticeCursors(c, lowerBoundCursor) < 0) {
+                        lowerBoundCursor = c;
+                    }
                 }
             }
         }
@@ -1348,7 +1423,7 @@ export async function runRunScopedSpaceDigests(
                 rv,
                 {
                     EntityName: SPACE_MEMBERS_ENTITY,
-                    ExtraFilter: `${buildBatchedInFilter('SpaceID', spaceBatch, dialect)} AND Status = 'Active'`,
+                    ExtraFilter: `${buildBatchedInFilter('SpaceID', spaceBatch, dialect)} AND ${buildStringEqualsFilter('Status', 'Active', dialect)}`,
                     Fields: ['ID', 'SpaceID', 'UserID', 'SpaceRoleTypeID', 'Band', 'Status', '__mj_CreatedAt'],
                 },
                 privilegedUser,
@@ -1394,40 +1469,7 @@ export async function runRunScopedSpaceDigests(
 
     // If recipients were discovered dynamically, load their SpaceDigestCheckpoints now in one batched pass.
     if (explicitRecipientIds.length === 0) {
-        const spaceCol = quoteAuditIdentifier('SpaceID', dialect);
-        const cadenceCol = quoteAuditIdentifier('Cadence', dialect);
-        const cpSpacePred = primaryScopedSpaceId
-            ? `${spaceCol} = '${primaryScopedSpaceId}'`
-            : `${spaceCol} IS NULL`;
-        for (const batch of chunkDistinctIds(candidateRecipientIds)) {
-            const cpRes = await readEverySimpleRow<SimpleSpaceDigestCheckpointRow>(
-                rv,
-                {
-                    EntityName: SPACE_DIGEST_CHECKPOINT_ENTITY,
-                    ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND ${cpSpacePred} AND ${cadenceCol} = '${escapeSqlLiteral(cadence)}'`,
-                    Fields: [
-                        'ID',
-                        'UserID',
-                        'SpaceID',
-                        'Cadence',
-                        'LastDeliveredTimestamp',
-                        'LastDeliveredRecordID',
-                        'LastDeliveredAt',
-                        'ItemsIncludedCount',
-                        'Status',
-                    ],
-                },
-                privilegedUser,
-            );
-            batchedQueryCount += cpRes.queryCount;
-            if (!cpRes.ok) {
-                throw new RemoteOperationError('EXECUTION_ERROR', `Failed to batch-load digest checkpoints: ${cpRes.error}`);
-            }
-            for (const row of cpRes.rows) {
-                const uid = normalizeNoticeUuid(row.UserID);
-                if (uid) checkpointByUser.set(uid, row);
-            }
-        }
+        await loadCheckpointsForRecipients(candidateRecipientIds);
     }
 
     // 5. Batch-load SpaceRoleTypes + target SpaceItems / SpaceChats / SpaceNotes for fail-closed verification.
@@ -1515,7 +1557,7 @@ export async function runRunScopedSpaceDigests(
                 rv,
                 {
                     EntityName: USER_NOTIFICATION_PREFERENCES_ENTITY,
-                    ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND NotificationTypeID = '${digestTypeDefault.ID}'`,
+                    ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND ${buildUuidEqualsFilter('NotificationTypeID', digestTypeDefault.ID, dialect)}`,
                     Fields: ['ID', 'UserID', 'NotificationTypeID', 'Enabled', 'InAppEnabled', 'EmailEnabled', 'SMSEnabled'],
                 },
                 privilegedUser,
@@ -1546,7 +1588,7 @@ export async function runRunScopedSpaceDigests(
             rv,
             {
                 EntityName: USER_SETTINGS_ENTITY,
-                ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND Setting = '${escapeSqlLiteral(COLLABORATION_NOTIFICATION_PREFERENCES_SETTING_KEY)}'`,
+                ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND ${buildStringEqualsFilter('Setting', COLLABORATION_NOTIFICATION_PREFERENCES_SETTING_KEY, dialect)}`,
                 Fields: ['ID', 'UserID', 'Setting', 'Value'],
             },
             privilegedUser,
@@ -1656,10 +1698,23 @@ export async function runRunScopedSpaceDigests(
             });
         }
 
-        const existingCpRow = checkpointByUser.get(recipientId) ?? null;
+        const existingCpRow = isMultiSpaceScoped ? null : (checkpointByUser.get(recipientId) ?? null);
         const existingCpRecord: SpaceDigestCheckpointRecord | null = existingCpRow
             ? toCheckpointDTO(existingCpRow)
             : null;
+        let checkpointsBySpaceMap: Map<string, SpaceDigestCheckpointRecord> | null = null;
+        if (isMultiSpaceScoped) {
+            checkpointsBySpaceMap = new Map<string, SpaceDigestCheckpointRecord>();
+            const perSpaceRows = checkpointByUserAndSpace.get(recipientId);
+            if (perSpaceRows) {
+                for (const [sid, row] of perSpaceRows.entries()) {
+                    const dto = toCheckpointDTO(row);
+                    if (dto) {
+                        checkpointsBySpaceMap.set(sid, dto);
+                    }
+                }
+            }
+        }
 
         const assembled = assembleScopedDigestForRecipient({
             Recipient: {
@@ -1672,6 +1727,7 @@ export async function runRunScopedSpaceDigests(
                 Preferences: settingsPrefByUser.get(recipientId) ?? createDefaultCollaborationNotificationPreferences(),
                 MJDigestPreference: mjPrefByUser.get(recipientId) ?? null,
                 Checkpoint: existingCpRecord,
+                ...(checkpointsBySpaceMap ? { CheckpointsBySpace: checkpointsBySpaceMap } : {}),
             },
             Events: sortedEvents,
             Cadence: cadence,
@@ -1808,27 +1864,71 @@ export async function runRunScopedSpaceDigests(
             let checkpointAdvanced = false;
             let updatedCheckpoint: SpaceDigestCheckpointDTO | null = existingCpRow ? toCheckpointDTO(existingCpRow) : null;
 
-            const cursorToPersist = assembled.HighestObservedCursor ?? assembled.HighestIncludedCursor;
-            if (cursorToPersist) {
-                const persisted = await persistDigestCheckpointMonotonic({
-                    provider,
-                    rv,
-                    actingUser,
-                    privilegedUser,
-                    operationKey: RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
-                    recipientUserId: recipientId,
-                    spaceId: assembled.SpaceID,
-                    cadence,
-                    existingRow: existingCpRow,
-                    candidateCursor: cursorToPersist,
-                    itemsIncludedCount: assembled.Items.length,
-                    deliveredAt: nowUtc,
-                    dialect,
-                });
-                checkpointAdvanced = persisted.persisted;
-                updatedCheckpoint = persisted.checkpoint;
-                if (checkpointAdvanced) {
-                    checkpointsAdvancedCount += 1;
+            if (isMultiSpaceScoped) {
+                const highestObservedBySpace = new Map<string, SpaceNoticeCursor>();
+                for (const ev of sortedEvents) {
+                    const evSid = normalizeNoticeUuid(ev.SpaceID);
+                    const evId = normalizeNoticeUuid(ev.ID);
+                    if (!evSid || !evId) continue;
+                    highestObservedBySpace.set(evSid, {
+                        EventTimestamp: parseNoticeTimestamp(ev.EventTimestamp).iso,
+                        EventID: evId,
+                    });
+                }
+                const includedCountBySpace = new Map<string, number>();
+                for (const item of assembled.Items) {
+                    includedCountBySpace.set(item.SpaceID, (includedCountBySpace.get(item.SpaceID) ?? 0) + 1);
+                }
+                for (const [sid, count] of includedCountBySpace.entries()) {
+                    const cursorForSpace = highestObservedBySpace.get(sid);
+                    if (!cursorForSpace) continue;
+                    const existingSpaceRow = checkpointByUserAndSpace.get(recipientId)?.get(sid) ?? null;
+                    const persisted = await persistDigestCheckpointMonotonic({
+                        provider,
+                        rv,
+                        actingUser,
+                        privilegedUser,
+                        operationKey: RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+                        recipientUserId: recipientId,
+                        spaceId: sid,
+                        cadence,
+                        existingRow: existingSpaceRow,
+                        candidateCursor: cursorForSpace,
+                        itemsIncludedCount: count,
+                        deliveredAt: nowUtc,
+                        dialect,
+                    });
+                    if (persisted.persisted) {
+                        checkpointAdvanced = true;
+                        checkpointsAdvancedCount += 1;
+                    }
+                    if (persisted.checkpoint) {
+                        updatedCheckpoint = persisted.checkpoint;
+                    }
+                }
+            } else {
+                const cursorToPersist = assembled.HighestObservedCursor ?? assembled.HighestIncludedCursor;
+                if (cursorToPersist) {
+                    const persisted = await persistDigestCheckpointMonotonic({
+                        provider,
+                        rv,
+                        actingUser,
+                        privilegedUser,
+                        operationKey: RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+                        recipientUserId: recipientId,
+                        spaceId: assembled.SpaceID,
+                        cadence,
+                        existingRow: existingCpRow,
+                        candidateCursor: cursorToPersist,
+                        itemsIncludedCount: assembled.Items.length,
+                        deliveredAt: nowUtc,
+                        dialect,
+                    });
+                    checkpointAdvanced = persisted.persisted;
+                    updatedCheckpoint = persisted.checkpoint;
+                    if (checkpointAdvanced) {
+                        checkpointsAdvancedCount += 1;
+                    }
                 }
             }
 
@@ -1988,22 +2088,78 @@ export async function runUpdateSpaceDigestCheckpoint(
         spaceId = clean;
     }
 
+    let parsedInputTs: ParsedNoticeTimestamp | null = null;
+    if (input.LastDeliveredTimestamp !== undefined) {
+        try {
+            parsedInputTs = parseNoticeTimestamp(input.LastDeliveredTimestamp);
+        } catch {
+            throw new RemoteOperationError('VALIDATION_ERROR', 'LastDeliveredTimestamp must be a valid timestamp.');
+        }
+    }
+
+    let normalizedInputRecordId: string | null | undefined = undefined;
+    if (input.LastDeliveredRecordID !== undefined) {
+        if (input.LastDeliveredRecordID === null) {
+            normalizedInputRecordId = null;
+        } else {
+            const cleanRecordId = normalizeNoticeUuid(input.LastDeliveredRecordID);
+            if (!cleanRecordId) {
+                throw new RemoteOperationError(
+                    'VALIDATION_ERROR',
+                    'LastDeliveredRecordID must be a valid UUID when provided.',
+                );
+            }
+            normalizedInputRecordId = cleanRecordId;
+        }
+    }
+
     const status: SpaceDigestCheckpointStatus = input.Status === 'Paused' ? 'Paused' : 'Active';
     const dialect = detectAuditSqlDialect(provider);
     const privilegedUser = await resolvePrivilegedContextUser(provider, actingUser);
+
+    if (spaceId !== null) {
+        const reach = await resolveMemberSpaceReach(provider, privilegedUser, auth.userId, dialect, [spaceId]);
+        if (!reach.accessBySpace.has(spaceId)) {
+            throw new RemoteOperationError('FORBIDDEN', `User does not have active reach in space ${spaceId}.`);
+        }
+    }
+
     const rv = RunView.FromMetadataProvider(provider);
     const existing = await loadCheckpointRow(rv, auth.userId, spaceId, cadence, privilegedUser, dialect);
 
-    const candidateTs = input.LastDeliveredTimestamp
-        ? new Date(parseNoticeTimestamp(input.LastDeliveredTimestamp).epochMs)
+    const candidateTsIso = parsedInputTs
+        ? parsedInputTs.iso
+        : existing
+          ? normalizeIsoTimestamp(existing.LastDeliveredTimestamp)
+          : new Date(0).toISOString();
+    const candidateTs = parsedInputTs
+        ? new Date(parsedInputTs.epochMs)
         : existing
           ? new Date(parseNoticeTimestamp(existing.LastDeliveredTimestamp).epochMs)
           : new Date(0);
-    const candidateRecordId = input.LastDeliveredRecordID !== undefined
-        ? normalizeNoticeUuid(input.LastDeliveredRecordID)
-        : existing
-          ? normalizeNoticeUuid(existing.LastDeliveredRecordID)
-          : ZERO_NOTICE_UUID;
+    const candidateRecordId =
+        normalizedInputRecordId !== undefined
+            ? normalizedInputRecordId
+            : existing
+              ? normalizeNoticeUuid(existing.LastDeliveredRecordID)
+              : ZERO_NOTICE_UUID;
+
+    if (existing && (input.LastDeliveredTimestamp !== undefined || input.LastDeliveredRecordID !== undefined)) {
+        const existingCursor: SpaceNoticeCursor = {
+            EventTimestamp: existing.LastDeliveredTimestamp,
+            EventID: normalizeNoticeUuid(existing.LastDeliveredRecordID) ?? ZERO_NOTICE_UUID,
+        };
+        const candidateCursor: SpaceNoticeCursor = {
+            EventTimestamp: candidateTsIso,
+            EventID: candidateRecordId ?? ZERO_NOTICE_UUID,
+        };
+        if (compareNoticeCursors(candidateCursor, existingCursor) < 0) {
+            throw new RemoteOperationError(
+                'VALIDATION_ERROR',
+                'Digest checkpoint regression is forbidden: LastDeliveredTimestamp/LastDeliveredRecordID must advance monotonically.',
+            );
+        }
+    }
 
     const savedDto = await ServerOperationScopeManager.Instance.RunWithAuthority(
         {
@@ -2034,7 +2190,7 @@ export async function runUpdateSpaceDigestCheckpoint(
             if (input.Status !== undefined) {
                 entity.Status = status;
             }
-            if (!existing || input.LastDeliveredTimestamp !== undefined) {
+            if (!existing || input.LastDeliveredTimestamp !== undefined || input.LastDeliveredRecordID !== undefined) {
                 entity.LastDeliveredTimestamp = candidateTs;
                 entity.LastDeliveredRecordID = candidateRecordId;
             }

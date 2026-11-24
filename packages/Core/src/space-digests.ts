@@ -131,6 +131,8 @@ export interface DigestRecipientScopeAccess {
     Preferences?: CollaborationUserNotificationPreferences | null;
     MJDigestPreference?: MJUserNotificationPreferenceSnapshot | null;
     Checkpoint?: SpaceDigestCheckpointRecord | null;
+    /** Per-space checkpoints used when a digest run scopes multiple SpaceIDs without a single TargetSpaceID. */
+    CheckpointsBySpace?: ReadonlyMap<string, SpaceDigestCheckpointRecord> | null;
 }
 
 export type DigestItemExclusionReason =
@@ -564,10 +566,11 @@ export function verifyDigestItemReachForRecipient(input: {
         }
     }
 
-    if (recipient.Checkpoint) {
+    const spaceCheckpoint = recipient.CheckpointsBySpace?.get(spaceId) ?? recipient.Checkpoint;
+    if (spaceCheckpoint) {
         const cpCursor: SpaceNoticeCursor = {
-            EventTimestamp: recipient.Checkpoint.LastDeliveredTimestamp,
-            EventID: normalizeNoticeUuid(recipient.Checkpoint.LastDeliveredRecordID) ?? ZERO_NOTICE_UUID,
+            EventTimestamp: spaceCheckpoint.LastDeliveredTimestamp,
+            EventID: normalizeNoticeUuid(spaceCheckpoint.LastDeliveredRecordID) ?? ZERO_NOTICE_UUID,
         };
         if (isNoticeAtOrBeforeCursor({ ID: eventId, EventTimestamp: event.EventTimestamp }, cpCursor)) {
             return fail('AlreadyDelivered');
@@ -757,15 +760,45 @@ export function assembleScopedDigestForRecipient(
         return emptyResult('CadenceMismatch');
     }
 
-    const scheduleCheck = isDigestScheduleWindowDue({
-        Cadence: input.Cadence,
-        Checkpoint: recipient.Checkpoint,
-        NowUtc: nowUtc,
-        ForceWindow: input.ForceWindow,
-        CustomIntervalMs: input.CustomIntervalMs,
-    });
-    if (!scheduleCheck.due) {
-        return emptyResult(scheduleCheck.reason ?? 'WindowNotDue');
+    if (recipient.CheckpointsBySpace) {
+        const scopedSpaces = input.TargetSpaceIDs && input.TargetSpaceIDs.size > 0
+            ? [...input.TargetSpaceIDs]
+            : [...recipient.ReachBySpace.keys()];
+        if (scopedSpaces.length > 0) {
+            let anyDue = false;
+            let anyPaused = false;
+            let anyWindowNotDue = false;
+            for (const sid of scopedSpaces) {
+                const cp = recipient.CheckpointsBySpace.get(sid) ?? null;
+                const check = isDigestScheduleWindowDue({
+                    Cadence: input.Cadence,
+                    Checkpoint: cp,
+                    NowUtc: nowUtc,
+                    ForceWindow: input.ForceWindow,
+                    CustomIntervalMs: input.CustomIntervalMs,
+                });
+                if (check.due) {
+                    anyDue = true;
+                    break;
+                }
+                if (check.reason === 'CheckpointPaused') anyPaused = true;
+                else anyWindowNotDue = true;
+            }
+            if (!anyDue) {
+                return emptyResult(anyWindowNotDue ? 'WindowNotDue' : anyPaused ? 'CheckpointPaused' : 'WindowNotDue');
+            }
+        }
+    } else {
+        const scheduleCheck = isDigestScheduleWindowDue({
+            Cadence: input.Cadence,
+            Checkpoint: recipient.Checkpoint,
+            NowUtc: nowUtc,
+            ForceWindow: input.ForceWindow,
+            CustomIntervalMs: input.CustomIntervalMs,
+        });
+        if (!scheduleCheck.due) {
+            return emptyResult(scheduleCheck.reason ?? 'WindowNotDue');
+        }
     }
 
     const sortedEvents = sortNoticeEventsByCompositeKeyset(input.Events);
@@ -786,6 +819,27 @@ export function assembleScopedDigestForRecipient(
     let highestIncludedCursor: SpaceNoticeCursor | null = null;
 
     for (const ev of sortedEvents) {
+        if (recipient.CheckpointsBySpace) {
+            const evSpaceId = normalizeNoticeUuid(ev.SpaceID);
+            if (evSpaceId) {
+                const spaceCp = recipient.CheckpointsBySpace.get(evSpaceId) ?? null;
+                const spaceSchedule = isDigestScheduleWindowDue({
+                    Cadence: input.Cadence,
+                    Checkpoint: spaceCp,
+                    NowUtc: nowUtc,
+                    ForceWindow: input.ForceWindow,
+                    CustomIntervalMs: input.CustomIntervalMs,
+                });
+                if (!spaceSchedule.due) {
+                    excludedItems.push({
+                        EventID: normalizeNoticeUuid(ev.ID) ?? ev.ID,
+                        SpaceID: evSpaceId,
+                        Reason: 'AlreadyDelivered',
+                    });
+                    continue;
+                }
+            }
+        }
         const verdict = verifyDigestItemReachForRecipient({
             Event: ev,
             Recipient: recipient,

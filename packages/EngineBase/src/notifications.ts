@@ -44,8 +44,12 @@ import {
 } from '@mj-biz-apps/collaboration-core';
 import {
     buildBatchedInFilter,
+    buildStringEqualsFilter,
+    buildUuidEqualsFilter,
     chunkDistinctIds,
     detectAuditSqlDialect,
+    isExternalParticipantUser,
+    quoteAuditIdentifier,
     readEverySimpleRow,
     type SqlDialect,
 } from './security-audit-types.js';
@@ -373,6 +377,7 @@ export async function runGetUserNotificationPreferences(
         throw new RemoteOperationError('FORBIDDEN', auth.reason);
     }
 
+    const dialect = detectAuditSqlDialect(provider);
     const rv = RunView.FromMetadataProvider(provider);
     let source: 'user-info-engine' | 'run-view' | 'default' = 'default';
     let preferences = createDefaultCollaborationNotificationPreferences();
@@ -389,7 +394,7 @@ export async function runGetUserNotificationPreferences(
         const settingsRes = await rv.RunView<SimpleUserSettingRow>(
             {
                 EntityName: USER_SETTINGS_ENTITY,
-                ExtraFilter: `UserID = '${auth.userId}' AND Setting = '${escapeSqlLiteralValue(COLLABORATION_NOTIFICATION_PREFERENCES_SETTING_KEY)}'`,
+                ExtraFilter: `${buildUuidEqualsFilter('UserID', auth.userId, dialect)} AND ${buildStringEqualsFilter('Setting', COLLABORATION_NOTIFICATION_PREFERENCES_SETTING_KEY, dialect)}`,
                 Fields: ['ID', 'UserID', 'Setting', 'Value'],
                 ResultType: 'simple',
                 MaxRows: 1,
@@ -413,7 +418,7 @@ export async function runGetUserNotificationPreferences(
         rv,
         {
             EntityName: USER_NOTIFICATION_PREFERENCES_ENTITY,
-            ExtraFilter: `UserID = '${auth.userId}'`,
+            ExtraFilter: buildUuidEqualsFilter('UserID', auth.userId, dialect),
             Fields: ['ID', 'UserID', 'NotificationTypeID', 'Enabled', 'InAppEnabled', 'EmailEnabled', 'SMSEnabled'],
         },
         actingUser,
@@ -520,11 +525,12 @@ export async function runUpdateUserNotificationPreferences(
         };
     }
 
+    const dialect = detectAuditSqlDialect(provider);
     const rv = RunView.FromMetadataProvider(provider);
     const existingRes = await rv.RunView<SimpleUserSettingRow>(
         {
             EntityName: USER_SETTINGS_ENTITY,
-            ExtraFilter: `UserID = '${auth.userId}' AND Setting = '${escapeSqlLiteralValue(COLLABORATION_NOTIFICATION_PREFERENCES_SETTING_KEY)}'`,
+            ExtraFilter: `${buildUuidEqualsFilter('UserID', auth.userId, dialect)} AND ${buildStringEqualsFilter('Setting', COLLABORATION_NOTIFICATION_PREFERENCES_SETTING_KEY, dialect)}`,
             Fields: ['ID', 'UserID', 'Setting', 'Value'],
             ResultType: 'simple',
             MaxRows: 1,
@@ -570,6 +576,7 @@ interface SpaceChainResolution {
     spacesInChain: SimpleSpaceRow[];
     targetSpace: SimpleSpaceRow;
     isVisibleStatus: boolean;
+    isReadOnlyStatus: boolean;
     batchedQueryCount: number;
 }
 
@@ -590,7 +597,7 @@ async function loadSpaceChainForNotifications(
         const res = await rv.RunView<SimpleSpaceRow>(
             {
                 EntityName: SPACES_ENTITY,
-                ExtraFilter: `ID = '${currentId}'`,
+                ExtraFilter: buildUuidEqualsFilter('ID', currentId, dialect),
                 Fields: ['ID', 'Name', 'ParentID', 'SpaceTypeID', 'OwnerID', 'InheritsMembership', 'StatusID'],
                 ResultType: 'simple',
                 MaxRows: 1,
@@ -621,6 +628,7 @@ async function loadSpaceChainForNotifications(
     const targetSpace = spacesInChain[0];
     const targetStatusId = normalizeNoticeUuid(targetSpace.StatusID);
     let isVisibleStatus = true;
+    let isReadOnlyStatus = false;
 
     if (targetStatusId) {
         const statusRes = await rv.RunView<SimpleSpaceTypeStatusRow>(
@@ -643,6 +651,7 @@ async function loadSpaceChainForNotifications(
         const statusRow = statusRes.Results?.[0];
         if (statusRow) {
             isVisibleStatus = statusRow.Visible !== false;
+            isReadOnlyStatus = statusRow.ReadOnly === true;
         }
     }
 
@@ -650,6 +659,7 @@ async function loadSpaceChainForNotifications(
         spacesInChain,
         targetSpace,
         isVisibleStatus,
+        isReadOnlyStatus,
         batchedQueryCount,
     };
 }
@@ -793,13 +803,14 @@ export async function runRouteCollaborationNotifications(
     // Load active SpaceMembers across the inherited space chain in batched RunView calls.
     const memberRows: SimpleSpaceMemberRow[] = [];
     const spaceFilter = buildBatchedInFilter('SpaceID', chainSpaceIds, dialect);
+    const activeStatusFilter = buildStringEqualsFilter('Status', 'Active', dialect);
 
     if (includeSpaceMembers) {
         const res = await readEverySimpleRow<SimpleSpaceMemberRow>(
             rv,
             {
                 EntityName: SPACE_MEMBERS_ENTITY,
-                ExtraFilter: `${spaceFilter} AND Status = 'Active'`,
+                ExtraFilter: `${spaceFilter} AND ${activeStatusFilter}`,
                 Fields: ['ID', 'SpaceID', 'UserID', 'SpaceRoleTypeID', 'Band', 'Status'],
             },
             privilegedUser,
@@ -817,7 +828,7 @@ export async function runRouteCollaborationNotifications(
                 rv,
                 {
                     EntityName: SPACE_MEMBERS_ENTITY,
-                    ExtraFilter: `${spaceFilter} AND Status = 'Active' AND ${buildBatchedInFilter('UserID', batch, dialect)}`,
+                    ExtraFilter: `${spaceFilter} AND ${activeStatusFilter} AND ${buildBatchedInFilter('UserID', batch, dialect)}`,
                     Fields: ['ID', 'SpaceID', 'UserID', 'SpaceRoleTypeID', 'Band', 'Status'],
                 },
                 privilegedUser,
@@ -855,11 +866,12 @@ export async function runRouteCollaborationNotifications(
     }
 
     // Build per-user reach across the space chain in memory.
-    const reachByUser = new Map<string, { hasReach: boolean; canSeeTeam: boolean; isOwner: boolean }>();
-    const grantReach = (uid: string, opts: { canSeeTeam: boolean; isOwner: boolean }) => {
-        const existing = reachByUser.get(uid) ?? { hasReach: false, canSeeTeam: false, isOwner: false };
+    const reachByUser = new Map<string, { hasReach: boolean; canSeeTeam: boolean; canContribute: boolean; isOwner: boolean }>();
+    const grantReach = (uid: string, opts: { canSeeTeam: boolean; canContribute: boolean; isOwner: boolean }) => {
+        const existing = reachByUser.get(uid) ?? { hasReach: false, canSeeTeam: false, canContribute: false, isOwner: false };
         existing.hasReach = true;
         if (opts.canSeeTeam || opts.isOwner) existing.canSeeTeam = true;
+        if (opts.canContribute || opts.isOwner) existing.canContribute = true;
         if (opts.isOwner) existing.isOwner = true;
         reachByUser.set(uid, existing);
     };
@@ -867,7 +879,7 @@ export async function runRouteCollaborationNotifications(
     for (const sp of chain.spacesInChain) {
         const ownerId = normalizeNoticeUuid(sp.OwnerID);
         if (ownerId) {
-            grantReach(ownerId, { canSeeTeam: true, isOwner: true });
+            grantReach(ownerId, { canSeeTeam: true, canContribute: true, isOwner: true });
         }
     }
 
@@ -879,15 +891,22 @@ export async function runRouteCollaborationNotifications(
         if (role && role.IsActive === false) continue;
         const canSeeTeam = role ? role.CanSeeTeamBand === true : m.Band === 'Team';
         const isOwner = role ? role.IsOwnerRole === true : false;
-        grantReach(uid, { canSeeTeam, isOwner });
+        const canContribute = role ? role.CanContribute === true : true;
+        grantReach(uid, { canSeeTeam, canContribute, isOwner });
     }
 
-    // Verify caller authorization: acting user must be Owner/System or hold reach in the space (and Team reach for Team events).
-    const isSystemCaller = actingUser.Type?.trim() === 'Owner';
+    // Verify caller authorization: acting user must be Owner/System or hold active contribution reach in the space.
+    const isSystemCaller = actingUser.Type?.trim() === 'Owner' && !isExternalParticipantUser(actingUser);
     const callerReach = reachByUser.get(auth.userId);
     if (!isSystemCaller) {
         if (!callerReach || !callerReach.hasReach || (!chain.isVisibleStatus && !callerReach.isOwner)) {
             throw new RemoteOperationError('FORBIDDEN', `Caller does not have active reach in space ${spaceId}.`);
+        }
+        if (chain.isReadOnlyStatus && !callerReach.isOwner) {
+            throw new RemoteOperationError('FORBIDDEN', `Space ${spaceId} is currently in a read-only status.`);
+        }
+        if (!callerReach.isOwner && !callerReach.canContribute) {
+            throw new RemoteOperationError('FORBIDDEN', 'Caller role does not have contribution permission in this space.');
         }
         if (event.Band === 'Team' && !callerReach.canSeeTeam) {
             throw new RemoteOperationError('FORBIDDEN', 'Shared-band callers cannot route Team-band notifications.');
@@ -978,7 +997,7 @@ export async function runRouteCollaborationNotifications(
                 rv,
                 {
                     EntityName: USER_NOTIFICATION_PREFERENCES_ENTITY,
-                    ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND NotificationTypeID = '${matchedNotificationType.ID}'`,
+                    ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND ${buildUuidEqualsFilter('NotificationTypeID', matchedNotificationType.ID, dialect)}`,
                     Fields: ['ID', 'UserID', 'NotificationTypeID', 'Enabled', 'InAppEnabled', 'EmailEnabled', 'SMSEnabled'],
                 },
                 privilegedUser,
@@ -1013,7 +1032,7 @@ export async function runRouteCollaborationNotifications(
             rv,
             {
                 EntityName: USER_SETTINGS_ENTITY,
-                ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND Setting = '${escapeSqlLiteralValue(COLLABORATION_NOTIFICATION_PREFERENCES_SETTING_KEY)}'`,
+                ExtraFilter: `${buildBatchedInFilter('UserID', batch, dialect)} AND ${buildStringEqualsFilter('Setting', COLLABORATION_NOTIFICATION_PREFERENCES_SETTING_KEY, dialect)}`,
                 Fields: ['ID', 'UserID', 'Setting', 'Value'],
             },
             privilegedUser,
@@ -1040,12 +1059,13 @@ export async function runRouteCollaborationNotifications(
         }
     }
 
+    const serverActorName = actingUser.Name ?? actingUser.Email ?? null;
     const effectiveEvent: CollaborationNotificationEvent = {
         ...event,
         SpaceID: spaceId,
         SpaceName: event.SpaceName ?? chain.targetSpace.Name ?? null,
-        ActorUserID: event.ActorUserID ?? auth.userId,
-        ActorName: event.ActorName ?? actingUser.Name ?? actingUser.Email ?? null,
+        ActorUserID: isSystemCaller ? (normalizeNoticeUuid(event.ActorUserID) ?? auth.userId) : auth.userId,
+        ActorName: isSystemCaller ? (event.ActorName ?? serverActorName) : serverActorName,
     };
 
     const transport = input.DryRun ? null : GetCollaborationCommsV2Transport();

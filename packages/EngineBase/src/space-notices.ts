@@ -42,6 +42,9 @@ import type {
 } from '@mj-biz-apps/collaboration-entities';
 import {
     buildBatchedInFilter,
+    buildBooleanEqualsFilter,
+    buildStringEqualsFilter,
+    buildUuidEqualsFilter,
     chunkDistinctIds,
     detectAuditSqlDialect,
     readEverySimpleRow,
@@ -342,7 +345,7 @@ function earlierTimestamp(
     return current;
 }
 
-async function resolveMemberSpaceReach(
+export async function resolveMemberSpaceReach(
     provider: IMetadataProvider,
     readUser: UserInfo,
     actingUserId: string,
@@ -357,7 +360,7 @@ async function resolveMemberSpaceReach(
         rv,
         {
             EntityName: SPACE_MEMBERS_ENTITY,
-            ExtraFilter: `UserID = '${actingUserId}' AND Status = 'Active'`,
+            ExtraFilter: `${buildUuidEqualsFilter('UserID', actingUserId, dialect)} AND ${buildStringEqualsFilter('Status', 'Active', dialect)}`,
             Fields: ['ID', 'SpaceID', 'UserID', 'SpaceRoleTypeID', 'Band', 'Status', '__mj_CreatedAt'],
         },
         readUser,
@@ -371,7 +374,7 @@ async function resolveMemberSpaceReach(
         rv,
         {
             EntityName: SPACES_ENTITY,
-            ExtraFilter: `OwnerID = '${actingUserId}'`,
+            ExtraFilter: buildUuidEqualsFilter('OwnerID', actingUserId, dialect),
             Fields: ['ID', 'ParentID', 'SpaceTypeID', 'OwnerID', 'InheritsMembership', 'StatusID', '__mj_CreatedAt'],
         },
         readUser,
@@ -517,7 +520,7 @@ async function resolveMemberSpaceReach(
                     rv,
                     {
                         EntityName: SPACES_ENTITY,
-                        ExtraFilter: `${buildBatchedInFilter('ParentID', batch, dialect)} AND InheritsMembership = 1`,
+                        ExtraFilter: `${buildBatchedInFilter('ParentID', batch, dialect)} AND ${buildBooleanEqualsFilter('InheritsMembership', true, dialect)}`,
                         Fields: ['ID', 'ParentID', 'SpaceTypeID', 'OwnerID', 'InheritsMembership', 'StatusID', '__mj_CreatedAt'],
                     },
                     readUser,
@@ -922,7 +925,7 @@ export async function runGetSpaceNotices(
             rv,
             {
                 EntityName: SPACE_NOTICE_WATERMARK_ENTITY,
-                ExtraFilter: `UserID = '${auth.userId}' AND ${buildBatchedInFilter('SpaceID', batch, dialect)}`,
+                ExtraFilter: `${buildUuidEqualsFilter('UserID', auth.userId, dialect)} AND ${buildBatchedInFilter('SpaceID', batch, dialect)}`,
                 Fields: ['ID', 'SpaceID', 'UserID', 'LastReadEventTimestamp', 'LastReadEventID', 'LastReadAt'],
             },
             privilegedUser,
@@ -1084,7 +1087,7 @@ export async function runGetSpaceUnreadNoticeCounts(
             rv,
             {
                 EntityName: SPACE_NOTICE_WATERMARK_ENTITY,
-                ExtraFilter: `UserID = '${auth.userId}' AND ${buildBatchedInFilter('SpaceID', batch, dialect)}`,
+                ExtraFilter: `${buildUuidEqualsFilter('UserID', auth.userId, dialect)} AND ${buildBatchedInFilter('SpaceID', batch, dialect)}`,
                 Fields: ['ID', 'SpaceID', 'UserID', 'LastReadEventTimestamp', 'LastReadEventID', 'LastReadAt'],
             },
             privilegedUser,
@@ -1161,7 +1164,7 @@ export async function runGetSpaceUnreadNoticeCounts(
                 latestCursor = {
                     epochMs: parsed.epochMs,
                     id: evId,
-                    iso: new Date(parsed.epochMs).toISOString(),
+                    iso: parsed.iso,
                 };
             }
         }
@@ -1193,11 +1196,12 @@ async function loadWatermarkRowForMemberSpace(
     spaceId: string,
     userId: string,
     readUser: UserInfo,
+    dialect: SqlDialect,
 ): Promise<SimpleSpaceNoticeWatermarkRow | null> {
     const res = await rv.RunView<SimpleSpaceNoticeWatermarkRow>(
         {
             EntityName: SPACE_NOTICE_WATERMARK_ENTITY,
-            ExtraFilter: `SpaceID = '${spaceId}' AND UserID = '${userId}'`,
+            ExtraFilter: `${buildUuidEqualsFilter('SpaceID', spaceId, dialect)} AND ${buildUuidEqualsFilter('UserID', userId, dialect)}`,
             Fields: ['ID', 'SpaceID', 'UserID', 'LastReadEventTimestamp', 'LastReadEventID', 'LastReadAt'],
             ResultType: 'simple',
             MaxRows: 1,
@@ -1262,7 +1266,7 @@ export async function runAdvanceSpaceNoticeWatermark(
         const evRes = await rv.RunView<SimpleSpaceNoticeEventRow>(
             {
                 EntityName: SPACE_NOTICE_EVENT_ENTITY,
-                ExtraFilter: `ID = '${cleanEventId}' AND SpaceID = '${spaceId}'`,
+                ExtraFilter: `${buildUuidEqualsFilter('ID', cleanEventId, dialect)} AND ${buildUuidEqualsFilter('SpaceID', spaceId, dialect)}`,
                 Fields: ['ID', 'SpaceID', 'Band', 'EventTimestamp'],
                 ResultType: 'simple',
                 MaxRows: 1,
@@ -1302,7 +1306,7 @@ export async function runAdvanceSpaceNoticeWatermark(
                 ErrorMessage: 'LastReadEventTimestamp must be a valid ISO timestamp.',
             };
         }
-        targetTimestamp = new Date(parsed.epochMs).toISOString();
+        targetTimestamp = parsed.iso;
         if (input.LastReadEventID) {
             const cleanCursorId = normalizeNoticeUuid(input.LastReadEventID);
             if (!cleanCursorId) {
@@ -1321,7 +1325,7 @@ export async function runAdvanceSpaceNoticeWatermark(
             rv,
             {
                 EntityName: SPACE_NOTICE_EVENT_ENTITY,
-                ExtraFilter: `SpaceID = '${spaceId}'`,
+                ExtraFilter: buildUuidEqualsFilter('SpaceID', spaceId, dialect),
                 Fields: ['ID', 'SpaceID', 'Band', 'EventTimestamp'],
             },
             privilegedUser,
@@ -1360,7 +1364,7 @@ export async function runAdvanceSpaceNoticeWatermark(
         EventID: targetEventId ?? ZERO_NOTICE_UUID,
     };
 
-    const existing = await loadWatermarkRowForMemberSpace(rv, spaceId, auth.userId, privilegedUser);
+    const existing = await loadWatermarkRowForMemberSpace(rv, spaceId, auth.userId, privilegedUser, dialect);
     const existingCursor: SpaceNoticeCursor | null = existing
         ? {
               EventTimestamp: existing.LastReadEventTimestamp,
@@ -1411,7 +1415,7 @@ export async function runAdvanceSpaceNoticeWatermark(
                     const msg = entity.LatestResult?.CompleteMessage || entity.LatestResult?.Message || 'Watermark save failed';
                     if (!currentRow) {
                         // Concurrent insert race on UQ_SpaceNoticeWatermark_Space_User: reload winner & resolve monotonically.
-                        const racedWinner = await loadWatermarkRowForMemberSpace(rv, spaceId, auth.userId, privilegedUser);
+                        const racedWinner = await loadWatermarkRowForMemberSpace(rv, spaceId, auth.userId, privilegedUser, dialect);
                         if (racedWinner) {
                             const racedCursor: SpaceNoticeCursor = {
                                 EventTimestamp: racedWinner.LastReadEventTimestamp,

@@ -180,11 +180,17 @@ export function compareNoticeCursors(a: SpaceNoticeCursor, b: SpaceNoticeCursor)
     if (tsA.epochMs !== tsB.epochMs) {
         return tsA.epochMs < tsB.epochMs ? -1 : 1;
     }
+    const idA = normalizeNoticeUuid(a.EventID) ?? ZERO_NOTICE_UUID;
+    const idB = normalizeNoticeUuid(b.EventID) ?? ZERO_NOTICE_UUID;
+    // Persisting a cursor via JS Date truncates DATETIMEOFFSET(7) sub-millisecond ticks to 0.
+    // When both cursors identify the exact same non-zero EventID within the same millisecond,
+    // treat that truncated representation as equal so the event does not remain unread.
+    if (idA === idB && idA !== ZERO_NOTICE_UUID && (tsA.subMs100ns === 0 || tsB.subMs100ns === 0)) {
+        return 0;
+    }
     if (tsA.subMs100ns !== tsB.subMs100ns) {
         return tsA.subMs100ns < tsB.subMs100ns ? -1 : 1;
     }
-    const idA = normalizeNoticeUuid(a.EventID) ?? ZERO_NOTICE_UUID;
-    const idB = normalizeNoticeUuid(b.EventID) ?? ZERO_NOTICE_UUID;
     if (idA === idB) {
         return 0;
     }
