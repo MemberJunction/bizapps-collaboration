@@ -1,19 +1,36 @@
 import {
     BaseEntity,
+    RunView,
+    ServerOperationScopeManager,
     ValidationErrorInfo,
     ValidationErrorType,
     type ValidationResult,
 } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import {
+    compareNoticeCursors,
     isSpaceDigestCadence,
+    normalizeNoticeUuid,
     parseNoticeTimestamp,
+    ZERO_NOTICE_UUID,
 } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceDigestCheckpointEntity } from '@mj-biz-apps/collaboration-entities';
-import { SPACE_DIGEST_CHECKPOINT_ENTITY } from '@mj-biz-apps/collaboration-engine-base';
-import { callerUuid } from './load-graph.js';
+import {
+    buildUuidEqualsFilter,
+    detectAuditSqlDialect,
+    RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
+    SPACE_DIGEST_CHECKPOINT_ENTITY,
+    UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY,
+} from '@mj-biz-apps/collaboration-engine-base';
+import { callerUuid, requireSystemUser } from './load-graph.js';
 import { isSpaceParticipant } from './task-attribution.js';
-import { parseUuid } from './uuid.js';
+import { asMetadata, parseUuid } from './uuid.js';
+
+interface PersistedCheckpointCursorRow {
+    ID: string;
+    LastDeliveredTimestamp: string | Date;
+    LastDeliveredRecordID: string | null;
+}
 
 function addValidationError(result: ValidationResult, source: string, message: string): ValidationResult {
     result.Success = false;
@@ -23,7 +40,8 @@ function addValidationError(result: ValidationResult, source: string, message: s
 
 /**
  * Server entity guard for `MJ_BizApps_Collaboration: Space Digest Checkpoints`.
- * Enforces self-ownership, valid cadence/status values, and non-negative delivery counts.
+ * Enforces self-ownership, server operation write authority, valid cadence/status values,
+ * non-negative delivery counts, and strictly monotonic `(LastDeliveredTimestamp, LastDeliveredRecordID)` progression.
  */
 @RegisterClass(BaseEntity, SPACE_DIGEST_CHECKPOINT_ENTITY)
 export class SpaceDigestCheckpointEntityServer extends mjBizAppsCollaborationSpaceDigestCheckpointEntity {
@@ -36,13 +54,36 @@ export class SpaceDigestCheckpointEntityServer extends mjBizAppsCollaborationSpa
         const actingUser = this.ContextCurrentUser;
         const caller = callerUuid(actingUser);
         const isOwnerOrSystem = Boolean(actingUser?.Type?.trim() === 'Owner' && !isSpaceParticipant(actingUser));
+        const inRunDigestsOp =
+            !ServerOperationScopeManager.Instance.IsInDirectClientCrud() &&
+            ServerOperationScopeManager.Instance.IsOperationActive(
+                [RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY],
+                SPACE_DIGEST_CHECKPOINT_ENTITY,
+                actingUser,
+            );
+        const inUpdateCheckpointOp =
+            !ServerOperationScopeManager.Instance.IsInDirectClientCrud() &&
+            ServerOperationScopeManager.Instance.IsOperationActive(
+                [UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY],
+                SPACE_DIGEST_CHECKPOINT_ENTITY,
+                actingUser,
+            );
+        const inAuthorizedOp = inRunDigestsOp || inUpdateCheckpointOp;
+
+        if (!isOwnerOrSystem && !inAuthorizedOp) {
+            return addValidationError(
+                result,
+                'UserID',
+                'Space Digest Checkpoints may only be persisted via Collaboration.RunScopedSpaceDigests, Collaboration.UpdateSpaceDigestCheckpoint, or server authority.',
+            );
+        }
 
         const userId = parseUuid(this.UserID);
         if (!userId) {
             return addValidationError(result, 'UserID', 'UserID must be a valid UUID.');
         }
 
-        if (!isOwnerOrSystem && (!caller || caller !== userId)) {
+        if (!isOwnerOrSystem && !inRunDigestsOp && (!caller || caller !== userId)) {
             return addValidationError(
                 result,
                 'UserID',
@@ -70,6 +111,63 @@ export class SpaceDigestCheckpointEntityServer extends mjBizAppsCollaborationSpa
             parseNoticeTimestamp(this.LastDeliveredTimestamp);
         } catch {
             return addValidationError(result, 'LastDeliveredTimestamp', 'LastDeliveredTimestamp must be a valid timestamp.');
+        }
+
+        if (
+            this.LastDeliveredRecordID !== null &&
+            this.LastDeliveredRecordID !== undefined &&
+            !parseUuid(this.LastDeliveredRecordID)
+        ) {
+            return addValidationError(
+                result,
+                'LastDeliveredRecordID',
+                'LastDeliveredRecordID must be a valid UUID when provided.',
+            );
+        }
+
+        // Enforce monotonic progression against any existing persisted checkpoint row.
+        const savedId = parseUuid(this.ID);
+        if (this.IsSaved && savedId) {
+            try {
+                const system = await requireSystemUser(this);
+                const dialect = detectAuditSqlDialect(asMetadata(this.ProviderToUse));
+                const existingRes = await new RunView(this.RunViewProviderToUse).RunView<PersistedCheckpointCursorRow>(
+                    {
+                        EntityName: SPACE_DIGEST_CHECKPOINT_ENTITY,
+                        ExtraFilter: buildUuidEqualsFilter('ID', savedId, dialect),
+                        Fields: ['ID', 'LastDeliveredTimestamp', 'LastDeliveredRecordID'],
+                        ResultType: 'simple',
+                        MaxRows: 1,
+                    },
+                    system,
+                );
+                const currentRow = existingRes.Results?.[0];
+                if (currentRow) {
+                    const cmp = compareNoticeCursors(
+                        {
+                            EventTimestamp: this.LastDeliveredTimestamp,
+                            EventID: normalizeNoticeUuid(this.LastDeliveredRecordID) ?? ZERO_NOTICE_UUID,
+                        },
+                        {
+                            EventTimestamp: currentRow.LastDeliveredTimestamp,
+                            EventID: normalizeNoticeUuid(currentRow.LastDeliveredRecordID) ?? ZERO_NOTICE_UUID,
+                        },
+                    );
+                    if (cmp < 0) {
+                        return addValidationError(
+                            result,
+                            'LastDeliveredTimestamp',
+                            'Digest checkpoint regression is forbidden: LastDeliveredTimestamp/LastDeliveredRecordID must advance monotonically.',
+                        );
+                    }
+                }
+            } catch (error) {
+                return addValidationError(
+                    result,
+                    'LastDeliveredTimestamp',
+                    error instanceof Error ? error.message : 'Unable to verify monotonic checkpoint constraint.',
+                );
+            }
         }
 
         return result;

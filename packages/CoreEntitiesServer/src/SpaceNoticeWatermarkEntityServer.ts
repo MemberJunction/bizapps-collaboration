@@ -16,11 +16,13 @@ import {
 import { mjBizAppsCollaborationSpaceNoticeWatermarkEntity } from '@mj-biz-apps/collaboration-entities';
 import {
     ADVANCE_SPACE_NOTICE_WATERMARK_OPERATION_KEY,
+    buildUuidEqualsFilter,
+    detectAuditSqlDialect,
     SPACE_NOTICE_WATERMARK_ENTITY,
 } from '@mj-biz-apps/collaboration-engine-base';
 import { callerUuid, requireSystemUser } from './load-graph.js';
 import { isSpaceParticipant } from './task-attribution.js';
-import { parseUuid } from './uuid.js';
+import { asMetadata, parseUuid } from './uuid.js';
 
 interface PersistedWatermarkCursorRow {
     ID: string;
@@ -87,13 +89,15 @@ export class SpaceNoticeWatermarkEntityServer extends mjBizAppsCollaborationSpac
         }
 
         // Enforce monotonic progression against any existing persisted watermark row.
-        if (this.IsSaved && parseUuid(this.ID)) {
+        const savedId = parseUuid(this.ID);
+        if (this.IsSaved && savedId) {
             try {
                 const system = await requireSystemUser(this);
+                const dialect = detectAuditSqlDialect(asMetadata(this.ProviderToUse));
                 const existingRes = await new RunView(this.RunViewProviderToUse).RunView<PersistedWatermarkCursorRow>(
                     {
                         EntityName: SPACE_NOTICE_WATERMARK_ENTITY,
-                        ExtraFilter: `ID = '${parseUuid(this.ID)}'`,
+                        ExtraFilter: buildUuidEqualsFilter('ID', savedId, dialect),
                         Fields: ['ID', 'LastReadEventTimestamp', 'LastReadEventID'],
                         ResultType: 'simple',
                         MaxRows: 1,
