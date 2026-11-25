@@ -246,7 +246,9 @@ const checks: NamedCheck[] = [
 
             const mdType = (typesRes.Results ?? []).find((t) => t.Name === 'Markdown Document') ?? typesRes.Results![0];
             const artifactsEntity = ctx.Provider.EntityByName('MJ: Artifacts');
+            const spaceItemsEntity = ctx.Provider.EntityByName(SPACE_ITEM_ENTITY);
             Assert(!!artifactsEntity?.ID, 'MJ: Artifacts entity metadata exists');
+            Assert(!!spaceItemsEntity?.ID, 'MJ_BizApps_Collaboration: Space Items entity metadata exists');
 
             const createdArtifactIds: string[] = [];
             const createdVersionIds: string[] = [];
@@ -285,7 +287,13 @@ const checks: NamedCheck[] = [
                 item.Set('Band', band);
                 item.Set('ArtifactVersionID', versionId);
                 Assert(await item.Save(), `Save fixture SpaceItem ${name}: ${item.LatestResult?.CompleteMessage ?? ''}`);
-                createdItemIds.push(String(item.Get('ID')));
+                const itemId = String(item.Get('ID'));
+                createdItemIds.push(itemId);
+
+                // Bind artifact delegation to the filed SpaceItem so MJ ArtifactPermissionEngine mirrors band isolation
+                art.Set('DelegateEntityID', spaceItemsEntity!.ID);
+                art.Set('DelegateRecordID', itemId);
+                Assert(await art.Save(), `Bind fixture artifact delegation ${name}: ${art.LatestResult?.CompleteMessage ?? ''}`);
 
                 return { artifactId, versionId };
             };
