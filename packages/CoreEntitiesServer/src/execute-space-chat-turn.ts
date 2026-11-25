@@ -58,6 +58,10 @@ import {
     resolveTurnKnowledgeScopes,
 } from './turn-knowledge-scopes.js';
 import { resolveSpaceScopedPromptParts } from './scoped-prompt-parts.js';
+import {
+    buildSpaceAgentContextSystemMessage,
+    isShippedCollaborationSpaceAgent,
+} from './space-agent-artifact-content.js';
 import type { BoundActionParamsMap } from './bound-agent-action-grants.js';
 
 const DETAILS = 'MJ: Conversation Details';
@@ -949,6 +953,24 @@ async function runClaimedTurn(
                 const envEffortLevel = parseSpaceChatEffortLevel(process.env['COLLABORATION_SPACE_CHAT_EFFORT_LEVEL']);
                 const effectiveEffortLevel = envEffortLevel !== undefined ? envEffortLevel : turnTools.runSettings.effortLevel;
 
+                const turnMessages = [...assembledMessages];
+                if (!isShippedCollaborationSpaceAgent(agentEntity.Name, targetAgentId)) {
+                    const spaceContextSystemMessage = buildSpaceAgentContextSystemMessage({
+                        audience,
+                        typeInstructions: typeContext.instructions ?? [],
+                        allowedItems: audienceQuoted,
+                        grantedKnowledgeHits: multiScopeSearchResult.grantedKnowledgeHits,
+                        spaceData: turnTools.spaceData,
+                        boundActions: turnTools.boundActionCatalog ?? [],
+                    });
+                    if (spaceContextSystemMessage) {
+                        turnMessages.unshift({
+                            role: 'system',
+                            content: spaceContextSystemMessage,
+                        });
+                    }
+                }
+
                 const runner = new AgentRunner(provider);
                 type SpaceExecuteAgentParams = ExecuteAgentParams & {
                     Audience?: { Mode: 'Intersection'; UserIDs: string[] };
@@ -1001,7 +1023,7 @@ async function runClaimedTurn(
                     ...(turnTools.runSettings.requestedSkillIDs.length ? { requestedSkillIDs: turnTools.runSettings.requestedSkillIDs } : {}),
                     ...(turnTools.runSettings.absoluteMaxIterations !== undefined ? { absoluteMaxIterations: turnTools.runSettings.absoluteMaxIterations } : {}),
                     ...(turnTools.runSettings.maxExecutionTimeMs !== undefined ? { maxExecutionTimeMs: turnTools.runSettings.maxExecutionTimeMs } : {}),
-                    conversationMessages: assembledMessages,
+                    conversationMessages: turnMessages,
                     onProgress: input.observer?.OnProgress,
                     onStreaming: input.observer?.OnStreaming,
                     onAgentRunCreated: async (createdRunId: string) => {
