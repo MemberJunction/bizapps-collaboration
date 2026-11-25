@@ -26,6 +26,8 @@ export const CORE_ENTITIES_FOR_PARTICIPANT = [
 
   // Conversations & Artifacts
   'MJ: Artifact Types',
+  'MJ: Collection Artifacts',
+  'MJ: Conversation Artifacts',
 
   // ResourceTypeEngine & Permissions
   'MJ: Resource Types',

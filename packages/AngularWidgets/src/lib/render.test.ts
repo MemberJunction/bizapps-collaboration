@@ -1799,20 +1799,32 @@ describe('SpaceMeetingsTabComponent, rendered', () => {
     fixture.componentInstance.OpenMeetingRequested.subscribe(openRecord);
 
     fixture.componentRef.setInput('CanSchedule', true);
+    fixture.componentRef.setInput('CanSeeTeamSide', true);
     fixture.detectChanges();
     await fixture.whenStable();
 
     const scheduleBtn = findButton('Schedule meeting');
     expect(scheduleBtn).toBeDefined();
 
-    // Click Start chat and Open on the rendered card
+    // Click Start chat on the rendered quick strip
     findButton('Start chat')!.click();
     expect(openChat).toHaveBeenCalledTimes(1);
     expect(openChat.mock.calls[0][0].ID).toBe('m-1');
 
-    findButton('Open')!.click();
+    // Click the meeting row in <bizapps-meeting-list> to open the in-place slide-over drawer, then click Open form
+    const listRow = host.querySelector<HTMLElement>('bizapps-meeting-list .row');
+    expect(listRow).not.toBeNull();
+    listRow!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    findButton('Open form')!.click();
     expect(openRecord).toHaveBeenCalledTimes(1);
     expect(openRecord.mock.calls[0][0].ID).toBe('m-1');
+
+    fixture.componentInstance.closeMeetingDrawer();
+    fixture.detectChanges();
 
     // Open the schedule dialog when AllowedBands is ['Team'] (Member without promote rights) -> defaults to Private
     fixture.componentRef.setInput('AllowedBands', ['Team']);

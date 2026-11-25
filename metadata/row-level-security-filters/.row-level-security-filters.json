@@ -618,5 +618,105 @@
       "Description": "Digest cursor checkpoints owned by the caller.",
       "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND (SpaceID IS NULL OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10001-4F50-4A6B-8C9D-0E1F2A3B4C61"
+    },
+    "fields": {
+      "Name": "Collaboration: Artifact Type Catalog",
+      "Description": "Enabled artifact types catalog so Space Participant can resolve artifact viewer plugins (Markdown, Presentation, PDF, etc.).",
+      "FilterText": "(IsEnabled = 1)"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10002-4F50-4A6B-8C9D-0E1F2A3B4C62"
+    },
+    "fields": {
+      "Name": "Collaboration: Artifacts In Reach",
+      "Description": "Artifacts owned by the caller or filed as a Shared (or visible Team) item in a space the caller reaches via direct MJ: Artifacts SpaceItem or SpaceItem.ArtifactVersionID.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR ID IN (SELECT TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE si.EntityID = (SELECT e.ID FROM [__mj].[Entity] AS e WHERE e.Name = N'MJ: Artifacts') AND (a.CanSeeTeam = 1 OR si.Band = N'Shared')) OR ID IN (SELECT av.ArtifactID FROM [__mj].[ArtifactVersion] AS av INNER JOIN [__mj_BizAppsCollaboration].[SpaceItem] AS si ON si.ArtifactVersionID = av.ID INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE a.CanSeeTeam = 1 OR si.Band = N'Shared'))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10003-4F50-4A6B-8C9D-0E1F2A3B4C63"
+    },
+    "fields": {
+      "Name": "Collaboration: Artifact Versions In Reach",
+      "Description": "Artifact versions belonging to an artifact the caller owns or reaches via a visible SpaceItem.",
+      "FilterText": "(ArtifactID IN (SELECT art.ID FROM [__mj].[Artifact] AS art WHERE art.UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) OR ArtifactID IN (SELECT TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE si.EntityID = (SELECT e.ID FROM [__mj].[Entity] AS e WHERE e.Name = N'MJ: Artifacts') AND (a.CanSeeTeam = 1 OR si.Band = N'Shared')) OR ArtifactID IN (SELECT av.ArtifactID FROM [__mj].[ArtifactVersion] AS av INNER JOIN [__mj_BizAppsCollaboration].[SpaceItem] AS si ON si.ArtifactVersionID = av.ID INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE a.CanSeeTeam = 1 OR si.Band = N'Shared'))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10004-4F50-4A6B-8C9D-0E1F2A3B4C64"
+    },
+    "fields": {
+      "Name": "Collaboration: Artifact Version Attributes In Reach",
+      "Description": "Artifact version attributes whose version belongs to an artifact the caller owns or reaches via a visible SpaceItem.",
+      "FilterText": "(ArtifactVersionID IN (SELECT av.ID FROM [__mj].[ArtifactVersion] AS av WHERE av.ArtifactID IN (SELECT art.ID FROM [__mj].[Artifact] AS art WHERE art.UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) OR av.ArtifactID IN (SELECT TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE si.EntityID = (SELECT e.ID FROM [__mj].[Entity] AS e WHERE e.Name = N'MJ: Artifacts') AND (a.CanSeeTeam = 1 OR si.Band = N'Shared')) OR av.ArtifactID IN (SELECT av2.ArtifactID FROM [__mj].[ArtifactVersion] AS av2 INNER JOIN [__mj_BizAppsCollaboration].[SpaceItem] AS si ON si.ArtifactVersionID = av2.ID INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE a.CanSeeTeam = 1 OR si.Band = N'Shared')))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10005-4F50-4A6B-8C9D-0E1F2A3B4C65"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Artifact Permissions",
+      "Description": "Artifact permission rows granted directly to the caller.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10006-4F50-4A6B-8C9D-0E1F2A3B4C66"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Artifact Uses",
+      "Description": "Artifact usage rows belonging to the caller on artifact versions in reach.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND ArtifactVersionID IN (SELECT av.ID FROM [__mj].[ArtifactVersion] AS av WHERE av.ArtifactID IN (SELECT art.ID FROM [__mj].[Artifact] AS art WHERE art.UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) OR av.ArtifactID IN (SELECT TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE si.EntityID = (SELECT e.ID FROM [__mj].[Entity] AS e WHERE e.Name = N'MJ: Artifacts') AND (a.CanSeeTeam = 1 OR si.Band = N'Shared')) OR av.ArtifactID IN (SELECT av2.ArtifactID FROM [__mj].[ArtifactVersion] AS av2 INNER JOIN [__mj_BizAppsCollaboration].[SpaceItem] AS si ON si.ArtifactVersionID = av2.ID INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE a.CanSeeTeam = 1 OR si.Band = N'Shared')))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10007-4F50-4A6B-8C9D-0E1F2A3B4C67"
+    },
+    "fields": {
+      "Name": "Collaboration: Conversation Detail Artifacts In Reach",
+      "Description": "Conversation detail artifact links whose conversation is a space chat the caller reaches.",
+      "FilterText": "(ConversationDetailID IN (SELECT cd.ID FROM [__mj].[ConversationDetail] AS cd INNER JOIN [__mj_BizAppsCollaboration].[SpaceChat] AS sc ON sc.ConversationID = cd.ConversationID INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1) OR (sc.Kind = N'Assistant' AND sc.OwnerUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10008-4F50-4A6B-8C9D-0E1F2A3B4C68"
+    },
+    "fields": {
+      "Name": "Collaboration: Artifacts In Reach Or Outside Collaboration",
+      "Description": "UI role: every MJ: Artifacts row no space holds, plus the space artifacts the caller owns or reaches.",
+      "FilterText": "((UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR ID IN (SELECT TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE si.EntityID = (SELECT e.ID FROM [__mj].[Entity] AS e WHERE e.Name = N'MJ: Artifacts') AND (a.CanSeeTeam = 1 OR si.Band = N'Shared')) OR ID IN (SELECT av.ArtifactID FROM [__mj].[ArtifactVersion] AS av INNER JOIN [__mj_BizAppsCollaboration].[SpaceItem] AS si ON si.ArtifactVersionID = av.ID INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE a.CanSeeTeam = 1 OR si.Band = N'Shared')) OR (ID NOT IN (SELECT TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.EntityID = (SELECT e.ID FROM [__mj].[Entity] AS e WHERE e.Name = N'MJ: Artifacts') AND TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IS NOT NULL) AND ID NOT IN (SELECT av.ArtifactID FROM [__mj].[ArtifactVersion] AS av INNER JOIN [__mj_BizAppsCollaboration].[SpaceItem] AS si ON si.ArtifactVersionID = av.ID WHERE av.ArtifactID IS NOT NULL)))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10009-4F50-4A6B-8C9D-0E1F2A3B4C69"
+    },
+    "fields": {
+      "Name": "Collaboration: Artifact Versions In Reach Or Outside Collaboration",
+      "Description": "UI role: every MJ: Artifact Versions row of an artifact no space holds, plus the space artifact versions the caller owns or reaches.",
+      "FilterText": "((ArtifactID IN (SELECT art.ID FROM [__mj].[Artifact] AS art WHERE art.UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) OR ArtifactID IN (SELECT TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE si.EntityID = (SELECT e.ID FROM [__mj].[Entity] AS e WHERE e.Name = N'MJ: Artifacts') AND (a.CanSeeTeam = 1 OR si.Band = N'Shared')) OR ArtifactID IN (SELECT av.ArtifactID FROM [__mj].[ArtifactVersion] AS av INNER JOIN [__mj_BizAppsCollaboration].[SpaceItem] AS si ON si.ArtifactVersionID = av.ID INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = si.SpaceID WHERE a.CanSeeTeam = 1 OR si.Band = N'Shared')) OR (ArtifactID NOT IN (SELECT TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceItem] AS si WHERE si.EntityID = (SELECT e.ID FROM [__mj].[Entity] AS e WHERE e.Name = N'MJ: Artifacts') AND TRY_CAST(SUBSTRING(si.RecordID, CASE WHEN si.RecordID LIKE N'ID|%' THEN 4 ELSE 1 END, 450) AS UNIQUEIDENTIFIER) IS NOT NULL) AND ArtifactID NOT IN (SELECT av.ArtifactID FROM [__mj].[ArtifactVersion] AS av INNER JOIN [__mj_BizAppsCollaboration].[SpaceItem] AS si ON si.ArtifactVersionID = av.ID WHERE av.ArtifactID IS NOT NULL)))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9A10010-4F50-4A6B-8C9D-0E1F2A3B4C70"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Meeting Attendee Row",
+      "Description": "Allows an invited Space Participant to update their own RSVP response on a meeting they reach through fnCollaborationMeetingAccess.",
+      "FilterText": "((UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR PersonID IN (SELECT p.ID FROM [__mj_BizAppsCommon].[Person] AS p WHERE p.LinkedUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))) AND MeetingID IN (SELECT MeetingID FROM [__mj_BizAppsCollaboration].[fnCollaborationMeetingAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE MeetingID IS NOT NULL))"
+    }
   }
 ]

@@ -1053,6 +1053,7 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                                     (OpenMeetingChatRequested)="onOpenMeetingChat($event)"
                                                     (OpenMeetingRequested)="onOpenMeetingRecord($event)"
                                                     (OpenArtifactRequested)="onOpenArtifactRequested($event)"
+                                                    (OpenTaskRequested)="onOpenMeetingFollowUpTask($event)"
                                                 ></ng-container>
                                             </div>
                                         } @else {
@@ -5283,8 +5284,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onOpenMeetingRecord(meeting: SpaceMeetingCardItem): void {
-        if (!meeting?.ID) return;
+        if (!meeting?.ID || !this.canSeeTeamSide) return;
         SharedService.Instance.OpenEntityRecord('MJ_BizApps_Tasks: Meetings', CompositeKey.FromID(meeting.ID));
+    }
+
+    public onOpenMeetingFollowUpTask(taskId: string): void {
+        const cleanId = (taskId ?? '').trim();
+        if (!cleanId) return;
+        this.setTab('Work');
+        this.UpdateQueryParams({ tab: 'work' });
+        if (this.canSeeTeamSide) {
+            SharedService.Instance.OpenEntityRecord('MJ_BizApps_Tasks: Tasks', CompositeKey.FromID(cleanId));
+        }
+        this.RefreshView();
     }
 
     public async onCreateSpaceMeeting(draft: NewSpaceMeetingDraft, instance: ContributedMeetingTabInstance | null): Promise<void> {
@@ -5328,12 +5340,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public async onOpenMeetingChat(meeting: SpaceMeetingCardItem): Promise<void> {
         if (!meeting?.ID) return;
-        const spaceId = this.activeSpaceId;
+        const targetSpaceId = (meeting.SpaceID ?? '').trim() || this.activeSpaceId;
         const isCurrent = this.currentSelection();
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
             const res = await client.EnsureMeetingSpaceChat({
-                SpaceID: spaceId,
+                SpaceID: targetSpaceId,
                 MeetingID: meeting.ID,
                 MeetingName: meeting.Name,
                 Visibility: meeting.Visibility,
@@ -5345,12 +5357,27 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
             if (!isCurrent()) return;
-            await this.loadSpaceConversations(spaceId, isCurrent, res.ConversationID);
+            if (!UUIDsEqual(targetSpaceId, this.activeSpaceId)) {
+                this.activeView = 'space';
+                this.activeTab = 'Chat';
+                this.activeConversationId = res.ConversationID;
+                await this.selectSpaceInternal(targetSpaceId);
+                if (UUIDsEqual(this.activeSpaceId, targetSpaceId)) {
+                    this.activeConversationId = res.ConversationID;
+                    this.setTab('Chat');
+                    this.UpdateQueryParams({ view: 'space', space: targetSpaceId, tab: 'chat', conv: res.ConversationID });
+                    await this.loadSpaceChatHostRules(targetSpaceId, res.ConversationID);
+                    this.syncStateWithAgent();
+                    this.RefreshView();
+                }
+                return;
+            }
+            await this.loadSpaceConversations(targetSpaceId, isCurrent, res.ConversationID);
             if (!isCurrent()) return;
             this.activeConversationId = res.ConversationID;
             this.setTab('Chat');
             this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
-            await this.loadSpaceChatHostRules(spaceId, res.ConversationID);
+            await this.loadSpaceChatHostRules(targetSpaceId, res.ConversationID);
             if (!isCurrent()) return;
             this.syncStateWithAgent();
             this.RefreshView();

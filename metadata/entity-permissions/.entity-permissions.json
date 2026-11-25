@@ -862,9 +862,10 @@
       "Type": "Allow",
       "CanCreate": 0,
       "CanRead": 1,
-      "CanUpdate": 0,
+      "CanUpdate": 1,
       "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Meeting Rows In Reach"
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Meeting Rows In Reach",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Meeting Attendee Row"
     }
   },
   {
@@ -1030,6 +1031,97 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Space Digest Checkpoints"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9B10001-4F50-4A6B-8C9D-0E1F2A3B4C61"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Artifacts",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Artifacts In Reach"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9B10002-4F50-4A6B-8C9D-0E1F2A3B4C62"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Artifact Versions",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Artifact Versions In Reach"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9B10003-4F50-4A6B-8C9D-0E1F2A3B4C63"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Artifact Version Attributes",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Artifact Version Attributes In Reach"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9B10004-4F50-4A6B-8C9D-0E1F2A3B4C64"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Artifact Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Artifact Permissions"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9B10005-4F50-4A6B-8C9D-0E1F2A3B4C65"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Artifact Uses",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 1,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Artifact Uses",
+      "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Artifact Uses"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9B10006-4F50-4A6B-8C9D-0E1F2A3B4C66"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Detail Artifacts",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Detail Artifacts In Reach"
     }
   }
 ]

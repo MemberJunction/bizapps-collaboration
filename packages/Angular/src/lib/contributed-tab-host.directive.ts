@@ -48,6 +48,7 @@ export class CollabContributedTabHostDirective implements OnChanges, OnDestroy {
     @Output() OpenMeetingChatRequested = new EventEmitter<SpaceMeetingCardItem>();
     @Output() OpenMeetingRequested = new EventEmitter<SpaceMeetingCardItem>();
     @Output() OpenArtifactRequested = new EventEmitter<SpaceArtifactOpenRequest>();
+    @Output() OpenTaskRequested = new EventEmitter<string>();
 
     private componentRef: ComponentRef<unknown> | null = null;
     private currentType: Type<unknown> | null = null;
@@ -131,6 +132,17 @@ export class CollabContributedTabHostDirective implements OnChanges, OnDestroy {
                     const normalized = normalizeArtifactOpenRequest(payload as string | SpaceArtifactOpenRequest | null | undefined);
                     if (normalized) {
                         this.OpenArtifactRequested.emit(normalized);
+                    }
+                }),
+            );
+        }
+
+        const taskEmitter = findEmitter('OpenTaskRequested');
+        if (taskEmitter) {
+            this.outputSubs.push(
+                taskEmitter.subscribe((taskId: unknown) => {
+                    if (typeof taskId === 'string' && taskId.trim()) {
+                        this.OpenTaskRequested.emit(taskId.trim());
                     }
                 }),
             );

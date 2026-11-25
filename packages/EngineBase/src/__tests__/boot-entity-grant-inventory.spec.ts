@@ -131,9 +131,22 @@ describe('XS-2 Boot Entity Grant Filter Inventory', () => {
         expect(codes.has('INVALID_ENTITY_ID_FIELD_NAME')).toBe(true);
     });
 
-    it('declares all 6 polymorphic FK specs matching Collaboration metadata', () => {
+    it('declares all 6 polymorphic FK specs and Artifact RLS policies matching Collaboration metadata', () => {
         expect(COLLABORATION_POLYMORPHIC_FK_SPECS.length).toBe(6);
-        expect(COLLABORATION_BOOT_ENTITY_REGISTRY.length).toBeGreaterThanOrEqual(73);
+        expect(COLLABORATION_BOOT_ENTITY_REGISTRY.length).toBeGreaterThanOrEqual(81);
+
+        const byName = new Map(COLLABORATION_BOOT_ENTITY_REGISTRY.map((e) => [e.EntityName, e]));
+        expect(byName.get('MJ: Artifact Types')?.PolicyKind).toBe('active-catalog');
+        expect(byName.get('MJ: Artifacts')?.PolicyKind).toBe('reach-scoped');
+        expect(byName.get('MJ: Artifacts')?.RequireUiRoleReadFilter).toBe(true);
+        expect(byName.get('MJ: Artifact Versions')?.PolicyKind).toBe('reach-scoped');
+        expect(byName.get('MJ: Artifact Versions')?.RequireUiRoleReadFilter).toBe(true);
+        expect(byName.get('MJ: Artifact Version Attributes')?.PolicyKind).toBe('reach-scoped');
+        expect(byName.get('MJ: Artifact Permissions')?.PolicyKind).toBe('reach-scoped');
+        expect(byName.get('MJ: Artifact Uses')?.PolicyKind).toBe('reach-scoped');
+        expect(byName.get('MJ: Conversation Detail Artifacts')?.PolicyKind).toBe('reach-scoped');
+        expect(byName.get('MJ: Collection Artifacts')?.PolicyKind).toBe('shell-deny-all');
+        expect(byName.get('MJ: Conversation Artifacts')?.PolicyKind).toBe('shell-deny-all');
     });
 
     it('registers BootEntityGrantInventoryOperation and enforces ContextUser authorization', async () => {

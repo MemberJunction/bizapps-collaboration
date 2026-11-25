@@ -5,6 +5,7 @@
  * on `MJ_BizApps_Tasks: Meetings` directly.
  */
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { CompositeKey } from '@memberjunction/core';
 import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
 import { SPACE_CHAT_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext } from '../../wire.js';
@@ -132,6 +133,33 @@ const checks: NamedCheck[] = [
                     !!spaceChat && spaceChat.Subject.toLowerCase() === `meeting:${meetingId.toLowerCase()}`,
                     `Space Chat Subject is meeting:<MeetingID> (got ${spaceChat?.Subject})`,
                 );
+
+                // Verify invited Space Participant (Casey) can save their own RSVP response over the wire
+                const caseyInvite = await ctx.Provider.GetEntityObject(MEETING_ATTENDEE_ENTITY, ctx.User);
+                caseyInvite.NewRecord();
+                caseyInvite.Set('MeetingID', meetingId);
+                caseyInvite.Set('UserID', casey.User.ID);
+                caseyInvite.Set('Email', casey.User.Email || 'casey@example.com');
+                caseyInvite.Set('Role', 'Required');
+                caseyInvite.Set('ResponseStatus', 'None');
+                caseyInvite.Set('AttendanceStatus', 'Unknown');
+                Assert(await caseyInvite.Save(), `Seed Casey meeting attendee row: ${caseyInvite.LatestResult?.CompleteMessage ?? ''}`);
+                const caseyAttendeeId = String(caseyInvite.Get('ID'));
+
+                const caseyRsvpRow = await casey.Provider.GetEntityObject(MEETING_ATTENDEE_ENTITY, casey.User);
+                Assert(await caseyRsvpRow.InnerLoad(CompositeKey.FromID(caseyAttendeeId)), 'Casey loads own Meeting Attendee row over the wire');
+                caseyRsvpRow.Set('ResponseStatus', 'Accepted');
+                Assert(await caseyRsvpRow.Save(), `Casey saves own RSVP ResponseStatus=Accepted over the wire: ${caseyRsvpRow.LatestResult?.CompleteMessage ?? ''}`);
+
+                const [rsvpCheck] = await FindRows<{ ResponseStatus: string }>(
+                    ctx,
+                    MEETING_ATTENDEE_ENTITY,
+                    `ID = '${caseyAttendeeId}'`,
+                    ['ResponseStatus'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(rsvpCheck?.ResponseStatus === 'Accepted', `Casey RSVP persisted as Accepted (got ${rsvpCheck?.ResponseStatus})`);
             } finally {
                 if (conversationId || spaceChatId) {
                     await cleanupConversation(ctx.Provider, ctx.User, conversationId, spaceChatId);

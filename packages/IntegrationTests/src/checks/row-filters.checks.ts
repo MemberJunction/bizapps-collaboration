@@ -226,6 +226,116 @@ const checks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'row-filters.RF9',
+        Name: 'RF9 — Space Participant (Bea) reads enabled MJ: Artifact Types, Shared artifacts & versions in Discovery, and 0 Team or Harbor artifacts',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const harborOwner = await GetPersonaUser(ctx, 'harbor');
+            const view = View(ctx);
+
+            // 1. Enabled MJ: Artifact Types catalog is readable so <mj-artifact-viewer-panel> resolves plugins
+            const typesRes = await view.RunView<{ ID: string; Name: string }>({
+                EntityName: 'MJ: Artifact Types',
+                Fields: ['ID', 'Name'],
+                ResultType: 'simple',
+            }, bea);
+            Assert(typesRes.Success && (typesRes.Results?.length ?? 0) > 0, `Bea reads enabled MJ: Artifact Types catalog (got ${typesRes.Results?.length ?? 0}, err=${typesRes.ErrorMessage ?? ''})`);
+
+            const mdType = (typesRes.Results ?? []).find((t) => t.Name === 'Markdown Document') ?? typesRes.Results![0];
+            const artifactsEntity = ctx.Provider.EntityByName('MJ: Artifacts');
+            const spaceItemsEntity = ctx.Provider.EntityByName(SPACE_ITEM_ENTITY);
+            Assert(!!artifactsEntity?.ID, 'MJ: Artifacts entity metadata exists');
+            Assert(!!spaceItemsEntity?.ID, 'MJ_BizApps_Collaboration: Space Items entity metadata exists');
+
+            const createdArtifactIds: string[] = [];
+            const createdVersionIds: string[] = [];
+            const createdItemIds: string[] = [];
+
+            const seedSpaceArtifact = async (
+                spaceId: string,
+                signer: typeof ada,
+                band: 'Shared' | 'Team',
+                name: string,
+            ): Promise<{ artifactId: string; versionId: string }> => {
+                const art = await ctx.Provider.GetEntityObject('MJ: Artifacts', ctx.User);
+                art.NewRecord();
+                art.Set('Name', name);
+                art.Set('TypeID', mdType.ID);
+                art.Set('UserID', signer.ID);
+                Assert(await art.Save(), `Save fixture artifact ${name}: ${art.LatestResult?.CompleteMessage ?? ''}`);
+                const artifactId = String(art.Get('ID'));
+                createdArtifactIds.push(artifactId);
+
+                const ver = await ctx.Provider.GetEntityObject('MJ: Artifact Versions', ctx.User);
+                ver.NewRecord();
+                ver.Set('ArtifactID', artifactId);
+                ver.Set('VersionNumber', 1);
+                ver.Set('Content', `# ${name}`);
+                ver.Set('UserID', signer.ID);
+                Assert(await ver.Save(), `Save fixture artifact version ${name}: ${ver.LatestResult?.CompleteMessage ?? ''}`);
+                const versionId = String(ver.Get('ID'));
+                createdVersionIds.push(versionId);
+
+                const item = await ctx.Provider.GetEntityObject(SPACE_ITEM_ENTITY, signer);
+                item.NewRecord();
+                item.Set('SpaceID', spaceId);
+                item.Set('EntityID', artifactsEntity!.ID);
+                item.Set('RecordID', `ID|${artifactId}`);
+                item.Set('Band', band);
+                item.Set('ArtifactVersionID', versionId);
+                Assert(await item.Save(), `Save fixture SpaceItem ${name}: ${item.LatestResult?.CompleteMessage ?? ''}`);
+                const itemId = String(item.Get('ID'));
+                createdItemIds.push(itemId);
+
+                // Bind artifact delegation to the filed SpaceItem so MJ ArtifactPermissionEngine mirrors band isolation
+                art.Set('DelegateEntityID', spaceItemsEntity!.ID);
+                art.Set('DelegateRecordID', itemId);
+                Assert(await art.Save(), `Bind fixture artifact delegation ${name}: ${art.LatestResult?.CompleteMessage ?? ''}`);
+
+                return { artifactId, versionId };
+            };
+
+            try {
+                const shared = await seedSpaceArtifact(DISCOVERY_SPACE_ID, ada, 'Shared', 'RF9 Discovery Shared Brief');
+                const team = await seedSpaceArtifact(DISCOVERY_SPACE_ID, ada, 'Team', 'RF9 Discovery Team Notes');
+                const harbor = await seedSpaceArtifact(HARBOR_SPACE_ID, harborOwner, 'Shared', 'RF9 Harbor Shared Brief');
+
+                const allIds = `'${shared.artifactId}', '${team.artifactId}', '${harbor.artifactId}'`;
+                const beaArts = await FindRows<{ ID: string }>(ctx, 'MJ: Artifacts', `ID IN (${allIds})`, ['ID'], bea, { BypassCache: true });
+                const artSet = new Set(beaArts.map((r) => r.ID.toLowerCase()));
+                Assert(artSet.has(shared.artifactId.toLowerCase()), 'Bea reads Discovery Shared artifact');
+                Assert(!artSet.has(team.artifactId.toLowerCase()), 'Bea MUST NOT read Discovery Team artifact');
+                Assert(!artSet.has(harbor.artifactId.toLowerCase()), 'Bea MUST NOT read Harbor Shared artifact');
+
+                const allVerIds = `'${shared.versionId}', '${team.versionId}', '${harbor.versionId}'`;
+                const beaVers = await FindRows<{ ID: string }>(ctx, 'MJ: Artifact Versions', `ID IN (${allVerIds})`, ['ID'], bea, { BypassCache: true });
+                const verSet = new Set(beaVers.map((r) => r.ID.toLowerCase()));
+                Assert(verSet.has(shared.versionId.toLowerCase()), 'Bea reads Discovery Shared artifact version');
+                Assert(!verSet.has(team.versionId.toLowerCase()), 'Bea MUST NOT read Discovery Team artifact version');
+                Assert(!verSet.has(harbor.versionId.toLowerCase()), 'Bea MUST NOT read Harbor artifact version');
+
+                // Auxiliary viewer queries succeed with zero permission errors
+                for (const auxEntity of [
+                    'MJ: Artifact Version Attributes',
+                    'MJ: Artifact Permissions',
+                    'MJ: Artifact Uses',
+                    'MJ: Collection Artifacts',
+                    'MJ: Conversation Detail Artifacts',
+                    'MJ: Conversation Artifacts',
+                ]) {
+                    const auxRes = await view.RunView<{ ID: string }>({ EntityName: auxEntity, Fields: ['ID'], MaxRows: 5, ResultType: 'simple' }, bea);
+                    Assert(auxRes.Success, `Bea RunView ${auxEntity} succeeds without permission error: ${auxRes.ErrorMessage ?? ''}`);
+                }
+            } finally {
+                for (const id of createdItemIds.reverse()) await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'RF9 space item');
+                for (const id of createdVersionIds.reverse()) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: Artifact Versions', id, 'RF9 artifact version');
+                for (const id of createdArtifactIds.reverse()) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: Artifacts', id, 'RF9 artifact');
+            }
+        },
+    },
 ];
 
 registerChecks(checks);

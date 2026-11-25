@@ -490,5 +490,45 @@
         }
       ]
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifacts"
+    },
+    "fields": {
+      "Name": "MJ: Artifacts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Artifacts In Reach Or Outside Collaboration"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Versions"
+    },
+    "fields": {
+      "Name": "MJ: Artifact Versions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Versions&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Artifact Versions In Reach Or Outside Collaboration"
+          }
+        }
+      ]
+    }
   }
 ]
