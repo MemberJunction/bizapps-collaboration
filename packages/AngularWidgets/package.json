@@ -61,6 +61,8 @@
     "@memberjunction/ng-entity-viewer": "6.3.0-edge.1",
     "@memberjunction/ng-shared-generic": "6.3.0-edge.1",
     "@memberjunction/ng-ui-components": "6.3.0-edge.1",
+    "@mj-biz-apps/tasks-core": "1.14.0",
+    "@mj-biz-apps/tasks-ng-widgets": "1.14.0",
     "jsdom": "26.1.0",
     "rxjs": "^7.8.2",
     "typescript": "5.9.3",
