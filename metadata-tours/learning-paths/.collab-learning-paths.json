@@ -1,0 +1,44 @@
+[
+  {
+    "fields": {
+      "Name": "Collaborative Workspaces",
+      "PathKey": "collab.essentials",
+      "Description": "Learn how to organize Collaboration Spaces, link anchored records and shared threads, govern Space Access Grants for external guests, and follow activity feeds.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Collaboration",
+      "Status": "Active",
+      "Configuration": {
+        "AllowSkipOptional": false,
+        "ShowNextConcreteStep": true
+      }
+    },
+    "primaryKey": {
+      "ID": "25BE4DF0-0E6E-4D0D-9343-9FB420D9A316"
+    },
+    "relatedEntities": {
+      "MJ: Tour Learning Path Tour Links": [
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=collab.spaces-anchors",
+            "Sequence": 1,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "FF5C01B8-94EA-48AE-A7F8-55A4098D2CDB"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=collab.grants-activity",
+            "Sequence": 2,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "C2335039-D80D-40B1-B820-F77E7C06D2D1"
+          }
+        }
+      ]
+    }
+  }
+]
