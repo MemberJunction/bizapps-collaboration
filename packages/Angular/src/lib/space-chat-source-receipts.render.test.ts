@@ -68,6 +68,8 @@ class ChatAreaStub {
     public assistantDisplayName: string | null = null;
     public BeforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
     public AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+    public OpenEntityRecord = new EventEmitter<object>();
+    public BeforeArtifactPanelOpen = new EventEmitter<object>();
     public ComposerDraftConsumed = new EventEmitter<void>();
     public PendingMessageConsumed = new EventEmitter<void>();
 }
@@ -90,7 +92,7 @@ declareComponent(ChatAreaStub, {
         'CollapseThreadReplies', 'ShowAgentCharacter', 'AgentReplyMode', 'AllowedAgentIDs', 'EnableDecisionRouting', 'MentionPeople', 'AgentHistoryFrom',
         'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
     ],
-    outputs: ['BeforeAgentTurn', 'AfterAgentTurn', 'ComposerDraftConsumed', 'PendingMessageConsumed'],
+    outputs: ['BeforeAgentTurn', 'AfterAgentTurn', 'OpenEntityRecord', 'BeforeArtifactPanelOpen', 'ComposerDraftConsumed', 'PendingMessageConsumed'],
 });
 
 const chatTestImports = [

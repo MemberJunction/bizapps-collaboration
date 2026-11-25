@@ -4,7 +4,13 @@ import { ConversationEngine } from '@memberjunction/core-entities';
 import { WellKnownUserSource, type EntityInfo, type IMetadataProvider, type IRunViewProvider, type RunViewParams, type RunViewResult, UserInfo } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
-import { EXPLICIT_ASK_MARKER, executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/execute-space-chat-turn.js';
+import {
+    clearSpaceChatModelOverrideCache,
+    EXPLICIT_ASK_MARKER,
+    executeSpaceChatTurn,
+    parseSpaceChatEffortLevel,
+    type ExecuteSpaceChatTurnInput,
+} from '../dist/execute-space-chat-turn.js';
 import { COLLABORATION_AI_RUN_LOCKDOWN_ENTITIES, evaluateParticipantAIRunWriteAccess } from '../dist/ai-run-lockdown.js';
 import { PARTICIPANT_ROLE_ID } from '../dist/task-attribution.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
@@ -1811,5 +1817,152 @@ describe('executeSpaceChatTurn', () => {
         }
         assert.equal(capturedReaderIds.includes(CALLER_ID.toLowerCase()), true);
         assert.equal(capturedReaderIds.includes(OTHER_USER_ID.toLowerCase()), true);
+    });
+
+    it('overrides InjectNotes and InjectExamples to false in memory for ambient agents like Sage without ever calling Save()', async () => {
+        const baseProvider = createMockProvider();
+        const baseGetEntityObject = baseProvider.GetEntityObject.bind(baseProvider);
+        let agentSaveCalls = 0;
+        let capturedAgent: { InjectNotes?: boolean; InjectExamples?: boolean } | null = null;
+
+        const providerWithSage = stubOf<IMetadataProvider>({
+            ...baseProvider,
+            EntityByName: baseProvider.EntityByName.bind(baseProvider),
+            EntityByID: baseProvider.EntityByID.bind(baseProvider),
+            RunView: (baseProvider as unknown as IRunViewProvider).RunView.bind(baseProvider),
+            RunViews: (baseProvider as unknown as IRunViewProvider).RunViews.bind(baseProvider),
+            async GetEntityObject(entityName: string, contextUser?: UserInfo) {
+                if (entityName === 'MJ: AI Agents') {
+                    return stubOf<never>({
+                        ID: ALLOWED_AGENT_ID,
+                        Name: 'Sage',
+                        TypeID: 'agent-type-1',
+                        DriverClass: null,
+                        InjectNotes: true,
+                        InjectExamples: true,
+                        async Load(id: string) {
+                            return id.toLowerCase() === ALLOWED_AGENT_ID.toLowerCase();
+                        },
+                        async Save() {
+                            agentSaveCalls++;
+                            return true;
+                        },
+                    });
+                }
+                return baseGetEntityObject(entityName, contextUser);
+            },
+        });
+
+        const prevRunAgent = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = stubOf<typeof AgentRunner.prototype.RunAgent>(async (params: ExecuteAgentParams) => {
+            capturedAgent = {
+                InjectNotes: params.agent?.InjectNotes,
+                InjectExamples: params.agent?.InjectExamples,
+            };
+            return prevRunAgent.call(new AgentRunner(providerWithSage), params);
+        });
+        try {
+            const res = await executeSpaceChatTurn(providerWithSage, callerUser, defaultInput);
+            assert.equal(res.ok, true, res.ok ? '' : res.message);
+            assert.deepEqual(capturedAgent, { InjectNotes: false, InjectExamples: false });
+            assert.equal(agentSaveCalls, 0, 'executeSpaceChatTurn must NEVER persist agentEntity.Save()');
+        } finally {
+            AgentRunner.prototype.RunAgent = prevRunAgent;
+        }
+    });
+
+    it('resolves COLLABORATION_SPACE_CHAT_MODEL (cached) and COLLABORATION_SPACE_CHAT_EFFORT_LEVEL overrides, and preserves defaults when unset', async () => {
+        const MODEL_ID = 'aaaa1111-2222-4333-8444-555566667777';
+        const prevModel = process.env['COLLABORATION_SPACE_CHAT_MODEL'];
+        const prevEffort = process.env['COLLABORATION_SPACE_CHAT_EFFORT_LEVEL'];
+        clearSpaceChatModelOverrideCache();
+
+        assert.equal(parseSpaceChatEffortLevel(undefined), undefined);
+        assert.equal(parseSpaceChatEffortLevel(''), undefined);
+        assert.equal(parseSpaceChatEffortLevel('Low'), 15);
+        assert.equal(parseSpaceChatEffortLevel('low'), 15);
+        assert.equal(parseSpaceChatEffortLevel('15'), 15);
+        assert.equal(parseSpaceChatEffortLevel('Medium'), 50);
+        assert.equal(parseSpaceChatEffortLevel('High'), 85);
+        assert.equal(parseSpaceChatEffortLevel('42'), 42);
+        assert.equal(parseSpaceChatEffortLevel('not-a-level'), undefined);
+        assert.equal(parseSpaceChatEffortLevel('150'), undefined);
+
+        let modelLookupCount = 0;
+        const makeModelAwareProvider = (modelFound: boolean): IMetadataProvider => {
+            const base = createMockProvider();
+            const baseRv = base as unknown as IRunViewProvider;
+            const wrapped: Partial<IMetadataProvider & IRunViewProvider> = {
+                EntityByName: base.EntityByName.bind(base),
+                EntityByID: base.EntityByID.bind(base),
+                GetEntityObject: base.GetEntityObject.bind(base),
+                async RunView<T>(params: RunViewParams, userArg?: UserInfo): Promise<RunViewResult<T>> {
+                    if (params.EntityName === 'MJ: AI Models') {
+                        modelLookupCount++;
+                        assert.match(String(params.ExtraFilter ?? ''), /IsActive\s*=\s*1/i);
+                        return modelFound
+                            ? mockResult<T>([{ ID: MODEL_ID, Name: 'Gemini 4 Hydrogen' }])
+                            : mockResult<T>([]);
+                    }
+                    return baseRv.RunView<T>(params, userArg);
+                },
+                async RunViews<T>(paramsList: RunViewParams[], userArg?: UserInfo): Promise<RunViewResult<T>[]> {
+                    return Promise.all(paramsList.map((p) => wrapped.RunView!<T>(p, userArg)));
+                },
+            };
+            return stubOf<IMetadataProvider>(wrapped);
+        };
+
+        const capturedParams: Array<{ override?: ExecuteAgentParams['override']; effortLevel?: ExecuteAgentParams['effortLevel'] }> = [];
+        const prevRunAgent = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = stubOf<typeof AgentRunner.prototype.RunAgent>(async (params: ExecuteAgentParams) => {
+            capturedParams.push({ override: params.override, effortLevel: params.effortLevel });
+            return prevRunAgent.call(new AgentRunner(createMockProvider()), params);
+        });
+
+        try {
+            // 1. Unset env vars -> standard model/effort selection unchanged
+            delete process.env['COLLABORATION_SPACE_CHAT_MODEL'];
+            delete process.env['COLLABORATION_SPACE_CHAT_EFFORT_LEVEL'];
+            const unsetRes = await executeSpaceChatTurn(makeModelAwareProvider(true), callerUser, defaultInput);
+            assert.equal(unsetRes.ok, true, unsetRes.ok ? '' : unsetRes.message);
+            assert.equal(modelLookupCount, 0);
+            assert.equal(capturedParams[0]?.override, undefined);
+            assert.equal(capturedParams[0]?.effortLevel, undefined);
+
+            // 2. Env vars set -> resolves active model once, caches across turns, maps "Low" -> 15
+            process.env['COLLABORATION_SPACE_CHAT_MODEL'] = 'Gemini 4 Hydrogen';
+            process.env['COLLABORATION_SPACE_CHAT_EFFORT_LEVEL'] = 'Low';
+            const firstOverrideRes = await executeSpaceChatTurn(makeModelAwareProvider(true), callerUser, defaultInput);
+            assert.equal(firstOverrideRes.ok, true, firstOverrideRes.ok ? '' : firstOverrideRes.message);
+            assert.equal(modelLookupCount, 1);
+            assert.deepEqual(capturedParams[1]?.override, { modelId: MODEL_ID });
+            assert.equal(capturedParams[1]?.effortLevel, 15);
+
+            // Second turn with numeric effort "25" reuses cached model ID without querying MJ: AI Models again
+            process.env['COLLABORATION_SPACE_CHAT_EFFORT_LEVEL'] = '25';
+            const secondOverrideRes = await executeSpaceChatTurn(makeModelAwareProvider(true), callerUser, defaultInput);
+            assert.equal(secondOverrideRes.ok, true, secondOverrideRes.ok ? '' : secondOverrideRes.message);
+            assert.equal(modelLookupCount, 1, 'Model lookup should be cached per model name');
+            assert.deepEqual(capturedParams[2]?.override, { modelId: MODEL_ID });
+            assert.equal(capturedParams[2]?.effortLevel, 25);
+
+            // 3. Unknown model name -> falls back cleanly without override
+            clearSpaceChatModelOverrideCache();
+            process.env['COLLABORATION_SPACE_CHAT_MODEL'] = 'Nonexistent Model';
+            delete process.env['COLLABORATION_SPACE_CHAT_EFFORT_LEVEL'];
+            const missingModelRes = await executeSpaceChatTurn(makeModelAwareProvider(false), callerUser, defaultInput);
+            assert.equal(missingModelRes.ok, true, missingModelRes.ok ? '' : missingModelRes.message);
+            assert.equal(modelLookupCount, 2);
+            assert.equal(capturedParams[3]?.override, undefined);
+            assert.equal(capturedParams[3]?.effortLevel, undefined);
+        } finally {
+            AgentRunner.prototype.RunAgent = prevRunAgent;
+            clearSpaceChatModelOverrideCache();
+            if (prevModel === undefined) delete process.env['COLLABORATION_SPACE_CHAT_MODEL'];
+            else process.env['COLLABORATION_SPACE_CHAT_MODEL'] = prevModel;
+            if (prevEffort === undefined) delete process.env['COLLABORATION_SPACE_CHAT_EFFORT_LEVEL'];
+            else process.env['COLLABORATION_SPACE_CHAT_EFFORT_LEVEL'] = prevEffort;
+        }
     });
 });

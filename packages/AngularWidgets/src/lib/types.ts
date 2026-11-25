@@ -57,11 +57,17 @@ export interface ItemCardModel {
   citationCount?: number;
   isImage?: boolean;
   fileId?: string;
+  entityName?: string;
+  artifactId?: string;
+  artifactType?: string;
 }
 
 export interface ItemRowModel {
   id: string;
   fileId?: string;
+  entityName?: string;
+  artifactId?: string;
+  artifactType?: string;
   kind: FileKind;
   title: string;
   author: string;
@@ -92,6 +98,9 @@ export interface FindingModel {
 export interface LibraryRowModel {
   id: string;
   fileId?: string;
+  entityName?: string;
+  artifactId?: string;
+  artifactType?: string;
   kind: FileKind;
   name: string;
   folder: string;

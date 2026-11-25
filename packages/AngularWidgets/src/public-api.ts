@@ -1,3 +1,10 @@
+export {
+    CollabArtifactSlideoverComponent,
+    COLLAB_OPEN_ARTIFACT,
+    normalizeArtifactOpenRequest,
+    type SpaceArtifactOpenRequest,
+    type SpaceArtifactOpenCallback,
+} from './lib/artifact-slideover.component';
 export { BaseSpaceTab } from './lib/base-space-tab';
 export { BaseSpaceOverviewCard } from './lib/base-space-overview-card';
 export { BaseSpaceSettingsSection } from './lib/base-space-settings-section';

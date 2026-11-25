@@ -12,6 +12,14 @@ import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
 import { rulesForSpace, rulesFromServerDocument, sameRules } from './logic/space-rules';
 import { recordLinkKeyPairs } from './logic/record-link.js';
+import {
+    ARTIFACTS_ENTITY_NAME,
+    artifactIconClass,
+    detectArtifactFileKind,
+    extractArtifactIdFromRecordLink,
+    isArtifactEntityName,
+    parsePinTarget,
+} from './logic/artifact-open.js';
 import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
 import {
     buildActiveKnowledgeSourceBands,
@@ -82,6 +90,11 @@ import type {
     AgentTurnResult,
 } from '@memberjunction/ng-conversations';
 import {
+    CollabArtifactSlideoverComponent,
+    COLLAB_OPEN_ARTIFACT,
+    normalizeArtifactOpenRequest,
+    type SpaceArtifactOpenCallback,
+    type SpaceArtifactOpenRequest,
     CollabSpaceRailComponent,
     CollabSpaceHeaderComponent,
     CollabSpaceTabsComponent,
@@ -176,7 +189,10 @@ import {
 } from './logic/space-extensions.js';
 
 /** The Space Notes entity's id on this host, which a pin names as its target entity. */
-const notesEntityId = (): string => Metadata.Provider.EntityByName('MJ_BizApps_Collaboration: Space Notes')?.ID ?? '';
+const notesEntityId = (provider?: { EntityByName?: (name: string) => { ID: string } | undefined } | null): string =>
+    provider?.EntityByName?.('MJ_BizApps_Collaboration: Space Notes')?.ID
+    ?? Metadata.Provider?.EntityByName?.('MJ_BizApps_Collaboration: Space Notes')?.ID
+    ?? '';
 /** A pin's record key, bare: `ID|<uuid>` and `<uuid>` name the same record. */
 const bareRecordId = (recordId: string): string => (recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId);
 interface NoteRow { ID: string; SpaceID: string; Title: string; Body: string | null; Band: SpaceBand; Visibility: 'Space' | 'Private'; AuthorUserID: string; AuthorUser?: string | null; __mj_UpdatedAt: string }
@@ -251,6 +267,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabPinnedStripComponent,
         CollabSpaceDataComponent,
         CollabContributedTabHostDirective,
+        CollabArtifactSlideoverComponent,
         MJDialogComponent,
         TaskEditPanelComponent,
         MJReactModule,
@@ -261,6 +278,15 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         ApprovalInboxComponent,
     ],
     changeDetection: ChangeDetectionStrategy.OnPush,
+    providers: [
+        {
+            provide: COLLAB_OPEN_ARTIFACT,
+            useFactory: (): SpaceArtifactOpenCallback => {
+                const host = inject(CollaborationSectionResource);
+                return (request: string | SpaceArtifactOpenRequest): void => host.openArtifactSlideover(request);
+            },
+        },
+    ],
     styles: [`
         :host {
             display: flex;
@@ -1021,10 +1047,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             <div class="contributed-tab-stage" data-testid="contributed-tab-stage">
                                                 <ng-container
                                                     [mjcContributedTabHost]="tabComponent"
-                                                    [TabInputs]="{ SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode, SpaceName: spaceTitle, CanSchedule: canAddHere, CanSeeTeamSide: canSeeTeamSide, DefaultBand: bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand, AllowedBands: bandChoice?.allowed ?? bothBands }"
+                                                    [TabInputs]="{ SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode, SpaceName: spaceTitle, CanSchedule: canAddHere, CanSeeTeamSide: canSeeTeamSide, DefaultBand: bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand, AllowedBands: bandChoice?.allowed ?? bothBands, OpenArtifact: openArtifactSlideoverBound }"
                                                     (CreateMeetingRequested)="onCreateSpaceMeeting($event.draft, $event.instance)"
                                                     (OpenMeetingChatRequested)="onOpenMeetingChat($event)"
                                                     (OpenMeetingRequested)="onOpenMeetingRecord($event)"
+                                                    (OpenArtifactRequested)="onOpenArtifactRequested($event)"
                                                 ></ng-container>
                                             </div>
                                         } @else {
@@ -1195,6 +1222,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     (RetrievalScopeChanged)="onChatRetrievalScopeChanged($event)"
                                                     (CitationClicked)="onChatCitationClicked($event)"
                                                     (SourceReceiptOpenRequested)="onChatSourceReceiptOpen($event)"
+                                                    (ArtifactOpenRequested)="onOpenArtifactRequested($event)"
                                                     (AfterAgentTurnCompleted)="onChatAfterAgentTurnCompleted()"
                                                     [AutoNameConversation]="false"
                                                     [ComposerDraft]="composerDraft"
@@ -1461,6 +1489,19 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 (SubmitRequested)="onSubmitNewConversation($event)"
                             />
                         }
+
+                        <mjc-artifact-slideover
+                            [IsOpen]="isArtifactSlideoverOpen"
+                            [ArtifactId]="activeArtifactSlideoverId"
+                            [VersionNumber]="activeArtifactSlideoverVersion"
+                            [Title]="activeArtifactSlideoverTitle"
+                            [CurrentUser]="currentUser"
+                            [CanEdit]="activeArtifactSlideoverCanEdit"
+                            [CanShare]="activeArtifactSlideoverCanShare"
+                            (Closed)="closeArtifactSlideover()"
+                            (ArtifactSelected)="onArtifactSlideoverSelected($event)"
+                            (OpenEntityRecordRequested)="onArtifactSlideoverOpenEntityRecord($event)"
+                        />
                     </div>
                 }
             </mj-page-body>
@@ -1483,6 +1524,75 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isDrawerOpen = false;
     public isShareDialogOpen = false;
     public isUploadDialogOpen = false;
+    public isArtifactSlideoverOpen = false;
+    public activeArtifactSlideoverId: string | null = null;
+    public activeArtifactSlideoverVersion: number | undefined = undefined;
+    public activeArtifactSlideoverTitle = '';
+    public activeArtifactSlideoverCanEdit = false;
+    public activeArtifactSlideoverCanShare = false;
+    public readonly openArtifactSlideoverBound: SpaceArtifactOpenCallback = (request) => this.openArtifactSlideover(request);
+    private spacePinArtifacts = new Map<string, { name: string; type: string | null }>();
+
+    private artifactsEntityId(): string {
+        return this.ProviderToUse?.EntityByName?.(ARTIFACTS_ENTITY_NAME)?.ID
+            ?? Metadata.Provider?.EntityByName?.(ARTIFACTS_ENTITY_NAME)?.ID
+            ?? '';
+    }
+
+    private spaceItemsEntityId(): string {
+        return this.ProviderToUse?.EntityByName?.('MJ_BizApps_Collaboration: Space Items')?.ID
+            ?? Metadata.Provider?.EntityByName?.('MJ_BizApps_Collaboration: Space Items')?.ID
+            ?? '';
+    }
+
+    /** Opens an `MJ: Artifacts` record in Collaboration's in-place right-hand slide-over without altering the host route. */
+    public openArtifactSlideover(request: string | SpaceArtifactOpenRequest): void {
+        const normalized = normalizeArtifactOpenRequest(request);
+        if (!normalized) return;
+        this.activeArtifactSlideoverId = normalized.artifactId;
+        this.activeArtifactSlideoverVersion = normalized.versionNumber;
+        this.activeArtifactSlideoverTitle = normalized.title ?? '';
+        this.activeArtifactSlideoverCanEdit = normalized.canEdit === true;
+        this.activeArtifactSlideoverCanShare = normalized.canShare === true;
+        this.isArtifactSlideoverOpen = true;
+        this.RefreshView();
+    }
+
+    public onOpenArtifactRequested(request: SpaceArtifactOpenRequest): void {
+        this.openArtifactSlideover(request);
+    }
+
+    public closeArtifactSlideover(): void {
+        this.isArtifactSlideoverOpen = false;
+        this.activeArtifactSlideoverId = null;
+        this.activeArtifactSlideoverVersion = undefined;
+        this.activeArtifactSlideoverTitle = '';
+        this.activeArtifactSlideoverCanEdit = false;
+        this.activeArtifactSlideoverCanShare = false;
+        this.RefreshView();
+    }
+
+    public onArtifactSlideoverSelected(artifactId: string): void {
+        const cleanId = (artifactId ?? '').trim();
+        if (!cleanId) return;
+        this.activeArtifactSlideoverId = cleanId;
+        this.activeArtifactSlideoverVersion = undefined;
+        this.RefreshView();
+    }
+
+    public onArtifactSlideoverOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+        if (!event?.entityName) return;
+        if (isArtifactEntityName(event.entityName)) {
+            const directId = event.compositeKey?.GetValueByFieldName('ID');
+            const fallbackId = event.compositeKey?.KeyValuePairs?.[0]?.Value;
+            const artifactId = String(directId ?? fallbackId ?? '').trim();
+            if (artifactId) {
+                this.openArtifactSlideover({ artifactId });
+                return;
+            }
+        }
+        SharedService.Instance.OpenEntityRecord(event.entityName, event.compositeKey);
+    }
 
     /**
      * The bands the caller's seat on this space may choose for an upload, and the one to start on, from Core's
@@ -2925,6 +3035,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.isSavingNote = false;
         this.noteSaveError = '';
         this.rawPins = [];
+        this.spacePinArtifacts = new Map();
         this.spacePins = [];
         this.dataEntries = [];
         this.selectedDataGrantId = null;
@@ -3224,7 +3335,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private async loadSpacePins(spaceId: string, isCurrent: () => boolean): Promise<void> {
         if (!isValidUuid(spaceId) || !this.currentUser) return;
         try {
-            const res = await new RunView(this.RunViewToUse).RunView<PinRow>({
+            const rv = new RunView(this.RunViewToUse);
+            const res = await rv.RunView<PinRow>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Member Pins',
                 BypassCache: true, // a note or pin just written or removed must show at once
                 ExtraFilter: `SpaceID = '${spaceId}' AND UserID = '${this.currentUser.ID}'`,
@@ -3236,8 +3348,36 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (!res?.Success) {
                 this.logOnce(`pins:${spaceId}`, `The pins could not be read: ${res?.ErrorMessage ?? 'unknown error'}`);
                 this.rawPins = [];
+                this.spacePinArtifacts = new Map();
             } else {
                 this.rawPins = res.Results ?? [];
+                const artifactEntityId = this.artifactsEntityId();
+                const artifactPinIds = artifactEntityId
+                    ? [...new Set(
+                        this.rawPins
+                            .filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, artifactEntityId))
+                            .map((p) => bareRecordId(p.TargetRecordID ?? ''))
+                            .filter((id) => isValidUuid(id)),
+                    )]
+                    : [];
+                const pinArtifactMap = new Map<string, { name: string; type: string | null }>();
+                if (artifactPinIds.length > 0) {
+                    const artRes = await rv.RunView<{ ID: string; Name: string | null; Type?: string | null }>({
+                        EntityName: ARTIFACTS_ENTITY_NAME,
+                        ExtraFilter: `ID IN (${artifactPinIds.map((id) => `'${id}'`).join(',')})`,
+                        Fields: ['ID', 'Name', 'Type'],
+                        ResultType: 'simple',
+                        MaxRows: artifactPinIds.length,
+                    });
+                    if (!isCurrent()) return;
+                    for (const art of artRes?.Results ?? []) {
+                        pinArtifactMap.set(art.ID.toLowerCase(), {
+                            name: (art.Name ?? '').trim() || 'Untitled artifact',
+                            type: art.Type ?? null,
+                        });
+                    }
+                }
+                this.spacePinArtifacts = pinArtifactMap;
             }
             this.refreshPinModels();
         } catch (err) {
@@ -3246,7 +3386,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    /** A pin as the strip shows it: what it points at, found among the space's items, notes and data entries. */
+    /** A pin as the strip shows it: what it points at, found among the space's items, artifacts, notes and data entries. */
     private pinModel(pin: PinRow, spaceName: string): PinModel | null {
         const base = { id: pin.ID, spaceId: pin.SpaceID, spaceName };
         if (pin.Kind === 'Grant') {
@@ -3262,8 +3402,35 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const note = this.spaceNotes.find((n) => UUIDsEqual(n.id, recordId));
             return { ...base, kind: 'Record', title: note?.title ?? 'A note', subtitle: 'Note', iconClass: 'fa-solid fa-note-sticky', target: `note:${recordId}` };
         }
-        const item = this.libraryRows.find((row) => UUIDsEqual(row.fileId ?? '', recordId) || UUIDsEqual(row.id, recordId));
+        const artifactEntityId = this.artifactsEntityId();
+        if (artifactEntityId && UUIDsEqual(pin.TargetEntityID, artifactEntityId)) {
+            const matchedRow = this.libraryRows.find((row) => UUIDsEqual(row.artifactId ?? '', recordId));
+            const resolved = this.spacePinArtifacts.get(recordId.toLowerCase());
+            const title = matchedRow?.name || resolved?.name || 'Untitled artifact';
+            const type = matchedRow?.artifactType || resolved?.type || null;
+            return {
+                ...base,
+                kind: 'Record',
+                title,
+                subtitle: type || matchedRow?.folder || 'Artifact',
+                iconClass: artifactIconClass(type, title),
+                target: `artifact:${recordId}`,
+            };
+        }
+        const item = this.libraryRows.find(
+            (row) => UUIDsEqual(row.fileId ?? '', recordId) || UUIDsEqual(row.artifactId ?? '', recordId) || UUIDsEqual(row.id, recordId),
+        );
         if (!item) return null;
+        if (item.artifactId) {
+            return {
+                ...base,
+                kind: 'Record',
+                title: item.name,
+                subtitle: item.artifactType || item.folder || 'Artifact',
+                iconClass: artifactIconClass(item.artifactType, item.name),
+                target: `artifact:${item.artifactId}`,
+            };
+        }
         return { ...base, kind: 'Record', title: item.name, subtitle: item.folder || 'File', iconClass: 'fa-solid fa-file-lines', target: `item:${item.id}` };
     }
 
@@ -3317,13 +3484,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         void this.removePin(pin.id);
     }
 
-    /** A pin opens where the thing lives: the note on Notes, the file in the library's drawer, the report on Data. */
+    /** A pin opens where the thing lives: artifacts in the in-place slide-over, notes on Notes, files in the library's drawer, reports on Data. */
     public onPinOpen(pin: PinModel): void {
         this.openPin(pin);
     }
 
     private openPin(pin: PinModel): void {
-        const [kind, id] = pin.target.split(':');
+        const { kind, id } = parsePinTarget(pin.target);
+        if (kind === 'artifact' && id) {
+            this.openArtifactSlideover({ artifactId: id, title: pin.title });
+            return;
+        }
         const here = UUIDsEqual(pin.spaceId, this.activeSpaceId) && this.activeView === 'space';
         if (!here) {
             this.pendingPinTarget = pin.target;
@@ -3336,6 +3507,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private pendingPinTarget: string | null = null;
 
     private showPinTarget(kind: string, id: string): void {
+        if (kind === 'artifact' && id) {
+            this.openArtifactSlideover({ artifactId: id });
+            return;
+        }
         if (kind === 'note') {
             this.setTab('Notes');
             this.UpdateQueryParams({ tab: 'notes' });
@@ -3346,6 +3521,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (entry) void this.onDataEntrySelected(entry);
         } else {
             const row = this.libraryRows.find((r) => UUIDsEqual(r.id, id));
+            if (row?.artifactId) {
+                this.openArtifactSlideover({ artifactId: row.artifactId, title: row.name });
+                return;
+            }
             if (row) this.onItemSelected({ id: row.id, kind: row.kind, title: row.name, meta: '', stamp: '' });
         }
         this.RefreshView();
@@ -3359,7 +3538,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.homeListError = '';
         this.RefreshView();
         try {
-            const res = await new RunView(this.RunViewToUse).RunView<PinRow>({
+            const rv = new RunView(this.RunViewToUse);
+            const res = await rv.RunView<PinRow>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Member Pins',
                 BypassCache: true, // a note or pin just written or removed must show at once
                 ExtraFilter: `UserID = '${this.currentUser.ID}'`,
@@ -3369,51 +3549,183 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             });
             if (token !== this.homeListLoadToken) return;
             if (!res?.Success) throw new Error(res?.ErrorMessage ?? 'unknown error');
-            const noteIds = (res.Results ?? []).filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntityId())).map((p) => bareRecordId(p.TargetRecordID ?? ''));
+            const pins = res.Results ?? [];
+            const noteEntityId = notesEntityId(this.ProviderToUse);
+            const artifactEntityId = this.artifactsEntityId();
+            const spaceItemEntityId = this.spaceItemsEntityId();
+
+            const noteIds = [...new Set(
+                pins
+                    .filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, noteEntityId))
+                    .map((p) => bareRecordId(p.TargetRecordID ?? ''))
+                    .filter((id) => isValidUuid(id)),
+            )];
+            const directArtifactIds = artifactEntityId
+                ? [...new Set(
+                    pins
+                        .filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, artifactEntityId))
+                        .map((p) => bareRecordId(p.TargetRecordID ?? ''))
+                        .filter((id) => isValidUuid(id)),
+                )]
+                : [];
+            const spaceItemPinIds = spaceItemEntityId
+                ? [...new Set(
+                    pins
+                        .filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, spaceItemEntityId))
+                        .map((p) => bareRecordId(p.TargetRecordID ?? ''))
+                        .filter((id) => isValidUuid(id)),
+                )]
+                : [];
+            const otherRecordIds = [...new Set(
+                pins
+                    .filter(
+                        (p) =>
+                            p.Kind === 'Record' &&
+                            !UUIDsEqual(p.TargetEntityID, noteEntityId) &&
+                            (!artifactEntityId || !UUIDsEqual(p.TargetEntityID, artifactEntityId)) &&
+                            (!spaceItemEntityId || !UUIDsEqual(p.TargetEntityID, spaceItemEntityId)),
+                    )
+                    .map((p) => bareRecordId(p.TargetRecordID ?? ''))
+                    .filter((id) => isValidUuid(id)),
+            )];
+
             const noteTitles = new Map<string, string>();
-            if (noteIds.length) {
-                const notes = await new RunView(this.RunViewToUse).RunView<{ ID: string; Title: string }>({
-                    EntityName: 'MJ_BizApps_Collaboration: Space Notes',
-                    BypassCache: true, // a note or pin just written or removed must show at once
-                    ExtraFilter: `ID IN (${noteIds.map((id) => `'${id}'`).join(',')})`,
-                    Fields: ['ID', 'Title'],
-                    ResultType: 'simple',
-                });
-                for (const note of notes?.Results ?? []) noteTitles.set(note.ID.toLowerCase(), note.Title);
-            }
-            const itemIds = (res.Results ?? []).filter((p) => p.Kind === 'Record' && !UUIDsEqual(p.TargetEntityID, notesEntityId())).map((p) => bareRecordId(p.TargetRecordID ?? ''));
-            const itemNames = new Map<string, { title: string; itemId: string }>();
-            if (itemIds.length) {
-                // The item points at the file; the file's name is on the MJ Files row
-                const [items, files] = await Promise.all([
-                    new RunView(this.RunViewToUse).RunView<{ ID: string; RecordID: string }>({
+            const spaceItemById = new Map<string, { id: string; entityId: string; entity: string | null; recordId: string }>();
+
+            await Promise.all([
+                noteIds.length
+                    ? rv.RunView<{ ID: string; Title: string }>({
+                        EntityName: 'MJ_BizApps_Collaboration: Space Notes',
+                        BypassCache: true, // a note or pin just written or removed must show at once
+                        ExtraFilter: `ID IN (${noteIds.map((id) => `'${id}'`).join(',')})`,
+                        Fields: ['ID', 'Title'],
+                        ResultType: 'simple',
+                    }).then((notes) => {
+                        for (const note of notes?.Results ?? []) noteTitles.set(note.ID.toLowerCase(), note.Title);
+                    })
+                    : Promise.resolve(),
+                spaceItemPinIds.length
+                    ? rv.RunView<{ ID: string; EntityID: string; Entity?: string | null; RecordID: string }>({
                         EntityName: 'MJ_BizApps_Collaboration: Space Items',
-                        ExtraFilter: `RecordID IN (${itemIds.map((id) => `'ID|${id}'`).join(',')})`,
-                        Fields: ['ID', 'RecordID'],
+                        ExtraFilter: `ID IN (${spaceItemPinIds.map((id) => `'${id}'`).join(',')})`,
+                        Fields: ['ID', 'EntityID', 'Entity', 'RecordID'],
                         ResultType: 'simple',
-                    }),
-                    new RunView(this.RunViewToUse).RunView<{ ID: string; Name: string | null }>({
-                        EntityName: 'MJ: Files',
-                        ExtraFilter: `ID IN (${itemIds.map((id) => `'${id}'`).join(',')})`,
-                        Fields: ['ID', 'Name'],
-                        ResultType: 'simple',
-                    }),
-                ]);
-                const names = new Map((files?.Results ?? []).map((file) => [file.ID.toLowerCase(), file.Name || 'A file']));
-                for (const item of items?.Results ?? []) {
-                    const fileId = bareRecordId(item.RecordID).toLowerCase();
-                    itemNames.set(fileId, { title: names.get(fileId) ?? 'A file', itemId: item.ID });
+                        MaxRows: spaceItemPinIds.length,
+                    }).then((itemsRes) => {
+                        for (const item of itemsRes?.Results ?? []) {
+                            spaceItemById.set(item.ID.toLowerCase(), {
+                                id: item.ID,
+                                entityId: item.EntityID,
+                                entity: item.Entity ?? null,
+                                recordId: bareRecordId(item.RecordID ?? ''),
+                            });
+                        }
+                    })
+                    : Promise.resolve(),
+            ]);
+            if (token !== this.homeListLoadToken) return;
+
+            const wrappedArtifactIds: string[] = [];
+            const wrappedFileIds: string[] = [];
+            for (const item of spaceItemById.values()) {
+                if (!isValidUuid(item.recordId)) continue;
+                if ((artifactEntityId && UUIDsEqual(item.entityId, artifactEntityId)) || isArtifactEntityName(item.entity)) {
+                    wrappedArtifactIds.push(item.recordId);
+                } else {
+                    wrappedFileIds.push(item.recordId);
                 }
             }
+
+            const allArtifactIds = [...new Set([...directArtifactIds, ...wrappedArtifactIds])];
+            const allFileIds = [...new Set([...otherRecordIds, ...wrappedFileIds])];
+            const artifactMeta = new Map<string, { title: string; type: string | null }>();
+            const fileNames = new Map<string, string>();
+            const itemIdByFileId = new Map<string, string>();
+
+            await Promise.all([
+                allArtifactIds.length
+                    ? rv.RunView<{ ID: string; Name: string | null; Type?: string | null }>({
+                        EntityName: ARTIFACTS_ENTITY_NAME,
+                        ExtraFilter: `ID IN (${allArtifactIds.map((id) => `'${id}'`).join(',')})`,
+                        Fields: ['ID', 'Name', 'Type'],
+                        ResultType: 'simple',
+                        MaxRows: allArtifactIds.length,
+                    }).then((arts) => {
+                        for (const art of arts?.Results ?? []) {
+                            artifactMeta.set(art.ID.toLowerCase(), {
+                                title: (art.Name ?? '').trim() || 'Untitled artifact',
+                                type: art.Type ?? null,
+                            });
+                        }
+                    })
+                    : Promise.resolve(),
+                otherRecordIds.length
+                    ? rv.RunView<{ ID: string; RecordID: string }>({
+                        EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                        ExtraFilter: `RecordID IN (${otherRecordIds.flatMap((id) => [`'ID|${id}'`, `'${id}'`]).join(',')})`,
+                        Fields: ['ID', 'RecordID'],
+                        ResultType: 'simple',
+                    }).then((items) => {
+                        for (const item of items?.Results ?? []) {
+                            itemIdByFileId.set(bareRecordId(item.RecordID).toLowerCase(), item.ID);
+                        }
+                    })
+                    : Promise.resolve(),
+                allFileIds.length
+                    ? rv.RunView<{ ID: string; Name: string | null }>({
+                        EntityName: 'MJ: Files',
+                        ExtraFilter: `ID IN (${allFileIds.map((id) => `'${id}'`).join(',')})`,
+                        Fields: ['ID', 'Name'],
+                        ResultType: 'simple',
+                    }).then((files) => {
+                        for (const file of files?.Results ?? []) {
+                            fileNames.set(file.ID.toLowerCase(), file.Name || 'A file');
+                        }
+                    })
+                    : Promise.resolve(),
+            ]);
             if (token !== this.homeListLoadToken) return;
-            this.homePins = (res.Results ?? []).map((pin): PinModel => {
+
+            this.homePins = pins.map((pin): PinModel => {
                 const space = this.rawSpaces.find((s) => UUIDsEqual(s.ID, pin.SpaceID));
                 const base = { id: pin.ID, spaceId: pin.SpaceID, spaceName: space?.Name ?? 'A space' };
                 if (pin.Kind === 'Grant') return { ...base, kind: 'Grant', title: 'A granted report', subtitle: 'Report', iconClass: 'fa-solid fa-table-cells', target: `grant:${pin.GrantID}` };
                 const recordId = bareRecordId(pin.TargetRecordID ?? '');
-                if (UUIDsEqual(pin.TargetEntityID, notesEntityId())) return { ...base, kind: 'Record', title: noteTitles.get(recordId.toLowerCase()) ?? 'A note', subtitle: 'Note', iconClass: 'fa-solid fa-note-sticky', target: `note:${recordId}` };
-                const item = itemNames.get(recordId.toLowerCase());
-                return { ...base, kind: 'Record', title: item?.title ?? 'A file', subtitle: 'File', iconClass: 'fa-solid fa-file-lines', target: `item:${item?.itemId ?? recordId}` };
+                if (UUIDsEqual(pin.TargetEntityID, noteEntityId)) {
+                    return { ...base, kind: 'Record', title: noteTitles.get(recordId.toLowerCase()) ?? 'A note', subtitle: 'Note', iconClass: 'fa-solid fa-note-sticky', target: `note:${recordId}` };
+                }
+                if (artifactEntityId && UUIDsEqual(pin.TargetEntityID, artifactEntityId)) {
+                    const art = artifactMeta.get(recordId.toLowerCase());
+                    const title = art?.title ?? 'Untitled artifact';
+                    return {
+                        ...base,
+                        kind: 'Record',
+                        title,
+                        subtitle: art?.type || 'Artifact',
+                        iconClass: artifactIconClass(art?.type, title),
+                        target: `artifact:${recordId}`,
+                    };
+                }
+                if (spaceItemEntityId && UUIDsEqual(pin.TargetEntityID, spaceItemEntityId)) {
+                    const wrapped = spaceItemById.get(recordId.toLowerCase());
+                    if (wrapped && ((artifactEntityId && UUIDsEqual(wrapped.entityId, artifactEntityId)) || isArtifactEntityName(wrapped.entity))) {
+                        const art = artifactMeta.get(wrapped.recordId.toLowerCase());
+                        const title = art?.title ?? 'Untitled artifact';
+                        return {
+                            ...base,
+                            kind: 'Record',
+                            title,
+                            subtitle: art?.type || 'Artifact',
+                            iconClass: artifactIconClass(art?.type, title),
+                            target: `artifact:${wrapped.recordId}`,
+                        };
+                    }
+                    const fileTitle = wrapped ? (fileNames.get(wrapped.recordId.toLowerCase()) ?? 'A file') : 'A file';
+                    return { ...base, kind: 'Record', title: fileTitle, subtitle: 'File', iconClass: 'fa-solid fa-file-lines', target: `item:${recordId}` };
+                }
+                const fileTitle = fileNames.get(recordId.toLowerCase()) ?? 'A file';
+                const resolvedItemId = itemIdByFileId.get(recordId.toLowerCase()) ?? recordId;
+                return { ...base, kind: 'Record', title: fileTitle, subtitle: 'File', iconClass: 'fa-solid fa-file-lines', target: `item:${resolvedItemId}` };
             });
             this.refreshHomeListRows();
         } catch (err) {
@@ -3905,40 +4217,72 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
 
-            const fileEntityId = '29248F34-2837-EF11-86D4-6045BDEE16E6';
-            const fileItemMap = new Map<string, typeof itemsRes.Results[0]>();
+            const fileEntityId = this.ProviderToUse.EntityByName('MJ: Files')?.ID ?? '29248F34-2837-EF11-86D4-6045BDEE16E6';
+            const artifactEntityId = this.artifactsEntityId();
+            const isFileItem = (item: { EntityID: string; Entity?: string }): boolean =>
+                UUIDsEqual(item.EntityID, fileEntityId) || item.Entity === 'MJ: Files';
+            const isArtifactItem = (item: { EntityID: string; Entity?: string }): boolean =>
+                (!!artifactEntityId && UUIDsEqual(item.EntityID, artifactEntityId)) || isArtifactEntityName(item.Entity);
+
             const fileIds: string[] = [];
+            const artifactIds: string[] = [];
 
             for (const item of itemsRes.Results) {
-                if (UUIDsEqual(item.EntityID, fileEntityId) || item.Entity === 'MJ: Files') {
-                    const fileId = item.RecordID.replace(/^ID\|/, '');
-                    if (isValidUuid(fileId)) {
-                        fileIds.push(fileId);
-                        fileItemMap.set(fileId, item);
-                    }
+                const targetId = bareRecordId(item.RecordID ?? '');
+                if (!isValidUuid(targetId)) continue;
+                if (isFileItem(item)) {
+                    fileIds.push(targetId);
+                } else if (isArtifactItem(item)) {
+                    artifactIds.push(targetId);
                 }
             }
 
+            const uniqueFileIds = [...new Set(fileIds)];
+            const uniqueArtifactIds = [...new Set(artifactIds)];
             const filesMap = new Map<string, { ID: string; Name: string; ProviderID: string; ProviderKey?: string; ContentType?: string }>();
-            if (fileIds.length > 0) {
-                const filesRes = await rv.RunView<{
-                    ID: string;
-                    Name: string;
-                    ProviderID: string;
-                    ProviderKey?: string;
-                    ContentType?: string;
-                }>({
-                    EntityName: 'MJ: Files',
-                    ExtraFilter: `ID IN ('${fileIds.join("','")}')`,
-                    ResultType: 'simple',
-                    MaxRows: 100,
-                });
-                if (filesRes?.Success && filesRes.Results) {
-                    filesRes.Results.forEach(f => filesMap.set(f.ID, f));
-                } else {
-                    LogError(`Failed to read the files behind space ${spaceId}'s items: ${filesRes?.ErrorMessage ?? 'unknown error'}`);
-                }
-            }
+            const artifactsMap = new Map<string, { ID: string; Name: string | null; Type?: string | null }>();
+
+            await Promise.all([
+                uniqueFileIds.length > 0
+                    ? rv.RunView<{
+                        ID: string;
+                        Name: string;
+                        ProviderID: string;
+                        ProviderKey?: string;
+                        ContentType?: string;
+                    }>({
+                        EntityName: 'MJ: Files',
+                        ExtraFilter: `ID IN ('${uniqueFileIds.join("','")}')`,
+                        ResultType: 'simple',
+                        MaxRows: 100,
+                    }).then((filesRes) => {
+                        if (filesRes?.Success && filesRes.Results) {
+                            filesRes.Results.forEach((f) => filesMap.set(f.ID.toLowerCase(), f));
+                        } else {
+                            LogError(`Failed to read the files behind space ${spaceId}'s items: ${filesRes?.ErrorMessage ?? 'unknown error'}`);
+                        }
+                    })
+                    : Promise.resolve(),
+                uniqueArtifactIds.length > 0
+                    ? rv.RunView<{
+                        ID: string;
+                        Name: string | null;
+                        Type?: string | null;
+                    }>({
+                        EntityName: ARTIFACTS_ENTITY_NAME,
+                        ExtraFilter: `ID IN ('${uniqueArtifactIds.join("','")}')`,
+                        Fields: ['ID', 'Name', 'Type'],
+                        ResultType: 'simple',
+                        MaxRows: uniqueArtifactIds.length,
+                    }).then((artifactsRes) => {
+                        if (artifactsRes?.Success && artifactsRes.Results) {
+                            artifactsRes.Results.forEach((a) => artifactsMap.set(a.ID.toLowerCase(), a));
+                        } else {
+                            LogError(`Failed to read the artifacts behind space ${spaceId}'s items: ${artifactsRes?.ErrorMessage ?? 'unknown error'}`);
+                        }
+                    })
+                    : Promise.resolve(),
+            ]);
 
             if (!isCurrent()) return;
             const rows: LibraryRowModel[] = [];
@@ -3947,23 +4291,48 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const folderCounts = new Map<string, { count: number; band: SpaceBand }>();
 
             for (const item of itemsRes.Results) {
-                if (!UUIDsEqual(item.EntityID, fileEntityId) && item.Entity !== 'MJ: Files') {
+                const fileMatch = isFileItem(item);
+                const artifactMatch = !fileMatch && isArtifactItem(item);
+                if (!fileMatch && !artifactMatch) {
                     continue;
                 }
-                const fileId = item.RecordID.replace(/^ID\|/, '');
-                const file = filesMap.get(fileId);
-                if (!file?.Name) {
-                    LogError(`File record could not be read for item ID ${item.ID} (fileId ${fileId})`);
+                const targetId = bareRecordId(item.RecordID ?? '');
+                let name = '[Untitled Document]';
+                let kind: FileKind = 'doc';
+                let fileId: string | undefined;
+                let artifactId: string | undefined;
+                let artifactType: string | undefined;
+                const entityName = artifactMatch ? ARTIFACTS_ENTITY_NAME : 'MJ: Files';
+
+                if (fileMatch) {
+                    fileId = targetId;
+                    const file = filesMap.get(targetId.toLowerCase());
+                    if (!file?.Name) {
+                        LogError(`File record could not be read for item ID ${item.ID} (fileId ${targetId})`);
+                    }
+                    name = file?.Name || '[Untitled Document]';
+                    kind = this.detectFileKind(name, file?.ProviderKey, file?.ContentType);
+                } else {
+                    artifactId = targetId;
+                    const artifact = artifactsMap.get(targetId.toLowerCase());
+                    if (!artifact?.Name) {
+                        LogError(`Artifact record could not be read for item ID ${item.ID} (artifactId ${targetId})`);
+                    }
+                    name = (artifact?.Name ?? '').trim() || '[Untitled Artifact]';
+                    artifactType = artifact?.Type ?? undefined;
+                    kind = detectArtifactFileKind(name, artifactType);
                 }
-                const name = file?.Name || '[Untitled Document]';
+
                 const folder = item.Folder || 'General';
-                const kind = this.detectFileKind(name, file?.ProviderKey, file?.ContentType);
                 const dateStr = this.formatDate(item.__mj_CreatedAt);
                 const author = item.PromotedByUser || 'Staff team';
 
                 rows.push({
                     id: item.ID,
-                    fileId,
+                    ...(fileId ? { fileId } : {}),
+                    ...(artifactId ? { artifactId } : {}),
+                    ...(artifactType ? { artifactType } : {}),
+                    entityName,
                     name,
                     folder,
                     band: item.Band,
@@ -3976,7 +4345,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 if (item.Band === 'Shared') {
                     shared.push({
                         id: item.ID,
-                        fileId,
+                        ...(fileId ? { fileId } : {}),
+                        ...(artifactId ? { artifactId } : {}),
+                        ...(artifactType ? { artifactType } : {}),
+                        entityName,
                         kind,
                         title: name,
                         meta: `${folder} · Shared`,
@@ -3985,7 +4357,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 } else {
                     team.push({
                         id: item.ID,
-                        fileId,
+                        ...(fileId ? { fileId } : {}),
+                        ...(artifactId ? { artifactId } : {}),
+                        ...(artifactType ? { artifactType } : {}),
+                        entityName,
                         kind,
                         title: name,
                         author,
@@ -4006,6 +4381,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.libraryTeamCount = team.length;
             this.overviewSharedItems = shared;
             this.overviewTeamItems = team;
+            this.refreshPinModels();
             if (UUIDsEqual(this.activeSpaceId, spaceId)) {
                 this.refreshVisibleSourceReceipts(spaceId);
             }
@@ -4922,6 +5298,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onItemSelected(item: ItemCardModel | ItemRowModel): void {
+        const matchedRow = this.libraryRows.find((r) => UUIDsEqual(r.id, item.id));
+        const artifactId = item.artifactId || matchedRow?.artifactId;
+        if (artifactId) {
+            this.openArtifactSlideover({ artifactId, title: item.title || matchedRow?.name });
+            void this.recordSpaceItemOpen(item.id);
+            return;
+        }
         // A space whose type has no Library has no drawer to open
         if (!this.hasTab('Library')) return;
         this.selectedItemId = item.id;
@@ -4933,6 +5316,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onRowSelected(row: LibraryRowModel): void {
+        if (row.artifactId) {
+            this.openArtifactSlideover({ artifactId: row.artifactId, title: row.name });
+            void this.recordSpaceItemOpen(row.id);
+            return;
+        }
         this.selectedItemId = row.id;
         this.isDrawerOpen = true;
         this.UpdateQueryParams({ item: row.id });
@@ -4985,9 +5373,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public async onOpenFileRequested(fileId?: string): Promise<void> {
         if (!fileId) return;
-        const targetItem = this.libraryRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId));
+        const targetItem = this.libraryRows.find(
+            (r) => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId ?? '', fileId) || UUIDsEqual(r.artifactId ?? '', fileId),
+        );
         if (!targetItem) {
             SharedService.Instance.CreateSimpleNotification('File not found in this space library.', 'error', 5000);
+            return;
+        }
+        if (targetItem.artifactId) {
+            this.openArtifactSlideover({ artifactId: targetItem.artifactId, title: targetItem.name });
+            void this.recordSpaceItemOpen(targetItem.id);
             return;
         }
 
@@ -5443,8 +5838,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    /** Opens the record a thread reply links to, its key read against the entity's own primary key; a link that does not fit opens nothing. */
+    /** Opens the record a thread reply or chat message links to; `MJ: Artifacts` opens in-place in Collaboration's slide-over. */
     public onOpenRecordLink(link: ChatRecordLink): void {
+        const artifactId = extractArtifactIdFromRecordLink(link);
+        if (artifactId) {
+            this.openArtifactSlideover({ artifactId });
+            return;
+        }
         const pairs = recordLinkKeyPairs(link.keys, this.ProviderToUse.EntityByName(link.entityName)?.PrimaryKeys.map((pk) => pk.Name) ?? []);
         if (!pairs) {
             LogError(`Record link: ${link.entityName} is not an entity here, or the link lacks part of its primary key`);
@@ -5729,6 +6129,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public onChatCitationClicked(citation: SpaceChatCitationModel): void {
         if (!citation?.SpaceItemID) return;
+        const artifactEntityId = typeof this.artifactsEntityId === 'function' ? this.artifactsEntityId() : '';
+        const matchedRow = this.libraryRows.find((r) => UUIDsEqual(r.id, citation.SpaceItemID));
+        if (matchedRow?.artifactId) {
+            this.openArtifactSlideover({ artifactId: matchedRow.artifactId, title: matchedRow.name || citation.Name });
+            return;
+        }
+        if (artifactEntityId && citation.EntityID && UUIDsEqual(citation.EntityID, artifactEntityId)) {
+            const artifactId = bareRecordId(citation.RecordID ?? '');
+            if (artifactId) {
+                this.openArtifactSlideover({ artifactId, title: citation.Name });
+                return;
+            }
+        }
         if (!this.hasTab('Library')) return;
         this.selectedItemId = citation.SpaceItemID;
         this.isDrawerOpen = true;
@@ -5739,13 +6152,18 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onChatSourceReceiptOpen(receipt: SpaceChatAnswerSourceReceipt): void {
+        const artifactEntityId = typeof this.artifactsEntityId === 'function' ? this.artifactsEntityId() : '';
         const target = resolveSourceReceiptOpenTarget(
             receipt,
             this.activeSpaceId,
             this.libraryRows,
             this.hasTab('Library'),
+            artifactEntityId,
         );
         switch (target.kind) {
+            case 'artifact-slideover':
+                this.openArtifactSlideover({ artifactId: target.artifactId, title: target.title });
+                break;
             case 'library-preview':
                 this.selectedItemId = target.spaceItemId;
                 this.isDrawerOpen = true;

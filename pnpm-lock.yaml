@@ -240,6 +240,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: 6.3.0-edge.1
+      '@memberjunction/ng-artifacts':
+        specifier: 6.3.0-edge.1
+        version: 6.3.0-edge.1(32a07bb81426ba747f6755461754de77)
       '@memberjunction/ng-base-forms':
         specifier: 6.3.0-edge.1
         version: 6.3.0-edge.1(32a07bb81426ba747f6755461754de77)

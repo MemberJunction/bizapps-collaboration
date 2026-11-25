@@ -12,7 +12,12 @@ import {
     ViewContainerRef,
     reflectComponentType,
 } from '@angular/core';
-import type { NewSpaceMeetingDraft, SpaceMeetingCardItem } from '@mj-biz-apps/collaboration-ng-widgets';
+import {
+    normalizeArtifactOpenRequest,
+    type NewSpaceMeetingDraft,
+    type SpaceArtifactOpenRequest,
+    type SpaceMeetingCardItem,
+} from '@mj-biz-apps/collaboration-ng-widgets';
 
 export interface ContributedMeetingTabInstance {
     completeSchedule?: () => void;
@@ -42,6 +47,7 @@ export class CollabContributedTabHostDirective implements OnChanges, OnDestroy {
     @Output() CreateMeetingRequested = new EventEmitter<CreateSpaceMeetingEvent>();
     @Output() OpenMeetingChatRequested = new EventEmitter<SpaceMeetingCardItem>();
     @Output() OpenMeetingRequested = new EventEmitter<SpaceMeetingCardItem>();
+    @Output() OpenArtifactRequested = new EventEmitter<SpaceArtifactOpenRequest>();
 
     private componentRef: ComponentRef<unknown> | null = null;
     private currentType: Type<unknown> | null = null;
@@ -114,6 +120,18 @@ export class CollabContributedTabHostDirective implements OnChanges, OnDestroy {
             this.outputSubs.push(
                 openEmitter.subscribe((meeting: unknown) => {
                     this.OpenMeetingRequested.emit(meeting as SpaceMeetingCardItem);
+                }),
+            );
+        }
+
+        const artifactEmitter = findEmitter('OpenArtifactRequested');
+        if (artifactEmitter) {
+            this.outputSubs.push(
+                artifactEmitter.subscribe((payload: unknown) => {
+                    const normalized = normalizeArtifactOpenRequest(payload as string | SpaceArtifactOpenRequest | null | undefined);
+                    if (normalized) {
+                        this.OpenArtifactRequested.emit(normalized);
+                    }
                 }),
             );
         }
