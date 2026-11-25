@@ -41,6 +41,7 @@ import {
     type SpaceAgentSuppliedSource,
     type SpaceAgentVectorSearchAdapter,
 } from './space-agent-retrieval-ranking.js';
+import { extractArtifactVersionChunks } from './space-agent-artifact-content.js';
 import { parseUuid } from './uuid.js';
 
 export {
@@ -79,6 +80,8 @@ const MEMBERS_ENTITY = 'MJ_BizApps_Collaboration: Space Members';
 const ROLES_ENTITY = 'MJ_BizApps_Collaboration: Space Role Types';
 const ITEMS_ENTITY = 'MJ_BizApps_Collaboration: Space Items';
 const FILES_ENTITY = 'MJ: Files';
+const ARTIFACTS_ENTITY = 'MJ: Artifacts';
+const ARTIFACT_VERSIONS_ENTITY = 'MJ: Artifact Versions';
 const USERS_ENTITY = 'MJ: Users';
 const PEOPLE_ENTITY = 'MJ_BizApps_Common: People';
 const TASKS_ENTITY = 'MJ_BizApps_Tasks: Tasks';
@@ -954,15 +957,16 @@ export async function resolveSpaceAgentRetrieval(
                         .filter((r) => r.entityName === TASKS_ENTITY && r.cleanTargetRecordId != null)
                         .map((r) => r.cleanTargetRecordId!);
 
-                    const [targetNames, chunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
+                    const [targetNames, chunksBySpaceItemId, artifactChunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
                         loadTargetMetadataMap(provider, rvUser, user, matchedRows),
                         loadChunksBySpaceItemId(provider, rvUser, user, matchedItemIds),
+                        loadArtifactVersionChunksBySpaceItemId(provider, rvUser, user, matchedRows),
                         loadTaskAssigneesByTaskId(provider, rvUser, user, matchedTaskIds),
                     ]);
 
                     const vectorCandidates: RankedCandidateOutcome<SpaceAgentCandidateItem>[] = topHitRows.map(({ row, score }) => {
                         const normId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
-                        const chunkTexts = chunksBySpaceItemId.get(normId);
+                        const chunkTexts = mergeChunkTexts(chunksBySpaceItemId.get(normId), artifactChunksBySpaceItemId.get(normId));
                         const assignees = row.cleanTargetRecordId ? assigneesByTaskId.Get(row.cleanTargetRecordId) : undefined;
                         return {
                             item: buildCandidateItem(row, targetNames.get(row.targetKey), chunkTexts, assignees, true),
@@ -999,14 +1003,15 @@ export async function resolveSpaceAgentRetrieval(
                 .filter((r) => r.entityName === TASKS_ENTITY && r.cleanTargetRecordId != null)
                 .map((r) => r.cleanTargetRecordId!);
 
-            const [chunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
+            const [chunksBySpaceItemId, artifactChunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
                 loadChunksBySpaceItemId(provider, rvUser, user, allowedItemIds),
+                loadArtifactVersionChunksBySpaceItemId(provider, rvUser, user, inScopeRows),
                 loadTaskAssigneesByTaskId(provider, rvUser, user, allowedTaskIds),
             ]);
 
             const enrichedItems: RankableSpaceItem<SpaceAgentCandidateItem>[] = inScopeRows.map((row) => {
                 const normId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
-                const chunkTexts = chunksBySpaceItemId.get(normId);
+                const chunkTexts = mergeChunkTexts(chunksBySpaceItemId.get(normId), artifactChunksBySpaceItemId.get(normId));
                 const assignees = row.cleanTargetRecordId ? assigneesByTaskId.Get(row.cleanTargetRecordId) : undefined;
                 return {
                     item: buildCandidateItem(row, targetNames.get(row.targetKey), chunkTexts, assignees, true),
@@ -1095,19 +1100,25 @@ export async function resolveSpaceAgentRetrieval(
             }
 
             if (shortlist.length > 0) {
-                const shortlistItemIds = shortlist.map((s) => s.row.raw.ID);
-                const shortlistTaskIds = shortlist
-                    .filter((s) => s.row.entityName === TASKS_ENTITY && s.row.cleanTargetRecordId != null)
-                    .map((s) => s.row.cleanTargetRecordId!);
+                const shortlistRows = shortlist.map((s) => s.row);
+                const shortlistItemIds = shortlistRows.map((row) => row.raw.ID);
+                const shortlistTaskIds = shortlistRows
+                    .filter((row) => row.entityName === TASKS_ENTITY && row.cleanTargetRecordId != null)
+                    .map((row) => row.cleanTargetRecordId!);
 
-                const [chunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
+                const [chunksBySpaceItemId, artifactChunksBySpaceItemId, assigneesByTaskId] = await Promise.all([
                     loadChunksBySpaceItemId(provider, rvUser, user, shortlistItemIds),
+                    loadArtifactVersionChunksBySpaceItemId(provider, rvUser, user, shortlistRows),
                     loadTaskAssigneesByTaskId(provider, rvUser, user, shortlistTaskIds),
                 ]);
 
                 const enrichedShortlist: RankableSpaceItem<SpaceAgentCandidateItem>[] = shortlist.map(({ row }) => {
                     const normId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
-                    const chunkTexts = mergeChunkTexts(matchingChunksByItemId.get(normId), chunksBySpaceItemId.get(normId));
+                    const combinedLoadedChunks = mergeChunkTexts(
+                        chunksBySpaceItemId.get(normId),
+                        artifactChunksBySpaceItemId.get(normId),
+                    );
+                    const chunkTexts = mergeChunkTexts(matchingChunksByItemId.get(normId), combinedLoadedChunks);
                     const assignees = row.cleanTargetRecordId ? assigneesByTaskId.Get(row.cleanTargetRecordId) : undefined;
                     return {
                         item: buildCandidateItem(row, targetNames.get(row.targetKey), chunkTexts, assignees, true),
@@ -1762,6 +1773,137 @@ async function loadChunksBySpaceItemId(
         }
     } catch (err) {
         LogError(`resolveSpaceAgentRetrieval chunk lookup failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    return result;
+}
+
+interface ArtifactVersionLookupRow {
+    ID: string;
+    ArtifactID: string;
+    VersionNumber?: number | null;
+    Content?: string | null;
+}
+
+/**
+ * Batch-hydrates the latest `MJ: Artifact Versions` (`Content`) for already-authorized
+ * `MJ: Artifacts` space items and extracts clean, bounded text chunks per artifact type
+ * (Markdown/plain text, `SlideDeckSpec` JSON, or base64 PDF text streams — never raw base64).
+ *
+ * Security invariant: callers MUST pass only pre-filtered `allowed` rows that already passed
+ * `(SpaceID, Band)` audience intersection; `row.allowed` is also re-checked defensively here.
+ */
+async function loadArtifactVersionChunksBySpaceItemId(
+    provider: IMetadataProvider,
+    rvUser: RunView,
+    user: UserInfo,
+    allowedRows: readonly PreFilteredSpaceItem[],
+): Promise<Map<string, string[]>> {
+    const result = new Map<string, string[]>();
+    if (
+        allowedRows.length === 0 ||
+        typeof provider.EntityByName !== 'function' ||
+        !provider.EntityByName(ARTIFACT_VERSIONS_ENTITY)
+    ) {
+        return result;
+    }
+
+    const spaceItemIdsByArtifactId = new Map<string, string[]>();
+    const artifactIdSet = new UUIDSet();
+    for (const row of allowedRows) {
+        if (!row.allowed || row.entityName !== ARTIFACTS_ENTITY || !row.cleanTargetRecordId) {
+            continue;
+        }
+        const artifactId = parseUuid(row.cleanTargetRecordId);
+        const spaceItemId = (parseUuid(row.raw.ID) ?? row.raw.ID).toLowerCase();
+        if (!artifactId) continue;
+        artifactIdSet.Add(artifactId);
+        const lowerArtId = artifactId.toLowerCase();
+        const existing = spaceItemIdsByArtifactId.get(lowerArtId);
+        if (existing) {
+            if (!existing.includes(spaceItemId)) existing.push(spaceItemId);
+        } else {
+            spaceItemIdsByArtifactId.set(lowerArtId, [spaceItemId]);
+        }
+    }
+
+    const uniqueArtifactIds = Array.from(artifactIdSet);
+    if (uniqueArtifactIds.length === 0) {
+        return result;
+    }
+
+    try {
+        const versionViewParams: RunViewParams[] = [];
+        for (let start = 0; start < uniqueArtifactIds.length; start += ID_LOOKUP_BATCH_SIZE) {
+            const batch = uniqueArtifactIds.slice(start, start + ID_LOOKUP_BATCH_SIZE);
+            const inClause = batch.map((id) => `'${id}'`).join(', ');
+            versionViewParams.push({
+                EntityName: ARTIFACT_VERSIONS_ENTITY,
+                ExtraFilter: `ArtifactID IN (${inClause})`,
+                Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content'],
+                OrderBy: 'VersionNumber DESC',
+                // row-cap-ok: falls back to keyset readEveryRow if batch page fills (>= 2000)
+                MaxRows: 2000,
+                ResultType: 'simple',
+            });
+        }
+
+        const latestByArtifactId = new Map<string, { versionNumber: number; content: string | null }>();
+        const considerRow = (row: ArtifactVersionLookupRow): void => {
+            const artId = parseUuid(row.ArtifactID)?.toLowerCase();
+            if (!artId || !spaceItemIdsByArtifactId.has(artId)) return;
+            const versionNum = typeof row.VersionNumber === 'number' && Number.isFinite(row.VersionNumber)
+                ? row.VersionNumber
+                : Number(row.VersionNumber ?? 0);
+            const safeVersionNum = Number.isFinite(versionNum) ? versionNum : 0;
+            const content = typeof row.Content === 'string' ? row.Content : null;
+            const current = latestByArtifactId.get(artId);
+            if (
+                !current ||
+                safeVersionNum > current.versionNumber ||
+                (safeVersionNum === current.versionNumber && !current.content && Boolean(content))
+            ) {
+                latestByArtifactId.set(artId, { versionNumber: safeVersionNum, content });
+            }
+        };
+
+        for (let start = 0; start < versionViewParams.length; start += RUN_VIEWS_BATCH_CONCURRENCY) {
+            const slice = versionViewParams.slice(start, start + RUN_VIEWS_BATCH_CONCURRENCY);
+            const batchResults = await rvUser.RunViews(slice, user);
+            for (let i = 0; i < batchResults.length; i++) {
+                const res = batchResults[i];
+                if (!res?.Success) {
+                    LogError(`resolveSpaceAgentRetrieval artifact version lookup failed: ${res?.ErrorMessage ?? 'unknown error'}`);
+                    continue;
+                }
+                let versionRows = (res.Results as ArtifactVersionLookupRow[]) ?? [];
+                if (versionRows.length >= 2000) {
+                    versionRows = await readEveryRow<ArtifactVersionLookupRow>(
+                        rvUser,
+                        {
+                            EntityName: ARTIFACT_VERSIONS_ENTITY,
+                            ExtraFilter: String(slice[i].ExtraFilter ?? ''),
+                            Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content'],
+                        },
+                        user,
+                    );
+                }
+                for (const row of versionRows) {
+                    considerRow(row);
+                }
+            }
+        }
+
+        for (const [artId, latest] of latestByArtifactId.entries()) {
+            const chunks = extractArtifactVersionChunks(latest.content);
+            if (chunks.length === 0) continue;
+            const spaceItemIds = spaceItemIdsByArtifactId.get(artId) ?? [];
+            for (const spaceItemId of spaceItemIds) {
+                result.set(spaceItemId, chunks);
+            }
+        }
+    } catch (err) {
+        LogError(`resolveSpaceAgentRetrieval artifact version hydration failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     return result;

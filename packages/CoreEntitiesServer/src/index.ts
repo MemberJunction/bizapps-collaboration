@@ -499,6 +499,14 @@ export {
     type UpdateSpaceDigestCheckpointResult,
 } from '@mj-biz-apps/collaboration-engine-base';
 export {
+    buildSpaceAgentContextSystemMessage,
+    DEFAULT_SPACE_CONTEXT_SYSTEM_MESSAGE_MAX_TOKENS,
+    extractArtifactVersionChunks,
+    isShippedCollaborationSpaceAgent,
+    SHIPPED_COLLABORATION_AGENT_ID,
+    type SpaceAgentContextMessageParams,
+} from './space-agent-artifact-content.js';
+export {
     type CommsV2DirectMessageDispatcher,
     type CommsV2DirectMessagePayload,
     EnsureCollaborationCommsV2TransportRegistered,
