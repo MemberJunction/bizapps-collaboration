@@ -63,6 +63,84 @@ import type { BoundActionParamsMap } from './bound-agent-action-grants.js';
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
+const AI_MODELS = 'MJ: AI Models';
+
+/** Named effort level presets mapped onto MJ's 1-100 `ExecuteAgentParams.effortLevel` numeric scale. */
+const NAMED_EFFORT_LEVELS: Readonly<Record<string, number>> = {
+    minimal: 5,
+    min: 5,
+    low: 15,
+    medium: 50,
+    med: 50,
+    high: 85,
+    max: 100,
+    maximum: 100,
+};
+
+/** In-memory cache of resolved active `MJ: AI Models` IDs keyed by trimmed lowercase model name. */
+const spaceChatModelOverrideCache = new Map<string, string>();
+
+/** Clears the cached `COLLABORATION_SPACE_CHAT_MODEL` name-to-ID lookup (intended for tests and runtime refreshes). */
+export function clearSpaceChatModelOverrideCache(): void {
+    spaceChatModelOverrideCache.clear();
+}
+
+/**
+ * Parses `COLLABORATION_SPACE_CHAT_EFFORT_LEVEL` (either a named preset like `"Low"`, `"Medium"`, `"High"`,
+ * or a numeric string in `[1, 100]` such as `"15"`) into the numeric `ExecuteAgentParams.effortLevel`.
+ * Returns `undefined` when unset or invalid so standard agent/system effort selection stays intact.
+ */
+export function parseSpaceChatEffortLevel(raw: string | undefined): number | undefined {
+    const trimmed = (raw ?? '').trim();
+    if (!trimmed) return undefined;
+    const named = NAMED_EFFORT_LEVELS[trimmed.toLowerCase()];
+    if (named !== undefined) return named;
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+        const parsed = Math.round(Number(trimmed));
+        if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 100) {
+            return parsed;
+        }
+    }
+    LogError(`executeSpaceChatTurn: ignoring invalid COLLABORATION_SPACE_CHAT_EFFORT_LEVEL value "${trimmed}" (expected Low/Medium/High or integer 1-100).`);
+    return undefined;
+}
+
+/**
+ * Resolves the active `MJ: AI Models` row matching `modelName` (case-insensitive cache per model name).
+ * Returns `null` when not found or when the lookup fails so standard agent model selection remains intact.
+ */
+async function resolveSpaceChatModelOverrideId(
+    view: RunView,
+    system: UserInfo,
+    modelName: string,
+): Promise<string | null> {
+    const trimmed = modelName.trim();
+    if (!trimmed) return null;
+    const cacheKey = trimmed.toLowerCase();
+    const cached = spaceChatModelOverrideCache.get(cacheKey);
+    if (cached) return cached;
+
+    const escaped = trimmed.replace(/'/g, "''");
+    try {
+        const res = await view.RunView<{ ID: string; Name: string }>({
+            EntityName: AI_MODELS,
+            ExtraFilter: `Name = '${escaped}' AND IsActive = 1`,
+            Fields: ['ID', 'Name'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, system);
+        const foundId = res?.Success ? parseUuid(res.Results?.[0]?.ID) : null;
+        if (!foundId) {
+            LogError(`executeSpaceChatTurn: COLLABORATION_SPACE_CHAT_MODEL "${trimmed}" did not match an active MJ: AI Models row; falling back to default model selection.`);
+            return null;
+        }
+        spaceChatModelOverrideCache.set(cacheKey, foundId);
+        return foundId;
+    } catch (err) {
+        LogError(`executeSpaceChatTurn: failed resolving COLLABORATION_SPACE_CHAT_MODEL "${trimmed}": ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+    }
+}
 
 /** How a turn ended, told to whoever is watching it once its reply row is final. */
 export interface TurnOutcome {
@@ -859,6 +937,18 @@ async function runClaimedTurn(
 
             const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
             if (agentEntity && (await agentEntity.Load(targetAgentId))) {
+                // Prevent cross-space global memory/note/example leakage when an ambient/global agent (such as Sage)
+                // runs inside a Collaboration space turn. Mutated in memory only — NEVER call .Save() on agentEntity.
+                agentEntity.InjectNotes = false;
+                agentEntity.InjectExamples = false;
+
+                const envModelName = process.env['COLLABORATION_SPACE_CHAT_MODEL']?.trim() ?? '';
+                const overrideModelId = envModelName
+                    ? await resolveSpaceChatModelOverrideId(view, system, envModelName)
+                    : null;
+                const envEffortLevel = parseSpaceChatEffortLevel(process.env['COLLABORATION_SPACE_CHAT_EFFORT_LEVEL']);
+                const effectiveEffortLevel = envEffortLevel !== undefined ? envEffortLevel : turnTools.runSettings.effortLevel;
+
                 const runner = new AgentRunner(provider);
                 type SpaceExecuteAgentParams = ExecuteAgentParams & {
                     Audience?: { Mode: 'Intersection'; UserIDs: string[] };
@@ -901,12 +991,13 @@ async function runClaimedTurn(
                         typeContextData: typeContext.contextData ?? {},
                     },
                     context: turnContext,
+                    ...(overrideModelId ? { override: { modelId: overrideModelId } } : {}),
                     ...(turnTools.boundActionParams && Object.keys(turnTools.boundActionParams).length > 0
                         ? { boundActionParams: turnTools.boundActionParams }
                         : {}),
                     ...(turnTools.actionChanges.length ? { actionChanges: turnTools.actionChanges } : {}),
                     ...(turnTools.runSettings.planMode !== undefined ? { planMode: turnTools.runSettings.planMode } : {}),
-                    ...(turnTools.runSettings.effortLevel !== undefined ? { effortLevel: turnTools.runSettings.effortLevel } : {}),
+                    ...(effectiveEffortLevel !== undefined ? { effortLevel: effectiveEffortLevel } : {}),
                     ...(turnTools.runSettings.requestedSkillIDs.length ? { requestedSkillIDs: turnTools.runSettings.requestedSkillIDs } : {}),
                     ...(turnTools.runSettings.absoluteMaxIterations !== undefined ? { absoluteMaxIterations: turnTools.runSettings.absoluteMaxIterations } : {}),
                     ...(turnTools.runSettings.maxExecutionTimeMs !== undefined ? { maxExecutionTimeMs: turnTools.runSettings.maxExecutionTimeMs } : {}),

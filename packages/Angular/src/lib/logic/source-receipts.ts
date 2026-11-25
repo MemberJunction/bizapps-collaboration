@@ -19,6 +19,7 @@ import type {
 } from '@mj-biz-apps/collaboration-ng-widgets';
 
 export type SourceReceiptOpenTarget =
+    | { kind: 'artifact-slideover'; artifactId: string; title: string }
     | { kind: 'library-preview'; spaceItemId: string }
     | { kind: 'space-item'; spaceId: string; spaceItemId: string }
     | { kind: 'entity-record'; entityName: string; recordId: string }
@@ -363,14 +364,28 @@ export function resolveSourceReceiptOpenTarget(
     activeSpaceId: string,
     libraryRows: readonly LibraryRowModel[],
     hasLibraryTab: boolean,
+    artifactEntityId?: string | null,
 ): SourceReceiptOpenTarget {
-    if (receipt.sourceKind === 'SpaceItem' && receipt.spaceItemId) {
-        const cleanItemId = receipt.spaceItemId.trim().toLowerCase();
-        const inActiveLibrary = libraryRows.some((row) => row.id.trim().toLowerCase() === cleanItemId);
-        if ((inActiveLibrary || receipt.spaceId.trim().toLowerCase() === activeSpaceId.trim().toLowerCase()) && hasLibraryTab) {
-            return { kind: 'library-preview', spaceItemId: receipt.spaceItemId };
+    if (receipt.sourceKind === 'SpaceItem') {
+        const cleanArtifactEntityId = artifactEntityId ? normalizeReceiptUuid(artifactEntityId) : null;
+        const receiptTargetEntityId = receipt.targetEntityId ? normalizeReceiptUuid(receipt.targetEntityId) : null;
+        if (cleanArtifactEntityId && receiptTargetEntityId && cleanArtifactEntityId === receiptTargetEntityId) {
+            const artifactId = stripRecordKeyPrefix(receipt.targetRecordId);
+            if (artifactId) {
+                return { kind: 'artifact-slideover', artifactId, title: receipt.sourceTitle };
+            }
         }
-        return { kind: 'space-item', spaceId: receipt.spaceId, spaceItemId: receipt.spaceItemId };
+        if (receipt.spaceItemId) {
+            const cleanItemId = receipt.spaceItemId.trim().toLowerCase();
+            const matchedRow = libraryRows.find((row) => row.id.trim().toLowerCase() === cleanItemId);
+            if (matchedRow?.artifactId) {
+                return { kind: 'artifact-slideover', artifactId: matchedRow.artifactId, title: matchedRow.name || receipt.sourceTitle };
+            }
+            if ((matchedRow || receipt.spaceId.trim().toLowerCase() === activeSpaceId.trim().toLowerCase()) && hasLibraryTab) {
+                return { kind: 'library-preview', spaceItemId: receipt.spaceItemId };
+            }
+            return { kind: 'space-item', spaceId: receipt.spaceId, spaceItemId: receipt.spaceItemId };
+        }
     }
 
     if (receipt.sourceKind === 'KnowledgeSource') {

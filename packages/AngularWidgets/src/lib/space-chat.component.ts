@@ -17,7 +17,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import type { UserInfo } from '@memberjunction/core';
+import { CompositeKey, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   ConversationsModule,
@@ -28,7 +28,9 @@ import {
   type AgentTurnRequest,
   type AgentTurnRoute,
   type BeforeAgentTurnEventArgs,
+  type BeforeArtifactPanelOpenEventArgs,
 } from '@memberjunction/ng-conversations';
+import type { SpaceArtifactOpenRequest } from './artifact-slideover.component';
 import { MentionAutocomplete, type MentionPerson } from '@memberjunction/conversations-runtime';
 import {
   MJButtonDirective,
@@ -477,6 +479,8 @@ export class CollabChatScopeBarComponent {
           [PendingMessageConversationId]="PendingMessageConversationId"
           (BeforeAgentTurn)="onBeforeAgentTurn($event)"
           (AfterAgentTurn)="onAfterAgentTurn($event)"
+          (OpenEntityRecord)="onChatAreaOpenEntityRecord($event)"
+          (BeforeArtifactPanelOpen)="onChatAreaBeforeArtifactPanelOpen($event)"
           (ComposerDraftConsumed)="onComposerDraftConsumed()"
           (PendingMessageConsumed)="onPendingMessageConsumed()">
 
@@ -2108,6 +2112,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   @Output() public RetrievalScopeChanged = new EventEmitter<'ThisSpace' | 'Subtree' | 'Everything'>();
   @Output() public CitationClicked = new EventEmitter<SpaceChatCitationModel>();
   @Output() public SourceReceiptOpenRequested = new EventEmitter<SpaceChatAnswerSourceReceipt>();
+  @Output() public ArtifactOpenRequested = new EventEmitter<SpaceArtifactOpenRequest>();
   @Output() public AfterAgentTurnCompleted = new EventEmitter<void>();
 
   public IsActiveConversation(conversationId: string): boolean {
@@ -2140,6 +2145,34 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
 
   public onSourceReceiptOpen(receipt: SpaceChatAnswerSourceReceipt): void {
     this.SourceReceiptOpenRequested.emit(receipt);
+  }
+
+  public onChatAreaOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+    if (!event?.entityName) return;
+    const keys: Record<string, string | number> = {};
+    for (const pair of event.compositeKey?.KeyValuePairs ?? []) {
+      if (pair?.FieldName && (typeof pair.Value === 'string' || typeof pair.Value === 'number')) {
+        keys[pair.FieldName] = pair.Value;
+      }
+    }
+    if (event.entityName.trim().toLowerCase() === 'mj: artifacts') {
+      const artifactId = String(keys['ID'] ?? keys['id'] ?? '').trim();
+      if (artifactId && this.ArtifactOpenRequested.observed) {
+        this.ArtifactOpenRequested.emit({ artifactId });
+        return;
+      }
+    }
+    this.RecordLinkOpenRequested.emit({ entityName: event.entityName, keys });
+  }
+
+  public onChatAreaBeforeArtifactPanelOpen(event: BeforeArtifactPanelOpenEventArgs): void {
+    const artifactId = (event?.ArtifactId ?? '').trim();
+    if (!artifactId || !this.ArtifactOpenRequested.observed) return;
+    event.Cancel = true;
+    this.ArtifactOpenRequested.emit({
+      artifactId,
+      ...(event.VersionNumber != null ? { versionNumber: event.VersionNumber } : {}),
+    });
   }
 
   /**
