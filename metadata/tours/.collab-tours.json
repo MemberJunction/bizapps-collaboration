@@ -1,0 +1,305 @@
+[
+  {
+    "fields": {
+      "Name": "Collaboration Spaces, Anchored Records & Shared Threads",
+      "TourKey": "collab.spaces-anchors",
+      "Description": "Navigate Collaboration Spaces, link business records with Space Anchors, collaborate in shared threads and Notes, and organize team vs. shared Library files.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Collaboration",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 85,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "AppName": "Collaboration",
+        "Description": "User navigates Collaboration Spaces, anchored records, shared threads, notes, and files."
+      },
+      "StartLocation": {
+        "Application": "Collaboration",
+        "NavItem": "CollaborationSectionResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "10458EA4-3E28-4579-BDFE-451D5E7F29F4"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "collab-spaces-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Welcome to Collaboration Spaces",
+            "Body": "**Collaboration** brings your team and external collaborators together inside structured **Spaces** — uniting anchored business records, shared threads, notes, tasks, and files.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Spaces",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Collaboration",
+              "DriverClass": "CollaborationSectionResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "B28ACBDA-8DF5-4D15-8612-9A47781CBD5F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "collab-spaces-rail",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Navigate Spaces, Tasks & Recent Files",
+            "Body": "Use the collapsible **Space Rail** to jump to any space, review **Inbox** approvals, manage **My tasks**, browse **Recent files**, or create a new space.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "collab.spaces.rail"
+            },
+            "Prepare": {
+              "ApplicationName": "Collaboration",
+              "DriverClass": "CollaborationSectionResource"
+            },
+            "Placement": "Right",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "C901A4F7-4986-443D-9FA3-886EAD991294"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "collab-spaces-directory-tabs",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Anchored Records, Shared Threads, Notes & Files",
+            "Body": "Open any space card from the directory to access its **Space Anchors** (linked entity records), **Shared Threads**, team or shared **Notes**, and **Library** files — with clear Team vs. Outside audience separation.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "collab.spaces.directory"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "3728D859-E47D-4334-9986-34C65E7129C9"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "collab-spaces-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Next: Space Access Grants & Activity",
+            "Body": "Next, see how Space owners govern **Access Grants**, invite external guests safely, and monitor activity feeds across every tab.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "collab.grants-activity",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "7BBB403F-B386-4A0E-984D-6E60C3E1884C"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Collaboration"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 85,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "ACF5D9CC-2D37-4949-AE6B-C12CD30024CA"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Space Access Grants, External Guests & Activity Feeds",
+      "TourKey": "collab.grants-activity",
+      "Description": "Govern Collaboration Space security with Space Access Grants, invite external guests into Outside/Shared bands without exposing Team-only content, and track space tabs and activity feeds.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Collaboration",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "AppName": "Collaboration",
+        "Description": "User manages Space Access Grants, external guests, and activity feeds inside Collaboration Spaces."
+      },
+      "StartLocation": {
+        "Application": "Collaboration",
+        "NavItem": "CollaborationSectionResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "2006A4F8-B100-4389-A0FB-5C4FADE79086"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "collab-grants-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Governing Space Access & External Guests",
+            "Body": "Collaboration enforces strict **Team** vs. **Outside / Shared** audience boundaries so internal working discussions stay private while external guests see only what you intentionally share.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Governance",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Collaboration",
+              "DriverClass": "CollaborationSectionResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "90ECBFD2-ACA8-4B64-9AE3-5582DE19705E"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "collab-grants-people",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Manage Team Roles, Space Grants & External Guests",
+            "Body": "On a space's **People** tab, review internal Team seats and Outside Participants, issue **Space Access Grants** with scoped roles, and invite external guests via sign-in links or pending approval.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "collab.grants.people"
+            },
+            "Prepare": {
+              "ApplicationName": "Collaboration",
+              "DriverClass": "CollaborationSectionResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "ECAE0364-0E47-4BCE-9DC6-C0CE7FE1B647"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "collab-grants-tabs",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Track Activity Feeds, Approvals & Pinned Items",
+            "Body": "Switch across **Space Tabs** (Overview, Work, Chat, Notes, Library, People, and contributed type tabs) to inspect recent **Activity Feeds**, pin key artifacts, and review Space Notice Events.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "collab.spaces.tabs"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "675DD677-EE65-48E5-AE97-C05FB7435DF5"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "collab-grants-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Collaboration Governance Ready",
+            "Body": "You are ready to launch new Collaboration Spaces, anchor business records, invite external participants safely, and track shared work.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "0E87E867-714F-4FB3-9C56-E5CDBD5D70C1"
+          }
+        }
+      ]
+    }
+  }
+]

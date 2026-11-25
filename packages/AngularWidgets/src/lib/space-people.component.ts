@@ -14,7 +14,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, MJButtonDirective, MJDropdownComponent, MJEmptyStateComponent, MJFilterChipComponent, CollabAvatarComponent, CollabBandChipComponent],
   template: `
-    <div class="people-container">
+    <div class="people-container" data-mj-tour-anchor="collab.grants.people">
       <!-- Summary metrics header -->
       <div class="metrics-row">
         <div class="metric-card">

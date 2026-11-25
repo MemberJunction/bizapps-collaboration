@@ -729,6 +729,7 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                 } @else {
                     <div class="mjc-shell">
                         <mjc-space-rail
+                            data-mj-tour-anchor="collab.spaces.rail"
                             [ActiveNav]="activeView"
                             [Spaces]="spaces"
                             [ActiveSpaceId]="activeView === 'space' ? activeSpaceId : ''"
@@ -821,7 +822,7 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                                         <mj-empty-state Icon="fa-solid fa-compass" Title="No spaces yet" Message="Spaces you belong to will appear here."></mj-empty-state>
                                                     }
                                                 }
-                                                <div class="spaces-directory-grid">
+                                                <div class="spaces-directory-grid" data-mj-tour-anchor="collab.spaces.directory">
                                                     @for (space of filteredSpaces; track space.id) {
                                                         <div class="space-directory-card" [class.closed]="space.isClosed" [mjClickable]="space.name" (click)="onSpaceOpenRequested(space.id)">
                                                             <div class="card-top">
@@ -1029,6 +1030,7 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                             }
                                         </div>
                                         <mjc-space-tabs
+                                            data-mj-tour-anchor="collab.spaces.tabs"
                                             [Tabs]="tabs"
                                             [ActiveTab]="activeTab"
                                             (TabSelectRequested)="onTabSelectRequested($event)"

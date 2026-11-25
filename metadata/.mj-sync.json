@@ -33,7 +33,10 @@
     "ai-skills",
     "search-scopes",
     "agents",
-    "task-types"
+    "task-types",
+    "tours",
+    "learning-paths",
+    "tour-publications"
   ],
   "emitSyncNotes": false,
   "sqlLogging": {
