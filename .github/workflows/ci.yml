@@ -127,7 +127,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
+      # Server harness only executes backend + integration packages (Angular packages build & test against next in the `build` job).
+      - run: pnpm --filter @mj-biz-apps/collaboration-integration-tests... --filter @mj-biz-apps/collaboration-server... --filter @mj-biz-apps/collaboration-actions... run build
       - name: Wait for SQL Server and create the database
         run: |
           node --input-type=module -e "
