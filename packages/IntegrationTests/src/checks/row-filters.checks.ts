@@ -232,6 +232,8 @@ const checks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const bea = await GetPersonaUser(ctx, 'bea');
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const harborOwner = await GetPersonaUser(ctx, 'harbor');
             const view = View(ctx);
 
             // 1. Enabled MJ: Artifact Types catalog is readable so <mj-artifact-viewer-panel> resolves plugins
@@ -250,12 +252,17 @@ const checks: NamedCheck[] = [
             const createdVersionIds: string[] = [];
             const createdItemIds: string[] = [];
 
-            const seedSpaceArtifact = async (spaceId: string, band: 'Shared' | 'Team', name: string): Promise<{ artifactId: string; versionId: string }> => {
+            const seedSpaceArtifact = async (
+                spaceId: string,
+                signer: typeof ada,
+                band: 'Shared' | 'Team',
+                name: string,
+            ): Promise<{ artifactId: string; versionId: string }> => {
                 const art = await ctx.Provider.GetEntityObject('MJ: Artifacts', ctx.User);
                 art.NewRecord();
                 art.Set('Name', name);
                 art.Set('TypeID', mdType.ID);
-                art.Set('UserID', ctx.User.ID);
+                art.Set('UserID', signer.ID);
                 Assert(await art.Save(), `Save fixture artifact ${name}: ${art.LatestResult?.CompleteMessage ?? ''}`);
                 const artifactId = String(art.Get('ID'));
                 createdArtifactIds.push(artifactId);
@@ -265,12 +272,12 @@ const checks: NamedCheck[] = [
                 ver.Set('ArtifactID', artifactId);
                 ver.Set('VersionNumber', 1);
                 ver.Set('Content', `# ${name}`);
-                ver.Set('UserID', ctx.User.ID);
+                ver.Set('UserID', signer.ID);
                 Assert(await ver.Save(), `Save fixture artifact version ${name}: ${ver.LatestResult?.CompleteMessage ?? ''}`);
                 const versionId = String(ver.Get('ID'));
                 createdVersionIds.push(versionId);
 
-                const item = await ctx.Provider.GetEntityObject(SPACE_ITEM_ENTITY, ctx.User);
+                const item = await ctx.Provider.GetEntityObject(SPACE_ITEM_ENTITY, signer);
                 item.NewRecord();
                 item.Set('SpaceID', spaceId);
                 item.Set('EntityID', artifactsEntity!.ID);
@@ -284,9 +291,9 @@ const checks: NamedCheck[] = [
             };
 
             try {
-                const shared = await seedSpaceArtifact(DISCOVERY_SPACE_ID, 'Shared', 'RF9 Discovery Shared Brief');
-                const team = await seedSpaceArtifact(DISCOVERY_SPACE_ID, 'Team', 'RF9 Discovery Team Notes');
-                const harbor = await seedSpaceArtifact(HARBOR_SPACE_ID, 'Shared', 'RF9 Harbor Shared Brief');
+                const shared = await seedSpaceArtifact(DISCOVERY_SPACE_ID, ada, 'Shared', 'RF9 Discovery Shared Brief');
+                const team = await seedSpaceArtifact(DISCOVERY_SPACE_ID, ada, 'Team', 'RF9 Discovery Team Notes');
+                const harbor = await seedSpaceArtifact(HARBOR_SPACE_ID, harborOwner, 'Shared', 'RF9 Harbor Shared Brief');
 
                 const allIds = `'${shared.artifactId}', '${team.artifactId}', '${harbor.artifactId}'`;
                 const beaArts = await FindRows<{ ID: string }>(ctx, 'MJ: Artifacts', `ID IN (${allIds})`, ['ID'], bea, { BypassCache: true });
