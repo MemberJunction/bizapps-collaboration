@@ -9,6 +9,6 @@ export default defineConfig({
   test: {
     // The logic tests run on node:test; vitest runs the rendered ones
     include: ['src/**/*.render.test.ts'],
-    server: { deps: { inline: [/@memberjunction\/ng-/, /@angular\//] } },
+    server: { deps: { inline: [/@memberjunction\/ng-/, /@mj-biz-apps\/tasks-ng/, /@angular\//] } },
   },
 });

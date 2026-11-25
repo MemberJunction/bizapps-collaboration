@@ -7,6 +7,6 @@ export default defineConfig({
     dedupe: ['@angular/core', '@angular/common', '@angular/compiler', '@angular/forms', '@angular/platform-browser', '@angular/animations', 'rxjs'],
   },
   test: {
-    server: { deps: { inline: [/@memberjunction\/ng-/, /@angular\//] } },
+    server: { deps: { inline: [/@memberjunction\/ng-/, /@mj-biz-apps\/tasks-ng/, /@angular\//] } },
   },
 });

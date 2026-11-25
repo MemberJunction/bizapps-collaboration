@@ -226,9 +226,14 @@ export interface TaskItemModel {
   assigneeName?: string;
   assigneeInitials?: string;
   assigneeAvatarUrl?: string;
+  assigneeNames?: readonly string[];
   dueDate?: string;
-  percentComplete?: number;
+  percentComplete?: number | null;
   subtaskCount?: number;
+  parentId?: string | null;
+  blockedReason?: string | null;
+  kindLabel?: string | null;
+  sequence?: number | null;
 }
 
 export interface SpaceMemberModel {
