@@ -62,7 +62,13 @@ class ArtifactViewerPanelStub {
 
   public Closed = new EventEmitter<void>();
   public MaximizeToggled = new EventEmitter<void>();
-  public OpenArtifactRequested = new EventEmitter<string>();
+  public NavigateToLink = new EventEmitter<{
+    type: 'conversation' | 'collection';
+    id: string;
+    artifactId?: string;
+    versionNumber?: number;
+    versionId?: string;
+  }>();
   public OpenEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
   public VersionSaved = new EventEmitter<object>();
 }
@@ -83,7 +89,7 @@ declareComponent(ArtifactViewerPanelStub, {
     'canShare',
     'IsMaximized',
   ],
-  outputs: ['Closed', 'MaximizeToggled', 'OpenArtifactRequested', 'OpenEntityRecord', 'VersionSaved'],
+  outputs: ['Closed', 'MaximizeToggled', 'NavigateToLink', 'OpenEntityRecord', 'VersionSaved'],
 });
 
 class ChatAreaArtifactStub {
@@ -208,10 +214,11 @@ describe('CollabArtifactSlideoverComponent', () => {
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="artifact-slideover-sheet"]')?.classList.contains('is-maximized'),
     ).toBe(true);
 
-    stub.OpenArtifactRequested.emit('art-related-2');
+    stub.NavigateToLink.emit({ type: 'collection', id: 'col-1', artifactId: 'art-related-2', versionNumber: 3 });
     fixture.detectChanges();
     expect(selected).toEqual(['art-related-2']);
     expect(fixture.componentInstance.activeArtifactId).toBe('art-related-2');
+    expect(fixture.componentInstance.activeVersionNumber).toBe(3);
 
     stub.OpenEntityRecord.emit({ entityName: 'MJ: Artifacts', compositeKey: CompositeKey.FromID('art-linked-3') });
     fixture.detectChanges();

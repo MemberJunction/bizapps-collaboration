@@ -114,7 +114,7 @@ function extractCompositeKeyId(compositeKey: CompositeKey | null | undefined): s
               [IsMaximized]="isMaximized"
               (Closed)="close()"
               (MaximizeToggled)="toggleMaximize()"
-              (OpenArtifactRequested)="onRelatedArtifactRequested($event)"
+              (NavigateToLink)="onViewerNavigateToLink($event)"
               (OpenEntityRecord)="onViewerOpenEntityRecord($event)"
               (VersionSaved)="VersionSaved.emit($event)">
             </mj-artifact-viewer-panel>
@@ -150,7 +150,7 @@ function extractCompositeKeyId(compositeKey: CompositeKey | null | undefined): s
         position: fixed;
         inset: 0;
         z-index: var(--mj-z-drawer, 1000);
-        background: var(--mj-bg-overlay, rgba(15, 23, 42, 0.5));
+        background: var(--mj-bg-overlay, color-mix(in srgb, var(--mj-text-primary) 50%, transparent));
         display: flex;
         justify-content: flex-end;
         align-items: stretch;
@@ -327,6 +327,21 @@ export class CollabArtifactSlideoverComponent implements OnChanges {
 
   public toggleMaximize(): void {
     this.isMaximized = !this.isMaximized;
+    this.cdr.markForCheck();
+  }
+
+  public onViewerNavigateToLink(event: {
+    type: 'conversation' | 'collection';
+    id: string;
+    artifactId?: string;
+    versionNumber?: number;
+    versionId?: string;
+  }): void {
+    const cleanId = (event?.artifactId ?? '').trim();
+    if (!cleanId) return;
+    this.activeArtifactId = cleanId;
+    this.activeVersionNumber = event.versionNumber;
+    this.ArtifactSelected.emit(cleanId);
     this.cdr.markForCheck();
   }
 
