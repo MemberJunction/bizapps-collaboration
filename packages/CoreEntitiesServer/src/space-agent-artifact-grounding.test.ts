@@ -175,6 +175,20 @@ describe('extractArtifactVersionChunks', () => {
         assert.deepEqual(extractArtifactVersionChunks('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA'), []);
         assert.deepEqual(extractArtifactVersionChunks('data:application/pdf;base64,AAAA'), []);
     });
+
+    it('rejects oversized FlateDecode PDF streams (CWE-409 decompression bomb protection) without throwing', () => {
+        // 3 MiB of highly compressible payload exceeds the 2 MiB maxOutputLength cap
+        const hugePayload = Buffer.from(`BT (${'A'.repeat(3 * 1024 * 1024)}) Tj ET`, 'latin1');
+        const compressed = deflateSync(hugePayload);
+        const pdf = Buffer.concat([
+            Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Filter /FlateDecode /Length ${compressed.length} >>\nstream\n`, 'latin1'),
+            compressed,
+            Buffer.from('\nendstream\nendobj\n%%EOF\n', 'latin1'),
+        ]);
+        const uri = `data:application/pdf;base64,${pdf.toString('base64')}`;
+        const chunks = extractArtifactVersionChunks(uri);
+        assert.deepEqual(chunks, []);
+    });
 });
 
 describe('resolveSpaceAgentRetrieval MJ: Artifacts version hydration & band isolation', () => {
@@ -696,5 +710,67 @@ describe('executeSpaceChatTurn Authorized Space Context injection', () => {
             boundActions: [],
         });
         assert.equal(msg, null);
+    });
+
+    it('enforces fail-closed Band filtering inside buildSpaceAgentContextSystemMessage for direct callers', () => {
+        const sharedItem = {
+            ID: ITEM_CHARTER_ID,
+            SpaceID: SPACE_ID,
+            EntityID: ARTIFACTS_ENTITY_ID,
+            RecordID: ART_CHARTER_ID,
+            EntityName: 'MJ: Artifacts',
+            Name: 'Executive Partnership Charter',
+            Description: 'Shared governance summary',
+            Band: 'Shared' as const,
+            StoredContentType: null,
+            ChunkTexts: ['Client-visible charter excerpt'],
+        };
+        const teamItem = {
+            ID: ITEM_TEAM_DRAFT_ID,
+            SpaceID: SPACE_ID,
+            EntityID: ARTIFACTS_ENTITY_ID,
+            RecordID: ART_TEAM_DRAFT_ID,
+            EntityName: 'MJ: Artifacts',
+            Name: 'Internal Margin Model',
+            Description: 'Confidential pricing notes',
+            Band: 'Team' as const,
+            StoredContentType: null,
+            ChunkTexts: [TEAM_DRAFT_CANARY],
+        };
+
+        // Team-only items under Shared audience produce null
+        const teamOnlyUnderShared = buildSpaceAgentContextSystemMessage({
+            audience: 'Shared',
+            allowedItems: [teamItem],
+        });
+        assert.equal(teamOnlyUnderShared, null);
+
+        // Mixed Shared + Team items under Shared audience strictly strip Team item
+        const mixedUnderShared = buildSpaceAgentContextSystemMessage({
+            audience: 'Shared',
+            allowedItems: [sharedItem, teamItem],
+            grantedKnowledgeHits: [
+                {
+                    contentSourceId: '44444444-3333-4000-8000-000000000001',
+                    contentSourceName: 'Internal Playbooks',
+                    band: 'Team',
+                    scopeId: '44444444-3333-4000-8000-000000000002',
+                    scopeName: 'Internal Scope',
+                    entityName: 'MJ: Artifacts',
+                    recordId: '44444444-3333-4000-8000-000000000003',
+                    title: 'Team-Only Playbook',
+                    snippet: 'TEAM_PLAYBOOK_CANARY',
+                    score: 0.95,
+                    rank: 1,
+                    rankingMode: 'lexical',
+                    targetEntityId: ARTIFACTS_ENTITY_ID,
+                },
+            ],
+        });
+        assert.ok(mixedUnderShared);
+        assert.match(mixedUnderShared, /Executive Partnership Charter/);
+        assert.equal(mixedUnderShared.includes(TEAM_DRAFT_CANARY), false);
+        assert.equal(mixedUnderShared.includes('Internal Margin Model'), false);
+        assert.equal(mixedUnderShared.includes('TEAM_PLAYBOOK_CANARY'), false);
     });
 });

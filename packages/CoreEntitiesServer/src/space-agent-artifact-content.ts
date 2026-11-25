@@ -14,6 +14,10 @@ export const SHIPPED_COLLABORATION_AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7
 const MAX_EXTRACTED_CHUNK_CHARS = 800;
 /** Hard cap on extracted chunks per artifact version to prevent pathological allocations on huge payloads. */
 const MAX_EXTRACTED_CHUNKS_PER_ARTIFACT = 40;
+/** Hard cap on inflated bytes per PDF FlateDecode stream to prevent CWE-409 decompression bombs. */
+const MAX_PDF_INFLATE_BYTES = 2 * 1024 * 1024;
+/** Soft saturation ceiling on total extracted PDF characters before exiting the stream loop early. */
+const MAX_PDF_EXTRACTED_CHARS = MAX_EXTRACTED_CHUNKS_PER_ARTIFACT * MAX_EXTRACTED_CHUNK_CHARS * 2;
 /** Default aggregate token ceiling for the injected Authorized Space Context system message. */
 export const DEFAULT_SPACE_CONTEXT_SYSTEM_MESSAGE_MAX_TOKENS = 7500;
 const CHARS_PER_TOKEN = 4;
@@ -322,27 +326,35 @@ function extractReadableChunksFromPdfBuffer(pdfBuffer: Buffer): string[] {
     const latin1 = pdfBuffer.toString('latin1');
     const allLines: string[] = [];
 
-    // Locate `stream ... endstream` blocks; attempt FlateDecode decompression when indicated
+    // Locate `stream ... endstream` blocks; attempt bounded FlateDecode decompression when indicated
     const streamRegex = /stream\r?\n([\s\S]*?)endstream/g;
     let match: RegExpExecArray | null;
     let foundStreamBlock = false;
+    let totalExtractedChars = 0;
     while ((match = streamRegex.exec(latin1)) !== null) {
         foundStreamBlock = true;
+        if (totalExtractedChars >= MAX_PDF_EXTRACTED_CHARS) {
+            break;
+        }
         const headerWindow = latin1.slice(Math.max(0, match.index - 256), match.index);
         const bodyRaw = match[1];
         let streamText = bodyRaw;
         if (/\/FlateDecode\b/.test(headerWindow)) {
             try {
                 const compressed = Buffer.from(bodyRaw.replace(/\r?\n$/, ''), 'latin1');
-                streamText = inflateSync(compressed).toString('latin1');
+                streamText = inflateSync(compressed, { maxOutputLength: MAX_PDF_INFLATE_BYTES }).toString('latin1');
             } catch {
-                // Fall back to scanning raw bytes if stream wasn't standard zlib
-                streamText = bodyRaw;
+                // Skip oversized (CWE-409) or corrupt compressed streams rather than scanning compressed bytes
+                continue;
             }
         }
         const extracted = extractLinesFromPdfContentStream(streamText);
         for (const line of extracted) {
             allLines.push(line);
+            totalExtractedChars += line.length + 1;
+            if (totalExtractedChars >= MAX_PDF_EXTRACTED_CHARS) {
+                break;
+            }
         }
     }
 
@@ -634,8 +646,13 @@ function truncateLineToBudget(text: string, remainingTokens: number): string {
  */
 export function buildSpaceAgentContextSystemMessage(params: SpaceAgentContextMessageParams): string | null {
     const typeInstructions = (params.typeInstructions ?? []).map((s) => s.trim()).filter(Boolean);
-    const allowedItems = params.allowedItems ?? [];
-    const grantedKnowledgeHits = params.grantedKnowledgeHits ?? [];
+    // Fail-closed Band guard: direct callers can never emit Team-band materials into a Shared context
+    const allowedItems = (params.allowedItems ?? []).filter(
+        (item) => params.audience === 'Team' || item.Band !== 'Team',
+    );
+    const grantedKnowledgeHits = (params.grantedKnowledgeHits ?? []).filter(
+        (hit) => params.audience === 'Team' || hit.band !== 'Team',
+    );
     const spaceData = params.spaceData ?? [];
     const boundActions = params.boundActions ?? [];
 
