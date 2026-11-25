@@ -4,6 +4,13 @@ import { CollaborationNoAccessComponent } from './lib/no-access.component.js';
 
 export { SpaceDetailsViewComponent } from './lib/space-details-view.component.js';
 export { CollabContributedTabHostDirective } from './lib/contributed-tab-host.directive.js';
+export {
+    CollabSpaceWorkWorkspaceComponent,
+    type SpaceWorkBandFilter,
+    type SpaceWorkBandMap,
+    type SpaceWorkBandOption,
+    type SpaceWorkQuickAddEvent,
+} from './lib/space-work-workspace.component.js';
 export { CollaborationSectionResource, CollaborationNoAccessComponent };
 // The generated forms: exported so Explorer's class-registration manifest keeps them, and their @RegisterClass runs (as common-ng does)
 export { GeneratedFormsModule } from './lib/generated/generated-forms.module';

@@ -46,7 +46,6 @@ import {
     CollabSpacePeopleComponent,
     CollabSpaceRailComponent,
     CollabSpaceSettingsComponent,
-    CollabSpaceWorkComponent,
     CollabUploadDialogComponent,
     type SpaceHeaderActionDescriptor,
     type SpaceHeaderChipDescriptor,
@@ -56,7 +55,8 @@ import {
     type SpaceTabDescriptor,
     type SpaceUIContext,
 } from '@mj-biz-apps/collaboration-ng-widgets';
-import { ApprovalInboxComponent, MyTasksComponent, TaskEditPanelComponent, TaskGanttComponent, TaskKanbanComponent } from '@mj-biz-apps/tasks-ng';
+import { ApprovalInboxComponent, MyTasksComponent, TaskEditPanelComponent } from '@mj-biz-apps/tasks-ng';
+import { CollabSpaceWorkWorkspaceComponent } from './space-work-workspace.component.ts';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { CollaborationNoAccessComponent } from './no-access.component.ts';
 import { SpaceDetailsViewComponent } from './space-details-view.component.ts';
@@ -262,7 +262,7 @@ function configureProductionSectionTestBed(options: {
                 CollaborationNoAccessComponent,
                 SpaceDetailsViewComponent,
                 CollabSpaceLibraryComponent,
-                CollabSpaceWorkComponent,
+                CollabSpaceWorkWorkspaceComponent,
                 CollabSpaceChatComponent,
                 CollabSpacePeopleComponent,
                 CollabSpaceNotesComponent,
@@ -275,8 +275,6 @@ function configureProductionSectionTestBed(options: {
                 CollabHomeListComponent,
                 TaskEditPanelComponent,
                 MJReactModule,
-                TaskKanbanComponent,
-                TaskGanttComponent,
                 MyTasksComponent,
                 ApprovalInboxComponent,
             ],
@@ -1211,11 +1209,12 @@ describe('CX-12 Terminal Closed vs Resumable Paused UI Reopen Alignment', () => 
         expect(hostEl.querySelector('.pinned-wrap')).not.toBeNull();
         expect(hostEl.querySelector('[data-testid="contributed-tab-stage"] .custom-overview-body')?.textContent).toContain(`Custom Full-Width Overview for ${SPACE_ID}`);
 
-        // Switching to overridden Work tab mounts custom Work component full-width instead of default mjc-space-work
+        // Switching to overridden Work tab mounts custom Work component full-width instead of default mjc-space-work-workspace
         comp.onTabSelectRequested('Work');
         comp['changeDetector'].markForCheck();
         fixture.detectChanges();
         await fixture.whenStable();
+        expect(hostEl.querySelector('mjc-space-work-workspace')).toBeNull();
         expect(hostEl.querySelector('mjc-space-work')).toBeNull();
         expect(hostEl.querySelector('[data-testid="contributed-tab-stage"] .custom-work-body')?.textContent).toContain(`Custom Full-Width Work for ${SPACE_ID}`);
     });

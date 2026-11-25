@@ -173,12 +173,18 @@ importers:
       '@mj-biz-apps/common-entities':
         specifier: 5.65.0
         version: 5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
+      '@mj-biz-apps/tasks-core':
+        specifier: 1.14.0
+        version: 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)(@mj-biz-apps/common-entities@5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1))
       '@mj-biz-apps/tasks-entities':
         specifier: 1.14.0
         version: 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)
       '@mj-biz-apps/tasks-ng':
         specifier: 1.14.0
         version: 1.14.0(27277c9b13cdfb14aefeb88d8ea6f554)
+      '@mj-biz-apps/tasks-ng-widgets':
+        specifier: 1.14.0
+        version: 1.14.0(e258952b8f10c79c627ad3bbb88ced2f)
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -261,6 +267,12 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.3.0-edge.1
         version: 6.3.0-edge.1(f5517fe63f1c615d5901e88463cf954b)
+      '@mj-biz-apps/tasks-core':
+        specifier: 1.14.0
+        version: 1.14.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1)(@mj-biz-apps/common-entities@5.65.0(@memberjunction/core@6.3.0-edge.1)(@memberjunction/global@6.3.0-edge.1))
+      '@mj-biz-apps/tasks-ng-widgets':
+        specifier: 1.14.0
+        version: 1.14.0(e258952b8f10c79c627ad3bbb88ced2f)
       jsdom:
         specifier: 26.1.0
         version: 26.1.0

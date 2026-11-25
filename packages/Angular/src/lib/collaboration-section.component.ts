@@ -6,7 +6,7 @@ import { type BaseEntity, CompositeKey, LogError, Metadata, RunView, type UserIn
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormResolverService } from '@memberjunction/ng-base-forms';
-import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJDialogComponent, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJDialogComponent, MJEmptyStateComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
@@ -72,17 +72,22 @@ import {
     mjBizAppsCollaborationSpaceMemberPinEntity,
     type mjBizAppsCollaborationSpaceTypeStatusEntity,
 } from '@mj-biz-apps/collaboration-entities';
-import { TaskEntity } from '@mj-biz-apps/tasks-entities';
+import { TaskEntity, type mjBizAppsTasksTaskDependencyEntity } from '@mj-biz-apps/tasks-entities';
 import { CollaborationEngineBase } from '@mj-biz-apps/collaboration-engine-base';
 import { PEOPLE_ENTITY, ResolvePersonIDForUser, ResolvePersonIDsForUsers } from '@mj-biz-apps/common-entities';
+import type { TaskPriorityValue, TaskStatusValue, TaskWidgetItem } from '@mj-biz-apps/tasks-ng-widgets';
 import {
-    TaskKanbanComponent,
-    TaskGanttComponent,
     MyTasksComponent,
     ApprovalInboxComponent,
     type BeforeKanbanStatusChangeEvent,
+    type BeforeStatusChangeEvent,
+    type TaskGanttDependencyInput,
     TaskEditPanelComponent,
 } from '@mj-biz-apps/tasks-ng';
+import {
+    CollabSpaceWorkWorkspaceComponent,
+    type SpaceWorkQuickAddEvent,
+} from './space-work-workspace.component.js';
 import type {
     AgentReplyMode,
     AgentTurnHandler,
@@ -103,7 +108,6 @@ import {
     CollabShareCheckDialogComponent,
     CollabAudiencePillComponent,
     CollabUploadDialogComponent,
-    CollabSpaceWorkComponent,
     CollabSpaceChatComponent,
     CollabSpacePeopleComponent,
     CollabSpaceSettingsComponent,
@@ -227,7 +231,7 @@ function isValidUuid(id?: string | null): boolean {
     return !!id && UUID_REGEX.test(id.trim());
 }
 
-export type WorkViewMode = 'list' | 'kanban' | 'gantt';
+export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
 
 /**
  * Collaboration section resource host for MemberJunction Explorer (L3).
@@ -247,7 +251,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         MJAlertComponent,
         MJClickableDirective,
         MJEmptyStateComponent,
-        MJViewToggleComponent,
         CollabSpaceRailComponent,
         CollabSpaceHeaderComponent,
         CollabSpaceTabsComponent,
@@ -256,7 +259,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabShareCheckDialogComponent,
         CollabAudiencePillComponent,
         CollabUploadDialogComponent,
-        CollabSpaceWorkComponent,
+        CollabSpaceWorkWorkspaceComponent,
         CollabSpaceChatComponent,
         CollabSpacePeopleComponent,
         CollabSpaceSettingsComponent,
@@ -272,8 +275,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         TaskEditPanelComponent,
         MJReactModule,
         CollaborationNoAccessComponent,
-        TaskKanbanComponent,
-        TaskGanttComponent,
         MyTasksComponent,
         ApprovalInboxComponent,
     ],
@@ -612,8 +613,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             display: flex;
             flex-direction: column;
         }
-        .work-kanban-pane, .work-gantt-pane {
-            padding: 16px;
+        .work-kanban-pane, .work-gantt-pane, .work-workspace-pane {
+            padding: 16px 20px;
             height: 100%;
             box-sizing: border-box;
             flex: 1;
@@ -1138,52 +1139,31 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             }
                                             @case ('Work') {
                                                 <div class="work-tab-container">
-                                                    <div class="work-view-toolbar">
-                                                        <mj-view-toggle
-                                                            [Options]="workViewOptions"
-                                                            [ActiveKey]="workViewMode"
-                                                            (KeyChange)="onWorkViewModeChanged($event)"
+                                                    <div class="work-view-body work-workspace-pane">
+                                                        <mjc-space-work-workspace
+                                                            [SpaceId]="activeSpaceId"
+                                                            [Provider]="ProviderToUse"
+                                                            [PersonID]="currentPersonId || null"
+                                                            [Tasks]="spaceWorkWidgetTasks"
+                                                            [Dependencies]="spaceTaskDependencies"
+                                                            [TaskBands]="spaceTaskBands"
+                                                            [ExtraFilter]="taskScopeFilter"
+                                                            [ParentTaskFilter]="taskScopeFilter"
+                                                            [DefaultBand]="bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand"
+                                                            [AllowedBands]="bandChoice?.allowed ?? bothBands"
+                                                            [CanSeeTeamSide]="canSeeTeamSide"
+                                                            [CanCreateTask]="!isSpaceClosed && canContribute"
+                                                            [ReadOnly]="isSpaceClosed || !canContribute"
+                                                            [ShowOpenForm]="canSeeTeamSide"
+                                                            [ShowTimeEffort]="canSeeTeamSide"
+                                                            [ViewMode]="workViewMode"
+                                                            PreferenceKey="Collaboration.SpaceWork.ViewMode"
+                                                            (ViewModeChange)="onWorkViewModeChanged($event)"
+                                                            (TaskAdd)="onWorkspaceTaskAdd($event)"
+                                                            (BeforeStatusChange)="onBeforeWorkStatusChange($event)"
+                                                            (BeforeKanbanStatusChange)="onBeforeKanbanStatusChange($event)"
+                                                            (TaskMutated)="onWorkspaceTaskMutated($event)"
                                                         />
-                                                    </div>
-                                                    <div class="work-view-body">
-                                                        @switch (workViewMode) {
-                                                            @case ('list') {
-                                                                <mjc-space-work
-                                                                    [Tasks]="spaceTasks"
-                                                                    [SpaceName]="spaceTitle"
-                                                                    [DefaultBand]="bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand"
-                                                                    [CanCreateTask]="!isSpaceClosed && canContribute"
-                                                                    [ReadOnly]="isSpaceClosed || !canContribute"
-                                                                    [AllowedBands]="bandChoice?.allowed ?? bothBands"
-                                                                    [CanSeeTeamSide]="canSeeTeamSide"
-                                                                    (TaskSelectRequested)="onTaskSelected($event)"
-                                                                    (TaskToggleRequested)="onTaskToggled($event)"
-                                                                    (CreateTaskRequested)="onCreateTask($event)"
-                                                                />
-                                                            }
-                                                            @case ('kanban') {
-                                                                <div class="work-kanban-pane">
-                                                                    <bizapps-task-kanban
-                                                                        [ExtraFilter]="taskScopeFilter"
-                                                                        [ReadOnly]="isSpaceClosed || !canContribute"
-                                                                        (BeforeStatusChange)="onBeforeKanbanStatusChange($event)"
-                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
-                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
-                                                                    />
-                                                                </div>
-                                                            }
-                                                            @case ('gantt') {
-                                                                <div class="work-gantt-pane">
-                                                                    <bizapps-task-gantt
-                                                                        [ExtraFilter]="taskScopeFilter"
-                                                                        [Height]="'620px'"
-                                                                        [ReadOnly]="isSpaceClosed || !canContribute"
-                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
-                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
-                                                                    />
-                                                                </div>
-                                                            }
-                                                        }
                                                     </div>
                                                 </div>
                                             }
@@ -2579,8 +2559,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     // Work tab state
     public spaceTasks: TaskItemModel[] = [];
-    public workViewMode: WorkViewMode = 'list';
+    public spaceWorkWidgetTasks: TaskWidgetItem[] = [];
+    public spaceTaskBands: Map<string, SpaceBand> = new Map<string, SpaceBand>();
+    public spaceTaskDependencies: TaskGanttDependencyInput[] = [];
+    public workViewMode: WorkViewMode = 'wbs';
     public workViewOptions: ViewToggleOption[] = [
+        { key: 'wbs', icon: 'fa-solid fa-diagram-project', label: 'WBS', title: 'Work Breakdown Structure' },
         { key: 'list', icon: 'fa-solid fa-list', label: 'List', title: 'List View' },
         { key: 'kanban', icon: 'fa-solid fa-table-columns', label: 'Board', title: 'Kanban Board View' },
         { key: 'gantt', icon: 'fa-solid fa-chart-gantt', label: 'Timeline', title: 'Timeline / Gantt View' },
@@ -2675,6 +2659,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             return this.headerStaffAvatars.length;
         }
         return this.headerTotalPeople;
+    }
+
+    public onBeforeWorkStatusChange(event: BeforeStatusChangeEvent): void {
+        if (this.isSpaceClosed) {
+            event.Cancel = true;
+            SharedService.Instance.CreateSimpleNotification('Cannot change task status in a closed space.', 'warning', 3000);
+            return;
+        }
+        if (!this.canContribute) {
+            event.Cancel = true;
+            SharedService.Instance.CreateSimpleNotification('You do not have permission to update tasks in this space.', 'warning', 3000);
+            return;
+        }
     }
 
     public onBeforeKanbanStatusChange(event: BeforeKanbanStatusChangeEvent): void {
@@ -3911,6 +3908,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.libraryCollections = [];
         this.librarySmartViews = [];
         this.spaceTasks = [];
+        this.spaceWorkWidgetTasks = [];
+        this.spaceTaskBands = new Map<string, SpaceBand>();
+        this.spaceTaskDependencies = [];
         this.taskCount = 0;
         this.canConfigureCurrentSpace = false;
         this.canReopenCurrentSpace = false;
@@ -4582,6 +4582,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
             if (!itemsRes?.Success || !itemsRes.Results || itemsRes.Results.length === 0) {
                 this.spaceTasks = [];
+                this.spaceWorkWidgetTasks = [];
+                this.spaceTaskBands = new Map<string, SpaceBand>();
+                this.spaceTaskDependencies = [];
                 this.taskCount = 0;
                 return;
             }
@@ -4598,57 +4601,172 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             if (taskIds.length === 0) {
                 this.spaceTasks = [];
+                this.spaceWorkWidgetTasks = [];
+                this.spaceTaskBands = new Map<string, SpaceBand>();
+                this.spaceTaskDependencies = [];
                 this.taskCount = 0;
                 return;
             }
 
+            const quotedIds = taskIds.map(id => `'${id}'`).join(',');
             const tasksRes = await rv.RunView<{
                 ID: string;
                 Name: string;
                 Description?: string | null;
-                Status?: string | null;
-                Priority?: string | null;
+                Status?: TaskStatusValue | null;
+                Priority?: TaskPriorityValue | null;
                 PercentComplete?: number | null;
                 DueAt?: string | null;
+                StartedAt?: string | null;
+                ParentID?: string | null;
+                RootParentID?: string | null;
+                Sequence?: number | null;
+                BlockedReason?: string | null;
+                TypeID?: string | null;
+                Type?: string | null;
+                HoursEstimated?: number | null;
+                HoursActual?: number | null;
             }>({
                 EntityName: 'MJ_BizApps_Tasks: Tasks',
-                ExtraFilter: `ID IN (${taskIds.map(id => `'${id}'`).join(',')})`,
+                ExtraFilter: `(ID IN (${quotedIds}) OR RootParentID IN (${quotedIds}))`,
+                Fields: [
+                    'ID',
+                    'Name',
+                    'Description',
+                    'Status',
+                    'Priority',
+                    'PercentComplete',
+                    'DueAt',
+                    'StartedAt',
+                    'ParentID',
+                    'RootParentID',
+                    'Sequence',
+                    'BlockedReason',
+                    'TypeID',
+                    'Type',
+                    'HoursEstimated',
+                    'HoursActual',
+                ],
                 ResultType: 'simple',
-                MaxRows: 100,
+                // row-cap-ok: space work hierarchy display cap
+                MaxRows: 500,
             });
 
             if (!isCurrent()) return;
             if (!tasksRes?.Success) {
                 LogError(`Failed to load tasks for space ${spaceId}: ${tasksRes?.ErrorMessage ?? 'unknown error'}`);
                 this.spaceTasks = [];
+                this.spaceWorkWidgetTasks = [];
+                this.spaceTaskBands = new Map<string, SpaceBand>();
+                this.spaceTaskDependencies = [];
                 this.taskCount = 0;
             } else if (tasksRes.Results) {
-                const assignees = await this.loadTaskAssignees(rv, taskIds);
+                const allTaskIds = tasksRes.Results.map(t => t.ID).filter(id => isValidUuid(id));
+                const [assignees, dependencies] = await Promise.all([
+                    allTaskIds.length > 0 ? this.loadTaskAssignees(rv, allTaskIds) : Promise.resolve(new Map<string, string>()),
+                    allTaskIds.length > 0 ? this.loadTaskDependencies(rv, allTaskIds) : Promise.resolve([]),
+                ]);
                 if (!isCurrent()) return;
-                this.spaceTasks = tasksRes.Results.map(t => {
-                    const spaceItem = taskItemMap.get(t.ID.toLowerCase());
+
+                const bandsByTaskId = new Map<string, SpaceBand>();
+                const modelRows: TaskItemModel[] = [];
+                const widgetRows: TaskWidgetItem[] = [];
+
+                for (const t of tasksRes.Results) {
+                    const directItem = taskItemMap.get(t.ID.toLowerCase());
+                    const rootItem = t.RootParentID ? taskItemMap.get(t.RootParentID.toLowerCase()) : undefined;
+                    const resolvedBand: SpaceBand = directItem?.Band ?? rootItem?.Band ?? 'Shared';
+                    bandsByTaskId.set(t.ID.toLowerCase(), resolvedBand);
+
                     const assigned = assignees.get(t.ID.toLowerCase());
-                    return {
+                    const status: TaskStatusValue = t.Status ?? 'Open';
+                    const priority: TaskPriorityValue = t.Priority ?? 'Medium';
+
+                    modelRows.push({
                         id: t.ID,
                         name: t.Name,
                         description: t.Description || undefined,
-                        status: t.Status || 'Open',
-                        priority: t.Priority || 'Medium',
-                        band: spaceItem?.Band || 'Shared',
+                        status,
+                        priority,
+                        band: resolvedBand,
                         assigneeName: assigned,
                         assigneeInitials: assigned ? assigned.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : undefined,
+                        assigneeNames: assigned ? [assigned] : undefined,
                         dueDate: t.DueAt ? this.formatDate(t.DueAt) : undefined,
-                        percentComplete: t.PercentComplete || 0,
-                    };
-                });
+                        percentComplete: t.PercentComplete ?? null,
+                        parentId: t.ParentID ?? null,
+                        blockedReason: t.BlockedReason ?? null,
+                        kindLabel: t.Type ?? null,
+                        sequence: t.Sequence ?? null,
+                    });
+
+                    widgetRows.push({
+                        ID: t.ID,
+                        Name: t.Name,
+                        Description: t.Description ?? null,
+                        ParentID: t.ParentID ?? null,
+                        Status: status,
+                        Priority: priority,
+                        PercentComplete: t.PercentComplete ?? null,
+                        DueAt: t.DueAt ?? null,
+                        StartedAt: t.StartedAt ?? null,
+                        Sequence: t.Sequence ?? null,
+                        BlockedReason: t.BlockedReason ?? null,
+                        TypeID: t.TypeID ?? undefined,
+                        TypeName: t.Type ?? null,
+                        TaskTypeName: t.Type ?? null,
+                        HoursEstimated: t.HoursEstimated ?? null,
+                        HoursActual: t.HoursActual ?? null,
+                        AssigneeNames: assigned ? [assigned] : undefined,
+                    });
+                }
+
+                this.spaceTasks = modelRows;
+                this.spaceWorkWidgetTasks = widgetRows;
+                this.spaceTaskBands = bandsByTaskId;
+                this.spaceTaskDependencies = dependencies;
                 this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed').length;
             }
         } catch (err) {
             LogError('Error loading space tasks: ' + (err instanceof Error ? err.message : String(err)));
             if (isCurrent()) {
                 this.spaceTasks = [];
+                this.spaceWorkWidgetTasks = [];
+                this.spaceTaskBands = new Map<string, SpaceBand>();
+                this.spaceTaskDependencies = [];
                 this.taskCount = 0;
             }
+        }
+    }
+
+    private async loadTaskDependencies(rv: RunView, taskIds: string[]): Promise<TaskGanttDependencyInput[]> {
+        try {
+            const quoted = taskIds.map(id => `'${id}'`).join(',');
+            const res = await rv.RunView<{
+                ID: string;
+                TaskID: string;
+                DependsOnTaskID: string;
+                DependencyType?: mjBizAppsTasksTaskDependencyEntity['DependencyType'];
+            }>({
+                EntityName: 'MJ_BizApps_Tasks: Task Dependencies',
+                ExtraFilter: `TaskID IN (${quoted})`,
+                Fields: ['ID', 'TaskID', 'DependsOnTaskID', 'DependencyType'],
+                ResultType: 'simple',
+                // row-cap-ok: space task dependency display cap
+                MaxRows: 500,
+            });
+            if (!res?.Success || !res.Results) {
+                return [];
+            }
+            return res.Results.map(d => ({
+                ID: d.ID,
+                TaskID: d.TaskID,
+                DependsOnTaskID: d.DependsOnTaskID,
+                DependencyType: d.DependencyType,
+            }));
+        } catch (err) {
+            LogError('Error loading task dependencies: ' + (err instanceof Error ? err.message : String(err)));
+            return [];
         }
     }
 
@@ -5004,7 +5122,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.activeView = params['view'];
         }
 
-        if (params['workView'] === 'list' || params['workView'] === 'kanban' || params['workView'] === 'gantt') {
+        if (params['workView'] === 'wbs' || params['workView'] === 'list' || params['workView'] === 'kanban' || params['workView'] === 'gantt') {
             this.workViewMode = params['workView'];
         }
 
@@ -5096,11 +5214,25 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onWorkViewModeChanged(mode: string): void {
-        if (mode === 'list' || mode === 'kanban' || mode === 'gantt') {
+        if (mode === 'wbs' || mode === 'list' || mode === 'kanban' || mode === 'gantt') {
             this.workViewMode = mode;
             this.UpdateQueryParams({ workView: mode });
             this.RefreshView();
         }
+    }
+
+    public async onWorkspaceTaskAdd(event: SpaceWorkQuickAddEvent): Promise<void> {
+        await this.onCreateTask({
+            name: event.Title,
+            band: event.Band,
+            priority: event.Priority,
+        });
+    }
+
+    public async onWorkspaceTaskMutated(_taskId: string): Promise<void> {
+        if (!this.activeSpaceId) return;
+        await this.loadSpaceTasks(this.activeSpaceId, this.currentSelection());
+        this.RefreshView();
     }
 
     public onTaskDoubleClicked(taskId: string): void {

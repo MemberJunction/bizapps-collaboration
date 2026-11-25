@@ -1038,6 +1038,65 @@ describe('the Work list follows the seat and the entity', () => {
     sharedOnly.submitNewTask();
     expect(made).toHaveBeenCalledWith(expect.objectContaining({ band: 'Shared' }));
   });
+
+  it('maps WBS hierarchy fields and strips Team tasks when CanSeeTeamSide is false', () => {
+    const comp = new CollabSpaceWorkComponent();
+    comp.CanSeeTeamSide = false;
+    comp.AllowedBands = ['Shared', 'Team'];
+    comp.Tasks = [
+      {
+        id: 'p1',
+        name: 'Phase 1',
+        status: 'InProgress',
+        priority: 'High',
+        band: 'Shared',
+        kindLabel: 'Phase',
+        sequence: 1,
+        percentComplete: null,
+      },
+      {
+        id: 'c1',
+        name: 'Client deliverable',
+        parentId: 'p1',
+        status: 'Blocked',
+        priority: 'Urgent',
+        band: 'Shared',
+        blockedReason: 'Waiting on sign-off',
+        assigneeNames: ['Ada Lovelace'],
+        sequence: 1,
+        percentComplete: 40,
+      },
+      {
+        id: 't1',
+        name: 'Internal margin review',
+        parentId: 'p1',
+        status: 'Open',
+        priority: 'Medium',
+        band: 'Team',
+        sequence: 2,
+      },
+    ];
+
+    expect(comp.TotalTasks).toBe(2);
+    expect(comp.hasHierarchy).toBe(true);
+    expect(comp.wbsTasks.map((t) => t.ID)).toEqual(['p1', 'c1']);
+    expect(comp.wbsTasks[1].ParentID).toBe('p1');
+    expect(comp.wbsTasks[1].Priority).toBe('Critical');
+    expect(comp.wbsTasks[1].BlockedReason).toBe('Waiting on sign-off');
+    expect(comp.wbsTasks[1].AssigneeNames).toEqual(['Ada Lovelace']);
+
+    // Even if someone forces bandFilter = 'Team', Team tasks stay hidden
+    comp.bandFilter = 'Team';
+    expect(comp.filteredTasks.map((t) => t.id)).toEqual(['p1', 'c1']);
+
+    // Quick-add enforces Shared when CanSeeTeamSide is false
+    const created = vi.fn();
+    comp.CreateTaskRequested.subscribe(created);
+    comp.newTaskName = 'External action';
+    comp.newTaskBand = 'Team';
+    comp.submitNewTask();
+    expect(created).toHaveBeenCalledWith(expect.objectContaining({ band: 'Shared' }));
+  });
 });
 
 describe('the Library narrows by search, collection and view', () => {
