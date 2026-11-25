@@ -56,8 +56,11 @@
       "CanRead": 1,
       "CanUpdate": 0,
       "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Shell Empty"
-    }
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Artifact Type Catalog"
+    },
+    "_comments": [
+      "ArtifactMetadataEngine and <mj-artifact-viewer-panel> resolve viewer plugins (Markdown Document, Presentation, PDF, etc.) from MJ: Artifact Types, so a participant reads enabled catalog types. It names types, not artifact records; every artifact stays behind Collaboration: Artifacts In Reach."
+    ]
   },
   {
     "primaryKey": {
@@ -305,6 +308,36 @@
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Prompt Runs",
       "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Prompt Runs"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9C10001-4F50-4A6B-8C9D-0E1F2A3B4C71"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Collection Artifacts",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Shell Empty"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E9C10002-4F50-4A6B-8C9D-0E1F2A3B4C72"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Artifacts",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Shell Empty"
     }
   }
 ]

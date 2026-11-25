@@ -99,12 +99,25 @@ export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';
 export {
     SpaceMeetingsTabComponent,
+    buildMeetingIcsContent,
+    computeMeetingPermissions,
     createDefaultSpaceMeetingDraft,
+    filterSpaceMeetings,
+    isUpcomingMeeting,
+    loadSpaceChildSpaces,
     loadSpaceMeetingCards,
+    loadSpaceMeetingDetail,
+    loadSpaceMeetingsWithRollup,
     meetingVisibilityToSpaceBand,
+    toMeetingRow,
     validateNewSpaceMeetingDraft,
+    type MeetingDrawerSection,
     type NewSpaceMeetingDraft,
+    type SpaceChildSummary,
     type SpaceMeetingCardItem,
+    type SpaceMeetingDetailBundle,
+    type SpaceMeetingsBandFilter,
+    type SpaceMeetingsFilterMode,
 } from './lib/space-meetings-tab.component';
 export {
     SpaceComingUpCardComponent,

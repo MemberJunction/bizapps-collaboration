@@ -120,3 +120,29 @@ pnpm run test:e2e
 # Run world-model database persona check (against a migrated test database)
 node scripts/run-sql-file.mjs scripts/persona-check.sql
 ```
+
+## Artifact Row-Level Security for `Space Participant` and `UI`
+
+When Collaboration opens documents, presentations, PDFs, or pinned records inside `<mjc-artifact-slideover>` (`<mj-artifact-viewer-panel>`), every core artifact entity queried by the viewer is governed by fail-closed Row-Level Security filters registered in `metadata/row-level-security-filters/.row-level-security-filters.json`, `metadata/entity-permissions/.entity-permissions.json`, `metadata/entity-permissions/.core-entity-permissions.json`, `metadata/entities/.ui-role-permissions.json`, and `COLLABORATION_BOOT_ENTITY_REGISTRY`:
+
+| Entity | Role | Policy Kind | RLS Filter |
+| --- | --- | --- | --- |
+| `MJ: Artifact Types` | `Space Participant` | `active-catalog` | `Collaboration: Artifact Type Catalog` (`(IsEnabled = 1)`) so viewer plugins (`Markdown Document`, `Presentation`, `PDF`, etc.) resolve without exposing record data |
+| `MJ: Artifacts` | `Space Participant` | `reach-scoped` (read-only) | `Collaboration: Artifacts In Reach` — caller-owned (`UserID`) or linked to a reachable `SpaceItem` (direct `MJ: Artifacts` `RecordID` or `SpaceItem.ArtifactVersionID`) with `CanSeeTeam = 1 OR Band = 'Shared'` |
+| `MJ: Artifact Versions` | `Space Participant` | `reach-scoped` (read-only) | `Collaboration: Artifact Versions In Reach` — same reach boundary on `ArtifactID` |
+| `MJ: Artifact Version Attributes` | `Space Participant` | `reach-scoped` (read-only) | `Collaboration: Artifact Version Attributes In Reach` — same reach boundary on `ArtifactVersionID` |
+| `MJ: Artifact Permissions` | `Space Participant` | `reach-scoped` (read-only) | `Collaboration: Own Artifact Permissions` (`UserID = caller`) |
+| `MJ: Artifact Uses` | `Space Participant` | `reach-scoped` (read + create) | `Collaboration: Own Artifact Uses` (`UserID = caller` AND `ArtifactVersionID` in reach) |
+| `MJ: Conversation Detail Artifacts` | `Space Participant` | `reach-scoped` (read-only) | `Collaboration: Conversation Detail Artifacts In Reach` (scoped to reachable `SpaceChat` conversations) |
+| `MJ: Collection Artifacts` / `MJ: Conversation Artifacts` | `Space Participant` | `shell-deny-all` | `Collaboration: Shell Empty` (`(1 = 0)`) |
+| `MJ: Artifacts` / `MJ: Artifact Versions` | `UI` | `reach-scoped` (read-only) | `Collaboration: Artifacts In Reach Or Outside Collaboration` / `Collaboration: Artifact Versions In Reach Or Outside Collaboration` — keeps artifacts outside Collaboration readable while enforcing space/band isolation on artifacts filed in a space |
+
+## `<mjc-space-meetings-tab>` Containment over `@mj-biz-apps/tasks-ng-widgets`
+
+`SpaceMeetingsTabComponent` (`<mjc-space-meetings-tab>`) composes the reusable meeting widgets from `@mj-biz-apps/tasks-ng-widgets` directly inside Collaboration spaces and any host application embedding Collaboration widgets:
+
+- **List & Rollup (`<bizapps-meeting-list>`):** Grouped-by-day meeting list with `Upcoming` / `Past` / `All` segmented filter, search input, `Shared` vs `Private` (`<mjc-band-chip Band="Team">`) visibility filters, inline RSVP (`ResponseChanged` saving to `MJ_BizApps_Tasks: Meeting Attendees` under `Collaboration: Own Meeting Attendee Row`), `Join` video links, and bound `SpaceChat` (`Subject = 'meeting:<MeetingID>'`) discussion launchers.
+- **Recursive Sub-Space Rollup (`IncludeSubSpaces`):** When a space has descendant spaces in reach, `IncludeSubSpaces` defaults to enabled (`Include sub-spaces (N)` toggle), labels rolled-up meetings with their child room name, provides room filter pills, and routes meeting chat creation to the meeting's owning space.
+- **In-Place Slide-Over Detail & Live Runner Drawer:** Clicking any meeting row opens an accessible right-hand slide-over sheet (`100% --mj-*` tokens) composing `<bizapps-meeting-header>`, `<bizapps-meeting-agenda>`, `<bizapps-meeting-people>`, `<bizapps-meeting-notes>`, `<bizapps-meeting-followups>`, and (for contributors with `CanSeeTeamSide && CanSchedule`) `<bizapps-meeting-live>`.
+- **Strict Band & Read-Only External Isolation:** When `CanSeeTeamSide === false`, `Visibility === 'Private'` meetings are filtered out from both list and drawer, `DrawerPermissions` locks all write/run controls (`canEdit: false`, `canRun: false`, `canInvite: false`, `canWriteNotes: false`, `canAddFollowUps: false`), and raw `"Open form"` Explorer navigation is hidden — while invited participants can still RSVP, download `.ics`, join video, and open `Shared` meeting discussions.
+
