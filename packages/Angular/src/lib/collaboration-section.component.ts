@@ -3551,48 +3551,70 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const fileNames = new Map<string, string>();
             const itemIdByFileId = new Map<string, string>();
 
-            await Promise.all([
-                allArtifactIds.length
-                    ? rv.RunView<{ ID: string; Name: string | null; Type?: string | null }>({
-                        EntityName: ARTIFACTS_ENTITY_NAME,
-                        ExtraFilter: `ID IN (${allArtifactIds.map((id) => `'${id}'`).join(',')})`,
-                        Fields: ['ID', 'Name', 'Type'],
-                        ResultType: 'simple',
-                        MaxRows: allArtifactIds.length,
-                    }).then((arts) => {
-                        for (const art of arts?.Results ?? []) {
-                            artifactMeta.set(art.ID.toLowerCase(), {
-                                title: (art.Name ?? '').trim() || 'Untitled artifact',
-                                type: art.Type ?? null,
-                            });
-                        }
-                    })
-                    : Promise.resolve(),
-                otherRecordIds.length
-                    ? rv.RunView<{ ID: string; RecordID: string }>({
-                        EntityName: 'MJ_BizApps_Collaboration: Space Items',
-                        ExtraFilter: `RecordID IN (${otherRecordIds.flatMap((id) => [`'ID|${id}'`, `'${id}'`]).join(',')})`,
-                        Fields: ['ID', 'RecordID'],
-                        ResultType: 'simple',
-                    }).then((items) => {
-                        for (const item of items?.Results ?? []) {
-                            itemIdByFileId.set(bareRecordId(item.RecordID).toLowerCase(), item.ID);
-                        }
-                    })
-                    : Promise.resolve(),
-                allFileIds.length
-                    ? rv.RunView<{ ID: string; Name: string | null }>({
-                        EntityName: 'MJ: Files',
-                        ExtraFilter: `ID IN (${allFileIds.map((id) => `'${id}'`).join(',')})`,
-                        Fields: ['ID', 'Name'],
-                        ResultType: 'simple',
-                    }).then((files) => {
-                        for (const file of files?.Results ?? []) {
-                            fileNames.set(file.ID.toLowerCase(), file.Name || 'A file');
-                        }
-                    })
-                    : Promise.resolve(),
-            ]);
+            const pinMetaQueries: Array<{
+                EntityName: string;
+                ExtraFilter: string;
+                Fields: string[];
+                ResultType: 'simple';
+                MaxRows?: number;
+            }> = [];
+            let pinArtIdx = -1;
+            let pinItemIdx = -1;
+            let pinFileIdx = -1;
+
+            if (allArtifactIds.length > 0) {
+                pinArtIdx = pinMetaQueries.length;
+                pinMetaQueries.push({
+                    EntityName: ARTIFACTS_ENTITY_NAME,
+                    ExtraFilter: `ID IN (${allArtifactIds.map((id) => `'${id}'`).join(',')})`,
+                    Fields: ['ID', 'Name', 'Type'],
+                    ResultType: 'simple',
+                    MaxRows: allArtifactIds.length,
+                });
+            }
+            if (otherRecordIds.length > 0) {
+                pinItemIdx = pinMetaQueries.length;
+                pinMetaQueries.push({
+                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                    ExtraFilter: `RecordID IN (${otherRecordIds.flatMap((id) => [`'ID|${id}'`, `'${id}'`]).join(',')})`,
+                    Fields: ['ID', 'RecordID'],
+                    ResultType: 'simple',
+                });
+            }
+            if (allFileIds.length > 0) {
+                pinFileIdx = pinMetaQueries.length;
+                pinMetaQueries.push({
+                    EntityName: 'MJ: Files',
+                    ExtraFilter: `ID IN (${allFileIds.map((id) => `'${id}'`).join(',')})`,
+                    Fields: ['ID', 'Name'],
+                    ResultType: 'simple',
+                });
+            }
+
+            if (pinMetaQueries.length > 0) {
+                const pinMetaResults = await rv.RunViews(pinMetaQueries);
+                if (pinArtIdx >= 0) {
+                    const arts = pinMetaResults[pinArtIdx] as { Results?: Array<{ ID: string; Name: string | null; Type?: string | null }> } | undefined;
+                    for (const art of arts?.Results ?? []) {
+                        artifactMeta.set(art.ID.toLowerCase(), {
+                            title: (art.Name ?? '').trim() || 'Untitled artifact',
+                            type: art.Type ?? null,
+                        });
+                    }
+                }
+                if (pinItemIdx >= 0) {
+                    const items = pinMetaResults[pinItemIdx] as { Results?: Array<{ ID: string; RecordID: string }> } | undefined;
+                    for (const item of items?.Results ?? []) {
+                        itemIdByFileId.set(bareRecordId(item.RecordID).toLowerCase(), item.ID);
+                    }
+                }
+                if (pinFileIdx >= 0) {
+                    const files = pinMetaResults[pinFileIdx] as { Results?: Array<{ ID: string; Name: string | null }> } | undefined;
+                    for (const file of files?.Results ?? []) {
+                        fileNames.set(file.ID.toLowerCase(), file.Name || 'A file');
+                    }
+                }
+            }
             if (token !== this.homeListLoadToken) return;
 
             this.homePins = pins.map((pin): PinModel => {
@@ -4091,6 +4113,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         let convsIdx = -1;
         let tasksIdx = -1;
         let usersIdx = -1;
+        let peopleIdx = -1;
 
         if (uniqueFileIds.length > 0) {
             filesIdx = stage2Queries.length;
@@ -4139,8 +4162,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             });
         }
         if (memberUserIds.length > 0) {
-            usersIdx = stage2Queries.length;
             const userFilter = memberUserIds.map(id => `'${id}'`).join(',');
+            usersIdx = stage2Queries.length;
             stage2Queries.push({
                 EntityName: 'MJ: Users',
                 ExtraFilter: `ID IN (${userFilter})`,
@@ -4148,19 +4171,29 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ResultType: 'simple',
                 MaxRows: memberUserIds.length,
             });
+            peopleIdx = stage2Queries.length;
+            stage2Queries.push({
+                EntityName: PEOPLE_ENTITY,
+                ExtraFilter: `LinkedUserID IN (${userFilter})`,
+                Fields: ['ID', 'LinkedUserID', 'PhotoURL'],
+                ResultType: 'simple',
+            });
         }
 
-        const userFilterForPhotos = memberUserIds.length > 0 ? memberUserIds.map(id => `'${id}'`).join(',') : '';
-        const [stage2Results, personRows] = await Promise.all([
-            stage2Queries.length > 0 ? rv.RunViews(stage2Queries) : Promise.resolve([]),
-            userFilterForPhotos ? this.loadPeoplePhotos(rv, userFilterForPhotos) : Promise.resolve([] as PersonPhotoRow[]),
-        ]);
+        const stage2Results = stage2Queries.length > 0 ? await rv.RunViews(stage2Queries) : [];
         if (!isCurrent()) return;
 
         // 1. Hydrate Space Members FIRST so Overview messages get outside rings + photos on the single initial pass!
         const usersStage2 = usersIdx >= 0
             ? (stage2Results[usersIdx] as { Success?: boolean; Results?: Array<UserPhotoRow & { Email: string }> } | undefined)
             : undefined;
+        const peopleStage2 = peopleIdx >= 0
+            ? (stage2Results[peopleIdx] as { Success?: boolean; ErrorMessage?: string; Results?: PersonPhotoRow[] } | undefined)
+            : undefined;
+        if (peopleIdx >= 0 && peopleStage2 && !peopleStage2.Success) {
+            LogError(`Member photos from People could not be read: ${peopleStage2.ErrorMessage ?? 'unknown error'}`);
+        }
+        const personRows: PersonPhotoRow[] = peopleStage2?.Success ? (peopleStage2.Results ?? []) : [];
         this.applySpaceMembersResult(spaceId, membersRes, chain, usersStage2?.Success ? (usersStage2.Results ?? []) : [], personRows);
 
         // Prime EngineBase caller membership cache from the members we already fetched for this space chain
@@ -4860,10 +4893,47 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const allTaskIds = tasks.map(t => t.ID).filter(id => isValidUuid(id));
         if (allTaskIds.length === 0) return;
         const rv = new RunView(this.RunViewToUse);
-        const [assignees, dependencies] = await Promise.all([
-            this.loadTaskAssignees(rv, allTaskIds),
-            this.loadTaskDependencies(rv, allTaskIds),
-        ]);
+        const quoted = allTaskIds.map(id => `'${id}'`).join(',');
+        let assignees = new Map<string, string>();
+        let dependencies: TaskGanttDependencyInput[] = [];
+        try {
+            const [assignmentsRes, depsRes] = await rv.RunViews([
+                {
+                    EntityName: 'MJ_BizApps_Tasks: Task Assignments',
+                    ExtraFilter: `TaskID IN (${quoted})`,
+                    Fields: ['TaskID', 'AssigneeEntityID', 'AssigneeRecordID', 'Status', 'AssignedAt'],
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ_BizApps_Tasks: Task Dependencies',
+                    ExtraFilter: `TaskID IN (${quoted})`,
+                    Fields: ['ID', 'TaskID', 'DependsOnTaskID', 'DependencyType'],
+                    ResultType: 'simple',
+                    // row-cap-ok: space task dependency display cap
+                    MaxRows: 500,
+                },
+            ]);
+            if (depsRes?.Success && depsRes.Results) {
+                dependencies = (depsRes.Results as Array<{
+                    ID: string;
+                    TaskID: string;
+                    DependsOnTaskID: string;
+                    DependencyType?: mjBizAppsTasksTaskDependencyEntity['DependencyType'];
+                }>).map(d => ({
+                    ID: d.ID,
+                    TaskID: d.TaskID,
+                    DependsOnTaskID: d.DependsOnTaskID,
+                    DependencyType: d.DependencyType,
+                }));
+            }
+            if (assignmentsRes?.Success) {
+                assignees = await this.resolveTaskAssigneeLabels(rv, (assignmentsRes.Results ?? []) as TaskAssignmentRow[]);
+            } else if (assignmentsRes) {
+                LogError(`Failed to load task assignments: ${assignmentsRes.ErrorMessage ?? 'unknown error'}`);
+            }
+        } catch (err) {
+            LogError('Error loading work heavy details: ' + (err instanceof Error ? err.message : String(err)));
+        }
         if (!isCurrent() || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
         this.buildTaskModels(taskItemMap, tasks, assignees, dependencies);
         this.RefreshView();
@@ -4927,37 +4997,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (isCurrent()) {
                 this.applyLightweightTasks(spaceId, [], undefined);
             }
-        }
-    }
-
-    private async loadTaskDependencies(rv: RunView, taskIds: string[]): Promise<TaskGanttDependencyInput[]> {
-        try {
-            const quoted = taskIds.map(id => `'${id}'`).join(',');
-            const res = await rv.RunView<{
-                ID: string;
-                TaskID: string;
-                DependsOnTaskID: string;
-                DependencyType?: mjBizAppsTasksTaskDependencyEntity['DependencyType'];
-            }>({
-                EntityName: 'MJ_BizApps_Tasks: Task Dependencies',
-                ExtraFilter: `TaskID IN (${quoted})`,
-                Fields: ['ID', 'TaskID', 'DependsOnTaskID', 'DependencyType'],
-                ResultType: 'simple',
-                // row-cap-ok: space task dependency display cap
-                MaxRows: 500,
-            });
-            if (!res?.Success || !res.Results) {
-                return [];
-            }
-            return res.Results.map(d => ({
-                ID: d.ID,
-                TaskID: d.TaskID,
-                DependsOnTaskID: d.DependsOnTaskID,
-                DependencyType: d.DependencyType,
-            }));
-        } catch (err) {
-            LogError('Error loading task dependencies: ' + (err instanceof Error ? err.message : String(err)));
-            return [];
         }
     }
 
@@ -5107,21 +5146,31 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             let personRows: PersonPhotoRow[] = [];
             if (userIds.length > 0) {
                 const userFilter = userIds.map(id => `'${id}'`).join(',');
-                const [users, people] = await Promise.all([
-                    rv.RunView<UserPhotoRow & { Email: string }>({
+                const [usersRes, peopleRes] = await rv.RunViews([
+                    {
                         EntityName: 'MJ: Users',
                         ExtraFilter: `ID IN (${userFilter})`,
                         Fields: ['ID', 'Email', 'UserImageURL'],
                         ResultType: 'simple',
                         MaxRows: userIds.length,
-                    }).catch((userErr: Error | object | string | number | boolean | null | undefined) => {
-                        LogError('Error loading user emails and photos for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
-                        return null;
-                    }),
-                    this.loadPeoplePhotos(rv, userFilter),
+                    },
+                    {
+                        EntityName: PEOPLE_ENTITY,
+                        ExtraFilter: `LinkedUserID IN (${userFilter})`,
+                        Fields: ['ID', 'LinkedUserID', 'PhotoURL'],
+                        ResultType: 'simple',
+                    },
                 ]);
-                if (users?.Success && users.Results) userRows.push(...users.Results);
-                personRows = people;
+                if (usersRes?.Success && usersRes.Results) {
+                    userRows.push(...(usersRes.Results as Array<UserPhotoRow & { Email: string }>));
+                } else if (usersRes && !usersRes.Success) {
+                    LogError(`Error loading user emails and photos for space members: ${usersRes.ErrorMessage ?? 'unknown error'}`);
+                }
+                if (peopleRes?.Success && peopleRes.Results) {
+                    personRows = peopleRes.Results as PersonPhotoRow[];
+                } else if (peopleRes && !peopleRes.Success) {
+                    LogError(`Member photos from People could not be read: ${peopleRes.ErrorMessage ?? 'unknown error'}`);
+                }
             }
             if (!isCurrent()) return;
             this.applySpaceMembersResult(spaceId, membersRes, chain, userRows, personRows);
@@ -5150,24 +5199,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     /**
-     * Who each task is assigned to, by lower-case task ID. Tasks keep assignees in Task Assignments, each naming a People
-     * record (or an IS-A subtype of People) or a User, so the names are read from those two. A failed read leaves the
-     * rows Unassigned rather than failing the Work tab.
+     * Resolves display labels for already-loaded `Task Assignments` rows in one batched `rv.RunViews([...])`
+     * (skipping the query completely when no Person or User assignee IDs are present).
      */
-    private async loadTaskAssignees(rv: RunView, taskIds: string[]): Promise<Map<string, string>> {
+    private async resolveTaskAssigneeLabels(rv: RunView, rows: TaskAssignmentRow[]): Promise<Map<string, string>> {
+        if (rows.length === 0) return new Map();
         try {
             const md = this.ProviderToUse;
-            const assignmentsRes = await rv.RunView<TaskAssignmentRow>({
-                EntityName: 'MJ_BizApps_Tasks: Task Assignments',
-                ExtraFilter: `TaskID IN (${taskIds.map(id => `'${id}'`).join(',')})`,
-                Fields: ['TaskID', 'AssigneeEntityID', 'AssigneeRecordID', 'Status', 'AssignedAt'],
-                ResultType: 'simple',
-            });
-            if (!assignmentsRes?.Success) {
-                LogError(`Failed to load task assignments: ${assignmentsRes?.ErrorMessage ?? 'unknown error'}`);
-                return new Map();
-            }
-            const rows = assignmentsRes.Results ?? [];
             const usersEntityId = md.EntityByName('MJ: Users')?.ID;
             const kindOf = (entityId: string): AssigneeKind => {
                 if (usersEntityId && UUIDsEqual(entityId, usersEntityId)) return 'user';
@@ -5179,29 +5217,48 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 [...new Set(rows.filter(r => kindOf(r.AssigneeEntityID) === kind && isValidUuid(r.AssigneeRecordID)).map(r => r.AssigneeRecordID))];
             const personIds = idsOf('person');
             const userIds = idsOf('user');
-            const [peopleRes, usersRes] = await rv.RunViews([
-                {
+            const lookupQueries: Array<{
+                EntityName: string;
+                ExtraFilter: string;
+                Fields: string[];
+                ResultType: 'simple';
+            }> = [];
+            let personIdx = -1;
+            let userIdx = -1;
+            if (personIds.length > 0) {
+                personIdx = lookupQueries.length;
+                lookupQueries.push({
                     EntityName: 'MJ_BizApps_Common: People',
-                    ExtraFilter: personIds.length ? `ID IN (${personIds.map(id => `'${id}'`).join(',')})` : '1=0',
+                    ExtraFilter: `ID IN (${personIds.map(id => `'${id}'`).join(',')})`,
                     Fields: ['ID', 'DisplayName', 'FirstName', 'LastName'],
                     ResultType: 'simple',
-                },
-                {
+                });
+            }
+            if (userIds.length > 0) {
+                userIdx = lookupQueries.length;
+                lookupQueries.push({
                     EntityName: 'MJ: Users',
-                    ExtraFilter: userIds.length ? `ID IN (${userIds.map(id => `'${id}'`).join(',')})` : '1=0',
+                    ExtraFilter: `ID IN (${userIds.map(id => `'${id}'`).join(',')})`,
                     Fields: ['ID', 'FirstLast', 'Name'],
                     ResultType: 'simple',
-                },
-            ]);
+                });
+            }
+            const lookupResults = lookupQueries.length > 0 ? await rv.RunViews(lookupQueries) : [];
             const person = new Map<string, string>();
-            for (const p of (peopleRes?.Results ?? []) as { ID: string; DisplayName?: string | null; FirstName?: string | null; LastName?: string | null }[]) {
-                const name = p.DisplayName || [p.FirstName, p.LastName].filter(Boolean).join(' ');
-                if (name) person.set(p.ID.toLowerCase(), name);
+            if (personIdx >= 0) {
+                const peopleRes = lookupResults[personIdx];
+                for (const p of (peopleRes?.Results ?? []) as { ID: string; DisplayName?: string | null; FirstName?: string | null; LastName?: string | null }[]) {
+                    const name = p.DisplayName || [p.FirstName, p.LastName].filter(Boolean).join(' ');
+                    if (name) person.set(p.ID.toLowerCase(), name);
+                }
             }
             const user = new Map<string, string>();
-            for (const u of (usersRes?.Results ?? []) as { ID: string; FirstLast?: string | null; Name?: string | null }[]) {
-                const name = u.FirstLast || u.Name;
-                if (name) user.set(u.ID.toLowerCase(), name);
+            if (userIdx >= 0) {
+                const usersRes = lookupResults[userIdx];
+                for (const u of (usersRes?.Results ?? []) as { ID: string; FirstLast?: string | null; Name?: string | null }[]) {
+                    const name = u.FirstLast || u.Name;
+                    if (name) user.set(u.ID.toLowerCase(), name);
+                }
             }
             return taskAssigneeLabels(rows, kindOf, { person, user });
         } catch (err) {
@@ -5217,30 +5274,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** Whether the user holds an Active outside (Shared band) seat on the space shown. */
     private isOutsideUser(userId: string): boolean {
         return this.spaceMembers.some((m) => m.status === 'Active' && m.band === 'Shared' && UUIDsEqual(m.userId, userId));
-    }
-
-    /**
-     * The photos on the People records linked to these users, for whoever may read them. An outside participant reads the
-     * People records of everyone they share a space with, which is how they see a photo of someone whose user they can not
-     * read. A refused or failed read leaves those members on initials; it never fails the People tab.
-     */
-    private async loadPeoplePhotos(rv: RunView, userFilter: string): Promise<PersonPhotoRow[]> {
-        try {
-            const res = await rv.RunView<PersonPhotoRow>({
-                EntityName: PEOPLE_ENTITY,
-                ExtraFilter: `LinkedUserID IN (${userFilter})`,
-                Fields: ['ID', 'LinkedUserID', 'PhotoURL'],
-                ResultType: 'simple',
-            });
-            if (!res?.Success) {
-                LogError(`Member photos from People could not be read: ${res?.ErrorMessage ?? 'unknown error'}`);
-                return [];
-            }
-            return res.Results ?? [];
-        } catch (err) {
-            LogError('Error loading member photos from People: ' + (err instanceof Error ? err.message : String(err)));
-            return [];
-        }
     }
 
     /** The photo of a person who holds a seat on the space shown, whatever the seat's status. */

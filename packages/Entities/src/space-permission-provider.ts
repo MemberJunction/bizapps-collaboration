@@ -60,34 +60,38 @@ export class CollaborationSpacePermissionProvider extends PermissionProviderBase
         const userId = asUuid(user.ID);
         if (!userId) return [];
         const view = viewFor(provider);
-        const spaces = await view.RunView<{ ID: string; ParentID: string | null; InheritsMembership: boolean; OwnerID: string; AgentRetrieval: SpaceNode['agentRetrieval'] }>({
-            EntityName: SPACES,
-            ExtraFilter: 'ID IS NOT NULL',
-            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval'],
-            ResultType: 'simple',
-            MaxRows: PAGE,
-        }, user);
-        if (!spaces.Success || (spaces.Results?.length ?? 0) >= PAGE) return [];
-        const members = await view.RunView<{ SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: MemberSnapshot['band']; SpaceRoleTypeID: string }>({
-            EntityName: MEMBERS,
-            ExtraFilter: `UserID = '${userId}' AND Status = 'Active'`,
-            Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
-            ResultType: 'simple',
-            MaxRows: PAGE,
-        }, user);
-        if (!members.Success || (members.Results?.length ?? 0) >= PAGE) return [];
-        const flags = await roleFlags(view, user, (members.Results ?? []).map((row) => row.SpaceRoleTypeID));
+        const [spaces, members] = await view.RunViews([
+            {
+                EntityName: SPACES,
+                ExtraFilter: 'ID IS NOT NULL',
+                Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval'],
+                ResultType: 'simple',
+                MaxRows: PAGE,
+            },
+            {
+                EntityName: MEMBERS,
+                ExtraFilter: `UserID = '${userId}' AND Status = 'Active'`,
+                Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
+                ResultType: 'simple',
+                MaxRows: PAGE,
+            },
+        ], user);
+        const spaceRows = (spaces?.Results ?? []) as Array<{ ID: string; ParentID: string | null; InheritsMembership: boolean; OwnerID: string; AgentRetrieval: SpaceNode['agentRetrieval'] }>;
+        const memberRows = (members?.Results ?? []) as Array<{ SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: MemberSnapshot['band']; SpaceRoleTypeID: string }>;
+        if (!spaces?.Success || spaceRows.length >= PAGE) return [];
+        if (!members?.Success || memberRows.length >= PAGE) return [];
+        const flags = await roleFlags(view, user, memberRows.map((row) => row.SpaceRoleTypeID));
         if (!flags) return [];
         const empty = blankRole();
         const graph = {
-            spaces: (spaces.Results ?? []).map((row) => ({
+            spaces: spaceRows.map((row) => ({
                 id: row.ID,
                 parentId: row.ParentID,
                 inheritsMembership: !!row.InheritsMembership,
                 ownerId: row.OwnerID,
                 agentRetrieval: row.AgentRetrieval,
             })),
-            memberships: (members.Results ?? []).map((row) => ({
+            memberships: memberRows.map((row) => ({
                 spaceId: row.SpaceID,
                 userId: row.UserID,
                 status: row.Status,

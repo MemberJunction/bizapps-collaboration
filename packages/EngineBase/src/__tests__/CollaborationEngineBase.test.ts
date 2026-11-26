@@ -290,37 +290,43 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             }
 
             const runViewCalls: RunViewParams[] = [];
-            const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
-                async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
-                    runViewCalls.push(params);
-                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
-                        const liveItems = rows.map((r) => ({
-                            ID: r.SpaceItemID,
-                            SpaceID: r.SpaceID,
-                            Band: r.Band,
-                        }));
-                        return {
-                            Success: true,
-                            Results: liveItems as Partial<T>[] as T[],
-                            UserViewRunID: '',
-                            TotalRowCount: liveItems.length,
-                            RowCount: liveItems.length,
-                            ExecutionTime: 1,
-                            ErrorMessage: '',
-                        };
-                    }
-                    const afterId = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
-                    const filtered = afterId ? rows.filter((r) => r.ID.toLowerCase() > afterId) : rows;
-                    const page = params.MaxRows ? filtered.slice(0, params.MaxRows) : filtered;
+            let runViewsBatchCount = 0;
+            const handleRunView = async <T,>(params: RunViewParams): Promise<RunViewResult<T>> => {
+                runViewCalls.push(params);
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                    const liveItems = rows.map((r) => ({
+                        ID: r.SpaceItemID,
+                        SpaceID: r.SpaceID,
+                        Band: r.Band,
+                    }));
                     return {
                         Success: true,
-                        Results: page as Partial<T>[] as T[],
+                        Results: liveItems as Partial<T>[] as T[],
                         UserViewRunID: '',
-                        TotalRowCount: page.length,
-                        RowCount: page.length,
+                        TotalRowCount: liveItems.length,
+                        RowCount: liveItems.length,
                         ExecutionTime: 1,
                         ErrorMessage: '',
                     };
+                }
+                const afterId = params.AfterKey ? String(params.AfterKey.GetValueByFieldName('ID')).toLowerCase() : '';
+                const filtered = afterId ? rows.filter((r) => r.ID.toLowerCase() > afterId) : rows;
+                const page = params.MaxRows ? filtered.slice(0, params.MaxRows) : filtered;
+                return {
+                    Success: true,
+                    Results: page as Partial<T>[] as T[],
+                    UserViewRunID: '',
+                    TotalRowCount: page.length,
+                    RowCount: page.length,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            };
+            const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
+                RunView: handleRunView,
+                async RunViews<T>(paramsList: RunViewParams[]): Promise<RunViewResult<T>[]> {
+                    runViewsBatchCount += 1;
+                    return Promise.all(paramsList.map((p) => handleRunView<T>(p)));
                 },
             };
 
@@ -332,6 +338,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             );
 
             expect(loaded).toHaveLength(totalReceipts);
+            expect(runViewsBatchCount).toBe(1);
             expect(runViewCalls.filter((c) => c.EntityName === 'MJ_BizApps_Collaboration: Space Agent Source Receipts')).toHaveLength(4);
             const perAnswerCounts = new Map<string, number>();
             for (const r of loaded) {
@@ -542,43 +549,47 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
                 },
             ];
 
-            const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
-                async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
-                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
-                        return {
-                            Success: true,
-                            Results: [
-                                { ID: demotedItem, SpaceID: spaceA, Band: 'Team' },
-                                { ID: movedItem, SpaceID: spaceB, Band: 'Shared' },
-                                { ID: validItem, SpaceID: spaceA, Band: 'Shared' },
-                            ] as Partial<T>[] as T[],
-                            UserViewRunID: '',
-                            TotalRowCount: 3,
-                            RowCount: 3,
-                            ExecutionTime: 1,
-                            ErrorMessage: '',
-                        };
-                    }
-                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
-                        return {
-                            Success: false,
-                            ErrorMessage: 'Permission denied on Space Grants',
-                            Results: [] as T[],
-                            UserViewRunID: '',
-                            TotalRowCount: 0,
-                            RowCount: 0,
-                            ExecutionTime: 1,
-                        };
-                    }
+            const handleRunView = async <T,>(params: RunViewParams): Promise<RunViewResult<T>> => {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
                     return {
                         Success: true,
-                        Results: receiptRows as Partial<T>[] as T[],
+                        Results: [
+                            { ID: demotedItem, SpaceID: spaceA, Band: 'Team' },
+                            { ID: movedItem, SpaceID: spaceB, Band: 'Shared' },
+                            { ID: validItem, SpaceID: spaceA, Band: 'Shared' },
+                        ] as Partial<T>[] as T[],
                         UserViewRunID: '',
-                        TotalRowCount: receiptRows.length,
-                        RowCount: receiptRows.length,
+                        TotalRowCount: 3,
+                        RowCount: 3,
                         ExecutionTime: 1,
                         ErrorMessage: '',
                     };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
+                    return {
+                        Success: false,
+                        ErrorMessage: 'Permission denied on Space Grants',
+                        Results: [] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: 0,
+                        RowCount: 0,
+                        ExecutionTime: 1,
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: receiptRows as Partial<T>[] as T[],
+                    UserViewRunID: '',
+                    TotalRowCount: receiptRows.length,
+                    RowCount: receiptRows.length,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            };
+            const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
+                RunView: handleRunView,
+                async RunViews<T>(paramsList: RunViewParams[]): Promise<RunViewResult<T>[]> {
+                    return Promise.all(paramsList.map((p) => handleRunView<T>(p)));
                 },
             };
 
@@ -772,92 +783,99 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             ];
 
             let denySpaceGrants = false;
-            const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
-                async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
-                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
-                        if (denySpaceGrants) {
-                            return {
-                                Success: false,
-                                ErrorMessage: 'Permission denied: user does not have read access on MJ_BizApps_Collaboration: Space Grants',
-                                Results: [] as T[],
-                                UserViewRunID: '',
-                                TotalRowCount: 0,
-                                RowCount: 0,
-                                ExecutionTime: 1,
-                            };
-                        }
+            let runViewsBatchCalls = 0;
+            const handleRunView = async <T,>(params: RunViewParams): Promise<RunViewResult<T>> => {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
+                    if (denySpaceGrants) {
                         return {
-                            Success: true,
-                            Results: [
-                                { ID: '1', SpaceID: null, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: ksGpRemoved, Sequence: 1 },
-                                { ID: '2', SpaceID: null, SpaceTypeID: typeA, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: ksGpTeam, Sequence: 2 },
-                                { ID: '3', SpaceID: null, SpaceTypeID: typeA, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: ksValid, Sequence: 3 },
-                                { ID: '4', SpaceID: gpId, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Remove', Band: 'Shared', TargetRecordID: ksGpRemoved, Sequence: 1 },
-                                { ID: '5', SpaceID: gpId, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Team', TargetRecordID: ksGpTeam, Sequence: 2 },
-                            ] as Partial<T>[] as T[],
+                            Success: false,
+                            ErrorMessage: 'Permission denied: user does not have read access on MJ_BizApps_Collaboration: Space Grants',
+                            Results: [] as T[],
                             UserViewRunID: '',
-                            TotalRowCount: 5,
-                            RowCount: 5,
+                            TotalRowCount: 0,
+                            RowCount: 0,
                             ExecutionTime: 1,
-                            ErrorMessage: '',
-                        };
-                    }
-                    if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
-                        return {
-                            Success: true,
-                            Results: [
-                                { ID: gpId, ParentID: null, SpaceTypeID: typeA, Configuration: null },
-                                { ID: parentId, ParentID: gpId, SpaceTypeID: typeA, Configuration: null },
-                                { ID: leafId, ParentID: parentId, SpaceTypeID: typeA, Configuration: null },
-                                { ID: diffParentId, ParentID: gpId, SpaceTypeID: typeB, Configuration: null },
-                                { ID: restartLeafId, ParentID: diffParentId, SpaceTypeID: typeA, Configuration: null },
-                                {
-                                    ID: replaceLeafId,
-                                    ParentID: parentId,
-                                    SpaceTypeID: typeA,
-                                    Configuration: JSON.stringify({ Grants: { KnowledgeSource: { ListMode: 'Replace' } } }),
-                                },
-                            ] as Partial<T>[] as T[],
-                            UserViewRunID: '',
-                            TotalRowCount: 6,
-                            RowCount: 6,
-                            ExecutionTime: 1,
-                            ErrorMessage: '',
-                        };
-                    }
-                    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Types') {
-                        return {
-                            Success: true,
-                            Results: [
-                                { ID: typeA, Configuration: JSON.stringify({ SpaceOverridable: ['Grants.KnowledgeSource'] }) },
-                                { ID: typeB, Configuration: null },
-                            ] as Partial<T>[] as T[],
-                            UserViewRunID: '',
-                            TotalRowCount: 2,
-                            RowCount: 2,
-                            ExecutionTime: 1,
-                            ErrorMessage: '',
                         };
                     }
                     return {
                         Success: true,
-                        Results: receipts as Partial<T>[] as T[],
+                        Results: [
+                            { ID: '1', SpaceID: null, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: ksGpRemoved, Sequence: 1 },
+                            { ID: '2', SpaceID: null, SpaceTypeID: typeA, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: ksGpTeam, Sequence: 2 },
+                            { ID: '3', SpaceID: null, SpaceTypeID: typeA, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetRecordID: ksValid, Sequence: 3 },
+                            { ID: '4', SpaceID: gpId, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Remove', Band: 'Shared', TargetRecordID: ksGpRemoved, Sequence: 1 },
+                            { ID: '5', SpaceID: gpId, SpaceTypeID: null, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Team', TargetRecordID: ksGpTeam, Sequence: 2 },
+                        ] as Partial<T>[] as T[],
                         UserViewRunID: '',
-                        TotalRowCount: receipts.length,
-                        RowCount: receipts.length,
+                        TotalRowCount: 5,
+                        RowCount: 5,
                         ExecutionTime: 1,
                         ErrorMessage: '',
                     };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: gpId, ParentID: null, SpaceTypeID: typeA, Configuration: null },
+                            { ID: parentId, ParentID: gpId, SpaceTypeID: typeA, Configuration: null },
+                            { ID: leafId, ParentID: parentId, SpaceTypeID: typeA, Configuration: null },
+                            { ID: diffParentId, ParentID: gpId, SpaceTypeID: typeB, Configuration: null },
+                            { ID: restartLeafId, ParentID: diffParentId, SpaceTypeID: typeA, Configuration: null },
+                            {
+                                ID: replaceLeafId,
+                                ParentID: parentId,
+                                SpaceTypeID: typeA,
+                                Configuration: JSON.stringify({ Grants: { KnowledgeSource: { ListMode: 'Replace' } } }),
+                            },
+                        ] as Partial<T>[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: 6,
+                        RowCount: 6,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Types') {
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: typeA, Configuration: JSON.stringify({ SpaceOverridable: ['Grants.KnowledgeSource'] }) },
+                            { ID: typeB, Configuration: null },
+                        ] as Partial<T>[] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: 2,
+                        RowCount: 2,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: receipts as Partial<T>[] as T[],
+                    UserViewRunID: '',
+                    TotalRowCount: receipts.length,
+                    RowCount: receipts.length,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            };
+            const providerObj: Partial<IMetadataProvider & IRunViewProvider> = {
+                RunView: handleRunView,
+                async RunViews<T>(paramsList: RunViewParams[]): Promise<RunViewResult<T>[]> {
+                    runViewsBatchCalls += 1;
+                    return Promise.all(paramsList.map((p) => handleRunView<T>(p)));
                 },
             };
 
-            // 1. Direct SpaceGrant + SpaceType + full ancestor chain resolution
+            // 1. Direct SpaceGrant + SpaceType + full ancestor chain resolution in ONE RunViews batch
             const loadedDirect = await engine.LoadSpaceAgentSourceReceiptsForConversation(
                 CONV_UUID,
                 mockUser,
                 providerObj as IMetadataProvider,
             );
             expect(loadedDirect.map((r) => r.SourceTitle)).toEqual(['Valid Shared KS', 'Valid Type-Restart KS']);
+            expect(runViewsBatchCalls).toBe(1);
 
             // 2. When Space Grants read is denied and NO server config resolver is available -> fail closed (ZERO KnowledgeSource receipts)
             denySpaceGrants = true;
@@ -906,6 +924,52 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
                 providerWithGql as Partial<IMetadataProvider> as IMetadataProvider,
             );
             expect(loadedViaGql.map((r) => r.SourceTitle)).toEqual(['Valid Shared KS']);
+        });
+    });
+
+    describe('ProviderToUse & impersonation-safe user cache isolation', () => {
+        it('tracks active provider via ProviderToUse and isolates/evicts per-user caches across persona switches', async () => {
+            const userA = { ID: '11111111-1111-4111-8111-111111111111', Name: 'Staff User' } as UserInfo;
+            const userB = { ID: '22222222-2222-4222-8222-222222222222', Name: 'Impersonated Participant' } as UserInfo;
+            const spaceId = '33333333-3333-4333-8333-333333333333';
+
+            let currentUser: UserInfo = userA;
+            const customProvider: Partial<IMetadataProvider & IRunViewProvider> = {
+                get CurrentUser() {
+                    return currentUser;
+                },
+                async RunView<T>(): Promise<RunViewResult<T>> {
+                    return {
+                        Success: true,
+                        Results: [] as T[],
+                        UserViewRunID: '',
+                        TotalRowCount: 0,
+                        RowCount: 0,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    };
+                },
+            };
+
+            Reflect.set(engine, '_activeProvider', customProvider as IMetadataProvider);
+            expect(engine.ProviderToUse).toBe(customProvider);
+
+            engine.PrimeReachableSpacesCache(
+                userA,
+                [{ ID: spaceId, ParentID: null, SpaceTypeID: null, InheritsMembership: false, OwnerID: userA.ID, ClosedAt: null, StatusID: null }],
+                customProvider as IMetadataProvider,
+            );
+
+            // User A reads from primed cache with zero RunView calls
+            const spacesA = await engine.GetReachableSpaces(userA, customProvider as IMetadataProvider);
+            expect(spacesA.has(spaceId)).toBe(true);
+
+            // Switching to User B on the same provider MUST NOT see User A's cached spaces
+            currentUser = userB;
+            const spacesB = await engine.GetReachableSpaces(userB, customProvider as IMetadataProvider);
+            expect(spacesB.has(spaceId)).toBe(false);
+
+            Reflect.set(engine, '_activeProvider', null);
         });
     });
 });

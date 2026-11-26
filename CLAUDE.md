@@ -15,3 +15,13 @@ Work runs on MemberJunction's `next`, in a workspace made by `mj dev workspace` 
 ## Release lines
 
 `next` is built on MJ Edge and never publishes. Production releases come from release lines (`lts/<MJ major.minor>`), listed in `release-lines.json`. Land every change on `next` first, then add a `backport lts/X.Y` label; a PR that adds a migration needs a label for every open line, or its files listed as edge-only in `release-lines.json`. Never open a PR straight into a line or into `main`. Full rules, publishing and the line cut: [guides/RELEASE_LINES.md](guides/RELEASE_LINES.md).
+
+## Performance & Caching Standard (5 Non-Negotiable Rules)
+
+See also [`AGENTS.md`](AGENTS.md). Every engine, server driver, Angular widget, and Explorer resource in `bizapps-collaboration` MUST adhere to these 5 rules:
+
+1. **`BaseEngine` (`BaseSingleton`) for Bounded Reference/Taxonomy Metadata:** Cache bounded lookup/config tables (`Space Types`, `Space Type Status`, `Space Role Types`, `Application Settings` on `CollaborationEngineBase`; staff-only `Authorizations`, `Authorization Roles`, app/type `Space Grants` on `CollaborationAdminEngineBase`) via `BaseEnginePropertyConfig` (`AutoRefresh: true`) with O(1) lookup maps cleared in `AdditionalLoading()` — never re-query them via `RunView` per widget mount.
+2. **Multi-Provider & Impersonation Safety:** Override `ProviderToUse` to follow the active provider passed to `Config()` / `Metadata.Provider`; auto-evict per-user caches (`ClearUserCaches()`) whenever `userId` changes (persona switch / impersonation); set `CacheLocal: false` on any RLS-filtered entity so IndexedDB never leaks across users; gate optional/staff-only queries on `EntityInfo.GetUserPermisions(user)?.CanRead` (or isolate staff-only entities in `CollaborationAdminEngineBase`).
+3. **Mandatory `rv.RunViews([...])` Single-Request Batching:** Never fire `Promise.all([new RunView().RunView(...), ...])` (N separate HTTP requests) or multi-hop `ParentID` loops when `RootParentID` exists. Use `RunView.FromMetadataProvider(this.ProviderToUse).RunViews([...])` with `ResultType: 'simple'` + narrow `Fields`.
+4. **`ConversationEngine`-Style Bounded Container Caching:** Never cache unbounded transactional tables globally or cache arbitrary `ExtraFilter` SQL list views. Cache only bounded container windows/subtrees (e.g., per-`SpaceID`, per-`ConversationID`, per-`RootParentID`, or per-user reachable space/seat caches) with `BaseEntity` event invalidation + explicit `InvalidateSpaceCache()` / `ClearUserCaches()` + persona-switch eviction.
+5. **RLS-Safe Two-Step Entity Reads:** Never write raw SQL subqueries against RLS-filtered base views (`vw*`) inside `ExtraFilter`; read the RLS-protected entity via `RunView` first, then pass `ID IN (...)`.

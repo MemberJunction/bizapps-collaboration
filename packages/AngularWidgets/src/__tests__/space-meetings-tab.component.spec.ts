@@ -10,6 +10,8 @@ import {
     createDefaultSpaceMeetingDraft,
     filterSpaceMeetings,
     loadSpaceChildSpaces,
+    loadSpaceMeetingDetail,
+    loadSpaceMeetingsWithRollup,
     meetingVisibilityToSpaceBand,
     type SpaceMeetingCardItem,
     SpaceMeetingsTabComponent,
@@ -362,5 +364,81 @@ describe('SpaceMeetingsTabComponent (meetings widget composition, drawer, sub-sp
         expect(ics).toContain('SUMMARY:Sync\\, Q4\\; Review');
         expect(ics).toContain('URL:https://meet.example.com/q4-arch');
         expect(ics).toContain('END:VCALENDAR');
+    });
+
+    it('batches independent queries in loadSpaceMeetingsWithRollup and loadSpaceMeetingDetail via single RunViews calls', async () => {
+        const rootSpaceId = 'S1000001-0000-4000-8000-000000000001';
+        const meetingId = 'M1000001-0000-4000-8000-000000000001';
+        const provider = mockRunViewProvider((params) => {
+            if (params.EntityName === 'MJ_BizApps_Tasks: Meeting Links') {
+                return {
+                    Success: true,
+                    Results: [{ ID: 'ML-1', MeetingID: meetingId, SeriesID: null, RecordID: rootSpaceId }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            }
+            if (params.EntityName === 'MJ_BizApps_Tasks: Meetings') {
+                return {
+                    Success: true,
+                    Results: [{
+                        ID: meetingId,
+                        Name: 'Batched Architecture Sync',
+                        StartsAt: futureIso(24),
+                        EndsAt: futureIso(25),
+                        Status: 'Scheduled',
+                        Visibility: 'Standard',
+                    }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            }
+            if (params.EntityName === 'MJ_BizApps_Common: People') {
+                return {
+                    Success: true,
+                    Results: [{ ID: 'P-VIEWER', Name: 'Jane Viewer', LinkedUserID: 'U-VIEWER' }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+        });
+
+        const rollup = await loadSpaceMeetingsWithRollup(rootSpaceId, provider, {
+            CurrentUserId: 'U-VIEWER',
+            IncludeSubSpaces: false,
+            CanSeeTeamSide: true,
+        });
+        expect(rollup.Meetings).toHaveLength(1);
+        expect(provider.RunViews).toHaveBeenCalledTimes(1);
+
+        const detailProvider = mockRunViewProvider((params) => {
+            if (params.EntityName === 'MJ_BizApps_Common: People') {
+                return {
+                    Success: true,
+                    Results: [{ ID: 'P-VIEWER', Name: 'Jane Viewer', LinkedUserID: 'U-VIEWER' }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' };
+        });
+
+        const detail = await loadSpaceMeetingDetail(makeMeeting({ ID: meetingId }), detailProvider, {
+            CurrentUserId: 'U-VIEWER',
+            CanSeeTeamSide: true,
+        });
+        expect(detail.Meeting.ID).toBe(meetingId);
+        // All 7 independent detail reads (Agenda, ItemTypes, Attendees, Notes, TaskLinks, People, ViewerPerson) batch into ONE RunViews call
+        expect(detailProvider.RunViews).toHaveBeenCalledTimes(1);
+        expect(detailProvider.RunView).not.toHaveBeenCalled();
     });
 });
