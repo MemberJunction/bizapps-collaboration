@@ -19,6 +19,7 @@ import { BreadcrumbItem } from './types';
           <mjc-type-tile
             [IconClass]="TypeIconClass || 'fa-solid fa-compass'"
             [Color]="TypeColor || ''"
+            [ImageUrl]="ImageUrl"
             [IsClosed]="Status === 'Closed'"
             Size="lg">
           </mjc-type-tile>
@@ -304,6 +305,7 @@ export class CollabSpaceHeaderComponent {
   @Input() TypeName = '';
   @Input() TypeIconClass = '';
   @Input() TypeColor = '';
+  @Input() ImageUrl: string | null = null;
   @Input() Status: 'Active' | 'Paused' | 'Closed' | string = 'Active';
   @Input() Subtitle = '';
   @Input() Breadcrumbs: BreadcrumbItem[] = [];

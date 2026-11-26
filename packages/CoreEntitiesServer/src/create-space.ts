@@ -18,6 +18,14 @@ export interface CreateSpaceInput {
     ParentID?: string | null;
     /** Whether the space's members come from its parent (D22: the creator chooses). A top-level space has no parent to inherit from; default true. */
     InheritsMembership?: boolean;
+    /** Optional Font Awesome icon class overriding the space type default. */
+    IconClass?: string | null;
+    /** Optional accent hex color overriding the space type default. */
+    Color?: string | null;
+    /** Optional square avatar/logo URL or 128x128 WebP data URI. */
+    ImageURL?: string | null;
+    /** Optional hero banner or background image URL. */
+    BackgroundImageURL?: string | null;
     /** The subtype's own columns, by field name. Only what the type's subtype adds to a space is accepted. */
     Details?: SpaceDetailsMap | null;
 }
@@ -59,6 +67,18 @@ export async function createSpace(provider: DatabaseProviderBase, user: UserInfo
     space.InheritsMembership = input.InheritsMembership ?? true;
     space.Name = name;
     space.Description = input.Description?.trim() || null;
+    if (input.IconClass !== undefined) {
+        space.IconClass = input.IconClass?.trim() || null;
+    }
+    if (input.Color !== undefined) {
+        space.Color = input.Color?.trim() || null;
+    }
+    if (input.ImageURL !== undefined) {
+        space.ImageURL = input.ImageURL?.trim() || null;
+    }
+    if (input.BackgroundImageURL !== undefined) {
+        space.BackgroundImageURL = input.BackgroundImageURL?.trim() || null;
+    }
     const attached = await space.EnsureISAChild();
     const leaf: BaseEntity = attached ? space.LeafEntity : space;
 

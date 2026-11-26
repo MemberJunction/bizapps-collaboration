@@ -1,0 +1,11 @@
+[
+  {
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Notes",
+      "Status": "Deprecated"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Notes"
+    }
+  }
+]

@@ -56,6 +56,14 @@ describe('what a Settings save writes', () => {
         const shown = buildSettingsModel(loaded, yearType);
         assert.deepEqual(changedSettings(shown, { ...shown, backgroundImageUrl: '' }), { BackgroundImageURL: null });
     });
+
+    it('round-trips and clears ImageURL', () => {
+        const loaded = space({ ImageURL: 'data:image/webp;base64,abc' });
+        const shown = buildSettingsModel(loaded, yearType);
+        assert.equal(shown.imageUrl, 'data:image/webp;base64,abc');
+        assert.deepEqual(changedSettings(shown, { ...shown, imageUrl: null }), { ImageURL: null });
+        assert.deepEqual(changedSettings(shown, { ...shown, imageUrl: 'https://example.test/logo.png' }), { ImageURL: 'https://example.test/logo.png' });
+    });
 });
 
 describe('the Settings session across two saves', () => {
@@ -97,17 +105,19 @@ describe('the Settings session across two saves', () => {
 
 describe('writing the changes onto a space', () => {
     it('sets exactly the fields that changed', () => {
-        const target = { Name: 'a', Description: 'b', IconClass: 'c', Color: 'd', BackgroundImageURL: null, InheritsMembership: true, AgentRetrieval: 'Included' } as Required<Parameters<typeof applySettingsChanges>[0]>;
-        applySettingsChanges(target, { Name: 'renamed', AgentRetrieval: 'ExcludedEntirely' });
+        const target = { Name: 'a', Description: 'b', IconClass: 'c', Color: 'd', ImageURL: null, BackgroundImageURL: null, InheritsMembership: true, AgentRetrieval: 'Included' } as Required<Parameters<typeof applySettingsChanges>[0]>;
+        applySettingsChanges(target, { Name: 'renamed', ImageURL: 'data:image/webp;base64,xyz', AgentRetrieval: 'ExcludedEntirely' });
         assert.equal(target.Name, 'renamed');
+        assert.equal(target.ImageURL, 'data:image/webp;base64,xyz');
         assert.equal(target.AgentRetrieval, 'ExcludedEntirely');
         assert.equal(target.Description, 'b');
         assert.equal(target.Color, 'd');
     });
 
     it('can set a field to null', () => {
-        const target = { Name: 'a', Description: 'b', IconClass: 'c', Color: 'd', BackgroundImageURL: 'x', InheritsMembership: true, AgentRetrieval: 'Included' } as Required<Parameters<typeof applySettingsChanges>[0]>;
-        applySettingsChanges(target, { BackgroundImageURL: null, Description: null });
+        const target = { Name: 'a', Description: 'b', IconClass: 'c', Color: 'd', ImageURL: 'y', BackgroundImageURL: 'x', InheritsMembership: true, AgentRetrieval: 'Included' } as Required<Parameters<typeof applySettingsChanges>[0]>;
+        applySettingsChanges(target, { ImageURL: null, BackgroundImageURL: null, Description: null });
+        assert.equal(target.ImageURL, null);
         assert.equal(target.BackgroundImageURL, null);
         assert.equal(target.Description, null);
     });

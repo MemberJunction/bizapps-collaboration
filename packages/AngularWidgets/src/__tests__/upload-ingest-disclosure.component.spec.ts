@@ -166,6 +166,13 @@ describe('CollabUploadIngestDisclosureComponent (XS-8)', () => {
     await libraryFixture.whenStable();
 
     const libHost = libraryFixture.nativeElement as HTMLElement;
+    // Collapsed by default behind the compact Upload info toggle so the file list isn't visually overwhelmed
+    expect(libHost.querySelector('[data-testid="upload-ingest-disclosure"]')).toBeNull();
+    const infoBtn = libHost.querySelector<HTMLButtonElement>('[data-testid="lib-upload-info-toggle"]');
+    expect(infoBtn).not.toBeNull();
+    infoBtn?.click();
+    libraryFixture.detectChanges();
+    await libraryFixture.whenStable();
     expect(libHost.querySelector('[data-testid="upload-ingest-disclosure"]')).not.toBeNull();
     expect(libHost.querySelector('[data-testid="disclosure-band-pill"]')?.textContent?.trim()).toBe('Shared band');
   });

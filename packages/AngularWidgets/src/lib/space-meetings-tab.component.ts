@@ -317,7 +317,7 @@ export async function loadSpaceMeetingCards(
                         class="search-input"
                         [(ngModel)]="SearchQuery"
                         (ngModelChange)="onSearchChange()"
-                        placeholder="Search meetings, rooms, or organizers…"
+                        placeholder="Search meetings, spaces, or organizers…"
                         aria-label="Search meetings"
                         data-testid="meetings-search-input"
                     />
@@ -325,14 +325,14 @@ export async function loadSpaceMeetingCards(
             </div>
 
             @if (IncludeSubSpaces && SubSpaceFilterOptions.length > 1) {
-                <div class="room-filter-bar" aria-label="Filter by room">
+                <div class="room-filter-bar" aria-label="Filter by space">
                     <button
                         type="button"
                         class="room-pill"
                         [class.active]="!ActiveRoomFilterId"
                         (click)="setRoomFilter(null)"
                     >
-                        All rooms ({{ VisibleMeetings.length }})
+                        All spaces ({{ VisibleMeetings.length }})
                     </button>
                     @for (room of SubSpaceFilterOptions; track room.id) {
                         <button

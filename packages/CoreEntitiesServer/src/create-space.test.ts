@@ -94,10 +94,23 @@ describe('making a space and its owner seat', () => {
         usual();
         const { provider, log, space, seat } = providerFor({ hasSubtype: true });
         // D22: the creator chooses whether the space inherits its parent's members; a top-level space says so itself
-        const result = await createSpace(provider, USER, { TypeID: TYPE_ID, Name: '  2026 Board ', Description: ' the board ', InheritsMembership: false, Details: { TermName: '2026' } });
+        const result = await createSpace(provider, USER, {
+            TypeID: TYPE_ID,
+            Name: '  2026 Board ',
+            Description: ' the board ',
+            InheritsMembership: false,
+            IconClass: ' fa-solid fa-crown ',
+            Color: ' #2563eb ',
+            ImageURL: ' data:image/webp;base64,UklGRh4AAABXRUJQ ',
+            BackgroundImageURL: ' https://example.com/banner.jpg ',
+            Details: { TermName: '2026' },
+        });
         assert.deepEqual(result, { status: 'created', spaceId: SPACE_ID });
         assert.deepEqual(log, ['begin', 'space save', 'seat save', 'commit']);
-        assert.deepEqual([space['Name'], space['Description'], space['OwnerID'], space['SpaceTypeID'], space['InheritsMembership']], ['2026 Board', 'the board', USER.ID, TYPE_ID, false]);
+        assert.deepEqual(
+            [space['Name'], space['Description'], space['OwnerID'], space['SpaceTypeID'], space['InheritsMembership'], space['IconClass'], space['Color'], space['ImageURL'], space['BackgroundImageURL']],
+            ['2026 Board', 'the board', USER.ID, TYPE_ID, false, 'fa-solid fa-crown', '#2563eb', 'data:image/webp;base64,UklGRh4AAABXRUJQ', 'https://example.com/banner.jpg'],
+        );
         assert.deepEqual([seat['SpaceID'], seat['UserID'], seat['SpaceRoleTypeID'], seat['Band'], seat['Status']], [SPACE_ID, USER.ID, OWNER_ROLE, 'Team', 'Active']);
     });
 

@@ -3609,6 +3609,9 @@ export class mjBizAppsCollaborationSpace_ {
     @MaxLength(1000)
     BackgroundImageURL?: string;
         
+    @Field({nullable: true, description: "Optional square avatar/logo URL or 128x128 WebP data URI for the Space."}) 
+    ImageURL?: string;
+        
     @Field({nullable: true}) 
     Configuration?: string;
         
@@ -3688,6 +3691,9 @@ export class CreatemjBizAppsCollaborationSpaceInput {
     BackgroundImageURL: string | null;
 
     @Field({ nullable: true })
+    ImageURL?: string | null;
+
+    @Field({ nullable: true })
     Configuration: string | null;
 
     @Field({ nullable: true })
@@ -3747,6 +3753,9 @@ export class UpdatemjBizAppsCollaborationSpaceInput {
 
     @Field({ nullable: true })
     BackgroundImageURL?: string | null;
+
+    @Field({ nullable: true })
+    ImageURL?: string | null;
 
     @Field({ nullable: true })
     Configuration?: string | null;

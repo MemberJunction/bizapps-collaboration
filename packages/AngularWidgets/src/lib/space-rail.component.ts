@@ -190,6 +190,7 @@ export interface SpaceRailPref {
               <mjc-type-tile
                 [IconClass]="s.iconClass"
                 [Color]="s.color || ''"
+                [ImageUrl]="s.imageUrl || null"
                 [IsClosed]="!!s.isLocked"
                 Size="sm">
               </mjc-type-tile>
@@ -213,6 +214,7 @@ export interface SpaceRailPref {
               <mjc-type-tile
                 [IconClass]="s.iconClass"
                 [Color]="s.color || ''"
+                [ImageUrl]="s.imageUrl || null"
                 [IsClosed]="!!s.isLocked"
                 Size="sm">
               </mjc-type-tile>
@@ -260,6 +262,7 @@ export interface SpaceRailPref {
                 <mjc-type-tile
                   [IconClass]="match.iconClass"
                   [Color]="match.color || ''"
+                  [ImageUrl]="match.imageUrl || null"
                   [IsClosed]="!!match.isLocked"
                   Size="sm">
                 </mjc-type-tile>

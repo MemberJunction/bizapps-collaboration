@@ -33,7 +33,7 @@ import {
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, type NeedsYouItem, GrantsForViewer, noteDocument, notePromotionVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, type NeedsYouItem, GrantsForViewer, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { photosByUser, type PersonPhotoRow, type UserPhotoRow } from './logic/member-photos.js';
 import { LatestOnly } from './logic/latest-only.js';
@@ -68,7 +68,6 @@ import {
     mjBizAppsCollaborationSpaceMemberEntity,
     type mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationItemUseEntity,
-    mjBizAppsCollaborationSpaceNoteEntity,
     mjBizAppsCollaborationSpaceMemberPinEntity,
     type mjBizAppsCollaborationSpaceTypeStatusEntity,
 } from '@mj-biz-apps/collaboration-entities';
@@ -157,11 +156,9 @@ import {
     type SpaceSettingsModel,
     type SpaceDetailsFormDescriptor,
     type SpaceConversationItem,
-    CollabSpaceNotesComponent,
+    CollabTypeTileComponent,
     CollabPinnedStripComponent,
     CollabSpaceDataComponent,
-    type NoteModel,
-    type NoteDraft,
     type PinModel,
     type DataEntryModel,
     type DataRunModel,
@@ -180,7 +177,6 @@ import type { AgendaItem } from '@mj-biz-apps/collaboration-core';
 import { CollabContributedTabHostDirective, type ContributedMeetingTabInstance } from './contributed-tab-host.directive';
 import { MJReactModule } from '@memberjunction/ng-react';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { notesVisibleTo } from './logic/visible-notes.js';
 import { chooseTaskSpace } from './logic/task-space.js';
 import { type AssignableSeat, assignableUsers, assigneeScopeFilter } from './logic/assignee-scope.js';
 import { pinRows } from './logic/home-lists.js';
@@ -192,16 +188,73 @@ import {
     normalizeSettingsSections,
 } from './logic/space-extensions.js';
 
-/** The Space Notes entity's id on this host, which a pin names as its target entity. */
-const notesEntityId = (provider?: { EntityByName?: (name: string) => { ID: string } | undefined } | null): string =>
-    provider?.EntityByName?.('MJ_BizApps_Collaboration: Space Notes')?.ID
-    ?? Metadata.Provider?.EntityByName?.('MJ_BizApps_Collaboration: Space Notes')?.ID
-    ?? '';
 /** A pin's record key, bare: `ID|<uuid>` and `<uuid>` name the same record. */
 const bareRecordId = (recordId: string): string => (recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId);
-interface NoteRow { ID: string; SpaceID: string; Title: string; Body: string | null; Band: SpaceBand; Visibility: 'Space' | 'Private'; AuthorUserID: string; AuthorUser?: string | null; __mj_UpdatedAt: string }
 interface PinRow { ID: string; SpaceID: string; UserID: string; Kind: 'Record' | 'Grant'; TargetEntityID: string | null; TargetRecordID: string | null; GrantID: string | null; Sequence: number }
 interface AnchorRow { ID: string; Role: string; Entity: string; EntityID: string; RecordID: string; IsPrimary: boolean }
+interface RawSpaceItemRow {
+    ID: string;
+    SpaceID: string;
+    EntityID: string;
+    Entity?: string;
+    RecordID: string;
+    Band: SpaceBand;
+    Folder?: string | null;
+    PromotedAt?: string | null;
+    PromotedByUser?: string | null;
+    __mj_CreatedAt: string;
+    __mj_UpdatedAt: string;
+}
+interface RawSpaceChatRow {
+    ID: string;
+    SpaceID: string;
+    ConversationID: string;
+    Name: string;
+    Subject?: string | null;
+    Kind: string;
+    Status: string;
+    __mj_CreatedAt: string;
+    __mj_UpdatedAt: string;
+}
+interface RawSpaceMemberRow {
+    ID: string;
+    SpaceID: string;
+    UserID: string;
+    User?: string | null;
+    UserEmail?: MJUserEntity['Email'];
+    SpaceRoleType?: string | null;
+    SpaceRoleTypeID?: string | null;
+    Space?: string | null;
+    Band: SpaceBand;
+    Status: string;
+    __mj_CreatedAt: string;
+}
+interface OverviewDetailRow {
+    ID: string;
+    Role: string;
+    Message: string;
+    User?: string;
+    UserID?: string | null;
+    __mj_CreatedAt: string;
+}
+interface RawTaskRow {
+    ID: string;
+    Name: string;
+    Description?: string | null;
+    Status?: TaskStatusValue | null;
+    Priority?: TaskPriorityValue | null;
+    PercentComplete?: number | null;
+    DueAt?: string | null;
+    StartedAt?: string | null;
+    ParentID?: string | null;
+    RootParentID?: string | null;
+    Sequence?: number | null;
+    BlockedReason?: string | null;
+    TypeID?: string | null;
+    Type?: string | null;
+    HoursEstimated?: number | null;
+    HoursActual?: number | null;
+}
 import { MentionParser, type MentionPerson } from '@memberjunction/conversations-runtime';
 import { CollaborationNoAccessComponent } from './no-access.component';
 
@@ -212,6 +265,7 @@ interface RawSpaceRecord {
     ParentID?: mjBizAppsCollaborationSpaceEntity['ParentID'];
     IconClass?: mjBizAppsCollaborationSpaceEntity['IconClass'];
     Color?: mjBizAppsCollaborationSpaceEntity['Color'];
+    ImageURL?: mjBizAppsCollaborationSpaceEntity['ImageURL'];
     BackgroundImageURL?: mjBizAppsCollaborationSpaceEntity['BackgroundImageURL'];
     SpaceType?: string;
     SpaceTypeID: mjBizAppsCollaborationSpaceEntity['SpaceTypeID'];
@@ -266,7 +320,7 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
         CollabNewConversationDialogComponent,
         CollabNewSpaceDialogComponent,
         CollabHomeListComponent,
-        CollabSpaceNotesComponent,
+        CollabTypeTileComponent,
         CollabPinnedStripComponent,
         CollabSpaceDataComponent,
         CollabContributedTabHostDirective,
@@ -825,9 +879,13 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                                     @for (space of filteredSpaces; track space.id) {
                                                         <div class="space-directory-card" [class.closed]="space.isClosed" [mjClickable]="space.name" (click)="onSpaceOpenRequested(space.id)">
                                                             <div class="card-top">
-                                                                <div class="space-icon-box" [style.background-color]="space.color || null">
-                                                                    <i [class]="space.iconClass"></i>
-                                                                </div>
+                                                                <mjc-type-tile
+                                                                    [IconClass]="space.iconClass"
+                                                                    [Color]="space.color"
+                                                                    [ImageUrl]="space.imageUrl || null"
+                                                                    [IsClosed]="space.isClosed"
+                                                                    Size="lg"
+                                                                ></mjc-type-tile>
                                                                 <div class="space-type-badge">
                                                                     @if (space.parentName) {
                                                                         <span>{{ space.parentName }} / </span>
@@ -901,6 +959,7 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                             @if (currentPersonId) {
                                                 <bizapps-my-tasks
                                                     [PersonID]="currentPersonId"
+                                                    [Provider]="ProviderToUse"
                                                     [ShowCreateButton]="false"
                                                     (AfterTaskSelected)="onMyTaskSelected($event.ID)"
                                                     (TaskDoubleClicked)="onTaskDoubleClicked($event.ID)"
@@ -972,6 +1031,7 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                         [Breadcrumbs]="breadcrumbs"
                                         [TypeColor]="headerTypeColor"
                                         [TypeIconClass]="headerTypeIcon"
+                                        [ImageUrl]="headerImageUrl"
                                         [Title]="spaceTitle"
                                         [TypeName]="spaceTypeName"
                                         [Status]="spaceStatus"
@@ -1004,11 +1064,6 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                                         <i [class]="act.icon" aria-hidden="true"></i>
                                                     }
                                                     <span>{{ act.label }}</span>
-                                                </button>
-                                            }
-                                            @if (canAddHere && hasTab('Notes') && activeTab !== 'Notes') {
-                                                <button mjButton Variant="secondary" Size="md" (click)="onQuickNoteClicked()" title="Write a note in this space">
-                                                    <i class="fa-solid fa-note-sticky"></i>Note
                                                 </button>
                                             }
                                             @if (activeTab === 'Overview') {
@@ -1115,6 +1170,7 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                                     [CanSeeTeamSide]="canSeeTeamSide"
                                                     [CanShareItems]="canShareItems"
                                                     [ShowUploadDisclosure]="canAddHere"
+                                                    [HasCustomDocsTab]="hasCustomDocsTab"
                                                     [SpaceName]="spaceTitle"
                                                     [DefaultUploadBand]="bandChoice?.start ?? typeDefaultBand ?? null"
                                                     [UploadMaxBytes]="uploadMaxBytes"
@@ -1235,31 +1291,6 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                                         <mj-react-component [Component]="embedded.spec" [ComponentProps]="embedded.props" />
                                                     }
                                                 </mjc-space-data>
-                                            }
-                                            @case ('Notes') {
-                                                <mjc-space-notes
-                                                    #notesPanel
-                                                    [Title]="notesLabel"
-                                                    [Notes]="spaceNotes"
-                                                    [IsLoading]="isLoadingNotes"
-                                                    [ErrorMessage]="notesError"
-                                                    [IsSaving]="isSavingNote"
-                                                    [SaveError]="noteSaveError"
-                                                    [CanWrite]="canContribute"
-                                                    [CanSeeTeam]="canSeeTeamSide"
-                                                    [IsReadOnly]="isSpaceClosed"
-                                                    [DefaultBand]="noteDefaultBand"
-                                                    [SharedLabel]="sharedBandLabel"
-                                                    [TeamLabel]="teamBandLabel"
-                                                    [PromotionConsequence]="notePromotionConsequence"
-                                                    [AutoOpen]="notesAutoOpen"
-                                                    (ComposerOpenChanged)="onNotesComposerOpenChanged($event)"
-                                                    (SaveRequested)="onNoteSave($event)"
-                                                    (DeleteRequested)="onNoteDelete($event)"
-                                                    (PromoteRequested)="onNotePromote($event)"
-                                                    (TurnIntoDocumentRequested)="onNoteTurnIntoDocument($event)"
-                                                    (PinToggleRequested)="onNotePinToggle($event)"
-                                                />
                                             }
                                             @case ('People') {
                                                 <mjc-space-people
@@ -1686,6 +1717,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public spaceSubtitle = '';
     public headerTypeColor = '';
     public headerTypeIcon = 'fa-solid fa-compass';
+    public headerImageUrl: string | null = null;
     public headerBackgroundImageUrl: string | null = null;
     public headerStaffAvatars: AvatarItem[] = [];
     public headerOutsideAvatars: AvatarItem[] = [];
@@ -1850,10 +1882,21 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             case 'Library': return this.libraryTotalCount;
             case 'Work': return this.taskCount;
             case 'Chat': return this.spaceConversations.length;
-            case 'Notes': return this.spaceNotes.length;
             case 'People': return this.headerTotalPeople;
             default: return 0;
         }
+    }
+
+    /** True when this space hosts a contributed Docs Studio / deliverables tab alongside Files. */
+    public get hasCustomDocsTab(): boolean {
+        const contributed = this.spaceTabModel?.contributed;
+        if (!contributed || contributed.size === 0) return false;
+        return this.tabs.some(
+            (t) =>
+                t.id !== 'Library' &&
+                contributed.has(t.id) &&
+                /\bdoc(s|uments)?\b|deliverable/i.test(`${t.id} ${t.label}`),
+        );
     }
 
     /** The tab model of the space shown, built when it is selected. Null until then. */
@@ -1931,6 +1974,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.detailsError = '';
         }
         this.activeTab = resolved ?? 'Overview';
+        this.ensureTabDataLoaded(this.activeTab);
     }
 
     /** Whether the space shown has a tab (its type's panel is on, and no driver removed it). */
@@ -2012,8 +2056,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return null;
     }
 
-    protected async loadActiveSpaceEntity(space: RawSpaceRecord, isCurrent: () => boolean): Promise<void> {
-        if (this.activeSpaceEntity && UUIDsEqual(this.activeSpaceEntity.ID, space.ID)) {
+    protected async loadActiveSpaceEntity(space: RawSpaceRecord, isCurrent: () => boolean, forceReload = false): Promise<void> {
+        if (!forceReload && this.activeSpaceEntity && UUIDsEqual(this.activeSpaceEntity.ID, space.ID)) {
             return;
         }
         try {
@@ -2031,6 +2075,27 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
             if (isCurrent()) {
                 this.activeSpaceEntity = entity;
+                // Sync fresh entity fields back onto rawSpaces so we don't need a separate RunView for Space
+                const idx = this.rawSpaces.findIndex(s => UUIDsEqual(s.ID, space.ID));
+                if (idx >= 0) {
+                    this.rawSpaces[idx] = {
+                        ...this.rawSpaces[idx],
+                        Name: entity.Name,
+                        Description: entity.Description,
+                        ParentID: entity.ParentID,
+                        IconClass: entity.IconClass,
+                        Color: entity.Color,
+                        ImageURL: entity.ImageURL,
+                        BackgroundImageURL: entity.BackgroundImageURL,
+                        SpaceTypeID: entity.SpaceTypeID,
+                        InheritsMembership: entity.InheritsMembership,
+                        AgentRetrieval: entity.AgentRetrieval,
+                        ClosedAt: entity.ClosedAt,
+                        StatusID: entity.StatusID,
+                        OwnerID: entity.OwnerID,
+                        Configuration: entity.Configuration,
+                    };
+                }
             }
         } catch (err) {
             if (isCurrent()) {
@@ -2332,24 +2397,38 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     private refreshHomeListRows(): void {
         const date = (iso: string | null | undefined): string => (iso ? formatDateLocale(iso) : '');
+        const spaceByName = new Map<string, RawSpaceRecord>();
+        for (const sp of this.rawSpaces) {
+            if (sp.Name) spaceByName.set(sp.Name.toLowerCase(), sp);
+        }
+        const decorateSpaceVisual = (row: HomeListRow, space?: RawSpaceRecord): HomeListRow => {
+            const resolved = space ?? spaceByName.get((row.spaceName || '').toLowerCase());
+            if (!resolved) return row;
+            const typeDef = this.spaceTypeMap.get(resolved.SpaceTypeID);
+            return {
+                ...row,
+                imageUrl: resolved.ImageURL || null,
+                color: resolved.Color || typeDef?.color || '',
+            };
+        };
         const agendaRows: HomeListRow[] = this.homeAgendaItems.map((item) => {
             const space = this.rawSpaces.find((s) => UUIDsEqual(s.ID, item.spaceId));
             const when = item.date instanceof Date ? date(item.date.toISOString()) : date(String(item.date));
-            return {
+            return decorateSpaceVisual({
                 key: item.id,
                 title: item.title,
                 detail: [item.context ?? 'Meeting', when].filter(Boolean).join(' · '),
                 spaceName: item.spaceName ?? space?.Name ?? 'Space',
                 iconClass: item.typeIcon ?? 'fa-solid fa-calendar-check',
                 actionLabel: 'Open in Meetings',
-            };
+            }, space);
         });
         const rows: HomeRowModel[] = this.homeList === 'pins'
             ? pinRows(this.homePins)
             : this.homeList === 'approvals'
                 ? invitationRows(this.homeInvitations, date)
                 : [...taskRows(this.homeOpenTaskList, date), ...agendaRows];
-        this.homeListRows = rows;
+        this.homeListRows = rows.map((row) => decorateSpaceVisual(row));
     }
 
     /** Opens (or closes, when it is already open) the list behind a count. */
@@ -2698,7 +2777,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return `(ID IN (${ids}) OR RootParentID IN (${ids}))`;
     }
 
-    public get rootSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string }[] {
+    public get rootSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string; imageUrl: string | null }[] {
         return this.rawSpaces
             .filter(s => !s.ParentID)
             .map(s => {
@@ -2714,6 +2793,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     type: typeName || 'Unknown Type',
                     iconClass: s.IconClass || t?.icon || 'fa-solid fa-compass',
                     color: s.Color || t?.color || '',
+                    imageUrl: s.ImageURL || null,
                 };
             });
     }
@@ -2735,7 +2815,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return found ? found.name : '';
     }
 
-    public get filteredSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string; parentName?: string; isClosed: boolean }[] {
+    public get filteredSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string; imageUrl: string | null; parentName?: string; isClosed: boolean }[] {
         const query = this.spaceSearchQuery.trim().toLowerCase();
         const spaceMap = new Map<string, RawSpaceRecord>();
         this.rawSpaces.forEach(s => spaceMap.set(s.ID, s));
@@ -2763,6 +2843,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     type: typeName || 'Unknown Type',
                     iconClass: s.IconClass || t?.icon || 'fa-solid fa-compass',
                     color: s.Color || t?.color || '',
+                    imageUrl: s.ImageURL || null,
                     parentName: parent?.Name,
                 };
             });
@@ -2798,6 +2879,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         spaceTypeId: '',
         iconClass: 'fa-solid fa-compass',
         color: DEFAULT_TYPE_COLOR,
+        imageUrl: null,
         backgroundImageUrl: '',
         inheritsMembership: true,
         agentRetrieval: 'Included',
@@ -2897,6 +2979,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     this.hasAccess = true;
                     this.loadErrorMessage = '';
                     this.rawSpaces = spacesRes.Results;
+                    this.primeEngineSpacesCache();
                     this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
                     void this.loadHomeCounts();
                     // The pins count is the viewer's own list, read here so Home shows it before the list is opened
@@ -2941,6 +3024,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 name: space.Name,
                 color: space.Color || typeDef?.color || '',
                 iconClass: space.IconClass || typeDef?.icon || 'fa-solid fa-compass',
+                imageUrl: space.ImageURL || null,
                 level,
                 hasChildren: children.length > 0,
                 isExpanded: true,
@@ -2992,6 +3076,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceTypeName = resolvedType || 'Unknown Type';
         this.headerTypeIcon = space.IconClass || typeDef?.icon || 'fa-solid fa-compass';
         this.headerTypeColor = space.Color || typeDef?.color || '';
+        this.headerImageUrl = space.ImageURL || null;
         this.headerBackgroundImageUrl = space.BackgroundImageURL || null;
 
         // Build breadcrumb lineage
@@ -3004,15 +3089,28 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.breadcrumbs = [{ label: 'Spaces' }, ...lineage];
     }
 
+    private primeEngineSpacesCache(): void {
+        if (!this.currentUser) return;
+        CollaborationEngineBase.Instance.PrimeReachableSpacesCache(
+            this.currentUser,
+            this.rawSpaces.map((s) => ({
+                ID: s.ID,
+                ParentID: s.ParentID ?? null,
+                SpaceTypeID: s.SpaceTypeID,
+                InheritsMembership: !!s.InheritsMembership,
+                OwnerID: s.OwnerID ?? '',
+                AgentRetrieval: s.AgentRetrieval,
+                ClosedAt: s.ClosedAt instanceof Date ? s.ClosedAt.toISOString() : (s.ClosedAt ?? null),
+                StatusID: s.StatusID ?? null,
+            })),
+            this.ProviderToUse,
+        );
+    }
+
     /** Everything the last space left on screen goes, and the header shows the new space's own name at once, from what is already loaded. */
-    // ── Stage 4 (B19, B21, B22): the data surface, notes, pins and the star ─────────────────────────────────────────────
+    // ── Stage 4 (B19, B22): the data surface, pins and the star ─────────────────────────────────────────────
     /** The server's whole configuration document per space, cut to the viewer, kept beside its rules for the data surface and Settings. */
     private readonly serverConfigurationBySpace = new Map<string, { configuration: EffectiveSpaceConfiguration; full: boolean }>();
-    public spaceNotes: NoteModel[] = [];
-    public isLoadingNotes = false;
-    public notesError = '';
-    public isSavingNote = false;
-    public noteSaveError = '';
     private rawPins: PinRow[] = [];
     public spacePins: PinModel[] = [];
     public homePins: PinModel[] = [];
@@ -3024,14 +3122,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isSpaceStarred = false;
     public isTogglingStar = false;
     public spaceAnchors: AnchorRow[] = [];
-    @ViewChild('notesPanel') private notesPanel?: CollabSpaceNotesComponent;
+
+    // Lazy-loaded tab tracking & cached raw data to eliminate redundant RunViews
+    private cachedOverviewDetails: { convId: string; rows: OverviewDetailRow[] } | null = null;
+    private cachedTaskRowsForSpace: { spaceId: string; taskItemMap: Map<string, RawSpaceItemRow>; tasks: RawTaskRow[] } | null = null;
+    private loadedWorkHeavyForSpace: string | null = null;
+    private loadedAnchorsForSpace: string | null = null;
+    private loadedChatHostRulesForKey: string | null = null;
+    private loadedSourceReceiptsForKey: string | null = null;
 
     private resetStage4(_spaceId: string): void {
-        this.spaceNotes = [];
-        this.isLoadingNotes = false;
-        this.notesError = '';
-        this.isSavingNote = false;
-        this.noteSaveError = '';
         this.rawPins = [];
         this.spacePinArtifacts = new Map();
         this.spacePins = [];
@@ -3043,19 +3143,46 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.isSpaceStarred = false;
         this.isTogglingStar = false;
         this.spaceAnchors = [];
+        this.cachedOverviewDetails = null;
+        this.cachedTaskRowsForSpace = null;
+        this.loadedWorkHeavyForSpace = null;
+        this.loadedAnchorsForSpace = null;
+        this.loadedChatHostRulesForKey = null;
+        this.loadedSourceReceiptsForKey = null;
     }
 
-    /** The stage 4 reads for the space shown: notes, pins, the star and (for Settings) the anchors. The data entries follow the server's document. */
-    private async loadStage4(spaceId: string, isCurrent: () => boolean): Promise<void> {
-        await Promise.all([
-            this.loadSpaceNotes(spaceId, isCurrent),
-            this.loadSpacePins(spaceId, isCurrent),
-            this.loadStar(spaceId, isCurrent),
-            this.loadSpaceAnchors(spaceId, isCurrent),
-        ]);
-        if (!isCurrent()) return;
-        this.refreshDataEntries(spaceId);
-        this.RefreshView();
+    /** Triggers lazy-loaded heavy queries when the user navigates to Work, Settings, or Chat. */
+    private ensureTabDataLoaded(tabId: string): void {
+        const spaceId = this.activeSpaceId;
+        if (!spaceId || !isValidUuid(spaceId)) return;
+        const isCurrent = this.currentSelection();
+
+        if (tabId === 'Settings' && !UUIDsEqual(this.loadedAnchorsForSpace ?? '', spaceId)) {
+            this.loadedAnchorsForSpace = spaceId;
+            void this.loadSpaceAnchors(spaceId, isCurrent).then(() => {
+                if (isCurrent()) this.RefreshView();
+            });
+        }
+
+        if (tabId === 'Work' && !UUIDsEqual(this.loadedWorkHeavyForSpace ?? '', spaceId)) {
+            if (this.cachedTaskRowsForSpace && UUIDsEqual(this.cachedTaskRowsForSpace.spaceId, spaceId)) {
+                this.loadedWorkHeavyForSpace = spaceId;
+                void this.hydrateWorkHeavyDetails(spaceId, this.cachedTaskRowsForSpace.taskItemMap, this.cachedTaskRowsForSpace.tasks, isCurrent);
+            }
+        }
+
+        if (tabId === 'Chat') {
+            const convId = this.activeConversationId || '';
+            const rulesKey = `${spaceId.toLowerCase()}|${convId.toLowerCase()}`;
+            if (this.loadedChatHostRulesForKey !== rulesKey) {
+                this.loadedChatHostRulesForKey = rulesKey;
+                void this.loadSpaceChatHostRules(spaceId, convId || undefined);
+            }
+            if (convId && this.loadedSourceReceiptsForKey !== rulesKey) {
+                this.loadedSourceReceiptsForKey = rulesKey;
+                void this.loadConversationSourceReceipts(spaceId, convId, isCurrent);
+            }
+        }
     }
 
     private rememberConfiguration(key: string, json: string | null, full: boolean): void {
@@ -3131,7 +3258,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
         return true;
     }
-    public get notesLabel(): string { return this.tabs.find((tab) => tab.id === 'Notes')?.label ?? 'Notes'; }
     public get pinnedLabel(): string { return 'Pinned'; }
 
     /** What the type offers, for the Data tab's empty state. */
@@ -3142,190 +3268,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return reach.length
             ? `Nothing granted here yet. This space's type reaches ${reach.join(', ')}; a view or query over them appears here once it is granted.`
             : `This space's type offers no views, queries, dashboards or components.`;
-    }
-
-    // ── notes (B21) ──────────────────────────────────────────────────────────────
-
-    private noteModel(row: NoteRow): NoteModel {
-        const me = this.currentUser?.ID ?? '';
-        const author = this.spaceMembers.find((m) => UUIDsEqual(m.userId, row.AuthorUserID));
-        const verdict = notePromotionVerdict(
-            { userId: me, isSpaceOwner: !!this.activeSpaceRecord && UUIDsEqual(this.activeSpaceRecord.OwnerID, me), role: this.callerSeat?.role ?? null, administers: this.mayAdministerSpaces },
-            { Band: row.Band, Visibility: row.Visibility, AuthorUserID: row.AuthorUserID },
-        );
-        return {
-            id: row.ID,
-            title: row.Title,
-            body: row.Body ?? '',
-            band: row.Band,
-            visibility: row.Visibility,
-            authorUserId: row.AuthorUserID,
-            authorName: row.AuthorUser || author?.name || (UUIDsEqual(row.AuthorUserID, me) ? 'You' : 'A member'),
-            updatedLabel: formatDateLocale(row.__mj_UpdatedAt),
-            isMine: UUIDsEqual(row.AuthorUserID, me),
-            canPromote: verdict.ok,
-            isPinned: this.rawPins.some((pin) => pin.Kind === 'Record' && UUIDsEqual(pin.TargetEntityID, notesEntityId()) && bareRecordId(pin.TargetRecordID ?? '').toLowerCase() === row.ID.toLowerCase()),
-        };
-    }
-
-    private async loadSpaceNotes(spaceId: string, isCurrent: () => boolean): Promise<void> {
-        if (!isValidUuid(spaceId)) return;
-        this.isLoadingNotes = true;
-        this.notesError = '';
-        try {
-            const res = await new RunView(this.RunViewToUse).RunView<NoteRow>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Notes',
-                BypassCache: true, // a note or pin just written or removed must show at once
-                ExtraFilter: `SpaceID = '${spaceId}'`,
-                OrderBy: '__mj_UpdatedAt DESC',
-                ResultType: 'simple',
-                MaxRows: 200,
-            });
-            if (!isCurrent()) return;
-            if (!res?.Success) {
-                this.notesError = `The notes could not be read: ${res?.ErrorMessage ?? 'unknown error'}`;
-                this.spaceNotes = [];
-                return;
-            }
-            // Another person's private note is never shown, whatever the viewer's roles read on the server
-            this.spaceNotes = notesVisibleTo(res.Results ?? [], this.currentUser?.ID).map((row) => this.noteModel(row));
-        } catch (err) {
-            if (!isCurrent()) return;
-            this.notesError = `The notes could not be read: ${err instanceof Error ? err.message : String(err)}`;
-        } finally {
-            if (isCurrent()) {
-                this.isLoadingNotes = false;
-                this.RefreshView();
-            }
-        }
-    }
-
-    /** The band a new note starts on: the upload choice the seat was given, else what the seat may see. */
-    public get noteDefaultBand(): SpaceBand {
-        return this.bandChoice?.start ?? (this.canSeeTeamSide ? (this.typeDefaultBand ?? 'Shared') : 'Shared');
-    }
-
-    public notePromotionConsequence = (note: NoteModel): string => promotionConsequence({ Title: note.title }, this.sharedBandLabel);
-
-    /** Set by the quick add: the Notes tab opens with its composer, and the flag drops once the composer closes. */
-    public notesAutoOpen = false;
-
-    public onNotesComposerOpenChanged(open: boolean): void {
-        if (!open) this.notesAutoOpen = false;
-    }
-
-    /** The quick add (B21): from any tab, the Notes tab opens with the composer. */
-    public onQuickNoteClicked(): void {
-        this.notesAutoOpen = true;
-        if (this.activeTab === 'Notes') this.notesPanel?.openComposer(null);
-        else {
-            this.setTab('Notes');
-            this.UpdateQueryParams({ tab: 'notes' });
-        }
-        this.RefreshView();
-    }
-
-    public async onNoteSave(draft: NoteDraft): Promise<void> {
-        const spaceId = this.activeSpaceId;
-        this.isSavingNote = true;
-        this.noteSaveError = '';
-        this.RefreshView();
-        try {
-            const md = new Metadata();
-            const note = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
-            if (draft.id) {
-                if (!(await note.Load(draft.id))) throw new Error('The note could not be loaded.');
-            } else {
-                note.NewRecord();
-                note.SpaceID = spaceId;
-                // The author is the signed-in person; the server stamps and checks it too, but MJ's required-field check runs here first
-                note.AuthorUserID = this.currentUser?.ID ?? '';
-            }
-            note.Title = draft.title;
-            note.Body = draft.body || null;
-            note.Band = draft.band;
-            note.Visibility = draft.visibility;
-            if (!(await note.Save())) throw new Error(note.LatestResult?.CompleteMessage || 'The note was not saved.');
-            this.notesPanel?.closeComposer();
-            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
-        } catch (err) {
-            this.noteSaveError = err instanceof Error ? err.message : String(err);
-            LogError(`Note action failed: ${this.noteSaveError}`);
-        } finally {
-            this.isSavingNote = false;
-            this.RefreshView();
-        }
-    }
-
-    public async onNoteDelete(note: NoteModel): Promise<void> {
-        const spaceId = this.activeSpaceId;
-        this.noteSaveError = '';
-        try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
-            if (!(await entity.Load(note.id))) throw new Error('The note could not be loaded.');
-            if (!(await entity.Delete())) throw new Error(entity.LatestResult?.CompleteMessage || 'The note was not deleted.');
-            const pin = this.rawPins.find((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntityId()) && bareRecordId(p.TargetRecordID ?? '').toLowerCase() === note.id.toLowerCase());
-            if (pin) await this.removePin(pin.ID);
-            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
-            await this.loadSpacePins(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
-        } catch (err) {
-            this.noteSaveError = err instanceof Error ? err.message : String(err);
-            LogError(`Note action failed: ${this.noteSaveError}`);
-        } finally {
-            this.RefreshView();
-        }
-    }
-
-    /** Call 15: the note moves to Shared, the same record, the server judging and logging it. */
-    public async onNotePromote(note: NoteModel): Promise<void> {
-        const spaceId = this.activeSpaceId;
-        this.isSavingNote = true;
-        this.noteSaveError = '';
-        this.RefreshView();
-        try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
-            if (!(await entity.Load(note.id))) throw new Error('The note could not be loaded.');
-            entity.Band = 'Shared';
-            if (!(await entity.Save())) throw new Error(entity.LatestResult?.CompleteMessage || 'The note was not shared.');
-            SharedService.Instance.CreateSimpleNotification(`"${note.title}" is now shared with ${this.sharedBandLabel}.`, 'success', 4000);
-            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
-        } catch (err) {
-            this.noteSaveError = err instanceof Error ? err.message : String(err);
-            LogError(`Note action failed: ${this.noteSaveError}`);
-        } finally {
-            this.isSavingNote = false;
-            this.RefreshView();
-        }
-    }
-
-    /** *Turn into document* (B21): the note as a Markdown file through the upload path, on the note's band; the note stays. */
-    public async onNoteTurnIntoDocument(note: NoteModel): Promise<void> {
-        const spaceId = this.activeSpaceId;
-        this.isSavingNote = true;
-        this.noteSaveError = '';
-        this.RefreshView();
-        try {
-            const doc = noteDocument({ Title: note.title, Body: note.body });
-            const base64 = btoa(unescape(encodeURIComponent(doc.content)));
-            const res = await new CollaborationClient(this.graphQLExecutor).UploadSpaceFile({ SpaceID: spaceId, FileName: doc.fileName, MimeType: doc.mimeType, Base64Data: base64, Folder: 'Notes', Band: note.band });
-            if (!res.Success) throw new Error(res.ErrorMessage || 'The document was not created.');
-            SharedService.Instance.CreateSimpleNotification(`${doc.fileName} is in the library.`, 'success', 4000);
-            if (UUIDsEqual(this.activeSpaceId, spaceId)) await this.loadSpaceItems(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
-        } catch (err) {
-            this.noteSaveError = err instanceof Error ? err.message : String(err);
-            LogError(`Note action failed: ${this.noteSaveError}`);
-        } finally {
-            this.isSavingNote = false;
-            this.RefreshView();
-        }
-    }
-
-    public async onNotePinToggle(note: NoteModel): Promise<void> {
-        const existing = this.rawPins.find((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntityId()) && bareRecordId(p.TargetRecordID ?? '').toLowerCase() === note.id.toLowerCase());
-        if (existing) await this.removePin(existing.ID);
-        else await this.addPin({ Kind: 'Record', TargetEntityID: notesEntityId(), TargetRecordID: `ID|${note.id}`, GrantID: null });
     }
 
     // ── pins (B22) ───────────────────────────────────────────────────────────────
@@ -3396,10 +3338,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             return { ...base, kind: 'Grant', title: label, subtitle: kind, iconClass: 'fa-solid fa-table-cells', target: `grant:${pin.GrantID}` };
         }
         const recordId = bareRecordId(pin.TargetRecordID ?? '');
-        if (UUIDsEqual(pin.TargetEntityID, notesEntityId())) {
-            const note = this.spaceNotes.find((n) => UUIDsEqual(n.id, recordId));
-            return { ...base, kind: 'Record', title: note?.title ?? 'A note', subtitle: 'Note', iconClass: 'fa-solid fa-note-sticky', target: `note:${recordId}` };
-        }
         const artifactEntityId = this.artifactsEntityId();
         if (artifactEntityId && UUIDsEqual(pin.TargetEntityID, artifactEntityId)) {
             const matchedRow = this.libraryRows.find((row) => UUIDsEqual(row.artifactId ?? '', recordId));
@@ -3435,7 +3373,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private refreshPinModels(): void {
         const spaceName = this.spaceTitle;
         this.spacePins = this.rawPins.map((pin) => this.pinModel(pin, spaceName)).filter((pin): pin is PinModel => pin !== null);
-        this.spaceNotes = this.spaceNotes.map((note) => ({ ...note, isPinned: this.rawPins.some((pin) => pin.Kind === 'Record' && UUIDsEqual(pin.TargetEntityID, notesEntityId()) && bareRecordId(pin.TargetRecordID ?? '').toLowerCase() === note.id.toLowerCase()) }));
         this.dataEntries = this.dataEntries.map((entry) => ({ ...entry, isPinned: this.rawPins.some((pin) => pin.Kind === 'Grant' && UUIDsEqual(pin.GrantID ?? '', entry.grantId)) }));
     }
 
@@ -3496,7 +3433,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const here = UUIDsEqual(pin.spaceId, this.activeSpaceId) && this.activeView === 'space';
         if (!here) {
             this.pendingPinTarget = pin.target;
-            this.openSpaceOnTab(pin.spaceId, kind === 'note' ? 'Notes' : kind === 'grant' ? 'Data' : 'Library');
+            this.openSpaceOnTab(pin.spaceId, kind === 'grant' ? 'Data' : 'Library');
             return;
         }
         this.showPinTarget(kind, id);
@@ -3509,10 +3446,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.openArtifactSlideover({ artifactId: id });
             return;
         }
-        if (kind === 'note') {
-            this.setTab('Notes');
-            this.UpdateQueryParams({ tab: 'notes' });
-        } else if (kind === 'grant') {
+        if (kind === 'grant') {
             this.setTab('Data');
             this.UpdateQueryParams({ tab: 'data' });
             const entry = this.dataEntries.find((e) => UUIDsEqual(e.grantId, id));
@@ -3548,16 +3482,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (token !== this.homeListLoadToken) return;
             if (!res?.Success) throw new Error(res?.ErrorMessage ?? 'unknown error');
             const pins = res.Results ?? [];
-            const noteEntityId = notesEntityId(this.ProviderToUse);
             const artifactEntityId = this.artifactsEntityId();
             const spaceItemEntityId = this.spaceItemsEntityId();
 
-            const noteIds = [...new Set(
-                pins
-                    .filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, noteEntityId))
-                    .map((p) => bareRecordId(p.TargetRecordID ?? ''))
-                    .filter((id) => isValidUuid(id)),
-            )];
             const directArtifactIds = artifactEntityId
                 ? [...new Set(
                     pins
@@ -3579,7 +3506,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     .filter(
                         (p) =>
                             p.Kind === 'Record' &&
-                            !UUIDsEqual(p.TargetEntityID, noteEntityId) &&
                             (!artifactEntityId || !UUIDsEqual(p.TargetEntityID, artifactEntityId)) &&
                             (!spaceItemEntityId || !UUIDsEqual(p.TargetEntityID, spaceItemEntityId)),
                     )
@@ -3587,40 +3513,25 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     .filter((id) => isValidUuid(id)),
             )];
 
-            const noteTitles = new Map<string, string>();
             const spaceItemById = new Map<string, { id: string; entityId: string; entity: string | null; recordId: string }>();
 
-            await Promise.all([
-                noteIds.length
-                    ? rv.RunView<{ ID: string; Title: string }>({
-                        EntityName: 'MJ_BizApps_Collaboration: Space Notes',
-                        BypassCache: true, // a note or pin just written or removed must show at once
-                        ExtraFilter: `ID IN (${noteIds.map((id) => `'${id}'`).join(',')})`,
-                        Fields: ['ID', 'Title'],
-                        ResultType: 'simple',
-                    }).then((notes) => {
-                        for (const note of notes?.Results ?? []) noteTitles.set(note.ID.toLowerCase(), note.Title);
-                    })
-                    : Promise.resolve(),
-                spaceItemPinIds.length
-                    ? rv.RunView<{ ID: string; EntityID: string; Entity?: string | null; RecordID: string }>({
-                        EntityName: 'MJ_BizApps_Collaboration: Space Items',
-                        ExtraFilter: `ID IN (${spaceItemPinIds.map((id) => `'${id}'`).join(',')})`,
-                        Fields: ['ID', 'EntityID', 'Entity', 'RecordID'],
-                        ResultType: 'simple',
-                        MaxRows: spaceItemPinIds.length,
-                    }).then((itemsRes) => {
-                        for (const item of itemsRes?.Results ?? []) {
-                            spaceItemById.set(item.ID.toLowerCase(), {
-                                id: item.ID,
-                                entityId: item.EntityID,
-                                entity: item.Entity ?? null,
-                                recordId: bareRecordId(item.RecordID ?? ''),
-                            });
-                        }
-                    })
-                    : Promise.resolve(),
-            ]);
+            if (spaceItemPinIds.length > 0) {
+                const itemsRes = await rv.RunView<{ ID: string; EntityID: string; Entity?: string | null; RecordID: string }>({
+                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                    ExtraFilter: `ID IN (${spaceItemPinIds.map((id) => `'${id}'`).join(',')})`,
+                    Fields: ['ID', 'EntityID', 'Entity', 'RecordID'],
+                    ResultType: 'simple',
+                    MaxRows: spaceItemPinIds.length,
+                });
+                for (const item of itemsRes?.Results ?? []) {
+                    spaceItemById.set(item.ID.toLowerCase(), {
+                        id: item.ID,
+                        entityId: item.EntityID,
+                        entity: item.Entity ?? null,
+                        recordId: bareRecordId(item.RecordID ?? ''),
+                    });
+                }
+            }
             if (token !== this.homeListLoadToken) return;
 
             const wrappedArtifactIds: string[] = [];
@@ -3689,9 +3600,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 const base = { id: pin.ID, spaceId: pin.SpaceID, spaceName: space?.Name ?? 'A space' };
                 if (pin.Kind === 'Grant') return { ...base, kind: 'Grant', title: 'A granted report', subtitle: 'Report', iconClass: 'fa-solid fa-table-cells', target: `grant:${pin.GrantID}` };
                 const recordId = bareRecordId(pin.TargetRecordID ?? '');
-                if (UUIDsEqual(pin.TargetEntityID, noteEntityId)) {
-                    return { ...base, kind: 'Record', title: noteTitles.get(recordId.toLowerCase()) ?? 'A note', subtitle: 'Note', iconClass: 'fa-solid fa-note-sticky', target: `note:${recordId}` };
-                }
                 if (artifactEntityId && UUIDsEqual(pin.TargetEntityID, artifactEntityId)) {
                     const art = artifactMeta.get(recordId.toLowerCase());
                     const title = art?.title ?? 'Untitled artifact';
@@ -3955,45 +3863,45 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         // arrive: Settings stays in the tabs, and the counts don't fall to 0. A new selection starts from nothing.
         if (!quiet) this.resetForSelection(spaceId);
 
-        // Refresh space record from server to ensure ClosedAt and status are completely fresh
-        try {
-            const rv = new RunView(this.RunViewToUse);
-            const freshSpaceRes = await rv.RunView<RawSpaceRecord>({
-                EntityName: 'MJ_BizApps_Collaboration: Spaces',
-                ExtraFilter: `ID = '${spaceId}'`,
-                ResultType: 'simple',
-                MaxRows: 1,
-            });
-            if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) {
+        const isCurrent = (): boolean => isSelectionCurrent(requestId, this.selectSpaceRequestId, spaceId, this.activeSpaceId);
+
+        // Single Space entity load (eliminates triple Space reads across refresh + loadActiveSpaceEntity + SpaceDetails.Load)
+        let space = this.rawSpaces.find(s => UUIDsEqual(s.ID, spaceId));
+        if (!space) {
+            try {
+                const rv = new RunView(this.RunViewToUse);
+                const freshSpaceRes = await rv.RunView<RawSpaceRecord>({
+                    EntityName: 'MJ_BizApps_Collaboration: Spaces',
+                    ExtraFilter: `ID = '${spaceId}'`,
+                    ResultType: 'simple',
+                    MaxRows: 1,
+                });
+                if (!isCurrent()) return;
+                if (freshSpaceRes?.Success && freshSpaceRes.Results?.[0]) {
+                    space = freshSpaceRes.Results[0];
+                    this.rawSpaces = [...this.rawSpaces, space];
+                    this.primeEngineSpacesCache();
+                } else {
+                    LogError(`Failed to refresh space record for ${spaceId}: ${freshSpaceRes?.ErrorMessage || 'space not found'}`);
+                    return;
+                }
+            } catch (e) {
+                LogError(`Failed to refresh space record for ${spaceId}: ${e}`);
                 return;
             }
-            if (!freshSpaceRes?.Success) {
-                LogError(`Failed to refresh space record for ${spaceId}: ${freshSpaceRes?.ErrorMessage || 'Unknown error'}`);
-            } else if (freshSpaceRes.Results?.[0]) {
-                const fresh = freshSpaceRes.Results[0];
-                const idx = this.rawSpaces.findIndex(s => UUIDsEqual(s.ID, spaceId));
-                if (idx >= 0) {
-                    this.rawSpaces[idx] = { ...this.rawSpaces[idx], ...fresh };
-                }
-            } else {
-                LogError(`Failed to refresh space record for ${spaceId}: space not found`);
-            }
-        } catch (e) {
-            LogError(`Failed to refresh space record for ${spaceId}: ${e}`);
         }
 
-        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) {
-            return;
-        }
+        // Load live Space entity ONCE (forces reload on quiet refresh so ClosedAt/StatusID/ImageURL sync into rawSpaces)
+        await this.loadActiveSpaceEntity(space, isCurrent, quiet);
+        if (!isCurrent()) return;
 
-        const space = this.rawSpaces.find(s => UUIDsEqual(s.ID, spaceId));
-        if (!space) return;
-
+        // Re-read the updated cached record (loadActiveSpaceEntity synced fresh columns into rawSpaces)
+        space = this.rawSpaces.find(s => UUIDsEqual(s.ID, spaceId)) ?? space;
         const typeDef = this.spaceTypeMap.get(space.SpaceTypeID);
         const resolvedType = space.SpaceType || typeDef?.name;
         this.showHeaderFor(space);
 
-        // Overview sub-spaces
+        // Overview sub-spaces (derived from rawSpaces in memory)
         const children = this.rawSpaces.filter(s => UUIDsEqual(s.ParentID, spaceId));
         this.overviewSubSpaces = children.map(c => {
             const cType = this.spaceTypeMap.get(c.SpaceTypeID);
@@ -4007,6 +3915,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 type: subType || 'Unknown Type',
                 iconClass: c.IconClass || cType?.icon || 'fa-solid fa-compass',
                 color: c.Color || cType?.color || '',
+                imageUrl: c.ImageURL || null,
                 description: c.Description || '',
             };
         });
@@ -4027,38 +3936,321 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         });
         this.settingsSession.Open(this.spaceSettings);
         this.spaceSettings = this.settingsSession.Shown;
-        const isCurrent = (): boolean => isSelectionCurrent(requestId, this.selectSpaceRequestId, spaceId, this.activeSpaceId);
-        await this.loadActiveSpaceEntity(space, isCurrent);
-        if (!isCurrent()) return;
-        // What the type's UI driver and other apps contribute: the tabs, Overview cards, header chips/actions, and Settings sections; the server's rules are re-read here
+
+        // What the type's UI driver and other apps contribute: the tabs, Overview cards, header chips/actions, and Settings sections
         this.buildSpaceUi(space, true);
         // The tabs the space has may differ from the ones the last space's URL asked for
         this.setTab(this.activeTab);
 
-        await this.updateCanConfigureCurrentSpace();
-        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
-        await this.loadSpaceDetails(space, isCurrent);
-        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
-        await this.updateBandChoice(space, isCurrent);
+        // Stage-1: Batch [Space Items, Space Chats, Space Members, Space Member Pins] into ONE RunViews round-trip
+        // in parallel with cached seat checks, SpaceDetails (reusing activeSpaceEntity), and Star lookup!
+        const rv = new RunView(this.RunViewToUse);
+        const chain = accessChain(spaceId, this.rawSpaces.map(sp => ({
+            ID: sp.ID,
+            Name: sp.Name,
+            ParentID: sp.ParentID ?? null,
+            InheritsMembership: !!sp.InheritsMembership,
+            ClosedAt: sp.ClosedAt,
+            Status: CollaborationEngineBase.Instance.StatusReachForSpace(sp),
+        })));
+        if (chain.length === 0) chain.push({ id: spaceId, name: '' });
 
-        // Each loader checks the selection itself, before it writes: a slow read for a space
-        // the person has already left must not put its lists under the space they're in now
+        const chatFilter = this.isSpaceClosed
+            ? `SpaceID = '${spaceId}' AND Status IN ('Active', 'Archived')`
+            : `SpaceID = '${spaceId}' AND Status = 'Active'`;
+
+        const stage1Queries: Array<{
+            EntityName: string;
+            ExtraFilter?: string;
+            OrderBy?: string;
+            Fields?: string[];
+            ResultType: 'simple';
+            MaxRows?: number;
+            BypassCache?: boolean;
+        }> = [
+            {
+                EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                ExtraFilter: `SpaceID = '${spaceId}'`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                ResultType: 'simple',
+                // row-cap-ok: batched space items UI display cap
+                MaxRows: 200,
+            },
+            {
+                EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                ExtraFilter: chatFilter,
+                OrderBy: '__mj_UpdatedAt DESC',
+                Fields: ['ID', 'SpaceID', 'ConversationID', 'Name', 'Subject', 'Kind', 'Status', '__mj_CreatedAt', '__mj_UpdatedAt'],
+                ResultType: 'simple',
+                // row-cap-ok: batched space conversations UI display cap
+                MaxRows: 100,
+            },
+            {
+                EntityName: 'MJ_BizApps_Collaboration: Space Members',
+                ExtraFilter: `SpaceID IN (${chain.map(c => `'${c.id}'`).join(',')})`,
+                ResultType: 'simple',
+                // row-cap-ok: batched space roster UI display cap
+                MaxRows: 500,
+            },
+        ];
+        const hasPinsQuery = !!this.currentUser;
+        if (hasPinsQuery && this.currentUser) {
+            stage1Queries.push({
+                EntityName: 'MJ_BizApps_Collaboration: Space Member Pins',
+                BypassCache: true,
+                ExtraFilter: `SpaceID = '${spaceId}' AND UserID = '${this.currentUser.ID}'`,
+                OrderBy: 'Sequence ASC, __mj_CreatedAt ASC',
+                ResultType: 'simple',
+                // row-cap-ok: per-user space pins display cap
+                MaxRows: 100,
+            });
+        }
+
+        const [stage1Results] = await Promise.all([
+            rv.RunViews(stage1Queries),
+            this.updateCanConfigureCurrentSpace(),
+            this.loadSpaceDetails(space, isCurrent),
+            this.updateBandChoice(space, isCurrent),
+            this.loadStar(spaceId, isCurrent),
+        ]);
+        if (!isCurrent()) return;
+
+        const itemsRes = stage1Results[0] as { Success?: boolean; ErrorMessage?: string; Results?: RawSpaceItemRow[] } | undefined;
+        const chatsRes = stage1Results[1] as { Success?: boolean; ErrorMessage?: string; Results?: RawSpaceChatRow[] } | undefined;
+        const membersRes = stage1Results[2] as { Success?: boolean; ErrorMessage?: string; Results?: RawSpaceMemberRow[] } | undefined;
+        const pinsRes = hasPinsQuery
+            ? (stage1Results[3] as { Success?: boolean; ErrorMessage?: string; Results?: PinRow[] } | undefined)
+            : undefined;
+
+        // Partition the SINGLE Space Items result in memory into files, artifacts, and tasks (eliminates duplicate Space Items read!)
+        const allItems = itemsRes?.Success && itemsRes.Results ? itemsRes.Results : [];
+        const fileEntityId = this.ProviderToUse.EntityByName('MJ: Files')?.ID ?? '29248F34-2837-EF11-86D4-6045BDEE16E6';
+        const artifactEntityId = this.artifactsEntityId();
+        const tasksEntityInfo = this.ProviderToUse.EntityByName('MJ_BizApps_Tasks: Tasks');
+
+        const isFileItem = (item: { EntityID: string; Entity?: string }): boolean =>
+            UUIDsEqual(item.EntityID, fileEntityId) || item.Entity === 'MJ: Files';
+        const isArtifactItem = (item: { EntityID: string; Entity?: string }): boolean =>
+            (!!artifactEntityId && UUIDsEqual(item.EntityID, artifactEntityId)) || isArtifactEntityName(item.Entity);
+        const isTaskItem = (item: { EntityID: string; Entity?: string }): boolean =>
+            (!!tasksEntityInfo && UUIDsEqual(item.EntityID, tasksEntityInfo.ID)) || item.Entity === 'MJ_BizApps_Tasks: Tasks';
+
+        const fileIds: string[] = [];
+        const artifactIds: string[] = [];
+        const taskItems: RawSpaceItemRow[] = [];
+        const taskIds: string[] = [];
+        for (const item of allItems) {
+            const targetId = bareRecordId(item.RecordID ?? '');
+            if (!isValidUuid(targetId)) continue;
+            if (isFileItem(item)) {
+                fileIds.push(targetId);
+            } else if (isArtifactItem(item)) {
+                artifactIds.push(targetId);
+            } else if (isTaskItem(item)) {
+                taskItems.push(item);
+                taskIds.push(targetId);
+            }
+        }
+
+        const pinRowsList = pinsRes?.Success && pinsRes.Results ? pinsRes.Results : [];
+        if (hasPinsQuery && !pinsRes?.Success) {
+            this.logOnce(`pins:${spaceId}`, `The pins could not be read: ${pinsRes?.ErrorMessage ?? 'unknown error'}`);
+        }
+        const artifactPinIds = artifactEntityId
+            ? pinRowsList
+                .filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, artifactEntityId))
+                .map((p) => bareRecordId(p.TargetRecordID ?? ''))
+                .filter((id) => isValidUuid(id))
+            : [];
+
+        const uniqueFileIds = [...new Set(fileIds)];
+        const uniqueArtifactIds = [...new Set([...artifactIds, ...artifactPinIds])];
+        const uniqueTaskIds = [...new Set(taskIds)];
+
+        const chatEntries = chatsRes?.Success && chatsRes.Results ? buildConversationEntries(chatsRes.Results) : [];
+        if (!chatsRes?.Success) {
+            LogError(`Failed to load space conversations for space ${spaceId}: ${chatsRes?.ErrorMessage ?? 'unknown error'}`);
+        }
+        const convIds = [...new Set(chatEntries.map(i => NormalizeUUID(i.id)))];
+
+        const reachedMembers = membersRes?.Success && membersRes.Results ? nearestSeats(membersRes.Results, chain) : null;
+        const memberUserIds = reachedMembers ? [...new Set(reachedMembers.map(r => r.row.UserID).filter(Boolean))] : [];
+
+        // Stage-2: ONE batched RunViews for [MJ: Files, MJ: Artifacts, MJ: Conversations, Tasks, MJ: Users]
+        // plus separate People photos lookup (RLS-isolated so outside participants don't fail the batch)
+        const stage2Queries: Array<{
+            EntityName: string;
+            ExtraFilter?: string;
+            OrderBy?: string;
+            Fields?: string[];
+            ResultType: 'simple';
+            MaxRows?: number;
+        }> = [];
+        let filesIdx = -1;
+        let artifactsIdx = -1;
+        let convsIdx = -1;
+        let tasksIdx = -1;
+        let usersIdx = -1;
+
+        if (uniqueFileIds.length > 0) {
+            filesIdx = stage2Queries.length;
+            stage2Queries.push({
+                EntityName: 'MJ: Files',
+                ExtraFilter: `ID IN ('${uniqueFileIds.join("','")}')`,
+                ResultType: 'simple',
+                MaxRows: uniqueFileIds.length,
+            });
+        }
+        if (uniqueArtifactIds.length > 0) {
+            artifactsIdx = stage2Queries.length;
+            stage2Queries.push({
+                EntityName: ARTIFACTS_ENTITY_NAME,
+                ExtraFilter: `ID IN ('${uniqueArtifactIds.join("','")}')`,
+                Fields: ['ID', 'Name', 'Type'],
+                ResultType: 'simple',
+                MaxRows: uniqueArtifactIds.length,
+            });
+        }
+        if (convIds.length > 0) {
+            convsIdx = stage2Queries.length;
+            stage2Queries.push({
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: `ID IN ('${convIds.join("','")}')`,
+                Fields: ['ID', '__mj_UpdatedAt'],
+                OrderBy: '__mj_UpdatedAt DESC',
+                ResultType: 'simple',
+                MaxRows: convIds.length,
+            });
+        }
+        if (tasksEntityInfo && uniqueTaskIds.length > 0) {
+            tasksIdx = stage2Queries.length;
+            const quotedTaskIds = uniqueTaskIds.map(id => `'${id}'`).join(',');
+            stage2Queries.push({
+                EntityName: 'MJ_BizApps_Tasks: Tasks',
+                ExtraFilter: `(ID IN (${quotedTaskIds}) OR RootParentID IN (${quotedTaskIds}))`,
+                Fields: [
+                    'ID', 'Name', 'Description', 'Status', 'Priority', 'PercentComplete',
+                    'DueAt', 'StartedAt', 'ParentID', 'RootParentID', 'Sequence',
+                    'BlockedReason', 'TypeID', 'Type', 'HoursEstimated', 'HoursActual',
+                ],
+                ResultType: 'simple',
+                // row-cap-ok: space work hierarchy display cap
+                MaxRows: 500,
+            });
+        }
+        if (memberUserIds.length > 0) {
+            usersIdx = stage2Queries.length;
+            const userFilter = memberUserIds.map(id => `'${id}'`).join(',');
+            stage2Queries.push({
+                EntityName: 'MJ: Users',
+                ExtraFilter: `ID IN (${userFilter})`,
+                Fields: ['ID', 'Email', 'UserImageURL'],
+                ResultType: 'simple',
+                MaxRows: memberUserIds.length,
+            });
+        }
+
+        const userFilterForPhotos = memberUserIds.length > 0 ? memberUserIds.map(id => `'${id}'`).join(',') : '';
+        const [stage2Results, personRows] = await Promise.all([
+            stage2Queries.length > 0 ? rv.RunViews(stage2Queries) : Promise.resolve([]),
+            userFilterForPhotos ? this.loadPeoplePhotos(rv, userFilterForPhotos) : Promise.resolve([] as PersonPhotoRow[]),
+        ]);
+        if (!isCurrent()) return;
+
+        // 1. Hydrate Space Members FIRST so Overview messages get outside rings + photos on the single initial pass!
+        const usersStage2 = usersIdx >= 0
+            ? (stage2Results[usersIdx] as { Success?: boolean; Results?: Array<UserPhotoRow & { Email: string }> } | undefined)
+            : undefined;
+        this.applySpaceMembersResult(spaceId, membersRes, chain, usersStage2?.Success ? (usersStage2.Results ?? []) : [], personRows);
+
+        // Prime EngineBase caller membership cache from the members we already fetched for this space chain
+        if (this.currentUser && membersRes?.Success && membersRes.Results) {
+            const myActiveSeats = membersRes.Results
+                .filter((m) => UUIDsEqual(m.UserID, this.currentUser!.ID) && m.Status === 'Active' && !!m.SpaceRoleTypeID)
+                .map((m) => ({
+                    SpaceID: m.SpaceID,
+                    UserID: m.UserID,
+                    Status: 'Active' as const,
+                    Band: m.Band,
+                    SpaceRoleTypeID: m.SpaceRoleTypeID!,
+                }));
+            if (myActiveSeats.length > 0) {
+                CollaborationEngineBase.Instance.PrimeUserSpaceMembershipsCache(this.currentUser, myActiveSeats, this.ProviderToUse, false);
+            }
+        }
+
+        // 2. Hydrate Space Items (Files & Artifacts) + Pins in memory
+        const filesMap = new Map<string, { ID: string; Name: string; ProviderID: string; ProviderKey?: string; ContentType?: string }>();
+        if (filesIdx >= 0) {
+            const fRes = stage2Results[filesIdx] as { Success?: boolean; ErrorMessage?: string; Results?: Array<{ ID: string; Name: string; ProviderID: string; ProviderKey?: string; ContentType?: string }> } | undefined;
+            if (fRes?.Success && fRes.Results) {
+                fRes.Results.forEach((f) => filesMap.set(f.ID.toLowerCase(), f));
+            } else if (fRes) {
+                LogError(`Failed to read the files behind space ${spaceId}'s items: ${fRes.ErrorMessage ?? 'unknown error'}`);
+            }
+        }
+        const artifactsMap = new Map<string, { ID: string; Name: string | null; Type?: string | null }>();
+        if (artifactsIdx >= 0) {
+            const aRes = stage2Results[artifactsIdx] as { Success?: boolean; ErrorMessage?: string; Results?: Array<{ ID: string; Name: string | null; Type?: string | null }> } | undefined;
+            if (aRes?.Success && aRes.Results) {
+                aRes.Results.forEach((a) => artifactsMap.set(a.ID.toLowerCase(), a));
+            } else if (aRes) {
+                LogError(`Failed to read the artifacts behind space ${spaceId}'s items: ${aRes.ErrorMessage ?? 'unknown error'}`);
+            }
+        }
+        this.applySpaceItemsResult(spaceId, itemsRes, filesMap, artifactsMap);
+
+        // Apply Pins (reusing artifactsMap from Stage-2!)
+        this.rawPins = pinRowsList;
+        const pinArtifactMap = new Map<string, { name: string; type: string | null }>();
+        for (const artId of artifactPinIds) {
+            const art = artifactsMap.get(artId.toLowerCase());
+            if (art) {
+                pinArtifactMap.set(art.ID.toLowerCase(), {
+                    name: (art.Name ?? '').trim() || 'Untitled artifact',
+                    type: art.Type ?? null,
+                });
+            }
+        }
+        this.spacePinArtifacts = pinArtifactMap;
+        this.refreshPinModels();
+        this.refreshDataEntries(spaceId);
+
+        // 3. Hydrate Space Conversations (using Stage-2 Conversations sort order) + SINGLE Overview messages load
         const pendingConvId = this._pendingConvId ?? undefined;
-        await this.loadSpaceItems(spaceId, isCurrent);
-        if (!isCurrent()) return;
-        await this.loadSpaceConversations(spaceId, isCurrent, pendingConvId);
-        if (!isCurrent()) return;
-        // Cleared only once this selection is known to be the current one, and only if it is still the value applied: a deep link
-        // that arrived while the load ran is a different one, and waits for its own selection
+        const convStage2 = convsIdx >= 0
+            ? (stage2Results[convsIdx] as { Success?: boolean; ErrorMessage?: string; Results?: Array<{ ID: string; __mj_UpdatedAt: string }> } | undefined)
+            : undefined;
+        if (convStage2?.Success && convStage2.Results) {
+            const orderMap = new Map<string, number>();
+            convStage2.Results.forEach((c, idx) => orderMap.set(c.ID.toLowerCase(), idx));
+            chatEntries.sort((a, b) => (orderMap.get(a.id.toLowerCase()) ?? 9999) - (orderMap.get(b.id.toLowerCase()) ?? 9999));
+        }
+        this.spaceConversations = chatEntries;
+        this.activeConversationId = chooseActiveConversation(chatEntries, pendingConvId)?.id ?? '';
+        const activeConvItem = chatEntries.find(i => UUIDsEqual(i.id, this.activeConversationId));
+        this.chatAudienceBand = activeConvItem && activeConvItem.band !== 'Team' ? 'Shared' : 'Team';
         if (this._pendingConvId === (pendingConvId ?? null)) this._pendingConvId = null;
-        await this.loadSpaceTasks(spaceId, isCurrent);
-        if (!isCurrent()) return;
-        await this.loadSpaceMembers(spaceId, isCurrent);
-        if (!isCurrent()) return;
-        await this.loadStage4(spaceId, isCurrent);
-        if (!isCurrent()) return;
-        await this.loadSpaceChatHostRules(spaceId, this.activeConversationId || undefined);
-        if (!isCurrent()) return;
+
+        // 4. Hydrate lightweight Tasks from Stage-2 (deferring heavy WBS assignees & dependencies unless on Work tab!)
+        const tasksStage2 = tasksIdx >= 0
+            ? (stage2Results[tasksIdx] as { Success?: boolean; ErrorMessage?: string; Results?: RawTaskRow[] } | undefined)
+            : undefined;
+        this.applyLightweightTasks(spaceId, taskItems, tasksStage2);
+
+        // 5. Load Overview messages ONCE (members are already loaded, so zero second pass needed!)
+        if (this.activeConversationId) {
+            await this.loadOverviewMessages(this.activeConversationId, isCurrent);
+            if (!isCurrent()) return;
+        } else {
+            this.cachedOverviewDetails = null;
+            this.overviewRoomMessages = [];
+            this.clearConversationSourceReceipts();
+        }
+
+        // 6. Trigger lazy tab-specific heavy loaders ONLY if the user is currently on Work, Settings, or Chat
+        this.ensureTabDataLoaded(this.activeTab);
+
         void this.loadSpaceNeedsYou(space, isCurrent);
         void this.loadSpaceHeaderChips(space, isCurrent);
 
@@ -4086,7 +4278,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
         if (this.spaceDetails?.Dirty) return;
         try {
-            const details = await SpaceDetails.Load(this.ProviderToUse, user, space.ID);
+            const reusableEntity = this.activeSpaceEntity && UUIDsEqual(this.activeSpaceEntity.ID, space.ID)
+                ? this.activeSpaceEntity
+                : null;
+            const details = await SpaceDetails.Load(this.ProviderToUse, user, space.ID, reusableEntity);
             if (!isCurrent()) return;
             const uiContext = this.uiContext;
             // The driver's hidden columns decide which of the form's sections can be shown alone
@@ -4174,47 +4369,170 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return () => isSelectionCurrent(requestId, this.selectSpaceRequestId, spaceId, this.activeSpaceId);
     }
 
+    private applySpaceItemsResult(
+        spaceId: string,
+        itemsRes: { Success?: boolean; ErrorMessage?: string; Results?: RawSpaceItemRow[] } | undefined,
+        filesMap: Map<string, { ID: string; Name: string; ProviderID: string; ProviderKey?: string; ContentType?: string }>,
+        artifactsMap: Map<string, { ID: string; Name: string | null; Type?: string | null }>,
+    ): void {
+        if (!itemsRes?.Success) {
+            LogError(`Failed to load space items for space ${spaceId}: ${itemsRes?.ErrorMessage ?? 'unknown error'}`);
+        }
+        if (!itemsRes?.Success || !itemsRes.Results || itemsRes.Results.length === 0) {
+            this.libraryRows = [];
+            this.librarySpaceIdLoaded = itemsRes?.Success ? spaceId : null;
+            this.libraryTotalCount = 0;
+            this.librarySharedCount = 0;
+            this.libraryTeamCount = 0;
+            this.overviewSharedItems = [];
+            this.overviewTeamItems = [];
+            this.libraryCollections = [];
+            this.librarySmartViews = [];
+            if (itemsRes?.Success && UUIDsEqual(this.activeSpaceId, spaceId)) {
+                this.refreshVisibleSourceReceipts(spaceId);
+            }
+            return;
+        }
+
+        const fileEntityId = this.ProviderToUse.EntityByName('MJ: Files')?.ID ?? '29248F34-2837-EF11-86D4-6045BDEE16E6';
+        const artifactEntityId = this.artifactsEntityId();
+        const isFileItem = (item: { EntityID: string; Entity?: string }): boolean =>
+            UUIDsEqual(item.EntityID, fileEntityId) || item.Entity === 'MJ: Files';
+        const isArtifactItem = (item: { EntityID: string; Entity?: string }): boolean =>
+            (!!artifactEntityId && UUIDsEqual(item.EntityID, artifactEntityId)) || isArtifactEntityName(item.Entity);
+
+        const rows: LibraryRowModel[] = [];
+        const shared: ItemCardModel[] = [];
+        const team: ItemRowModel[] = [];
+        const folderCounts = new Map<string, { count: number; band: SpaceBand }>();
+
+        for (const item of itemsRes.Results) {
+            const fileMatch = isFileItem(item);
+            const artifactMatch = !fileMatch && isArtifactItem(item);
+            if (!fileMatch && !artifactMatch) continue;
+            const targetId = bareRecordId(item.RecordID ?? '');
+            let name = '[Untitled Document]';
+            let kind: FileKind = 'doc';
+            let fileId: string | undefined;
+            let artifactId: string | undefined;
+            let artifactType: string | undefined;
+            const entityName = artifactMatch ? ARTIFACTS_ENTITY_NAME : 'MJ: Files';
+
+            if (fileMatch) {
+                fileId = targetId;
+                const file = filesMap.get(targetId.toLowerCase());
+                if (!file?.Name) {
+                    LogError(`File record could not be read for item ID ${item.ID} (fileId ${targetId})`);
+                }
+                name = file?.Name || '[Untitled Document]';
+                kind = this.detectFileKind(name, file?.ProviderKey, file?.ContentType);
+            } else {
+                artifactId = targetId;
+                const artifact = artifactsMap.get(targetId.toLowerCase());
+                if (!artifact?.Name) {
+                    LogError(`Artifact record could not be read for item ID ${item.ID} (artifactId ${targetId})`);
+                }
+                name = (artifact?.Name ?? '').trim() || '[Untitled Artifact]';
+                artifactType = artifact?.Type ?? undefined;
+                kind = detectArtifactFileKind(name, artifactType);
+            }
+
+            const folder = item.Folder || 'General';
+            const dateStr = this.formatDate(item.__mj_CreatedAt);
+            const author = item.PromotedByUser || 'Staff team';
+
+            rows.push({
+                id: item.ID,
+                ...(fileId ? { fileId } : {}),
+                ...(artifactId ? { artifactId } : {}),
+                ...(artifactType ? { artifactType } : {}),
+                entityName,
+                name,
+                folder,
+                band: item.Band,
+                who: author,
+                when: dateStr,
+                updatedAt: item.__mj_UpdatedAt,
+                kind,
+            });
+
+            if (item.Band === 'Shared') {
+                shared.push({
+                    id: item.ID,
+                    ...(fileId ? { fileId } : {}),
+                    ...(artifactId ? { artifactId } : {}),
+                    ...(artifactType ? { artifactType } : {}),
+                    entityName,
+                    kind,
+                    title: name,
+                    meta: `${folder} · Shared`,
+                    stamp: dateStr,
+                });
+            } else {
+                team.push({
+                    id: item.ID,
+                    ...(fileId ? { fileId } : {}),
+                    ...(artifactId ? { artifactId } : {}),
+                    ...(artifactType ? { artifactType } : {}),
+                    entityName,
+                    kind,
+                    title: name,
+                    author,
+                    timestamp: dateStr,
+                    canShare: this.canShareItems,
+                });
+            }
+
+            const cur = folderCounts.get(folder) || { count: 0, band: item.Band };
+            cur.count++;
+            folderCounts.set(folder, cur);
+        }
+
+        this.libraryRows = rows;
+        this.librarySpaceIdLoaded = spaceId;
+        this.libraryTotalCount = rows.length;
+        this.librarySharedCount = shared.length;
+        this.libraryTeamCount = team.length;
+        this.overviewSharedItems = shared;
+        this.overviewTeamItems = team;
+        this.refreshPinModels();
+        if (UUIDsEqual(this.activeSpaceId, spaceId)) {
+            this.refreshVisibleSourceReceipts(spaceId);
+        }
+
+        this.libraryCollections = Array.from(folderCounts.entries()).map(([folder, info], idx) => ({
+            id: 'folder-' + idx,
+            name: folder,
+            band: info.band,
+            count: info.count,
+        }));
+
+        this.librarySmartViews = [
+            { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: rows.length },
+            { id: 'shared', name: 'Shared', iconClass: 'fa-solid fa-eye', count: shared.length },
+            ...(this.canSeeTeamSide ? [{ id: 'team', name: 'Team only', iconClass: 'fa-solid fa-lock', count: team.length }] : []),
+        ];
+        if (this.pendingPinTarget?.startsWith('item:')) {
+            const target = this.pendingPinTarget;
+            this.pendingPinTarget = null;
+            this.showPinTarget('item', target.slice('item:'.length));
+        }
+    }
+
     private async loadSpaceItems(spaceId: string, isCurrent: () => boolean): Promise<void> {
         if (!isValidUuid(spaceId)) return;
         try {
             const rv = new RunView(this.RunViewToUse);
-            const itemsRes = await rv.RunView<{
-                ID: string;
-                SpaceID: string;
-                EntityID: string;
-                Entity?: string;
-                RecordID: string;
-                Band: SpaceBand;
-                Folder?: string | null;
-                PromotedAt?: string | null;
-                PromotedByUser?: string | null;
-                __mj_CreatedAt: string;
-                __mj_UpdatedAt: string;
-            }>({
+            const itemsRes = await rv.RunView<RawSpaceItemRow>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Items',
                 ExtraFilter: `SpaceID = '${spaceId}'`,
                 OrderBy: '__mj_UpdatedAt DESC',
                 ResultType: 'simple',
-                MaxRows: 100,
+                MaxRows: 200,
             });
-
             if (!isCurrent()) return;
-            if (!itemsRes?.Success) {
-                LogError(`Failed to load space items for space ${spaceId}: ${itemsRes?.ErrorMessage ?? 'unknown error'}`);
-            }
             if (!itemsRes?.Success || !itemsRes.Results || itemsRes.Results.length === 0) {
-                this.libraryRows = [];
-                this.librarySpaceIdLoaded = itemsRes?.Success ? spaceId : null;
-                this.libraryTotalCount = 0;
-                this.librarySharedCount = 0;
-                this.libraryTeamCount = 0;
-                this.overviewSharedItems = [];
-                this.overviewTeamItems = [];
-                this.libraryCollections = [];
-                this.librarySmartViews = [];
-                if (itemsRes?.Success && UUIDsEqual(this.activeSpaceId, spaceId)) {
-                    this.refreshVisibleSourceReceipts(spaceId);
-                }
+                this.applySpaceItemsResult(spaceId, itemsRes, new Map(), new Map());
                 return;
             }
 
@@ -4227,15 +4545,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             const fileIds: string[] = [];
             const artifactIds: string[] = [];
-
             for (const item of itemsRes.Results) {
                 const targetId = bareRecordId(item.RecordID ?? '');
                 if (!isValidUuid(targetId)) continue;
-                if (isFileItem(item)) {
-                    fileIds.push(targetId);
-                } else if (isArtifactItem(item)) {
-                    artifactIds.push(targetId);
-                }
+                if (isFileItem(item)) fileIds.push(targetId);
+                else if (isArtifactItem(item)) artifactIds.push(targetId);
             }
 
             const uniqueFileIds = [...new Set(fileIds)];
@@ -4243,167 +4557,44 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const filesMap = new Map<string, { ID: string; Name: string; ProviderID: string; ProviderKey?: string; ContentType?: string }>();
             const artifactsMap = new Map<string, { ID: string; Name: string | null; Type?: string | null }>();
 
-            await Promise.all([
-                uniqueFileIds.length > 0
-                    ? rv.RunView<{
-                        ID: string;
-                        Name: string;
-                        ProviderID: string;
-                        ProviderKey?: string;
-                        ContentType?: string;
-                    }>({
-                        EntityName: 'MJ: Files',
-                        ExtraFilter: `ID IN ('${uniqueFileIds.join("','")}')`,
-                        ResultType: 'simple',
-                        MaxRows: 100,
-                    }).then((filesRes) => {
-                        if (filesRes?.Success && filesRes.Results) {
-                            filesRes.Results.forEach((f) => filesMap.set(f.ID.toLowerCase(), f));
-                        } else {
-                            LogError(`Failed to read the files behind space ${spaceId}'s items: ${filesRes?.ErrorMessage ?? 'unknown error'}`);
-                        }
-                    })
-                    : Promise.resolve(),
-                uniqueArtifactIds.length > 0
-                    ? rv.RunView<{
-                        ID: string;
-                        Name: string | null;
-                        Type?: string | null;
-                    }>({
-                        EntityName: ARTIFACTS_ENTITY_NAME,
-                        ExtraFilter: `ID IN ('${uniqueArtifactIds.join("','")}')`,
-                        Fields: ['ID', 'Name', 'Type'],
-                        ResultType: 'simple',
-                        MaxRows: uniqueArtifactIds.length,
-                    }).then((artifactsRes) => {
-                        if (artifactsRes?.Success && artifactsRes.Results) {
-                            artifactsRes.Results.forEach((a) => artifactsMap.set(a.ID.toLowerCase(), a));
-                        } else {
-                            LogError(`Failed to read the artifacts behind space ${spaceId}'s items: ${artifactsRes?.ErrorMessage ?? 'unknown error'}`);
-                        }
-                    })
-                    : Promise.resolve(),
-            ]);
-
-            if (!isCurrent()) return;
-            const rows: LibraryRowModel[] = [];
-            const shared: ItemCardModel[] = [];
-            const team: ItemRowModel[] = [];
-            const folderCounts = new Map<string, { count: number; band: SpaceBand }>();
-
-            for (const item of itemsRes.Results) {
-                const fileMatch = isFileItem(item);
-                const artifactMatch = !fileMatch && isArtifactItem(item);
-                if (!fileMatch && !artifactMatch) {
-                    continue;
-                }
-                const targetId = bareRecordId(item.RecordID ?? '');
-                let name = '[Untitled Document]';
-                let kind: FileKind = 'doc';
-                let fileId: string | undefined;
-                let artifactId: string | undefined;
-                let artifactType: string | undefined;
-                const entityName = artifactMatch ? ARTIFACTS_ENTITY_NAME : 'MJ: Files';
-
-                if (fileMatch) {
-                    fileId = targetId;
-                    const file = filesMap.get(targetId.toLowerCase());
-                    if (!file?.Name) {
-                        LogError(`File record could not be read for item ID ${item.ID} (fileId ${targetId})`);
-                    }
-                    name = file?.Name || '[Untitled Document]';
-                    kind = this.detectFileKind(name, file?.ProviderKey, file?.ContentType);
-                } else {
-                    artifactId = targetId;
-                    const artifact = artifactsMap.get(targetId.toLowerCase());
-                    if (!artifact?.Name) {
-                        LogError(`Artifact record could not be read for item ID ${item.ID} (artifactId ${targetId})`);
-                    }
-                    name = (artifact?.Name ?? '').trim() || '[Untitled Artifact]';
-                    artifactType = artifact?.Type ?? undefined;
-                    kind = detectArtifactFileKind(name, artifactType);
-                }
-
-                const folder = item.Folder || 'General';
-                const dateStr = this.formatDate(item.__mj_CreatedAt);
-                const author = item.PromotedByUser || 'Staff team';
-
-                rows.push({
-                    id: item.ID,
-                    ...(fileId ? { fileId } : {}),
-                    ...(artifactId ? { artifactId } : {}),
-                    ...(artifactType ? { artifactType } : {}),
-                    entityName,
-                    name,
-                    folder,
-                    band: item.Band,
-                    who: author,
-                    when: dateStr,
-                    updatedAt: item.__mj_UpdatedAt,
-                    kind,
+            const queries: Array<{ EntityName: string; ExtraFilter: string; Fields?: string[]; ResultType: 'simple'; MaxRows: number }> = [];
+            let fIdx = -1;
+            let aIdx = -1;
+            if (uniqueFileIds.length > 0) {
+                fIdx = queries.length;
+                queries.push({
+                    EntityName: 'MJ: Files',
+                    ExtraFilter: `ID IN ('${uniqueFileIds.join("','")}')`,
+                    ResultType: 'simple',
+                    MaxRows: uniqueFileIds.length,
                 });
-
-                if (item.Band === 'Shared') {
-                    shared.push({
-                        id: item.ID,
-                        ...(fileId ? { fileId } : {}),
-                        ...(artifactId ? { artifactId } : {}),
-                        ...(artifactType ? { artifactType } : {}),
-                        entityName,
-                        kind,
-                        title: name,
-                        meta: `${folder} · Shared`,
-                        stamp: dateStr,
-                    });
-                } else {
-                    team.push({
-                        id: item.ID,
-                        ...(fileId ? { fileId } : {}),
-                        ...(artifactId ? { artifactId } : {}),
-                        ...(artifactType ? { artifactType } : {}),
-                        entityName,
-                        kind,
-                        title: name,
-                        author,
-                        timestamp: dateStr,
-                        canShare: this.canShareItems,
-                    });
+            }
+            if (uniqueArtifactIds.length > 0) {
+                aIdx = queries.length;
+                queries.push({
+                    EntityName: ARTIFACTS_ENTITY_NAME,
+                    ExtraFilter: `ID IN ('${uniqueArtifactIds.join("','")}')`,
+                    Fields: ['ID', 'Name', 'Type'],
+                    ResultType: 'simple',
+                    MaxRows: uniqueArtifactIds.length,
+                });
+            }
+            if (queries.length > 0) {
+                const batch = await rv.RunViews(queries);
+                if (!isCurrent()) return;
+                if (fIdx >= 0) {
+                    const filesRes = batch[fIdx] as { Success?: boolean; ErrorMessage?: string; Results?: Array<{ ID: string; Name: string; ProviderID: string; ProviderKey?: string; ContentType?: string }> };
+                    if (filesRes?.Success && filesRes.Results) filesRes.Results.forEach((f) => filesMap.set(f.ID.toLowerCase(), f));
+                    else LogError(`Failed to read the files behind space ${spaceId}'s items: ${filesRes?.ErrorMessage ?? 'unknown error'}`);
                 }
-
-                const cur = folderCounts.get(folder) || { count: 0, band: item.Band };
-                cur.count++;
-                folderCounts.set(folder, cur);
+                if (aIdx >= 0) {
+                    const artifactsRes = batch[aIdx] as { Success?: boolean; ErrorMessage?: string; Results?: Array<{ ID: string; Name: string | null; Type?: string | null }> };
+                    if (artifactsRes?.Success && artifactsRes.Results) artifactsRes.Results.forEach((a) => artifactsMap.set(a.ID.toLowerCase(), a));
+                    else LogError(`Failed to read the artifacts behind space ${spaceId}'s items: ${artifactsRes?.ErrorMessage ?? 'unknown error'}`);
+                }
             }
-
-            this.libraryRows = rows;
-            this.librarySpaceIdLoaded = spaceId;
-            this.libraryTotalCount = rows.length;
-            this.librarySharedCount = shared.length;
-            this.libraryTeamCount = team.length;
-            this.overviewSharedItems = shared;
-            this.overviewTeamItems = team;
-            this.refreshPinModels();
-            if (UUIDsEqual(this.activeSpaceId, spaceId)) {
-                this.refreshVisibleSourceReceipts(spaceId);
-            }
-
-            this.libraryCollections = Array.from(folderCounts.entries()).map(([folder, info], idx) => ({
-                id: 'folder-' + idx,
-                name: folder,
-                band: info.band,
-                count: info.count,
-            }));
-
-            this.librarySmartViews = [
-                { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: rows.length },
-                { id: 'shared', name: 'Shared', iconClass: 'fa-solid fa-eye', count: shared.length },
-                ...(this.canSeeTeamSide ? [{ id: 'team', name: 'Team only', iconClass: 'fa-solid fa-lock', count: team.length }] : []),
-            ];
-            if (this.pendingPinTarget?.startsWith('item:')) {
-                const target = this.pendingPinTarget;
-                this.pendingPinTarget = null;
-                this.showPinTarget('item', target.slice('item:'.length));
-            }
+            if (!isCurrent()) return;
+            this.applySpaceItemsResult(spaceId, itemsRes, filesMap, artifactsMap);
         } catch (err) {
             LogError('Error loading space items: ' + (err instanceof Error ? err.message : String(err)));
             if (!isCurrent()) return;
@@ -4491,8 +4682,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             if (this.activeConversationId) {
                 await this.loadOverviewMessages(this.activeConversationId, isCurrent);
-                void this.loadConversationSourceReceipts(spaceId, this.activeConversationId, isCurrent);
+                if (this.activeTab === 'Chat') {
+                    const rulesKey = `${spaceId.toLowerCase()}|${this.activeConversationId.toLowerCase()}`;
+                    this.loadedSourceReceiptsForKey = rulesKey;
+                    void this.loadConversationSourceReceipts(spaceId, this.activeConversationId, isCurrent);
+                }
             } else {
+                this.cachedOverviewDetails = null;
                 this.overviewRoomMessages = [];
                 this.clearConversationSourceReceipts();
             }
@@ -4502,6 +4698,21 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     private readonly overviewReads = new LatestOnly();
+
+    /** Re-decorates cached Overview messages in memory (outside rings & member photos) with zero network reads. */
+    private rebuildOverviewMessagesFromCache(): void {
+        if (!this.cachedOverviewDetails || !UUIDsEqual(this.cachedOverviewDetails.convId, this.activeConversationId)) {
+            return;
+        }
+        const parser = new MentionParser();
+        this.overviewRoomMessages = toOverviewMessages(
+            this.cachedOverviewDetails.rows,
+            (message) => parser.ToPlainText(message),
+            (userId) => this.isOutsideUser(userId),
+            (iso) => formatDateTime(iso),
+            (userId) => this.photoOfUser(userId),
+        );
+    }
 
     /**
      * Loads the Overview's latest messages for a conversation. Only the newest read of these may write, and only while the
@@ -4516,14 +4727,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             await guardedLoad(
                 () => isLatest() && isCurrent(),
                 async () => {
-                    const res = await rv.RunView<{
-                        ID: string;
-                        Role: string;
-                        Message: string;
-                        User?: string;
-                        UserID?: string | null;
-                        __mj_CreatedAt: string;
-                    }>({
+                    const res = await rv.RunView<OverviewDetailRow>({
                         EntityName: 'MJ: Conversation Details',
                         ExtraFilter: `ConversationID = '${convId}'`,
                         OrderBy: '__mj_CreatedAt DESC',
@@ -4536,23 +4740,133 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 },
                 (detailRes) => {
                     if (!detailRes.Success || !detailRes.Results) {
+                        this.cachedOverviewDetails = null;
                         this.overviewRoomMessages = [];
                         return;
                     }
-                    const parser = new MentionParser();
-                    this.overviewRoomMessages = toOverviewMessages(
-                        detailRes.Results,
-                        (message) => parser.ToPlainText(message),
-                        (userId) => this.isOutsideUser(userId),
-                        (iso) => formatDateTime(iso),
-                        (userId) => this.photoOfUser(userId),
-                    );
+                    this.cachedOverviewDetails = { convId, rows: detailRes.Results };
+                    this.rebuildOverviewMessagesFromCache();
                 },
             );
         } catch (err) {
             LogError('Error loading overview messages: ' + (err instanceof Error ? err.message : String(err)));
-            if (isLatest() && isCurrent()) this.overviewRoomMessages = [];
+            if (isLatest() && isCurrent()) {
+                this.cachedOverviewDetails = null;
+                this.overviewRoomMessages = [];
+            }
         }
+    }
+
+    private buildTaskModels(
+        taskItemMap: Map<string, RawSpaceItemRow>,
+        tasks: readonly RawTaskRow[],
+        assignees: Map<string, string>,
+        dependencies: TaskGanttDependencyInput[],
+    ): void {
+        const bandsByTaskId = new Map<string, SpaceBand>();
+        const modelRows: TaskItemModel[] = [];
+        const widgetRows: TaskWidgetItem[] = [];
+
+        for (const t of tasks) {
+            const directItem = taskItemMap.get(t.ID.toLowerCase());
+            const rootItem = t.RootParentID ? taskItemMap.get(t.RootParentID.toLowerCase()) : undefined;
+            const resolvedBand: SpaceBand = directItem?.Band ?? rootItem?.Band ?? 'Shared';
+            bandsByTaskId.set(t.ID.toLowerCase(), resolvedBand);
+
+            const assigned = assignees.get(t.ID.toLowerCase());
+            const status: TaskStatusValue = t.Status ?? 'Open';
+            const priority: TaskPriorityValue = t.Priority ?? 'Medium';
+
+            modelRows.push({
+                id: t.ID,
+                name: t.Name,
+                description: t.Description || undefined,
+                status,
+                priority,
+                band: resolvedBand,
+                assigneeName: assigned,
+                assigneeInitials: assigned ? assigned.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : undefined,
+                assigneeNames: assigned ? [assigned] : undefined,
+                dueDate: t.DueAt ? this.formatDate(t.DueAt) : undefined,
+                percentComplete: t.PercentComplete ?? null,
+                parentId: t.ParentID ?? null,
+                blockedReason: t.BlockedReason ?? null,
+                kindLabel: t.Type ?? null,
+                sequence: t.Sequence ?? null,
+            });
+
+            widgetRows.push({
+                ID: t.ID,
+                Name: t.Name,
+                Description: t.Description ?? null,
+                ParentID: t.ParentID ?? null,
+                Status: status,
+                Priority: priority,
+                PercentComplete: t.PercentComplete ?? null,
+                DueAt: t.DueAt ?? null,
+                StartedAt: t.StartedAt ?? null,
+                Sequence: t.Sequence ?? null,
+                BlockedReason: t.BlockedReason ?? null,
+                TypeID: t.TypeID ?? undefined,
+                TypeName: t.Type ?? null,
+                TaskTypeName: t.Type ?? null,
+                HoursEstimated: t.HoursEstimated ?? null,
+                HoursActual: t.HoursActual ?? null,
+                AssigneeNames: assigned ? [assigned] : undefined,
+            });
+        }
+
+        this.spaceTasks = modelRows;
+        this.spaceWorkWidgetTasks = widgetRows;
+        this.spaceTaskBands = bandsByTaskId;
+        this.spaceTaskDependencies = dependencies;
+        this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed').length;
+    }
+
+    private applyLightweightTasks(
+        spaceId: string,
+        taskItems: readonly RawSpaceItemRow[],
+        tasksRes: { Success?: boolean; ErrorMessage?: string; Results?: RawTaskRow[] } | undefined,
+    ): void {
+        if (taskItems.length === 0 || !tasksRes?.Success || !tasksRes.Results) {
+            if (taskItems.length > 0 && tasksRes && !tasksRes.Success) {
+                LogError(`Failed to load tasks for space ${spaceId}: ${tasksRes.ErrorMessage ?? 'unknown error'}`);
+            }
+            this.cachedTaskRowsForSpace = null;
+            this.spaceTasks = [];
+            this.spaceWorkWidgetTasks = [];
+            this.spaceTaskBands = new Map<string, SpaceBand>();
+            this.spaceTaskDependencies = [];
+            this.taskCount = 0;
+            return;
+        }
+        const taskItemMap = new Map<string, RawSpaceItemRow>();
+        for (const item of taskItems) {
+            const rawId = bareRecordId(item.RecordID ?? '');
+            if (rawId && isValidUuid(rawId)) {
+                taskItemMap.set(rawId.toLowerCase(), item);
+            }
+        }
+        this.cachedTaskRowsForSpace = { spaceId, taskItemMap, tasks: tasksRes.Results };
+        this.buildTaskModels(taskItemMap, tasksRes.Results, new Map(), []);
+    }
+
+    private async hydrateWorkHeavyDetails(
+        spaceId: string,
+        taskItemMap: Map<string, RawSpaceItemRow>,
+        tasks: readonly RawTaskRow[],
+        isCurrent: () => boolean,
+    ): Promise<void> {
+        const allTaskIds = tasks.map(t => t.ID).filter(id => isValidUuid(id));
+        if (allTaskIds.length === 0) return;
+        const rv = new RunView(this.RunViewToUse);
+        const [assignees, dependencies] = await Promise.all([
+            this.loadTaskAssignees(rv, allTaskIds),
+            this.loadTaskDependencies(rv, allTaskIds),
+        ]);
+        if (!isCurrent() || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
+        this.buildTaskModels(taskItemMap, tasks, assignees, dependencies);
+        this.RefreshView();
     }
 
     private async loadSpaceTasks(spaceId: string, isCurrent: () => boolean): Promise<void> {
@@ -4563,14 +4877,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const tasksEntityInfo = md.EntityByName('MJ_BizApps_Tasks: Tasks');
             if (!tasksEntityInfo) return;
 
-            const itemsRes = await rv.RunView<{
-                ID: string;
-                SpaceID: string;
-                EntityID: string;
-                Entity?: string;
-                RecordID: string;
-                Band: SpaceBand;
-            }>({
+            const itemsRes = await rv.RunView<RawSpaceItemRow>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Items',
                 ExtraFilter: `SpaceID = '${spaceId}' AND (EntityID = '${tasksEntityInfo.ID}' OR Entity = 'MJ_BizApps_Tasks: Tasks')`,
                 ResultType: 'simple',
@@ -4582,160 +4889,43 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 LogError(`Failed to load task items for space ${spaceId}: ${itemsRes?.ErrorMessage ?? 'unknown error'}`);
             }
             if (!itemsRes?.Success || !itemsRes.Results || itemsRes.Results.length === 0) {
-                this.spaceTasks = [];
-                this.spaceWorkWidgetTasks = [];
-                this.spaceTaskBands = new Map<string, SpaceBand>();
-                this.spaceTaskDependencies = [];
-                this.taskCount = 0;
+                this.applyLightweightTasks(spaceId, [], undefined);
                 return;
             }
 
-            const taskItemMap = new Map<string, typeof itemsRes.Results[0]>();
             const taskIds: string[] = [];
             for (const item of itemsRes.Results) {
-                const rawId = (item.RecordID ?? '').replace(/^ID\|/i, '');
-                if (rawId && isValidUuid(rawId)) {
-                    taskIds.push(rawId);
-                    taskItemMap.set(rawId.toLowerCase(), item);
-                }
+                const rawId = bareRecordId(item.RecordID ?? '');
+                if (rawId && isValidUuid(rawId)) taskIds.push(rawId);
             }
-
             if (taskIds.length === 0) {
-                this.spaceTasks = [];
-                this.spaceWorkWidgetTasks = [];
-                this.spaceTaskBands = new Map<string, SpaceBand>();
-                this.spaceTaskDependencies = [];
-                this.taskCount = 0;
+                this.applyLightweightTasks(spaceId, [], undefined);
                 return;
             }
 
             const quotedIds = taskIds.map(id => `'${id}'`).join(',');
-            const tasksRes = await rv.RunView<{
-                ID: string;
-                Name: string;
-                Description?: string | null;
-                Status?: TaskStatusValue | null;
-                Priority?: TaskPriorityValue | null;
-                PercentComplete?: number | null;
-                DueAt?: string | null;
-                StartedAt?: string | null;
-                ParentID?: string | null;
-                RootParentID?: string | null;
-                Sequence?: number | null;
-                BlockedReason?: string | null;
-                TypeID?: string | null;
-                Type?: string | null;
-                HoursEstimated?: number | null;
-                HoursActual?: number | null;
-            }>({
+            const tasksRes = await rv.RunView<RawTaskRow>({
                 EntityName: 'MJ_BizApps_Tasks: Tasks',
                 ExtraFilter: `(ID IN (${quotedIds}) OR RootParentID IN (${quotedIds}))`,
                 Fields: [
-                    'ID',
-                    'Name',
-                    'Description',
-                    'Status',
-                    'Priority',
-                    'PercentComplete',
-                    'DueAt',
-                    'StartedAt',
-                    'ParentID',
-                    'RootParentID',
-                    'Sequence',
-                    'BlockedReason',
-                    'TypeID',
-                    'Type',
-                    'HoursEstimated',
-                    'HoursActual',
+                    'ID', 'Name', 'Description', 'Status', 'Priority', 'PercentComplete',
+                    'DueAt', 'StartedAt', 'ParentID', 'RootParentID', 'Sequence',
+                    'BlockedReason', 'TypeID', 'Type', 'HoursEstimated', 'HoursActual',
                 ],
                 ResultType: 'simple',
                 // row-cap-ok: space work hierarchy display cap
                 MaxRows: 500,
             });
-
             if (!isCurrent()) return;
-            if (!tasksRes?.Success) {
-                LogError(`Failed to load tasks for space ${spaceId}: ${tasksRes?.ErrorMessage ?? 'unknown error'}`);
-                this.spaceTasks = [];
-                this.spaceWorkWidgetTasks = [];
-                this.spaceTaskBands = new Map<string, SpaceBand>();
-                this.spaceTaskDependencies = [];
-                this.taskCount = 0;
-            } else if (tasksRes.Results) {
-                const allTaskIds = tasksRes.Results.map(t => t.ID).filter(id => isValidUuid(id));
-                const [assignees, dependencies] = await Promise.all([
-                    allTaskIds.length > 0 ? this.loadTaskAssignees(rv, allTaskIds) : Promise.resolve(new Map<string, string>()),
-                    allTaskIds.length > 0 ? this.loadTaskDependencies(rv, allTaskIds) : Promise.resolve([]),
-                ]);
-                if (!isCurrent()) return;
-
-                const bandsByTaskId = new Map<string, SpaceBand>();
-                const modelRows: TaskItemModel[] = [];
-                const widgetRows: TaskWidgetItem[] = [];
-
-                for (const t of tasksRes.Results) {
-                    const directItem = taskItemMap.get(t.ID.toLowerCase());
-                    const rootItem = t.RootParentID ? taskItemMap.get(t.RootParentID.toLowerCase()) : undefined;
-                    const resolvedBand: SpaceBand = directItem?.Band ?? rootItem?.Band ?? 'Shared';
-                    bandsByTaskId.set(t.ID.toLowerCase(), resolvedBand);
-
-                    const assigned = assignees.get(t.ID.toLowerCase());
-                    const status: TaskStatusValue = t.Status ?? 'Open';
-                    const priority: TaskPriorityValue = t.Priority ?? 'Medium';
-
-                    modelRows.push({
-                        id: t.ID,
-                        name: t.Name,
-                        description: t.Description || undefined,
-                        status,
-                        priority,
-                        band: resolvedBand,
-                        assigneeName: assigned,
-                        assigneeInitials: assigned ? assigned.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : undefined,
-                        assigneeNames: assigned ? [assigned] : undefined,
-                        dueDate: t.DueAt ? this.formatDate(t.DueAt) : undefined,
-                        percentComplete: t.PercentComplete ?? null,
-                        parentId: t.ParentID ?? null,
-                        blockedReason: t.BlockedReason ?? null,
-                        kindLabel: t.Type ?? null,
-                        sequence: t.Sequence ?? null,
-                    });
-
-                    widgetRows.push({
-                        ID: t.ID,
-                        Name: t.Name,
-                        Description: t.Description ?? null,
-                        ParentID: t.ParentID ?? null,
-                        Status: status,
-                        Priority: priority,
-                        PercentComplete: t.PercentComplete ?? null,
-                        DueAt: t.DueAt ?? null,
-                        StartedAt: t.StartedAt ?? null,
-                        Sequence: t.Sequence ?? null,
-                        BlockedReason: t.BlockedReason ?? null,
-                        TypeID: t.TypeID ?? undefined,
-                        TypeName: t.Type ?? null,
-                        TaskTypeName: t.Type ?? null,
-                        HoursEstimated: t.HoursEstimated ?? null,
-                        HoursActual: t.HoursActual ?? null,
-                        AssigneeNames: assigned ? [assigned] : undefined,
-                    });
-                }
-
-                this.spaceTasks = modelRows;
-                this.spaceWorkWidgetTasks = widgetRows;
-                this.spaceTaskBands = bandsByTaskId;
-                this.spaceTaskDependencies = dependencies;
-                this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed').length;
+            this.applyLightweightTasks(spaceId, itemsRes.Results, tasksRes);
+            if (this.cachedTaskRowsForSpace && this.activeTab === 'Work') {
+                this.loadedWorkHeavyForSpace = spaceId;
+                await this.hydrateWorkHeavyDetails(spaceId, this.cachedTaskRowsForSpace.taskItemMap, this.cachedTaskRowsForSpace.tasks, isCurrent);
             }
         } catch (err) {
             LogError('Error loading space tasks: ' + (err instanceof Error ? err.message : String(err)));
             if (isCurrent()) {
-                this.spaceTasks = [];
-                this.spaceWorkWidgetTasks = [];
-                this.spaceTaskBands = new Map<string, SpaceBand>();
-                this.spaceTaskDependencies = [];
-                this.taskCount = 0;
+                this.applyLightweightTasks(spaceId, [], undefined);
             }
         }
     }
@@ -4809,11 +4999,87 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return { canApprove: actions.approve, canRemove: actions.remove, canChangeRole: actions.changeRole };
     }
 
+    private applySpaceMembersResult(
+        spaceId: string,
+        membersRes: { Success?: boolean; ErrorMessage?: string; Results?: RawSpaceMemberRow[] } | undefined,
+        chain: Array<{ id: string; name: string }>,
+        userRows: Array<UserPhotoRow & { Email: string }>,
+        personRows: PersonPhotoRow[],
+    ): void {
+        if (!membersRes?.Success || !membersRes.Results) {
+            LogError(`Failed to load members for space ${spaceId}: ${membersRes?.ErrorMessage ?? 'unknown error'}`);
+            this.spaceMembers = [];
+            this.headerTotalPeople = 0;
+            this.headerStaffAvatars = [];
+            this.headerOutsideAvatars = [];
+            this.headerAudienceSummary = '';
+            this.spaceAudienceBand = 'Team';
+            return;
+        }
+        const reached = nearestSeats(membersRes.Results, chain);
+        const userEmailMap = new Map<string, string>();
+        for (const u of userRows) userEmailMap.set(u.ID, u.Email || '');
+        const photos = photosByUser(userRows, personRows);
+
+        this.memberSeats = reached.map(({ row: m, from }) => {
+            const roleType = m.SpaceRoleTypeID ? CollaborationEngineBase.Instance.SpaceRoleTypeById(m.SpaceRoleTypeID) : null;
+            return {
+                userId: m.UserID,
+                seatSpaceId: from.id,
+                role: {
+                    level: roleType?.Level ?? 0,
+                    maxGrantableLevel: roleType?.MaxGrantableLevel ?? 0,
+                    canInvite: !!roleType?.CanInvite,
+                    canPromoteBand: !!roleType?.CanPromoteBand,
+                    canSeeTeamBand: !!roleType?.CanSeeTeamBand,
+                    isOwnerRole: !!roleType?.IsOwnerRole,
+                    canContribute: !!roleType?.CanContribute,
+                },
+            };
+        });
+        this.spaceMembers = reached.map(({ row: m, from, inherited, ownSeat }, _i, all) => {
+            const name = m.User || 'Member';
+            const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+            const roleType = m.SpaceRoleTypeID
+                ? CollaborationEngineBase.Instance.SpaceRoleTypeById(m.SpaceRoleTypeID)
+                : null;
+            const roleCode = roleType?.Code || 'member';
+            const canContribute = roleType ? roleType.CanContribute : false;
+            return {
+                id: m.ID,
+                userId: m.UserID,
+                name,
+                email: userEmailMap.get(m.UserID) || '',
+                initials,
+                avatarUrl: m.UserID ? photos.get(m.UserID.toLowerCase()) : undefined,
+                roleName: roleType?.Name || m.SpaceRoleType || 'Member',
+                roleCode,
+                roleId: m.SpaceRoleTypeID || undefined,
+                canContribute,
+                band: m.Band || 'Team',
+                status: m.Status || 'Active',
+                joinedDate: this.formatDate(m.__mj_CreatedAt),
+                inherited,
+                source: inherited ? (m.Space || from.name || 'a parent space') : undefined,
+                ownSeat: ownSeat ? this.ownSeatModel(ownSeat, all) : undefined,
+                ...this.actionsFor(m, roleType, inherited, reached),
+            };
+        });
+
+        const seats = summarizeSeats(this.spaceMembers);
+        this.headerTotalPeople = seats.totalPeople;
+        this.headerStaffAvatars = seats.staffAvatars;
+        this.headerOutsideAvatars = seats.outsideAvatars;
+        this.headerAudienceSummary = seats.audienceSummary;
+        this.spaceAudienceBand = seats.audienceBand;
+        // Re-decorate cached overview messages in memory with zero extra RunView!
+        this.rebuildOverviewMessagesFromCache();
+    }
+
     private async loadSpaceMembers(spaceId: string, isCurrent: () => boolean): Promise<void> {
         if (!isValidUuid(spaceId)) return;
         try {
             const rv = new RunView(this.RunViewToUse);
-            // Everyone who reaches the space: its own seats, then each ancestor's while the chain inherits, the nearest seat per person
             const chain = accessChain(spaceId, this.rawSpaces.map(sp => ({
                 ID: sp.ID,
                 Name: sp.Name,
@@ -4823,22 +5089,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 Status: CollaborationEngineBase.Instance.StatusReachForSpace(sp),
             })));
             if (chain.length === 0) chain.push({ id: spaceId, name: '' });
-            const membersRes = await rv.RunView<{
-                ID: string;
-                SpaceID: string;
-                UserID: string;
-                User?: string | null;
-                UserEmail?: MJUserEntity['Email'];
-                SpaceRoleType?: string | null;
-                SpaceRoleTypeID?: string | null;
-                Space?: string | null;
-                Band: SpaceBand;
-                Status: string;
-                __mj_CreatedAt: string;
-            }>({
+            const membersRes = await rv.RunView<RawSpaceMemberRow>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Members',
-                // Every seat, not only Active ones: the People tab shows invited and removed seats, and re-inviting
-                // someone needs to find their old one. The header's counts leave the others out (summarizeSeats).
                 ExtraFilter: `SpaceID IN (${chain.map(c => `'${c.id}'`).join(',')})`,
                 ResultType: 'simple',
                 MaxRows: 500,
@@ -4846,103 +5098,33 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             if (!isCurrent()) return;
             if (!membersRes?.Success || !membersRes.Results) {
-                // The previous space's people must not stay under this one
-                LogError(`Failed to load members for space ${spaceId}: ${membersRes?.ErrorMessage ?? 'unknown error'}`);
-                this.spaceMembers = [];
-                this.headerTotalPeople = 0;
-                this.headerStaffAvatars = [];
-                this.headerOutsideAvatars = [];
-                this.headerAudienceSummary = '';
-                this.spaceAudienceBand = 'Team'; // no band is claimed when the seats could not be read
+                this.applySpaceMembersResult(spaceId, membersRes, chain, [], []);
                 return;
             }
-            if (membersRes.Results) {
-                const reached = nearestSeats(membersRes.Results, chain);
-                const userIds = [...new Set(reached.map(r => r.row.UserID).filter(Boolean))];
-                const userEmailMap = new Map<string, string>();
-                const userRows: Array<UserPhotoRow & { Email: string }> = [];
-                let personRows: PersonPhotoRow[] = [];
-                if (userIds.length > 0) {
-                    const userFilter = userIds.map(id => `'${id}'`).join(',');
-                    // Two reads, not one batch: an outside participant reads only their own user, and a host that has not
-                    // opened the People photo to them refuses the second read, which must not take the emails with it
-                    const [users, people] = await Promise.all([
-                        rv.RunView<UserPhotoRow & { Email: string }>({
-                            EntityName: 'MJ: Users',
-                            ExtraFilter: `ID IN (${userFilter})`,
-                            Fields: ['ID', 'Email', 'UserImageURL'],
-                            ResultType: 'simple',
-                            MaxRows: userIds.length,
-                        }).catch((userErr: Error | object | string | number | boolean | null | undefined) => {
-                            LogError('Error loading user emails and photos for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
-                            return null;
-                        }),
-                        this.loadPeoplePhotos(rv, userFilter),
-                    ]);
-                    if (users?.Success && users.Results) {
-                        userRows.push(...users.Results);
-                        for (const u of users.Results) userEmailMap.set(u.ID, u.Email || '');
-                    }
-                    personRows = people;
-                }
-                // A user's own photo is the one MJ's chat draws, so it comes first; the People record's fills in
-                const photos = photosByUser(userRows, personRows);
-
-                if (!isCurrent()) return;
-                this.memberSeats = reached.map(({ row: m, from }) => {
-                    const roleType = m.SpaceRoleTypeID ? CollaborationEngineBase.Instance.SpaceRoleTypeById(m.SpaceRoleTypeID) : null;
-                    return {
-                        userId: m.UserID,
-                        seatSpaceId: from.id,
-                        role: {
-                            level: roleType?.Level ?? 0,
-                            maxGrantableLevel: roleType?.MaxGrantableLevel ?? 0,
-                            canInvite: !!roleType?.CanInvite,
-                            canPromoteBand: !!roleType?.CanPromoteBand,
-                            canSeeTeamBand: !!roleType?.CanSeeTeamBand,
-                            isOwnerRole: !!roleType?.IsOwnerRole,
-                            canContribute: !!roleType?.CanContribute,
-                        },
-                    };
-                });
-                this.spaceMembers = reached.map(({ row: m, from, inherited, ownSeat }, _i, all) => {
-                    const name = m.User || 'Member';
-                    const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-                    const roleType = m.SpaceRoleTypeID
-                        ? CollaborationEngineBase.Instance.SpaceRoleTypeById(m.SpaceRoleTypeID)
-                        : null;
-                    const roleCode = roleType?.Code || 'member';
-                    const canContribute = roleType ? roleType.CanContribute : false;
-                    return {
-                        id: m.ID,
-                        userId: m.UserID,
-                        name,
-                        email: userEmailMap.get(m.UserID) || '',
-                        initials,
-                        avatarUrl: m.UserID ? photos.get(m.UserID.toLowerCase()) : undefined,
-                        roleName: roleType?.Name || m.SpaceRoleType || 'Member',
-                        roleCode,
-                        roleId: m.SpaceRoleTypeID || undefined,
-                        canContribute,
-                        band: m.Band || 'Team',
-                        status: m.Status || 'Active',
-                        joinedDate: this.formatDate(m.__mj_CreatedAt),
-                        inherited,
-                        source: inherited ? (m.Space || from.name || 'a parent space') : undefined,
-                        ownSeat: ownSeat ? this.ownSeatModel(ownSeat, all) : undefined,
-                        ...this.actionsFor(m, roleType, inherited, reached),
-                    };
-                });
-
-                const seats = summarizeSeats(this.spaceMembers);
-                this.headerTotalPeople = seats.totalPeople;
-                this.headerStaffAvatars = seats.staffAvatars;
-                this.headerOutsideAvatars = seats.outsideAvatars;
-                this.headerAudienceSummary = seats.audienceSummary;
-                this.spaceAudienceBand = seats.audienceBand;
-                // The Discussion card's outside ring and photos need the seats: map its messages again now that they are here
-                if (this.activeConversationId) void this.loadOverviewMessages(this.activeConversationId, isCurrent);
+            const reached = nearestSeats(membersRes.Results, chain);
+            const userIds = [...new Set(reached.map(r => r.row.UserID).filter(Boolean))];
+            const userRows: Array<UserPhotoRow & { Email: string }> = [];
+            let personRows: PersonPhotoRow[] = [];
+            if (userIds.length > 0) {
+                const userFilter = userIds.map(id => `'${id}'`).join(',');
+                const [users, people] = await Promise.all([
+                    rv.RunView<UserPhotoRow & { Email: string }>({
+                        EntityName: 'MJ: Users',
+                        ExtraFilter: `ID IN (${userFilter})`,
+                        Fields: ['ID', 'Email', 'UserImageURL'],
+                        ResultType: 'simple',
+                        MaxRows: userIds.length,
+                    }).catch((userErr: Error | object | string | number | boolean | null | undefined) => {
+                        LogError('Error loading user emails and photos for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
+                        return null;
+                    }),
+                    this.loadPeoplePhotos(rv, userFilter),
+                ]);
+                if (users?.Success && users.Results) userRows.push(...users.Results);
+                personRows = people;
             }
+            if (!isCurrent()) return;
+            this.applySpaceMembersResult(spaceId, membersRes, chain, userRows, personRows);
         } catch (err) {
             LogError('Error loading space members: ' + (err instanceof Error ? err.message : String(err)));
             if (isCurrent()) {
@@ -5882,6 +6064,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 description: payload.description,
                 parentId: this.newSpaceParentId,
                 inheritsMembership: payload.inheritsMembership,
+                iconClass: payload.iconClass,
+                color: payload.color,
+                imageUrl: payload.imageUrl,
             });
             if (outcome.status === 'refused') {
                 LogError(`Could not create the space: ${outcome.message}`);
@@ -5924,6 +6109,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const [row] = res.Results ?? [];
         if (!row) throw new Error('The new space was created but cannot be read by you yet.');
         this.rawSpaces = [...this.rawSpaces.filter((sp) => !UUIDsEqual(sp.ID, row.ID)), row];
+        CollaborationEngineBase.Instance.InvalidateSpaceCache();
+        this.primeEngineSpacesCache();
         this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
     }
 
@@ -6610,6 +6797,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.inviteRedemptionUrl = result.RedemptionUrl ?? null;
             }
             SharedService.Instance.CreateSimpleNotification(message, 'info', 6000);
+            CollaborationEngineBase.Instance.InvalidateSpaceCache(spaceId);
             await this.loadSpaceMembers(spaceId, isCurrent);
         } catch (error) {
             failed(error instanceof Error ? error.message : String(error));
@@ -6643,6 +6831,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
             SharedService.Instance.CreateSimpleNotification(`Done: ${doing} for ${member.name}.`, 'info', 3000);
+            CollaborationEngineBase.Instance.InvalidateSpaceCache(spaceId);
             // A change to the caller's own seat changes what they may do here: resolve the seat (and the right to configure) again
             if (this.currentUser && UUIDsEqual(member.userId, this.currentUser.ID) && isCurrent()) {
                 const space = this.activeSpaceRecord;
@@ -6737,6 +6926,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 raw.ClosedAt = spaceEntity.ClosedAt;
                 this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
             }
+            CollaborationEngineBase.Instance.InvalidateSpaceCache(spaceId);
+            this.primeEngineSpacesCache();
             if (isCurrent()) {
                 this.activeSpaceEntity = spaceEntity;
                 // Read the space again as it now is: the header, the caller's seat and bands, the host rules and the conversations
@@ -6816,11 +7007,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     raw.Description = savedCopy.description;
                     raw.IconClass = savedCopy.iconClass;
                     raw.Color = savedCopy.color;
+                    raw.ImageURL = savedCopy.imageUrl || null;
                     raw.BackgroundImageURL = savedCopy.backgroundImageUrl || null;
                     raw.InheritsMembership = savedCopy.inheritsMembership;
                     raw.AgentRetrieval = savedCopy.agentRetrieval as mjBizAppsCollaborationSpaceEntity['AgentRetrieval'];
                     this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
                 }
+                CollaborationEngineBase.Instance.InvalidateSpaceCache(targetId);
+                this.primeEngineSpacesCache();
 
                 // The screen, its baseline and the header change only if this space is still the one shown; otherwise they belong to another
                 if (stillShown()) {
@@ -6830,6 +7024,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     this.spaceSubtitle = savedCopy.description;
                     this.headerTypeIcon = savedCopy.iconClass;
                     this.headerTypeColor = savedCopy.color;
+                    this.headerImageUrl = savedCopy.imageUrl || null;
                     this.headerBackgroundImageUrl = savedCopy.backgroundImageUrl || null;
                     this.settingsSaveSuccess = 'Space settings saved successfully.';
                 }

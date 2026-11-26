@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { COLLAB_TOKENS_CSS } from './tokens';
+import { CollabTypeTileComponent } from './type-tile.component';
 
 /** One row of a Home list: what it is, where it is, and what selecting it does. */
 export interface HomeListRow {
@@ -13,6 +14,8 @@ export interface HomeListRow {
   /** The space it is in. */
   spaceName: string;
   iconClass: string;
+  color?: string;
+  imageUrl?: string | null;
   /** What selecting the row does, said for a screen reader and shown as the row's action ("Review on People"). */
   actionLabel: string;
 }
@@ -25,7 +28,7 @@ export interface HomeListRow {
   selector: 'mjc-home-list',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, MJButtonDirective, SharedGenericModule],
+  imports: [CommonModule, MJButtonDirective, SharedGenericModule, CollabTypeTileComponent],
   template: `
     <section class="hl" [attr.aria-labelledby]="'hl-title-' + Id">
       <header class="hl-head">
@@ -49,7 +52,11 @@ export interface HomeListRow {
           @for (row of Rows; track row.key) {
             <li>
               <button type="button" class="hl-row" (click)="RowSelected.emit(row.key)">
-                <span class="hl-ic"><i [class]="row.iconClass" aria-hidden="true"></i></span>
+                @if (row.imageUrl) {
+                  <mjc-type-tile [IconClass]="row.iconClass" [Color]="row.color" [ImageUrl]="row.imageUrl" Size="md"></mjc-type-tile>
+                } @else {
+                  <span class="hl-ic"><i [class]="row.iconClass" aria-hidden="true"></i></span>
+                }
                 <span class="hl-main">
                   <span class="hl-row-title">{{ row.title }}</span>
                   <span class="hl-row-detail">{{ row.detail }}</span>

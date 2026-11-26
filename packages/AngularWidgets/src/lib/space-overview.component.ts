@@ -33,6 +33,7 @@ export interface SubSpaceSummary {
   type: string;
   iconClass: string;
   color?: string;
+  imageUrl?: string | null;
   description: string;
 }
 
@@ -285,7 +286,7 @@ export interface SubSpaceSummary {
                 <div class="sub-grid">
                   @for (sub of SubSpaces; track sub.id) {
                     <div class="sub-row" [mjClickable]="sub.name" (click)="onSubSpaceSelected(sub)">
-                      <mjc-type-tile [IconClass]="sub.iconClass" [Color]="sub.color" Size="lg" />
+                      <mjc-type-tile [IconClass]="sub.iconClass" [Color]="sub.color" [ImageUrl]="sub.imageUrl || null" Size="lg" />
                       <div class="grow">
                         <div class="fw6 fs13">{{ sub.name }}</div>
                         @if (sub.description) {

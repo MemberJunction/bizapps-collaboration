@@ -21,6 +21,22 @@ export class CreateSpaceInput {
     @Field({ nullable: true })
     InheritsMembership?: boolean;
 
+    /** Optional Font Awesome icon class overriding the space type default. */
+    @Field({ nullable: true })
+    IconClass?: string;
+
+    /** Optional accent hex color overriding the space type default. */
+    @Field({ nullable: true })
+    Color?: string;
+
+    /** Optional square avatar/logo URL or 128x128 WebP data URI. */
+    @Field({ nullable: true })
+    ImageURL?: string;
+
+    /** Optional hero banner or background image URL. */
+    @Field({ nullable: true })
+    BackgroundImageURL?: string;
+
     /** The subtype's own columns, as JSON text: an object of field name to value. */
     @Field({ nullable: true })
     Details?: string;
@@ -51,7 +67,18 @@ export class CreateSpaceResolver extends ResolverBase {
             return { Success: false, ErrorMessage: parsedDetails.message };
         }
         try {
-            const result = await createSpace(provider, user, { TypeID: input.TypeID, Name: input.Name, Description: input.Description, ParentID: input.ParentID ?? null, InheritsMembership: input.InheritsMembership ?? undefined, Details: parsedDetails.details });
+            const result = await createSpace(provider, user, {
+                TypeID: input.TypeID,
+                Name: input.Name,
+                Description: input.Description,
+                ParentID: input.ParentID ?? null,
+                InheritsMembership: input.InheritsMembership ?? undefined,
+                IconClass: input.IconClass,
+                Color: input.Color,
+                ImageURL: input.ImageURL,
+                BackgroundImageURL: input.BackgroundImageURL,
+                Details: parsedDetails.details,
+            });
             return result.status === 'created' ? { Success: true, SpaceID: result.spaceId } : { Success: false, ErrorMessage: result.message };
         } catch (error) {
             // What went wrong is for the log: an unexpected error's own text is not for the browser

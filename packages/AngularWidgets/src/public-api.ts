@@ -96,6 +96,22 @@ export {
 } from './lib/answer-source-receipts.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';
 export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
+export {
+    CollabSpaceAvatarStudioComponent,
+    buildSpaceAvatarPrompt,
+    extractGeneratedImageSource,
+    downscaleImageToSquareWebp,
+    SPACE_AVATAR_STYLE_PRESETS,
+    CURATED_SPACE_ICONS,
+    CURATED_SPACE_COLORS,
+    GENERATE_IMAGE_ACTION_FALLBACK_ID,
+    SPACE_AVATAR_MAX_UNDO_STEPS,
+    SPACE_AVATAR_DIMENSION,
+    SPACE_AVATAR_WEBP_QUALITY,
+    type SpaceAvatarStudioTab,
+    type SpaceAvatarChangePayload,
+    type SpaceAvatarStylePreset,
+} from './lib/space-avatar-studio.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';
 export {
     SpaceMeetingsTabComponent,

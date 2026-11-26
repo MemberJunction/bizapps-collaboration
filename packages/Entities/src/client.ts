@@ -250,6 +250,14 @@ export interface CreateSpaceGraphQLInput {
     ParentID?: string;
     /** D22: whether a sub-space's members come from its parent. Read only with a parent. */
     InheritsMembership?: boolean;
+    /** Optional Font Awesome icon class overriding the space type default. */
+    IconClass?: string | null;
+    /** Optional accent hex color overriding the space type default. */
+    Color?: string | null;
+    /** Optional square avatar/logo URL or 128x128 WebP data URI. */
+    ImageURL?: string | null;
+    /** Optional hero banner or background image URL. */
+    BackgroundImageURL?: string | null;
     Details?: Record<string, {} | null | undefined>;
 }
 

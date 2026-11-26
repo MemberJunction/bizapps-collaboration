@@ -135,6 +135,39 @@ export interface RoleTypeFlags {
     CanContribute: boolean;
 }
 
+/** Minimal space projection cached per-user for reachability and parent/child hierarchy lookups. */
+export interface CachedSpaceReachRow {
+    ID: string;
+    ParentID: string | null;
+    SpaceTypeID: string | null;
+    InheritsMembership: boolean;
+    OwnerID: string;
+    AgentRetrieval?: AgentRetrieval;
+    AllowParentAssignees?: boolean;
+    ClosedAt: string | null;
+    StatusID: string | null;
+}
+
+/** Minimal active Space Member row cached per-user for seat lookups. */
+export interface CachedUserSpaceMemberRow {
+    SpaceID: string;
+    UserID: string;
+    Status: MemberSnapshot['status'];
+    Band: MemberSnapshot['band'];
+    SpaceRoleTypeID: string;
+}
+
+interface UserProviderSpaceCache {
+    epoch: number;
+    userId: string;
+    spacesById: Map<string, CachedSpaceReachRow>;
+    childrenByParentId: Map<string, CachedSpaceReachRow[]>;
+    allSpacesLoaded: boolean;
+    membersBySpaceId: Map<string, CachedUserSpaceMemberRow[]>;
+    allMembersLoaded: boolean;
+    reachedSeatByKey: Map<string, ReturnType<typeof membershipReaches>>;
+}
+
 @RegisterForStartup()
 export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase> {
     private _spaceTypes: mjBizAppsCollaborationSpaceTypeEntity[] = [];
@@ -150,6 +183,12 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
     private _statusesById: Map<string, mjBizAppsCollaborationSpaceTypeStatusEntity> | null = null;
     private _statusesByType: Map<string, mjBizAppsCollaborationSpaceTypeStatusEntity[]> | null = null;
     private _cachedParsedSettings: CollaborationSettings | null | undefined = undefined;
+
+    // Per-provider, per-user memoized caches for reachable spaces, caller memberships, and ReachedSeat results.
+    // Automatically reset whenever the active userId changes (e.g. persona impersonation) or cache epoch increments.
+    private _providerUserCaches = new WeakMap<IMetadataProvider, UserProviderSpaceCache>();
+    private _lastActiveCache: UserProviderSpaceCache | null = null;
+    private _userCacheEpoch = 0;
 
     public static get Instance(): CollaborationEngineBase {
         return super.getInstance<CollaborationEngineBase>();
@@ -199,8 +238,213 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         this._statusesByType = null;
         this._cachedParsedSettings = undefined;
         this._settingsError = null;
+        this.ClearUserCaches();
         // The subtype each space type names, for the Spaces subtype resolver: it answers a load's hint from memory, never by a read
         SpaceSubtypeDirectory.Instance.Replace(this.SpaceTypes.map((type) => ({ ID: type.ID, SpaceExtensionEntity: type.SpaceExtensionEntity })));
+    }
+
+    // ─── Per-User Reachability & Hierarchy Caches ──────────────────────────────
+
+    /**
+     * Clears all per-user memoized space, membership, and `ReachedSeat` caches across all providers.
+     * Call on sign-out, persona switch, or full reload.
+     */
+    public ClearUserCaches(): void {
+        this._userCacheEpoch += 1;
+        this._lastActiveCache = null;
+    }
+
+    /**
+     * Invalidates cached space/membership/seat data after space or member create/update/delete.
+     * When `spaceId` is provided, drops that space's cached row and any derived `ReachedSeat` / child-hierarchy entries
+     * (since descendant spaces may inherit from `spaceId`); when omitted, clears all user caches.
+     */
+    public InvalidateSpaceCache(spaceId?: string | null): void {
+        if (!spaceId) {
+            this.ClearUserCaches();
+            return;
+        }
+        const key = normalizeKey(spaceId);
+        if (!key) {
+            this.ClearUserCaches();
+            return;
+        }
+        const active = this._lastActiveCache;
+        if (active && active.epoch === this._userCacheEpoch) {
+            active.spacesById.delete(key);
+            active.childrenByParentId.clear();
+            active.allSpacesLoaded = false;
+            active.membersBySpaceId.delete(key);
+            active.allMembersLoaded = false;
+            active.reachedSeatByKey.clear();
+            // Rebuild parent->children index from remaining cached spaces
+            for (const row of active.spacesById.values()) {
+                this.indexChildSpace(active.childrenByParentId, row);
+            }
+        } else {
+            this.ClearUserCaches();
+        }
+    }
+
+    private getUserCache(provider: IMetadataProvider, userId: string): UserProviderSpaceCache {
+        const normalizedUserId = normalizeKey(userId);
+        let entry = this._providerUserCaches.get(provider);
+        if (!entry || entry.epoch !== this._userCacheEpoch || entry.userId !== normalizedUserId) {
+            entry = {
+                epoch: this._userCacheEpoch,
+                userId: normalizedUserId,
+                spacesById: new Map<string, CachedSpaceReachRow>(),
+                childrenByParentId: new Map<string, CachedSpaceReachRow[]>(),
+                allSpacesLoaded: false,
+                membersBySpaceId: new Map<string, CachedUserSpaceMemberRow[]>(),
+                allMembersLoaded: false,
+                reachedSeatByKey: new Map<string, ReturnType<typeof membershipReaches>>(),
+            };
+            this._providerUserCaches.set(provider, entry);
+        }
+        this._lastActiveCache = entry;
+        return entry;
+    }
+
+    private indexChildSpace(childrenByParentId: Map<string, CachedSpaceReachRow[]>, row: CachedSpaceReachRow): void {
+        const parentKey = row.ParentID ? normalizeKey(row.ParentID) : '__root__';
+        const list = childrenByParentId.get(parentKey) ?? [];
+        const rowKey = normalizeKey(row.ID);
+        if (!list.some((existing) => normalizeKey(existing.ID) === rowKey)) {
+            list.push(row);
+            childrenByParentId.set(parentKey, list);
+        }
+    }
+
+    /**
+     * Primes the per-user reachable spaces map and child hierarchy from an already-fetched Spaces list
+     * (e.g. `CollaborationSectionComponent`'s initial space load) so subsequent `ReachedSeat` and child
+     * lookups require zero extra `RunView` round-trips.
+     */
+    public PrimeReachableSpacesCache(
+        user: UserInfo,
+        spaces: readonly CachedSpaceReachRow[],
+        provider?: IMetadataProvider,
+    ): void {
+        if (!user?.ID) return;
+        const md = provider ?? Metadata.Provider;
+        const cache = this.getUserCache(md, user.ID);
+        cache.spacesById.clear();
+        cache.childrenByParentId.clear();
+        for (const s of spaces) {
+            if (!s.ID) continue;
+            cache.spacesById.set(normalizeKey(s.ID), s);
+            this.indexChildSpace(cache.childrenByParentId, s);
+        }
+        cache.allSpacesLoaded = true;
+        cache.reachedSeatByKey.clear();
+    }
+
+    /**
+     * Primes the per-user active `Space Members` rows cache so subsequent `ReachedSeat` checks
+     * resolve caller seats in memory without issuing serial `RunView` queries.
+     */
+    public PrimeUserSpaceMembershipsCache(
+        user: UserInfo,
+        memberships: readonly CachedUserSpaceMemberRow[],
+        provider?: IMetadataProvider,
+        isComplete = true,
+    ): void {
+        if (!user?.ID) return;
+        const md = provider ?? Metadata.Provider;
+        const cache = this.getUserCache(md, user.ID);
+        const normalizedUserId = normalizeKey(user.ID);
+        if (isComplete) {
+            cache.membersBySpaceId.clear();
+            cache.allMembersLoaded = true;
+        }
+        for (const m of memberships) {
+            if (!m.SpaceID || normalizeKey(m.UserID) !== normalizedUserId) continue;
+            const spaceKey = normalizeKey(m.SpaceID);
+            const list = cache.membersBySpaceId.get(spaceKey) ?? [];
+            list.push(m);
+            cache.membersBySpaceId.set(spaceKey, list);
+        }
+        cache.reachedSeatByKey.clear();
+    }
+
+    /**
+     * Returns the caller's reachable `Spaces` map (keyed by normalized lowercase Space ID), memoized per user.
+     */
+    public async GetReachableSpaces(
+        user: UserInfo,
+        provider?: IMetadataProvider,
+        options?: { forceRefresh?: boolean },
+    ): Promise<ReadonlyMap<string, CachedSpaceReachRow>> {
+        if (!user?.ID) return new Map();
+        const md = provider ?? Metadata.Provider;
+        const cache = this.getUserCache(md, user.ID);
+        if (cache.allSpacesLoaded && !options?.forceRefresh) {
+            return cache.spacesById;
+        }
+        const rv = RunView.FromMetadataProvider(md);
+        const res = await rv.RunView<CachedSpaceReachRow>({
+            EntityName: 'MJ_BizApps_Collaboration: Spaces',
+            Fields: ['ID', 'ParentID', 'SpaceTypeID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID'],
+            ResultType: 'simple',
+            // row-cap-ok: bounded by caller's reachable spaces catalog
+            MaxRows: 2000,
+        }, user);
+        if (res.Success && res.Results) {
+            this.PrimeReachableSpacesCache(user, res.Results, md);
+        }
+        return cache.spacesById;
+    }
+
+    /**
+     * Returns direct child spaces of `parentSpaceId` (or top-level spaces when `parentSpaceId` is null)
+     * from the memoized per-user hierarchy cache.
+     */
+    public async GetChildSpaces(
+        user: UserInfo,
+        parentSpaceId: string | null,
+        provider?: IMetadataProvider,
+        options?: { forceRefresh?: boolean },
+    ): Promise<readonly CachedSpaceReachRow[]> {
+        if (!user?.ID) return [];
+        const md = provider ?? Metadata.Provider;
+        await this.GetReachableSpaces(user, md, options);
+        const cache = this.getUserCache(md, user.ID);
+        const key = parentSpaceId ? normalizeKey(parentSpaceId) : '__root__';
+        return cache.childrenByParentId.get(key) ?? [];
+    }
+
+    /**
+     * Returns the caller's active `Space Members` rows across all reachable spaces, memoized per user.
+     */
+    public async GetUserSpaceMemberships(
+        user: UserInfo,
+        provider?: IMetadataProvider,
+        options?: { forceRefresh?: boolean },
+    ): Promise<readonly CachedUserSpaceMemberRow[]> {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!user?.ID || !uuidRegex.test(user.ID.trim())) return [];
+        const md = provider ?? Metadata.Provider;
+        const cache = this.getUserCache(md, user.ID);
+        if (cache.allMembersLoaded && !options?.forceRefresh) {
+            const all: CachedUserSpaceMemberRow[] = [];
+            for (const rows of cache.membersBySpaceId.values()) all.push(...rows);
+            return all;
+        }
+        const rv = RunView.FromMetadataProvider(md);
+        const res = await rv.RunView<CachedUserSpaceMemberRow>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Members',
+            ExtraFilter: `UserID = '${user.ID}' AND Status = 'Active'`,
+            Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
+            ResultType: 'simple',
+            // row-cap-ok: bounded by caller's active space memberships
+            MaxRows: 2000,
+        }, user);
+        if (res.Success && res.Results) {
+            this.PrimeUserSpaceMembershipsCache(user, res.Results, md, true);
+            return res.Results;
+        }
+        return [];
     }
 
     // ─── Collections ───────────────────────────────────────────────────────────
@@ -581,13 +825,21 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         user: UserInfo,
         spaceId: string,
         provider?: IMetadataProvider,
-        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id),
+        roleTypeOf?: (id: string) => RoleTypeFlags | undefined,
         ignoreStatusFilter: boolean = false
     ): Promise<ReturnType<typeof membershipReaches>> {
         const md = provider ?? Metadata.Provider;
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(spaceId.trim()) || !user?.ID || !uuidRegex.test(user.ID.trim())) {
             return null;
+        }
+
+        const useDefaultRoleLookup = !roleTypeOf;
+        const resolveRoleType = roleTypeOf ?? ((id: string) => this.SpaceRoleTypeById(id));
+        const cache = this.getUserCache(md, user.ID);
+        const seatCacheKey = `${normalizeKey(spaceId)}|${ignoreStatusFilter ? '1' : '0'}`;
+        if (useDefaultRoleLookup && cache.reachedSeatByKey.has(seatCacheKey)) {
+            return cache.reachedSeatByKey.get(seatCacheKey) ?? null;
         }
 
         try {
@@ -598,39 +850,41 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             const spaces: SpaceNode[] = [];
             let currentSpaceId: string | null = spaceId;
             const seen = new Set<string>();
+            let spaceReadFailed = false;
 
             while (currentSpaceId && !seen.has(currentSpaceId.toLowerCase())) {
                 if (!uuidRegex.test(currentSpaceId.trim())) {
                     break;
                 }
-                seen.add(currentSpaceId.toLowerCase());
-                interface SpaceReachRow {
-                    ID: string;
-                    ParentID: string | null;
-                    SpaceTypeID: string | null;
-                    InheritsMembership: boolean;
-                    OwnerID: string;
-                    AgentRetrieval?: AgentRetrieval;
-                    AllowParentAssignees?: boolean;
-                    ClosedAt: string | null;
-                    StatusID: string | null;
-                }
-                const spaceRes: RunViewResult<SpaceReachRow> = await rv.RunView<SpaceReachRow>({
-                    EntityName: 'MJ_BizApps_Collaboration: Spaces',
-                    ExtraFilter: `ID = '${currentSpaceId}'`,
-                    Fields: ['ID', 'ParentID', 'SpaceTypeID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID'],
-                    ResultType: 'simple',
-                    MaxRows: 1,
-                }, user);
+                const currentKey = currentSpaceId.toLowerCase();
+                seen.add(currentKey);
 
-                if (!spaceRes.Success) {
-                    LogError(`ReachedSeat: space ${currentSpaceId} could not be read: ${spaceRes.ErrorMessage ?? 'unknown error'}`);
+                let s = cache.spacesById.get(currentKey);
+                if (!s && !cache.allSpacesLoaded) {
+                    const spaceRes: RunViewResult<CachedSpaceReachRow> = await rv.RunView<CachedSpaceReachRow>({
+                        EntityName: 'MJ_BizApps_Collaboration: Spaces',
+                        ExtraFilter: `ID = '${currentSpaceId}'`,
+                        Fields: ['ID', 'ParentID', 'SpaceTypeID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID'],
+                        ResultType: 'simple',
+                        MaxRows: 1,
+                    }, user);
+
+                    if (!spaceRes.Success) {
+                        LogError(`ReachedSeat: space ${currentSpaceId} could not be read: ${spaceRes.ErrorMessage ?? 'unknown error'}`);
+                        spaceReadFailed = true;
+                        break;
+                    }
+                    if (!spaceRes.Results?.[0]) {
+                        break;
+                    }
+                    s = spaceRes.Results[0];
+                    cache.spacesById.set(normalizeKey(s.ID), s);
+                    this.indexChildSpace(cache.childrenByParentId, s);
+                }
+
+                if (!s) {
                     break;
                 }
-                if (!spaceRes.Results?.[0]) {
-                    break;
-                }
-                const s = spaceRes.Results[0];
                 spaces.push({
                     id: s.ID,
                     parentId: s.ParentID,
@@ -651,28 +905,55 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 return null;
             }
 
-            const spaceFilter = spaces.map(sp => `'${sp.id}'`).join(',');
-            const memberRes = await rv.RunView<{
-                SpaceID: string;
-                UserID: string;
-                Status: MemberSnapshot['status'];
-                Band: MemberSnapshot['band'];
-                SpaceRoleTypeID: string;
-            }>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Members',
-                ExtraFilter: `UserID = '${user.ID}' AND Status = 'Active' AND SpaceID IN (${spaceFilter})`,
-                Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
-                ResultType: 'simple',
-                MaxRows: 100,
-            }, user);
+            const memberRows: CachedUserSpaceMemberRow[] = [];
+            if (cache.allMembersLoaded) {
+                for (const sp of spaces) {
+                    const rows = cache.membersBySpaceId.get(normalizeKey(sp.id));
+                    if (rows) memberRows.push(...rows);
+                }
+            } else {
+                const uncachedSpaceIds: string[] = [];
+                for (const sp of spaces) {
+                    const spKey = normalizeKey(sp.id);
+                    const cachedRows = cache.membersBySpaceId.get(spKey);
+                    if (cachedRows !== undefined) {
+                        memberRows.push(...cachedRows);
+                    } else {
+                        uncachedSpaceIds.push(sp.id);
+                    }
+                }
 
-            if (!memberRes.Success || !memberRes.Results) {
-                LogError(`ReachedSeat: the seats of ${user.ID} could not be read: ${memberRes.ErrorMessage ?? 'unknown error'}`);
-                return null;
+                if (uncachedSpaceIds.length > 0) {
+                    const spaceFilter = uncachedSpaceIds.map(id => `'${id}'`).join(',');
+                    const memberRes = await rv.RunView<CachedUserSpaceMemberRow>({
+                        EntityName: 'MJ_BizApps_Collaboration: Space Members',
+                        ExtraFilter: `UserID = '${user.ID}' AND Status = 'Active' AND SpaceID IN (${spaceFilter})`,
+                        Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
+                        ResultType: 'simple',
+                        MaxRows: 100,
+                    }, user);
+
+                    if (!memberRes.Success || !memberRes.Results) {
+                        LogError(`ReachedSeat: the seats of ${user.ID} could not be read: ${memberRes.ErrorMessage ?? 'unknown error'}`);
+                        return null;
+                    }
+
+                    // Record every queried spaceId in cache (even empty) so repeated checks don't re-query
+                    for (const queriedId of uncachedSpaceIds) {
+                        cache.membersBySpaceId.set(normalizeKey(queriedId), []);
+                    }
+                    for (const row of memberRes.Results) {
+                        const spKey = normalizeKey(row.SpaceID);
+                        const list = cache.membersBySpaceId.get(spKey) ?? [];
+                        list.push(row);
+                        cache.membersBySpaceId.set(spKey, list);
+                        memberRows.push(row);
+                    }
+                }
             }
 
-            const memberships: MemberSnapshot[] = memberRes.Results.map(m => {
-                const roleType = roleTypeOf(m.SpaceRoleTypeID);
+            const memberships: MemberSnapshot[] = memberRows.map(m => {
+                const roleType = resolveRoleType(m.SpaceRoleTypeID);
                 return {
                     spaceId: m.SpaceID,
                     userId: m.UserID,
@@ -690,7 +971,11 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 };
             });
 
-            return membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), ignoreStatusFilter);
+            const result = membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), ignoreStatusFilter);
+            if (useDefaultRoleLookup && !spaceReadFailed) {
+                cache.reachedSeatByKey.set(seatCacheKey, result);
+            }
+            return result;
         } catch (e) {
             LogError(`Error resolving the seat of user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
             return null;

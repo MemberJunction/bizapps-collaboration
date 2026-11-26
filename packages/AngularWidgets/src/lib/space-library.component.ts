@@ -40,72 +40,74 @@ export interface LibrarySmartView {
     MJClickableDirective,
   ],
   template: `
-    <div class="lib">
-      <!-- Left sidebar: Collections and Smart Views -->
-      <nav class="folders" aria-label="Library collections">
-        <div
-          class="fold"
-          [mjClickable]="'All material'"
-          [class.on]="ActiveFolderId === 'all'"
-          [attr.aria-current]="ActiveFolderId === 'all' ? 'true' : null"
-          (click)="onSelectFolder('all')"
-        >
-          <i class="fa-solid fa-layer-group"></i>
-          <span>All material</span>
-          <span class="n">{{ TotalCount }}</span>
-        </div>
-
-        <div class="fold-h">Collections</div>
-        @for (col of Collections; track col.id) {
+    <div class="lib" [class.has-rail]="ShowFolderRail" [class.has-drawer]="ShowDrawer">
+      <!-- Left sidebar: Collections and Smart Views (shown when >1 collection exists) -->
+      @if (ShowFolderRail) {
+        <nav class="folders" aria-label="File collections">
           <div
             class="fold"
-            [mjClickable]="col.name"
-            [class.on]="ActiveFolderId === col.id"
-            [attr.aria-current]="ActiveFolderId === col.id ? 'true' : null"
-            (click)="onSelectFolder(col.id)"
+            [mjClickable]="'All material'"
+            [class.on]="ActiveFolderId === 'all'"
+            [attr.aria-current]="ActiveFolderId === 'all' ? 'true' : null"
+            (click)="onSelectFolder('all')"
           >
-            <i class="fa-solid fa-folder"></i>
-            <span>{{ col.name }}</span>
-            <span class="dotc" [class.shared]="col.band === 'Shared'" [class.team]="col.band === 'Team'"></span>
-            <span class="n">{{ col.count }}</span>
+            <i class="fa-solid fa-layer-group"></i>
+            <span>All material</span>
+            <span class="n">{{ TotalCount }}</span>
           </div>
-        }
 
-        <div class="fold-h">Smart views</div>
-        @for (view of SmartViews; track view.id) {
-          <div
-            class="fold"
-            [mjClickable]="view.name"
-            [class.on]="ActiveFolderId === view.id"
-            [attr.aria-current]="ActiveFolderId === view.id ? 'true' : null"
-            (click)="onSelectFolder(view.id)"
-          >
-            <i [class]="view.iconClass"></i>
-            <span>{{ view.name }}</span>
-            <span class="n">{{ view.count }}</span>
-          </div>
-        }
-
-        <div class="legend">
-          <div class="row gap8">
-            <mjc-band-chip Band="Shared" Label="Shared" />
-            <span class="fs12 muted">Shared band</span>
-          </div>
-          @if (CanSeeTeamSide) {
-            <div class="row gap8">
-              <mjc-band-chip Band="Team" Label="Team" />
-              <span class="fs12 muted">{{ TeamBandLegend || 'Team only' }}</span>
+          <div class="fold-h">Collections</div>
+          @for (col of Collections; track col.id) {
+            <div
+              class="fold"
+              [mjClickable]="col.name"
+              [class.on]="ActiveFolderId === col.id"
+              [attr.aria-current]="ActiveFolderId === col.id ? 'true' : null"
+              (click)="onSelectFolder(col.id)"
+            >
+              <i class="fa-solid fa-folder"></i>
+              <span>{{ col.name }}</span>
+              <span class="dotc" [class.shared]="col.band === 'Shared'" [class.team]="col.band === 'Team'"></span>
+              <span class="n">{{ col.count }}</span>
             </div>
           }
-        </div>
-      </nav>
+
+          <div class="fold-h">Smart views</div>
+          @for (view of SmartViews; track view.id) {
+            <div
+              class="fold"
+              [mjClickable]="view.name"
+              [class.on]="ActiveFolderId === view.id"
+              [attr.aria-current]="ActiveFolderId === view.id ? 'true' : null"
+              (click)="onSelectFolder(view.id)"
+            >
+              <i [class]="view.iconClass"></i>
+              <span>{{ view.name }}</span>
+              <span class="n">{{ view.count }}</span>
+            </div>
+          }
+
+          <div class="legend">
+            <div class="row gap8">
+              <mjc-band-chip Band="Shared" Label="Shared" />
+              <span class="fs12 muted">Shared band</span>
+            </div>
+            @if (CanSeeTeamSide) {
+              <div class="row gap8">
+                <mjc-band-chip Band="Team" Label="Team" />
+                <span class="fs12 muted">{{ TeamBandLegend || 'Team only' }}</span>
+              </div>
+            }
+          </div>
+        </nav>
+      }
 
       <!-- Center section: Files table and tools -->
       <section class="files">
         <div class="lib-tools">
           <div class="input search-input">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" class="mj-input" placeholder="Search the library" aria-label="Search the library" [value]="SearchText" (input)="onSearchInput($event)" />
+            <input type="text" class="mj-input" placeholder="Search files" aria-label="Search files" [value]="SearchText" (input)="onSearchInput($event)" />
           </div>
           @if (CanSeeTeamSide) {
             <mj-tab-nav
@@ -115,9 +117,67 @@ export interface LibrarySmartView {
               (TabChange)="onFilterBand($event)"
             />
           }
+          @if (!ShowFolderRail && SmartViews.length > 0) {
+            <div class="smart-pills" role="group" aria-label="Quick filters">
+              <button
+                type="button"
+                class="smart-pill"
+                [class.active]="ActiveFolderId === 'all'"
+                (click)="onSelectFolder('all')"
+              >
+                All <span class="pill-n">{{ TotalCount }}</span>
+              </button>
+              @for (view of SmartViews; track view.id) {
+                <button
+                  type="button"
+                  class="smart-pill"
+                  [class.active]="ActiveFolderId === view.id"
+                  (click)="onSelectFolder(view.id)"
+                >
+                  <i [class]="view.iconClass" aria-hidden="true"></i>
+                  <span>{{ view.name }}</span>
+                  <span class="pill-n">{{ view.count }}</span>
+                </button>
+              }
+            </div>
+          }
+          @if (ShowArtifactToggle) {
+            <div class="type-pills" role="group" aria-label="Item scope">
+              <button
+                type="button"
+                class="smart-pill"
+                [class.active]="!ShowWorkspaceDocs"
+                (click)="setShowWorkspaceDocs(false)"
+              >
+                Files <span class="pill-n">{{ FileOnlyCount }}</span>
+              </button>
+              <button
+                type="button"
+                class="smart-pill"
+                [class.active]="ShowWorkspaceDocs"
+                (click)="setShowWorkspaceDocs(true)"
+              >
+                Show Workspace Docs <span class="pill-n">{{ Rows.length }}</span>
+              </button>
+            </div>
+          }
+          @if (ShowUploadDisclosure) {
+            <button
+              type="button"
+              class="info-toggle-btn"
+              data-testid="lib-upload-info-toggle"
+              [class.active]="disclosureExpanded"
+              [attr.aria-expanded]="disclosureExpanded"
+              title="Upload limits and AI indexing details"
+              (click)="disclosureExpanded = !disclosureExpanded"
+            >
+              <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+              <span>Upload info</span>
+            </button>
+          }
         </div>
 
-        @if (ShowUploadDisclosure) {
+        @if (ShowUploadDisclosure && disclosureExpanded) {
           <div class="lib-disclosure-wrap">
             <mjc-upload-ingest-disclosure
               [Compact]="true"
@@ -241,9 +301,21 @@ export interface LibrarySmartView {
 
     .lib {
       display: grid;
-      grid-template-columns: 206px minmax(0, 1fr) 318px;
+      grid-template-columns: minmax(0, 1fr);
       min-height: 0;
       flex: 1;
+    }
+
+    .lib.has-rail {
+      grid-template-columns: 206px minmax(0, 1fr);
+    }
+
+    .lib.has-drawer {
+      grid-template-columns: minmax(0, 1fr) 318px;
+    }
+
+    .lib.has-rail.has-drawer {
+      grid-template-columns: 206px minmax(0, 1fr) 318px;
     }
 
     .folders {
@@ -323,8 +395,56 @@ export interface LibrarySmartView {
     .lib-tools {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 10px;
       margin-bottom: 12px;
+    }
+
+    .smart-pills,
+    .type-pills {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .smart-pill,
+    .info-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 30px;
+      padding: 0 10px;
+      border-radius: 99px;
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.12s ease;
+
+      &:hover {
+        border-color: var(--mj-border-strong);
+        color: var(--mj-text-primary);
+      }
+
+      &.active {
+        border-color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+        font-weight: 600;
+      }
+
+      .pill-n {
+        font-size: 11px;
+        opacity: 0.78;
+      }
+    }
+
+    .info-toggle-btn {
+      margin-left: auto;
     }
 
     .lib-disclosure-wrap {
@@ -499,8 +619,11 @@ export interface LibrarySmartView {
     .muted { color: var(--mj-text-muted); }
 
     @media (max-width: 1024px) {
-      .lib {
+      .lib.has-rail.has-drawer {
         grid-template-columns: 190px minmax(0, 1fr);
+      }
+      .lib.has-drawer:not(.has-rail) {
+        grid-template-columns: minmax(0, 1fr);
       }
       mjc-item-preview {
         grid-column: 1 / -1;
@@ -508,7 +631,10 @@ export interface LibrarySmartView {
     }
 
     @media (max-width: 768px) {
-      .lib {
+      .lib,
+      .lib.has-rail,
+      .lib.has-drawer,
+      .lib.has-rail.has-drawer {
         grid-template-columns: minmax(0, 1fr);
       }
       .folders {
@@ -572,6 +698,13 @@ export class CollabSpaceLibraryComponent {
   @Input() public DefaultUploadBand: SpaceBand | null = null;
   @Input() public UploadMaxBytes: number = SPACE_UPLOAD_MAX_BYTES;
   @Input() public AgentRetrieval = 'Included';
+  /** True when the hosting space already provides a dedicated contributed Docs Studio / deliverables tab. */
+  @Input() public HasCustomDocsTab = false;
+  /** When true and HasCustomDocsTab is true, defaults to showing raw files only unless the user toggles Show Workspace Docs. */
+  @Input() public ExcludeArtifactsWhenCustomDocsTab = true;
+
+  public disclosureExpanded = false;
+  public ShowWorkspaceDocs = false;
 
   @Output() public FolderSelectRequested = new EventEmitter<string>();
   @Output() public BandFilterChangeRequested = new EventEmitter<'All' | 'Shared' | 'Team'>();
@@ -580,12 +713,40 @@ export class CollabSpaceLibraryComponent {
   @Output() public CloseDrawerRequested = new EventEmitter<void>();
   @Output() public OpenFileRequested = new EventEmitter<string>();
 
+  public get ShowFolderRail(): boolean {
+    return this.Collections.length > 1;
+  }
+
+  private isArtifactRow(row: LibraryRowModel): boolean {
+    return Boolean(row.artifactId) || (row.entityName ?? '').trim().toLowerCase() === 'mj: artifacts';
+  }
+
+  public get HasArtifactRows(): boolean {
+    return this.Rows.some((row) => this.isArtifactRow(row));
+  }
+
+  public get ShowArtifactToggle(): boolean {
+    return this.HasCustomDocsTab && this.ExcludeArtifactsWhenCustomDocsTab && this.HasArtifactRows;
+  }
+
+  public get FileOnlyCount(): number {
+    return this.Rows.filter((row) => !this.isArtifactRow(row)).length;
+  }
+
+  public setShowWorkspaceDocs(show: boolean): void {
+    this.ShowWorkspaceDocs = show;
+  }
+
   public onOpenFile(fileId: string): void {
     this.OpenFileRequested.emit(fileId);
   }
 
   public get FilteredRows(): LibraryRowModel[] {
-    return filterLibraryRows(this.Rows, {
+    const baseRows =
+      this.ShowArtifactToggle && !this.ShowWorkspaceDocs
+        ? this.Rows.filter((row) => !this.isArtifactRow(row))
+        : this.Rows;
+    return filterLibraryRows(baseRows, {
       band: this.ActiveBandFilter,
       search: this.SearchText,
       folderId: this.ActiveFolderId,
