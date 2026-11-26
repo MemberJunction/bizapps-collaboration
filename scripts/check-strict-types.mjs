@@ -100,6 +100,13 @@ export const S9_STRICT_TYPE_FILES = [
     'packages/CoreEntitiesServer/src/__tests__/space-docs.test.ts',
     'packages/IntegrationTests/src/checks/space-note-to-artifact-doc.checks.ts',
     'packages/IntegrationTests/src/__tests__/space-note-to-artifact-doc.integration.spec.ts',
+    'packages/Server/src/promote-space-note-to-doc.resolver.ts',
+    'packages/Server/src/promote-space-note-to-doc.resolver.test.ts',
+    'packages/AngularWidgets/src/lib/space-notes.component.ts',
+    'packages/Angular/src/lib/logic/note-to-document.ts',
+    'packages/Angular/src/lib/logic/note-to-document.test.ts',
+    'packages/Angular/src/__tests__/space-notes-turn-into-doc.spec.ts',
+    'packages/Angular/src/__tests__/openapp-registration-and-tokens.spec.ts',
 ];
 
 const STRICT_RULES = [

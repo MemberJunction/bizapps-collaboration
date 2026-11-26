@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node --experimental-strip-types --test src/upload-limit.test.ts src/turn-observer.test.ts src/source-receipt-resolver.test.ts src/schema-entity-parity.test.ts src/mint-space-link.resolver.test.ts src/bootstrap-security-audits.test.ts"
+    "test": "tsc && node --experimental-strip-types --test src/upload-limit.test.ts src/turn-observer.test.ts src/source-receipt-resolver.test.ts src/schema-entity-parity.test.ts src/mint-space-link.resolver.test.ts src/bootstrap-security-audits.test.ts src/promote-space-note-to-doc.resolver.test.ts"
   },
   "license": "BUSL-1.1",
   "dependencies": {
