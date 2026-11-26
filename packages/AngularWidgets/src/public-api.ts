@@ -46,7 +46,11 @@ export { CollabSpaceTabsComponent } from './lib/space-tabs.component';
 export { CollabSpaceRailComponent, type SpaceRailPref } from './lib/space-rail.component';
 export { CollabFileIconComponent } from './lib/file-icon.component';
 export { CollabItemCardComponent } from './lib/item-card.component';
-export { CollabSpaceNotesComponent } from './lib/space-notes.component';
+export {
+    CollabSpaceNotesComponent,
+    formatNotePreviewText,
+    type PromotedNoteDocLink,
+} from './lib/space-notes.component';
 export { CollabPinnedStripComponent } from './lib/pinned-strip.component';
 export { CollabSpaceDataComponent } from './lib/space-data.component';
 export { CollabItemRowComponent } from './lib/item-row.component';

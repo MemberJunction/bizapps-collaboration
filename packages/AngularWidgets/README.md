@@ -59,7 +59,7 @@ The build is `ngc`, into `dist/`. The tests use Vitest, 161 in all: `widgets.tes
 
 ## Stage 4 widgets
 
-- `mjc-space-notes` (B21): the Notes list and composer; promotion asks first (call 15), *Turn into document*, pin, edit and delete are events the section answers.
+- `mjc-space-notes` (B21): the Notes list and composer (`ChangeDetectionStrategy.OnPush`, pure `--mj-*`/`--mjc-*` tokens with zero raw color literals). Promotion asks first (call 15); *Turn into document* guards against concurrent double-click (`TurningIntoDocumentNoteId` + `IsSaving`), displays post-promotion document links (`PromotedDocsByNoteId` / `OpenDocumentRequested`), falls back gracefully for empty/untitled notes (`Untitled Note`), and strips raw Markdown syntax (`formatNotePreviewText`) from rendered note card previews while preserving full Markdown for editing and native `MJ: Artifacts` document promotion.
 - `mjc-pinned-strip` (B22): the viewer's pins, on a space's Overview and on Home across spaces.
 - `mjc-space-data` (B19): what the space's grants offer, the chosen one's rows, or the projected host for a component; the empty state says what the type reaches.
 - `mjc-space-header` gains the star (MJ's User Favorites).

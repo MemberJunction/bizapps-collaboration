@@ -33,7 +33,17 @@ import {
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, type NeedsYouItem, GrantsForViewer, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, type NeedsYouItem, GrantsForViewer, notePromotionVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import {
+    buildPromotedDocumentLibraryRow,
+    buildPromoteSpaceNoteInput,
+    evaluateNoteTurnIntoDocument,
+    navigateToPromotedArtifactDocument,
+    parsePromoteSpaceNotePayload,
+    upsertPromotedDocumentRow,
+    type PromotedNoteDocumentResult,
+} from './logic/note-to-document.js';
+import { notesVisibleTo } from './logic/visible-notes.js';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { photosByUser, type PersonPhotoRow, type UserPhotoRow } from './logic/member-photos.js';
 import { LatestOnly } from './logic/latest-only.js';
@@ -68,6 +78,7 @@ import {
     mjBizAppsCollaborationSpaceMemberEntity,
     type mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationItemUseEntity,
+    mjBizAppsCollaborationSpaceNoteEntity,
     mjBizAppsCollaborationSpaceMemberPinEntity,
     type mjBizAppsCollaborationSpaceTypeStatusEntity,
 } from '@mj-biz-apps/collaboration-entities';
@@ -157,8 +168,12 @@ import {
     type SpaceDetailsFormDescriptor,
     type SpaceConversationItem,
     CollabTypeTileComponent,
+    CollabSpaceNotesComponent,
     CollabPinnedStripComponent,
     CollabSpaceDataComponent,
+    type NoteDraft,
+    type NoteModel,
+    type PromotedNoteDocLink,
     type PinModel,
     type DataEntryModel,
     type DataRunModel,
@@ -191,6 +206,7 @@ import {
 /** A pin's record key, bare: `ID|<uuid>` and `<uuid>` name the same record. */
 const bareRecordId = (recordId: string): string => (recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId);
 interface PinRow { ID: string; SpaceID: string; UserID: string; Kind: 'Record' | 'Grant'; TargetEntityID: string | null; TargetRecordID: string | null; GrantID: string | null; Sequence: number }
+interface NoteRow { ID: string; SpaceID: string; Title: string | null; Body: string | null; Band: SpaceBand; Visibility: 'Space' | 'Private'; AuthorUserID: string; AuthorUser?: string | null; __mj_UpdatedAt: string }
 interface AnchorRow { ID: string; Role: string; Entity: string; EntityID: string; RecordID: string; IsPrimary: boolean }
 interface RawSpaceItemRow {
     ID: string;
@@ -321,6 +337,7 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
         CollabNewSpaceDialogComponent,
         CollabHomeListComponent,
         CollabTypeTileComponent,
+        CollabSpaceNotesComponent,
         CollabPinnedStripComponent,
         CollabSpaceDataComponent,
         CollabContributedTabHostDirective,
@@ -1291,6 +1308,32 @@ export type WorkViewMode = 'wbs' | 'list' | 'kanban' | 'gantt';
                                                         <mj-react-component [Component]="embedded.spec" [ComponentProps]="embedded.props" />
                                                     }
                                                 </mjc-space-data>
+                                            }
+                                            @case ('Notes') {
+                                                <mjc-space-notes
+                                                    #notesPanel
+                                                    [Title]="notesLabel"
+                                                    [Notes]="spaceNotes"
+                                                    [IsLoading]="isLoadingNotes"
+                                                    [ErrorMessage]="notesError"
+                                                    [IsSaving]="isSavingNote"
+                                                    [SaveError]="noteSaveError"
+                                                    [TurningIntoDocumentNoteId]="turningIntoDocumentNoteId"
+                                                    [PromotedDocsByNoteId]="promotedDocsByNoteId"
+                                                    [CanWrite]="canContribute"
+                                                    [CanSeeTeam]="canSeeTeamSide"
+                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [DefaultBand]="noteDefaultBand"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [PromotionConsequence]="notePromotionConsequence"
+                                                    (SaveRequested)="onNoteSave($event)"
+                                                    (DeleteRequested)="onNoteDelete($event)"
+                                                    (PromoteRequested)="onNotePromote($event)"
+                                                    (TurnIntoDocumentRequested)="onNoteTurnIntoDocument($event)"
+                                                    (OpenDocumentRequested)="onOpenPromotedNoteDocument($event)"
+                                                    (PinToggleRequested)="onNotePinToggle($event)"
+                                                />
                                             }
                                             @case ('People') {
                                                 <mjc-space-people
@@ -3874,6 +3917,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.previewMeta = '';
         this.previewBandLabel = '';
         this.previewAudienceSub = '';
+        this.spaceNotes = [];
+        this.isLoadingNotes = false;
+        this.notesError = '';
+        this.isSavingNote = false;
+        this.noteSaveError = '';
+        this.turningIntoDocumentNoteId = null;
+        this.promotedDocsByNoteId = {};
     }
 
     private async selectSpaceBody(spaceId: string, requestId: number, quiet: boolean): Promise<void> {
@@ -4281,8 +4331,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.clearConversationSourceReceipts();
         }
 
-        // 6. Trigger lazy tab-specific heavy loaders ONLY if the user is currently on Work, Settings, or Chat
+        // 6. Trigger lazy tab-specific heavy loaders ONLY if the user is currently on Work, Settings, Chat, or Notes
         this.ensureTabDataLoaded(this.activeTab);
+        if (this.activeTab === 'Notes') {
+            void this.loadSpaceNotes(spaceId, isCurrent);
+        }
 
         void this.loadSpaceNeedsYou(space, isCurrent);
         void this.loadSpaceHeaderChips(space, isCurrent);
@@ -5292,6 +5345,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public override ngOnInit(): void {
         super.ngOnInit();
+        queueMicrotask(() => {
+            if (this.isLoading) {
+                this.NotifyLoadStarted();
+            }
+        });
         const params = this.GetQueryParams();
         if (params['tab']) {
             this.activeTab = tabIdFromUrl(params['tab']);
@@ -5372,7 +5430,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ? this._loadedSpaceId
                 : this.rawSpaces[0]?.ID);
 
+        let selectedSpace = false;
         if (targetSpaceId && !UUIDsEqual(targetSpaceId, this._loadedSpaceId)) {
+            selectedSpace = true;
             await this.selectSpaceInternal(targetSpaceId);
         }
 
@@ -5383,6 +5443,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             else if (!resolveTabId(this.spaceTabModel, this.activeTab)) this.activeTab = 'Overview';
             // A link to a tab the space doesn't have: the URL says the tab that opened
             if (params['tab'] && !named) this.UpdateQueryParams({ tab: this.activeTab.toLowerCase() });
+        }
+
+        if (!selectedSpace && this.activeTab === 'Notes' && this.activeSpaceId) {
+            void this.loadSpaceNotes(this.activeSpaceId, this.currentSelection());
         }
 
         if (params['item'] && isValidUuid(params['item'])) {
@@ -5421,6 +5485,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             SharedService.Instance.CreateSimpleNotification('You do not have permission to configure this space.', 'warning', 3000);
         }
         this.setTab(tabId);
+        if (this.activeTab === 'Notes' && this.activeSpaceId) {
+            void this.loadSpaceNotes(this.activeSpaceId, this.currentSelection());
+        }
         this.settingsSaveSuccess = '';
         this.settingsInfoMessage = '';
         // The URL names the tab that opened, which is the Overview when the type has no such tab
@@ -5915,6 +5982,333 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
         await this.loadSpaceItems(this.activeSpaceId, this.currentSelection());
         this.RefreshView();
+    }
+
+    @ViewChild('notesPanel') public notesPanelComponent?: CollabSpaceNotesComponent;
+    public spaceNotes: NoteModel[] = [];
+    public isLoadingNotes = false;
+    public notesError = '';
+    public isSavingNote = false;
+    public noteSaveError = '';
+    public turningIntoDocumentNoteId: string | null = null;
+    public promotedDocsByNoteId: Readonly<Record<string, PromotedNoteDocLink>> = {};
+
+    public get notesLabel(): string {
+        return this.tabs.find((t) => t.id === 'Notes')?.label || 'Notes';
+    }
+
+    public get noteDefaultBand(): SpaceBand {
+        return this.bandChoice?.start ?? this.typeDefaultBand ?? (this.canSeeTeamSide ? 'Team' : 'Shared');
+    }
+
+    public readonly notePromotionConsequence = (note: NoteModel): string =>
+        promotionConsequence({ Title: (note.title ?? '').trim() || 'Untitled Note' }, this.sharedBandLabel);
+
+    private notesEntityId(): string {
+        return this.ProviderToUse?.EntityByName?.('MJ_BizApps_Collaboration: Space Notes')?.ID
+            ?? Metadata.Provider?.EntityByName?.('MJ_BizApps_Collaboration: Space Notes')?.ID
+            ?? '';
+    }
+
+    public async loadSpaceNotes(spaceId: string, isCurrent: () => boolean): Promise<void> {
+        const cleanSpaceId = typeof spaceId === 'string' ? spaceId.trim() : '';
+        if (!isValidUuid(cleanSpaceId) || !this.currentUser) return;
+        this.isLoadingNotes = true;
+        this.notesError = '';
+        this.RefreshView();
+        try {
+            const rv = new RunView(this.RunViewToUse);
+            const res = await rv.RunView<NoteRow>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Notes',
+                BypassCache: true,
+                ExtraFilter: `SpaceID = '${cleanSpaceId}'`,
+                Fields: ['ID', 'SpaceID', 'Title', 'Body', 'Band', 'Visibility', 'AuthorUserID', 'AuthorUser', '__mj_UpdatedAt'],
+                OrderBy: '__mj_UpdatedAt DESC',
+                ResultType: 'simple',
+                MaxRows: 200,
+            });
+            if (!isCurrent()) return;
+            if (!res?.Success) {
+                this.notesError = res?.ErrorMessage || 'The space notes could not be loaded.';
+                this.spaceNotes = [];
+            } else {
+                const visible = notesVisibleTo(res.Results ?? [], this.currentUser.ID);
+                const notesEntId = this.notesEntityId();
+                const pinnedNoteIds = new Set(
+                    this.rawPins
+                        .filter((p) => p.Kind === 'Record' && !!notesEntId && UUIDsEqual(p.TargetEntityID, notesEntId))
+                        .map((p) => NormalizeUUID(bareRecordId(p.TargetRecordID ?? ''))),
+                );
+                const isSpaceOwner = !!this.activeSpaceRecord?.OwnerID && UUIDsEqual(this.activeSpaceRecord.OwnerID, this.currentUser.ID);
+                this.spaceNotes = visible.map((row) => {
+                    const verdict = notePromotionVerdict(
+                        {
+                            userId: this.currentUser!.ID,
+                            isSpaceOwner,
+                            role: this.callerSeat?.role ?? null,
+                            administers: this.mayAdministerSpaces,
+                        },
+                        {
+                            Band: row.Band,
+                            Visibility: row.Visibility,
+                            AuthorUserID: row.AuthorUserID,
+                        },
+                    );
+                    return {
+                        id: row.ID,
+                        title: row.Title ?? '',
+                        body: row.Body ?? '',
+                        band: row.Band,
+                        visibility: row.Visibility,
+                        authorUserId: row.AuthorUserID,
+                        authorName: row.AuthorUser || 'Space member',
+                        updatedLabel: this.formatDate(row.__mj_UpdatedAt),
+                        isMine: UUIDsEqual(row.AuthorUserID, this.currentUser!.ID),
+                        canPromote: verdict.ok,
+                        isPinned: pinnedNoteIds.has(NormalizeUUID(row.ID)),
+                    };
+                });
+            }
+        } catch (err) {
+            if (!isCurrent()) return;
+            this.notesError = err instanceof Error ? err.message : String(err);
+            LogError(`Error loading space notes for ${cleanSpaceId}: ${this.notesError}`);
+        } finally {
+            if (isCurrent()) {
+                this.isLoadingNotes = false;
+                this.RefreshView();
+            }
+        }
+    }
+
+    public async onNoteSave(draft: NoteDraft): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        if (!spaceId || !this.currentUser) return;
+        this.isSavingNote = true;
+        this.noteSaveError = '';
+        this.RefreshView();
+        try {
+            const md = this.ProviderToUse;
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes', this.currentUser);
+            if (draft.id) {
+                if (!(await entity.Load(draft.id))) throw new Error('The note could not be loaded.');
+            } else {
+                entity.NewRecord();
+                entity.SpaceID = spaceId;
+                entity.AuthorUserID = this.currentUser.ID;
+            }
+            entity.Title = draft.title.trim();
+            entity.Body = draft.body;
+            entity.Band = draft.band;
+            entity.Visibility = draft.visibility;
+            if (!(await entity.Save())) throw new Error(entity.LatestResult?.CompleteMessage || 'The note was not saved.');
+            this.notesPanelComponent?.closeComposer();
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            this.noteSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Note save failed: ${this.noteSaveError}`);
+        } finally {
+            this.isSavingNote = false;
+            this.RefreshView();
+        }
+    }
+
+    public async onNoteDelete(note: NoteModel): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        if (!spaceId || !this.currentUser) return;
+        this.isSavingNote = true;
+        this.noteSaveError = '';
+        this.RefreshView();
+        try {
+            const md = this.ProviderToUse;
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes', this.currentUser);
+            if (!(await entity.Load(note.id))) throw new Error('The note could not be loaded.');
+            if (!(await entity.Delete())) throw new Error(entity.LatestResult?.CompleteMessage || 'The note was not deleted.');
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            this.noteSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Note delete failed: ${this.noteSaveError}`);
+        } finally {
+            this.isSavingNote = false;
+            this.RefreshView();
+        }
+    }
+
+    /** Call 15: the note moves to Shared, the same record, the server judging and logging it. */
+    public async onNotePromote(note: NoteModel): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        if (!spaceId || !this.currentUser) return;
+        this.isSavingNote = true;
+        this.noteSaveError = '';
+        this.RefreshView();
+        try {
+            const md = this.ProviderToUse;
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes', this.currentUser);
+            if (!(await entity.Load(note.id))) throw new Error('The note could not be loaded.');
+            entity.Band = 'Shared';
+            if (!(await entity.Save())) throw new Error(entity.LatestResult?.CompleteMessage || 'The note was not shared.');
+            SharedService.Instance.CreateSimpleNotification(`"${(note.title ?? '').trim() || 'Untitled Note'}" is now shared with ${this.sharedBandLabel}.`, 'success', 4000);
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            this.noteSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Note promote failed: ${this.noteSaveError}`);
+        } finally {
+            this.isSavingNote = false;
+            this.RefreshView();
+        }
+    }
+
+    /**
+     * *Turn into document*: promotes a SpaceNote into a native, editable `MJ: Artifacts`
+     * (`Markdown Document`) + initial v1 `MJ: Artifact Versions` + `SpaceItem` with
+     * `DelegateEntityID` / `DelegateRecordID` permission delegation via `PromoteSpaceNoteToDoc`
+     * (never `UploadSpaceFile`), refreshes local SpaceItem/document state without full-page reload,
+     * and navigates cleanly to the created document via `NavigationService`.
+     */
+    public async onNoteTurnIntoDocument(note: NoteModel): Promise<PromotedNoteDocumentResult | null> {
+        if (!note || this.turningIntoDocumentNoteId !== null || this.isSavingNote) {
+            return null;
+        }
+        const spaceId = this.activeSpaceId;
+        const built = buildPromoteSpaceNoteInput(spaceId, note);
+        if (!built.ok) {
+            this.noteSaveError = built.message;
+            SharedService.Instance.CreateSimpleNotification(built.message, 'error', 5000);
+            this.RefreshView();
+            return null;
+        }
+
+        if (this.currentUser) {
+            const isSpaceOwner = !!this.activeSpaceRecord?.OwnerID && UUIDsEqual(this.activeSpaceRecord.OwnerID, this.currentUser.ID);
+            const verdict = evaluateNoteTurnIntoDocument(
+                {
+                    userId: this.currentUser.ID,
+                    isSpaceOwner,
+                    role: this.callerSeat?.role ?? (this.canContribute ? { canSeeTeamBand: this.canSeeTeamSide, canContribute: this.canContribute } : null),
+                    administers: this.mayAdministerSpaces,
+                    spaceReadOnly: this.isSpaceClosed,
+                },
+                note,
+            );
+            if (!verdict.ok) {
+                this.noteSaveError = verdict.message;
+                SharedService.Instance.CreateSimpleNotification(verdict.message, 'error', 5000);
+                this.RefreshView();
+                return null;
+            }
+        }
+
+        this.turningIntoDocumentNoteId = note.id;
+        this.isSavingNote = true;
+        this.noteSaveError = '';
+        this.RefreshView();
+
+        try {
+            const client = new CollaborationClient(this.graphQLExecutor);
+            const payload = await client.PromoteSpaceNoteToDoc(built.input);
+            const parsed = parsePromoteSpaceNotePayload(
+                payload,
+                built.normalizedTitle,
+                built.effectiveBand,
+                note.visibility,
+                note.id || null,
+            );
+            if (!parsed.ok) {
+                throw new Error(parsed.message);
+            }
+
+            const createdDoc = parsed.data;
+            this.promotedDocsByNoteId = {
+                ...this.promotedDocsByNoteId,
+                [note.id]: {
+                    artifactId: createdDoc.artifactId,
+                    spaceItemId: createdDoc.spaceItemId,
+                    title: createdDoc.title,
+                    versionNumber: createdDoc.versionNumber,
+                },
+            };
+
+            const stillHere = UUIDsEqual(this.activeSpaceId, spaceId);
+            if (stillHere) {
+                const nowIso = new Date().toISOString();
+                const optimisticRow = buildPromotedDocumentLibraryRow(
+                    createdDoc,
+                    this.currentUser?.Name || note.authorName || 'Staff team',
+                    'Just now',
+                    nowIso,
+                );
+                this.libraryRows = upsertPromotedDocumentRow(this.libraryRows, optimisticRow);
+                this.libraryTotalCount = this.libraryRows.length;
+                this.librarySharedCount = this.libraryRows.filter((r) => r.band === 'Shared').length;
+                this.libraryTeamCount = this.libraryRows.filter((r) => r.band === 'Team').length;
+                this.RefreshView();
+                await this.loadSpaceItems(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+            }
+
+            SharedService.Instance.CreateSimpleNotification(
+                `"${createdDoc.title}" is now an editable document.`,
+                'success',
+                4000,
+            );
+
+            navigateToPromotedArtifactDocument(
+                {
+                    artifactId: createdDoc.artifactId,
+                    title: createdDoc.title,
+                    versionNumber: createdDoc.versionNumber,
+                },
+                {
+                    navigationService: this.navigationService,
+                    openSlideover: (request) => this.openArtifactSlideover(request),
+                    canEdit: this.canContribute && !this.isSpaceClosed,
+                    canShare: this.canShareItems,
+                },
+            );
+
+            return createdDoc;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.noteSaveError = msg;
+            LogError(`Turn into document failed: ${msg}`);
+            SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+            return null;
+        } finally {
+            this.turningIntoDocumentNoteId = null;
+            this.isSavingNote = false;
+            this.RefreshView();
+        }
+    }
+
+    /** Re-opens a previously promoted native `MJ: Artifacts` Markdown Document via `NavigationService`. */
+    public onOpenPromotedNoteDocument(doc: PromotedNoteDocLink): void {
+        if (!doc?.artifactId) return;
+        navigateToPromotedArtifactDocument(
+            {
+                artifactId: doc.artifactId,
+                title: doc.title,
+                versionNumber: doc.versionNumber,
+            },
+            {
+                navigationService: this.navigationService,
+                openSlideover: (request) => this.openArtifactSlideover(request),
+                canEdit: this.canContribute && !this.isSpaceClosed,
+                canShare: this.canShareItems,
+            },
+        );
+    }
+
+    public async onNotePinToggle(note: NoteModel): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        const notesEntId = this.notesEntityId();
+        if (!isValidUuid(spaceId) || !notesEntId) return;
+        const existing = this.rawPins.find(
+            (p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntId) && UUIDsEqual(bareRecordId(p.TargetRecordID ?? ''), note.id),
+        );
+        if (existing) await this.removePin(existing.ID);
+        else await this.addPin({ Kind: 'Record', TargetEntityID: notesEntId, TargetRecordID: `ID|${note.id}`, GrantID: null });
+        if (UUIDsEqual(this.activeSpaceId, spaceId)) {
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        }
     }
 
     public onUploadClicked(): void {

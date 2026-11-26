@@ -110,7 +110,7 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 | ✅ | **A library per space,** on MemberJunction Storage: upload, open, promote from Team to Shared with a recorded stamp, share notices, a record of who used what, and an inline/expandable upload ingest model disclosure explaining storage, indexing, band reach, and retention. |
 | ✅ | **Tasks filed in spaces,** on [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks), in lists, boards and timelines. |
 | 🚧 | **Where files are stored is a setting,** per app, type, space or sub-space, so each relationship's files can live in its own storage account. |
-| 🗺️ | **Notes:** quick notes in a space, Shared, Team or private to their author, that the assistant can use in the right audience. |
+| ✅ | **Notes & native MJ Docs promotion:** quick notes (`SpaceNote`) in a space — `Shared`, `Team`, or `Private` to their author — with one-click **Turn into document** promotion directly into native, versioned, editable **MJ Docs (`MJ: Artifacts` `Markdown Document`)** carrying `DelegateEntityID`/`DelegateRecordID` band-isolated permission delegation instead of static `.md` file uploads. |
 | 🗺️ | **Pins and stars:** pin the files, notes, views and dashboards you use to the top of a space, see your pins across spaces on Home, and star the spaces you live in. |
 | 🗺️ | **Meetings and agendas,** from BizApps Tasks, with Outlook and Google Calendar sync, agendas built in the app, and notes and proposed tasks drafted from the transcript. |
 
@@ -168,6 +168,11 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 **The audience rule.** What the assistant may use depends on who will see its answer, not on where the asker is standing. One person with the assistant: that person's reach, which they can narrow. Two or more people: the intersection of what each of them can read, and nobody can widen it, the asker included. The assistant always runs as the asking user, never as a service account.
 
 **Reads in SQL, writes in the entity classes.** Every read grant the Space Participant role holds carries a row-level security filter, and every write is checked by a server subclass of the entity, so a forged API call meets the same rule as a click.
+
+**Docs, comments, and quick notes.** Collaboration follows MemberJunction's [`MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md`](https://github.com/MemberJunction/MJ/blob/next/guides/MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md) rubric:
+- **MJ Docs (`MJ: Artifacts` `Markdown Document`)** store versioned, collaboratively editable documents (`MJ: Artifact Versions`, `ContentMode: 'Text'`) linked to a space via `SpaceItem.ArtifactVersionID` with `Artifact.DelegateEntityID`/`DelegateRecordID` permission delegation enforcing `Team` vs. `Shared` band isolation.
+- **`MJ: Comments`** handle threaded record-level discussions anchored to an entity record with automatic RLS/FLS.
+- **Quick Notes (`SpaceNote`)** capture lightweight ephemeral notes in a space (`Team`, `Shared`, or author-only `Private`) and promote cleanly into native editable MJ Docs via **Turn into document** (`PromoteSpaceNoteToDoc`) without uploading static `.md` blobs.
 
 The full set of rules, each marked built or planned, is in [How Collaboration works](docs/HOW_THE_SYSTEM_WORKS.md).
 
@@ -255,6 +260,7 @@ The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/p
 | [PR #8's plan](plans/pr8-plan.md) | The build plan for anchors, grants, data reach, notes and pins |
 | [How Collaboration works](docs/HOW_THE_SYSTEM_WORKS.md) | The rules the rules module, the server and the database share, each marked built or planned |
 | [Security audits &amp; ingest disclosure](docs/security-audits-and-ingest-disclosure.md) | XS-1/XS-7 role audits, XS-2 boot entity grant inventory, XS-3 rolled-back persona probe, and XS-8 upload ingest disclosure |
+| [SpaceNote → Native MJ Docs spec](.mj/specs/upgrade-spacenote-turn-into-document-to-native-mj-artifacts-mark/spec.md) | EARS specification &amp; architecture for promoting SpaceNotes to native `MJ: Artifacts` `Markdown Document` records and the Docs vs. Comments vs. Quick Notes rubric |
 | [The extensibility plan](docs/EXTENSIBILITY_PLAN.md) | Space types as plug-ins, with chats, history and agents |
 | [The data guide](docs/reviewing-the-data.md) | The sample world's people and spaces |
 

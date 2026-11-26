@@ -1756,6 +1756,35 @@ describe('CollabSpaceNotesComponent (B21)', async () => {
     comp.openComposer(note({ band: 'Shared' }));
     expect(comp.draft).toEqual({ id: 'n1', title: 'Q3 plan', body: 'Call the lapsed members.', band: 'Shared', visibility: 'Space' });
   });
+  it('guards Turn into document against concurrent double-click and strips raw Markdown in card previews', async () => {
+    const { formatNotePreviewText } = await import('./space-notes.component.ts');
+    const comp = new CollabSpaceNotesComponent();
+    comp.CanWrite = true;
+    comp.IsReadOnly = false;
+    const requested: string[] = [];
+    comp.TurnIntoDocumentRequested.subscribe((n) => requested.push(n.id));
+    const n = note({ title: '   ', body: '### Summary\n**Bold** and `inline` text [link](https://example.test)' });
+    expect(comp.displayTitle(n)).toBe('Untitled Note');
+    const preview = comp.previewBody(n);
+    expect(preview).not.toContain('###');
+    expect(preview).not.toContain('**');
+    expect(preview).not.toContain('`');
+    expect(preview).toContain('Summary');
+    expect(preview).toContain('Bold');
+    expect(formatNotePreviewText('')).toBe('');
+
+    comp.turnIntoDocument(n);
+    expect(requested).toEqual(['n1']);
+
+    comp.TurningIntoDocumentNoteId = 'n1';
+    comp.turnIntoDocument(n);
+    expect(requested).toEqual(['n1']);
+
+    comp.TurningIntoDocumentNoteId = null;
+    comp.IsSaving = true;
+    comp.turnIntoDocument(n);
+    expect(requested).toEqual(['n1']);
+  });
 });
 
 describe('CollabSpaceDataComponent (B19)', async () => {

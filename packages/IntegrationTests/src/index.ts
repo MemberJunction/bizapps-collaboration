@@ -83,6 +83,7 @@ import './checks/space-meetings.checks.js';
 import './checks/adversarial-persona.checks.js';
 import './checks/cross-stack-enterprise.checks.js';
 import './checks/round2-substrate.checks.js';
+import './checks/space-note-to-artifact-doc.checks.js';
 
 export * from './entity-names.js';
 export * from './wire.js';

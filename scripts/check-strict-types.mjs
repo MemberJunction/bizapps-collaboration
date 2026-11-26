@@ -94,6 +94,19 @@ export const S9_STRICT_TYPE_FILES = [
     'packages/IntegrationTests/src/checks/round2-substrate.checks.ts',
     'packages/IntegrationTests/src/checks/client/cross-stack-enterprise.client.checks.ts',
     'packages/IntegrationTests/src/checks/client/round2-substrate.client.checks.ts',
+    // SpaceNote -> Native MJ: Artifacts Markdown Document promotion & delegation
+    'packages/Core/src/notes.ts',
+    'packages/Core/src/notes.test.ts',
+    'packages/CoreEntitiesServer/src/__tests__/space-docs.test.ts',
+    'packages/IntegrationTests/src/checks/space-note-to-artifact-doc.checks.ts',
+    'packages/IntegrationTests/src/__tests__/space-note-to-artifact-doc.integration.spec.ts',
+    'packages/Server/src/promote-space-note-to-doc.resolver.ts',
+    'packages/Server/src/promote-space-note-to-doc.resolver.test.ts',
+    'packages/AngularWidgets/src/lib/space-notes.component.ts',
+    'packages/Angular/src/lib/logic/note-to-document.ts',
+    'packages/Angular/src/lib/logic/note-to-document.test.ts',
+    'packages/Angular/src/__tests__/space-notes-turn-into-doc.spec.ts',
+    'packages/Angular/src/__tests__/openapp-registration-and-tokens.spec.ts',
 ];
 
 const STRICT_RULES = [

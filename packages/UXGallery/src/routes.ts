@@ -4,6 +4,7 @@ import { Frame03Component } from './frames/frame-03.component';
 import { Frame04Component } from './frames/frame-04.component';
 import { Frame08Component } from './frames/frame-08.component';
 import { Frame09Component } from './frames/frame-09.component';
+import { Frame10Component } from './frames/frame-10.component';
 
 export const routes: Routes = [
   { path: 'frame/02', component: Frame02Component },
@@ -11,5 +12,6 @@ export const routes: Routes = [
   { path: 'frame/04', component: Frame04Component },
   { path: 'frame/08', component: Frame08Component },
   { path: 'frame/09', component: Frame09Component },
+  { path: 'frame/10', component: Frame10Component },
   { path: '', redirectTo: 'frame/02', pathMatch: 'full' },
 ];

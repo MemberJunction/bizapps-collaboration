@@ -82,6 +82,7 @@ describe('CSS --mj-* token compliance across Angular UI packages (XS-8)', () => 
       resolve(repoRoot, 'packages/AngularWidgets/src/lib/upload-ingest-disclosure.component.ts'),
       resolve(repoRoot, 'packages/AngularWidgets/src/lib/upload-dialog.component.ts'),
       resolve(repoRoot, 'packages/AngularWidgets/src/lib/space-library.component.ts'),
+      resolve(repoRoot, 'packages/AngularWidgets/src/lib/space-notes.component.ts'),
     ];
     for (const filePath of strictTargets) {
       const content = readFileSync(filePath, 'utf8');

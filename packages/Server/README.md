@@ -16,13 +16,14 @@ The server bootstrap: the function MJAPI calls at startup, and the GraphQL resol
 
 **The generated resolvers** (`src/generated/`, from CodeGen): read and write resolvers for the eleven entities. Never edit them by hand.
 
-**Seven mutations and four queries,** each a thin resolver over an operation in `collaboration-core-entities-server` or `mint-space-link.ts`:
+**Eight mutations and four queries,** each a thin resolver over an operation in `collaboration-core-entities-server` or `mint-space-link.ts`:
 
 | Operation | Input | What it does |
 |---|---|---|
 | `CreateSpace` | `TypeID`, `Name`, `Description?`, `Details?` | Makes a top-level space of a type, through its subtype when the type names one, and seats the caller as its active owner on the Team band, in one transaction: a refusal of either leaves nothing behind. The space's own rules apply, so it needs `Administer Spaces`. `Details` is a JSON object of the subtype's own columns; any other name is refused. An unexpected error is logged, and the caller is told only that the space could not be created. |
 | `MintSpaceLink` | `SpaceID`, `Email`, `RoleID` | Seats a person by email. The seat is saved through the member gate, so the invitation ceiling, approval and cap apply. It creates the MJ user and Person when needed, grants `Space Participant`, and issues a one-use magic link of kind `app-session` for an Active seat. The link is emailed, returned to a host issuer, or withheld (see the host's `magicLink` settings in the root README). |
-| `UploadSpaceFile` | `SpaceID`, `FileName`, `MimeType`, `Base64Data`, `Folder`, `Band?` | Stores the file and files it as a space item, in the band the person chose (Shared or Team; a band the seat cannot hold is refused), or the space type's default when none is chosen. Refuses a file over the cap: 10 MB, or `COLLABORATION_UPLOAD_MAX_BYTES` when set. |
+| `UploadSpaceFile` | `SpaceID`, `FileName`, `MimeType`, `Base64Data`, `Folder`, `Band?` | Stores the file and files it as a space item, in the band the person chose (Shared or Team; a band the seat cannot hold is refused), or the space type's default when none is chosen. Refuses a file over the cap: 10 MB, or `COLLABORATION_UPLOAD_MAX_BYTES` when set. Reserved for non-note file attachments. |
+| `PromoteSpaceNoteToDoc` | `SpaceID`, `NoteID?`, `Title?`, `Body?`, `Band?`, `Visibility?`, `Folder?` | Promotes a `SpaceNote` (loaded by `NoteID` or supplied inline) into a native editable `MJ: Artifacts` `Markdown Document` + v1 `MJ: Artifact Versions` (`ContentMode: 'Text'`) + `SpaceItem` with `DelegateEntityID`/`DelegateRecordID` permission delegation via `promoteSpaceNoteToDoc` (never calls `upload-space-file.ts`). |
 | `CreateSpaceTask` | `SpaceID`, `Name`, `Band` | Creates a root task and files it in the space. |
 | `PostSpaceMessage` | `SpaceID`, `Text`, `ConversationID?` | Posts the caller's message to one of the space's conversations, as the system user, which owns them. An Internal Only conversation needs a seat that sees Team. It runs no agent. |
 | `CreateSpaceConversation` | `SpaceID`, `Name`, `Kind?` | Starts a conversation in the space: General (the default), Topic, or Internal Only (`Private`), under `Chats.WhoCanStart`, the seat's band and the type's driver. |

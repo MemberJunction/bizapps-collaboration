@@ -41,9 +41,14 @@ The build is `ngc`, into `dist/`. Its `test` script typechecks, runs every `node
 - A sub-space made through the New space dialog.
 - Header chips, needs-you items and agenda items from contributions.
 
-## Stage 4
+## Stage 4 & Native MJ: Artifacts Promotion
 
-- **Notes** tab and the *Note* quick add in the header; a Team note promotes to Shared through an entity save the server judges and logs (call 15); *Turn into document* files the note through `UploadSpaceFile`.
+- **Notes & Turn into Document (Native `MJ: Artifacts` Markdown Document):** `CollaborationSectionResource` wires `<mjc-space-notes>` (`@case ('Notes')`) and `onNoteTurnIntoDocument(note)` to promote a `SpaceNote` via the typed GraphQL mutation `CollaborationClient.PromoteSpaceNoteToDoc` (backed by `PromoteSpaceNoteToDocResolver` -> `promoteSpaceNoteToDoc` in `packages/CoreEntitiesServer/src/space-docs.ts`) instead of uploading a static `.md` file through `UploadSpaceFile`.
+  - Pure isomorphic helpers in `src/lib/logic/note-to-document.ts` normalize empty/untitled/whitespace note titles (`Untitled Note`) and bodies via `@mj-biz-apps/collaboration-core`'s `noteToArtifactDocument`, enforce `noteTurnIntoDocumentVerdict` (locking `Private` notes to `Team` band and preventing Shared-band participants from creating Team documents), and prevent concurrent duplicate submissions while in flight (`turningIntoDocumentNoteId`).
+  - After promotion, local `libraryRows` and `SpaceItem` state refresh cleanly in-place without a full-page reload, and `navigateToPromotedArtifactDocument(...)` routes directly to the newly created editable Markdown Document via Explorer's `NavigationService.OpenArtifact(...)` (falling back to `NavigationService.OpenEntityRecord('MJ: Artifacts', ...)` or Collaboration's in-place `<mjc-artifact-slideover>` when embedded without Explorer `NavigationService` — never raw Angular `Router`).
+- **OpenApp v3 & Angular Standards Invariants:**
+  - `LoadBizAppsCollaborationClient()` (`src/public-api.ts`, referenced by `mj-app.json` `startupExport`) retains `GeneratedFormsModule`, `CollaborationSectionResource` (`@RegisterClass(BaseResourceComponent, 'CollaborationSectionResource')` matching `metadata/applications/.applications.json` `DefaultNavItems`), and `CollaborationNoAccessComponent` so all 17 generated `@RegisterClass(BaseFormComponent, '<EntityName>')` classes remain registered in `MJGlobal.Instance.ClassFactory`.
+  - `CollaborationSectionResource` uses `ChangeDetectionStrategy.OnPush`, `@if`/`@for`, `inject()`, `<mj-page-layout>`, deferred `NotifyLoadStarted()` (via `queueMicrotask`), `NotifyLoadComplete()`, semantic `--mj-*` / `--mjc-*` CSS custom properties only (zero raw `#hex`/`rgb`/`rgba`/`hsl` color literals), `UserInfoEngine.Instance` (zero `localStorage`), and zero `window.print()`.
 - **Data** tab, offered when the space has a granted view, query, dashboard or component for the viewer (or a declared reach): views and queries run through the grant operations, a component through `GetSpaceComponent` into `mj-react-component`, a dashboard waits on MJ#4789 (A15).
 - **Pins** on the Overview and *My Pins* on Home; the **star** in the header through `Metadata.Provider`'s favorites.
 - **Settings** shows the grants, anchors and data reach to a viewer with the settings authorizations.

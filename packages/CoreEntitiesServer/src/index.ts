@@ -160,7 +160,12 @@ export {
     listSpaceDocs,
     LoadCollaborationSpaceItemArtifactPermissionDelegate,
     promoteSpaceDocToShared,
+    promoteSpaceNoteToDoc,
+    SpaceDocMetadataCache,
+    turnSpaceNoteIntoDocument,
     updateSpaceDoc,
+    type PromotedSpaceNoteDocRecord,
+    type PromoteSpaceNoteToDocParams,
     type SpaceDocOutcome,
     type SpaceDocRecord,
 } from './space-docs.js';

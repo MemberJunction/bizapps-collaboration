@@ -36,6 +36,7 @@ const ALL_BUNDLES = [
     'adversarial-persona',
     'cross-stack-enterprise',
     'round2-substrate',
+    'space-note-to-artifact-doc',
 ];
 
 const args = process.argv.slice(2);

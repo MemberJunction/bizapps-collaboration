@@ -9,10 +9,10 @@
  */
 import {
     BaseEntity,
-    CompositeKey,
     type IMetadataProvider,
     LogError,
     RunView,
+    type RunViewResult,
     type UserInfo,
     WellKnownUserSource,
 } from '@memberjunction/core';
@@ -23,26 +23,33 @@ import {
     type MJArtifactEntity,
     type MJArtifactVersionEntity,
 } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseSingleton, RegisterClass } from '@memberjunction/global';
 import {
     type Band,
+    DEFAULT_NOTE_DOCUMENT_FOLDER,
     evaluateSpaceDocAccess,
     filterVisibleSpaceDocs,
+    MARKDOWN_DOCUMENT_ARTIFACT_TYPE_NAME,
     membershipReaches,
+    NOTE_ARTIFACT_DOCUMENT_CONTENT_MODE,
+    noteToArtifactDocument,
+    noteTurnIntoDocumentVerdict,
+    type NoteVisibility,
     spaceIsReadOnly,
 } from '@mj-biz-apps/collaboration-core';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { resolvePerRootDeliveryPrincipal } from './delivery-principal.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
-import { SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
+import { releaseStoredFile, SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
 import { parseUuid } from './uuid.js';
 
 const ITEMS_ENTITY = 'MJ_BizApps_Collaboration: Space Items';
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
+const SPACE_NOTES_ENTITY = 'MJ_BizApps_Collaboration: Space Notes';
 const ARTIFACTS_ENTITY = 'MJ: Artifacts';
 const ARTIFACT_VERSIONS_ENTITY = 'MJ: Artifact Versions';
 const ARTIFACT_TYPES_ENTITY = 'MJ: Artifact Types';
-const MARKDOWN_DOCUMENT_TYPE_NAME = 'Markdown Document';
+const MARKDOWN_DOCUMENT_TYPE_NAME = MARKDOWN_DOCUMENT_ARTIFACT_TYPE_NAME;
 
 export interface SpaceDocRecord {
     spaceItemId: string;
@@ -57,6 +64,46 @@ export interface SpaceDocRecord {
     authorUserId: string;
     promotedByUserId: string | null;
     promotedAt: Date | null;
+    /** Delegating entity ID (`MJ_BizApps_Collaboration: Space Items`) recorded on `MJ: Artifacts.DelegateEntityID`. */
+    delegateEntityId?: string | null;
+    /** Delegating `SpaceItem.ID` recorded on `MJ: Artifacts.DelegateRecordID`. */
+    delegateRecordId?: string | null;
+    /** Inherited source visibility when promoted from a `SpaceNote` (`Space` or `Private`). */
+    visibility?: NoteVisibility;
+    /** Source `SpaceNote.ID` when created by `promoteSpaceNoteToDoc`, or `null`. */
+    sourceNoteId?: string | null;
+}
+
+export interface PromotedSpaceNoteDocRecord extends SpaceDocRecord {
+    sourceNoteId: string | null;
+    visibility: NoteVisibility;
+    delegateEntityId: string;
+    delegateRecordId: string;
+    artifactTypeName: typeof MARKDOWN_DOCUMENT_ARTIFACT_TYPE_NAME;
+    contentMode: typeof NOTE_ARTIFACT_DOCUMENT_CONTENT_MODE;
+}
+
+export interface PromoteSpaceNoteToDocParams {
+    provider: IMetadataProvider;
+    callerUser: UserInfo;
+    /** Target space ID; verified against the loaded note when `noteId` is supplied. */
+    spaceId?: string;
+    /** Existing `MJ_BizApps_Collaboration: Space Notes` ID to load and promote server-side. */
+    noteId?: string;
+    /** Inline note snapshot when promoting an already-loaded or unsaved SpaceNote. */
+    note?: {
+        ID?: string | null;
+        SpaceID?: string;
+        Title?: string | null;
+        Body?: string | null;
+        Band: Band;
+        Visibility?: NoteVisibility;
+        AuthorUserID?: string | null;
+    };
+    /** Optional folder label on the created SpaceItem; defaults to `'Notes'`. Pass `null` for unfiled. */
+    folder?: string | null;
+    /** Optional attribution user for the created artifact & version (defaults to `callerUser`). */
+    attributionUser?: UserInfo;
 }
 
 export type SpaceDocOutcome<T> =
@@ -92,6 +139,16 @@ interface ArtifactVersionSummaryRow {
     UserID: string;
 }
 
+interface SpaceNoteSummaryRow {
+    ID: string;
+    SpaceID: string;
+    Title: string | null;
+    Body: string | null;
+    Band: Band;
+    Visibility: NoteVisibility;
+    AuthorUserID: string | null;
+}
+
 function escapeSql(value: string): string {
     return value.replace(/'/g, "''");
 }
@@ -102,23 +159,106 @@ function extractRecordUuid(recordId: string): string | null {
     return parseUuid(raw);
 }
 
-async function resolveMarkdownDocTypeId(provider: IMetadataProvider, system: UserInfo): Promise<string> {
-    const rv = RunView.FromMetadataProvider(provider);
-    const res = await rv.RunView<{ ID: string }>(
-        {
-            EntityName: ARTIFACT_TYPES_ENTITY,
-            ExtraFilter: `Name = '${escapeSql(MARKDOWN_DOCUMENT_TYPE_NAME)}'`,
-            Fields: ['ID'],
-            ResultType: 'simple',
-            MaxRows: 1,
-        },
-        system,
-    );
-    const id = res.Success ? res.Results?.[0]?.ID : undefined;
-    if (!id) {
-        throw new Error(`MJ has no artifact type named "${MARKDOWN_DOCUMENT_TYPE_NAME}".`);
+/**
+ * Process-scoped metadata lookup cache (`BaseSingleton`) for bounded `MJ: Artifact Types` IDs,
+ * keyed per `IMetadataProvider` so multi-provider / test providers never collide.
+ */
+export class SpaceDocMetadataCache extends BaseSingleton<SpaceDocMetadataCache> {
+    private providerTypeIds = new WeakMap<IMetadataProvider, Map<string, string>>();
+
+    protected constructor() {
+        super();
     }
-    return id;
+
+    public static get Instance(): SpaceDocMetadataCache {
+        return super.getInstance<SpaceDocMetadataCache>();
+    }
+
+    public ClearProvider(provider: IMetadataProvider): void {
+        this.providerTypeIds.delete(provider);
+    }
+
+    public Clear(): void {
+        this.providerTypeIds = new WeakMap<IMetadataProvider, Map<string, string>>();
+    }
+
+    public async ResolveArtifactTypeId(
+        provider: IMetadataProvider,
+        system: UserInfo,
+        typeName: string,
+    ): Promise<string> {
+        let byName = this.providerTypeIds.get(provider);
+        const key = typeName.trim().toLowerCase();
+        const cached = byName?.get(key);
+        if (cached) return cached;
+
+        const rv = RunView.FromMetadataProvider(provider);
+        const res = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: ARTIFACT_TYPES_ENTITY,
+                ExtraFilter: `Name = '${escapeSql(typeName)}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            system,
+        );
+        const id = res.Success ? res.Results?.[0]?.ID : undefined;
+        if (!id) {
+            throw new Error(`MJ has no artifact type named "${typeName}".`);
+        }
+
+        if (!byName) {
+            byName = new Map<string, string>();
+            this.providerTypeIds.set(provider, byName);
+        }
+        byName.set(key, id);
+        return id;
+    }
+}
+
+async function resolveMarkdownDocTypeId(provider: IMetadataProvider, system: UserInfo): Promise<string> {
+    return SpaceDocMetadataCache.Instance.ResolveArtifactTypeId(provider, system, MARKDOWN_DOCUMENT_TYPE_NAME);
+}
+
+async function safeDeleteRecord(entity: BaseEntity, label: string): Promise<void> {
+    try {
+        await entity.Delete();
+    } catch (err) {
+        LogError(`SpaceDoc compensating cleanup failed for ${label}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
+/**
+ * Deletes a filed `SpaceItem` during compensating rollback, falling back to reloading and deleting
+ * under the `system` user when `authorUser` (e.g., a Shared-band `Space Participant`) lacks Delete
+ * permission on `MJ_BizApps_Collaboration: Space Items`.
+ */
+async function safeDeleteSpaceItem(
+    provider: IMetadataProvider,
+    system: UserInfo,
+    item: SpaceItemEntityServer,
+): Promise<void> {
+    const itemId = item.ID;
+    const label = `space item ${itemId}`;
+    try {
+        const deleted = await item.Delete();
+        if (deleted) return;
+    } catch (err) {
+        LogError(`SpaceDoc compensating cleanup under author user failed for ${label}, retrying as system user: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!itemId) return;
+    try {
+        const systemItem = await provider.GetEntityObject<SpaceItemEntityServer>(ITEMS_ENTITY, system);
+        if (await systemItem.Load(itemId)) {
+            const deletedAsSystem = await systemItem.Delete();
+            if (!deletedAsSystem) {
+                LogError(`SpaceDoc compensating cleanup as system user returned false for ${label}: ${systemItem.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        }
+    } catch (err) {
+        LogError(`SpaceDoc compensating cleanup as system user failed for ${label}: ${err instanceof Error ? err.message : String(err)}`);
+    }
 }
 
 /**
@@ -258,6 +398,9 @@ export async function createSpaceDoc(params: {
     band: Band;
     folder?: string | null;
     attributionUser?: UserInfo;
+    description?: string | null;
+    visibility?: NoteVisibility;
+    sourceNoteId?: string | null;
 }): Promise<SpaceDocOutcome<SpaceDocRecord>> {
     const cleanSpaceId = parseUuid(params.spaceId);
     const callerId = parseUuid(params.callerUser?.ID);
@@ -307,7 +450,16 @@ export async function createSpaceDoc(params: {
         return { ok: false, code: 'FAILED', message: 'Required MJ: Artifacts or Space Items entity metadata is missing.' };
     }
 
-    const markdownTypeId = await resolveMarkdownDocTypeId(params.provider, system);
+    let markdownTypeId: string;
+    try {
+        markdownTypeId = await resolveMarkdownDocTypeId(params.provider, system);
+    } catch (err) {
+        return {
+            ok: false,
+            code: 'FAILED',
+            message: err instanceof Error ? err.message : 'Failed to resolve Markdown Document artifact type.',
+        };
+    }
     const authorUser = params.attributionUser ?? params.callerUser;
 
     const artifact = await params.provider.GetEntityObject<MJArtifactEntity>(ARTIFACTS_ENTITY, system);
@@ -315,11 +467,25 @@ export async function createSpaceDoc(params: {
     artifact.Name = title;
     artifact.TypeID = markdownTypeId;
     artifact.UserID = authorUser.ID;
-    if (!(await artifact.Save()) || !artifact.ID) {
+    artifact.Visibility = 'Always';
+    if (params.description !== undefined) {
+        artifact.Description = params.description;
+    }
+    let artifactSaved = false;
+    try {
+        artifactSaved = await artifact.Save();
+    } catch (err) {
         return {
             ok: false,
             code: 'FAILED',
-            message: artifact.LatestResult?.CompleteMessage ?? 'Failed to save MJ: Artifacts record.',
+            message: err instanceof Error ? err.message : 'Failed to save MJ: Artifacts record.',
+        };
+    }
+    if (!artifactSaved || !artifact.ID) {
+        return {
+            ok: false,
+            code: 'FAILED',
+            message: artifact.LatestResult?.CompleteMessage || 'Failed to save MJ: Artifacts record.',
         };
     }
 
@@ -328,41 +494,88 @@ export async function createSpaceDoc(params: {
     version.ArtifactID = artifact.ID;
     version.VersionNumber = 1;
     version.Name = title;
-    version.ContentMode = 'Text';
+    version.ContentMode = NOTE_ARTIFACT_DOCUMENT_CONTENT_MODE;
     version.Content = params.content;
     version.UserID = authorUser.ID;
-    if (!(await version.Save()) || !version.ID) {
-        await artifact.Delete();
+    let versionSaved = false;
+    try {
+        versionSaved = await version.Save();
+    } catch (err) {
+        await safeDeleteRecord(artifact, `artifact ${artifact.ID}`);
         return {
             ok: false,
             code: 'FAILED',
-            message: version.LatestResult?.CompleteMessage ?? 'Failed to save MJ: Artifact Versions record.',
+            message: err instanceof Error ? err.message : 'Failed to save MJ: Artifact Versions record.',
+        };
+    }
+    if (!versionSaved || !version.ID) {
+        await safeDeleteRecord(artifact, `artifact ${artifact.ID}`);
+        return {
+            ok: false,
+            code: 'FAILED',
+            message: version.LatestResult?.CompleteMessage || 'Failed to save MJ: Artifact Versions record.',
         };
     }
 
     const item = await params.provider.GetEntityObject<SpaceItemEntityServer>(ITEMS_ENTITY, authorUser);
     vouchStoredFile(item);
-    item.NewRecord();
-    item.SpaceID = cleanSpaceId;
-    item.EntityID = artifactsEntity.ID;
-    item.RecordID = `ID|${artifact.ID}`;
-    item.Band = verdict.effectiveBand;
-    item.Folder = params.folder?.trim() || null;
-    item.ArtifactVersionID = version.ID;
-    if (!(await item.Save()) || !item.ID) {
-        await version.Delete();
-        await artifact.Delete();
+    let itemSaved = false;
+    try {
+        item.NewRecord();
+        item.SpaceID = cleanSpaceId;
+        item.EntityID = artifactsEntity.ID;
+        item.RecordID = `ID|${artifact.ID}`;
+        item.Band = verdict.effectiveBand;
+        item.Folder = params.folder?.trim() || null;
+        item.ArtifactVersionID = version.ID;
+        itemSaved = await item.Save();
+    } catch (err) {
+        await safeDeleteRecord(version, `artifact version ${version.ID}`);
+        await safeDeleteRecord(artifact, `artifact ${artifact.ID}`);
         return {
             ok: false,
             code: 'FAILED',
-            message: item.LatestResult?.CompleteMessage ?? 'Failed to file document in Space Items.',
+            message: err instanceof Error ? err.message : 'Failed to file document in Space Items.',
+        };
+    } finally {
+        releaseStoredFile(item);
+    }
+    if (!itemSaved || !item.ID) {
+        await safeDeleteRecord(version, `artifact version ${version.ID}`);
+        await safeDeleteRecord(artifact, `artifact ${artifact.ID}`);
+        return {
+            ok: false,
+            code: 'FAILED',
+            message: item.LatestResult?.CompleteMessage || 'Failed to file document in Space Items.',
         };
     }
 
-    // Bind artifact delegation to the filed SpaceItem so MJ ArtifactPermissionEngine mirrors band isolation
+    // Bind artifact delegation to the filed SpaceItem so MJ ArtifactPermissionEngine mirrors band isolation (fail-closed)
     artifact.DelegateEntityID = itemsEntity.ID;
     artifact.DelegateRecordID = item.ID;
-    await artifact.Save();
+    let delegationSaved = false;
+    try {
+        delegationSaved = await artifact.Save();
+    } catch (err) {
+        await safeDeleteSpaceItem(params.provider, system, item);
+        await safeDeleteRecord(version, `artifact version ${version.ID}`);
+        await safeDeleteRecord(artifact, `artifact ${artifact.ID}`);
+        return {
+            ok: false,
+            code: 'FAILED',
+            message: err instanceof Error ? err.message : 'Failed to bind DelegateEntityID / DelegateRecordID on MJ: Artifacts.',
+        };
+    }
+    if (!delegationSaved) {
+        await safeDeleteSpaceItem(params.provider, system, item);
+        await safeDeleteRecord(version, `artifact version ${version.ID}`);
+        await safeDeleteRecord(artifact, `artifact ${artifact.ID}`);
+        return {
+            ok: false,
+            code: 'FAILED',
+            message: artifact.LatestResult?.CompleteMessage || 'Failed to bind DelegateEntityID / DelegateRecordID on MJ: Artifacts.',
+        };
+    }
 
     return {
         ok: true,
@@ -379,6 +592,10 @@ export async function createSpaceDoc(params: {
             authorUserId: authorUser.ID,
             promotedByUserId: item.PromotedByUserID ?? null,
             promotedAt: item.PromotedAt ?? null,
+            delegateEntityId: itemsEntity.ID,
+            delegateRecordId: item.ID,
+            ...(params.visibility !== undefined ? { visibility: params.visibility } : {}),
+            ...(params.sourceNoteId !== undefined ? { sourceNoteId: params.sourceNoteId } : {}),
         },
     };
 }
@@ -476,39 +693,64 @@ export async function listSpaceDocs(params: {
         ),
     ];
 
-    const [artifactsRes, versionsRes] = await Promise.all([
-        artifactIds.length > 0
-            ? rv.RunView<ArtifactSummaryRow>(
-                  {
-                      EntityName: ARTIFACTS_ENTITY,
-                      ExtraFilter: `ID IN (${artifactIds.map((id) => `'${escapeSql(id)}'`).join(', ')})`,
-                      Fields: ['ID', 'Name', 'TypeID', 'UserID', 'DelegateEntityID', 'DelegateRecordID'],
-                      ResultType: 'simple',
-                      MaxRows: 500, // row-cap-ok: matches itemRows bound
-                  },
-                  system,
-              )
-            : Promise.resolve({ Success: true, Results: [] as ArtifactSummaryRow[], ErrorMessage: '' }),
-        versionIds.length > 0
-            ? rv.RunView<ArtifactVersionSummaryRow>(
-                  {
-                      EntityName: ARTIFACT_VERSIONS_ENTITY,
-                      ExtraFilter: `ID IN (${versionIds.map((id) => `'${escapeSql(id)}'`).join(', ')})`,
-                      Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content', 'UserID'],
-                      ResultType: 'simple',
-                      MaxRows: 500, // row-cap-ok: matches itemRows bound
-                  },
-                  system,
-              )
-            : Promise.resolve({ Success: true, Results: [] as ArtifactVersionSummaryRow[], ErrorMessage: '' }),
-    ]);
+    let artifactRows: ArtifactSummaryRow[] = [];
+    let versionRows: ArtifactVersionSummaryRow[] = [];
+    if (artifactIds.length > 0 && versionIds.length > 0) {
+        const batchResults = await rv.RunViews<ArtifactSummaryRow | ArtifactVersionSummaryRow>(
+            [
+                {
+                    EntityName: ARTIFACTS_ENTITY,
+                    ExtraFilter: `ID IN (${artifactIds.map((id) => `'${escapeSql(id)}'`).join(', ')})`,
+                    Fields: ['ID', 'Name', 'TypeID', 'UserID', 'DelegateEntityID', 'DelegateRecordID'],
+                    ResultType: 'simple',
+                    MaxRows: 500, // row-cap-ok: matches itemRows bound
+                },
+                {
+                    EntityName: ARTIFACT_VERSIONS_ENTITY,
+                    ExtraFilter: `ID IN (${versionIds.map((id) => `'${escapeSql(id)}'`).join(', ')})`,
+                    Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content', 'UserID'],
+                    ResultType: 'simple',
+                    MaxRows: 500, // row-cap-ok: matches itemRows bound
+                },
+            ],
+            system,
+        );
+        const artifactsRes = batchResults[0] as RunViewResult<ArtifactSummaryRow> | undefined;
+        const versionsRes = batchResults[1] as RunViewResult<ArtifactVersionSummaryRow> | undefined;
+        artifactRows = artifactsRes?.Success ? (artifactsRes.Results ?? []) : [];
+        versionRows = versionsRes?.Success ? (versionsRes.Results ?? []) : [];
+    } else if (artifactIds.length > 0) {
+        const artifactsRes = await rv.RunView<ArtifactSummaryRow>(
+            {
+                EntityName: ARTIFACTS_ENTITY,
+                ExtraFilter: `ID IN (${artifactIds.map((id) => `'${escapeSql(id)}'`).join(', ')})`,
+                Fields: ['ID', 'Name', 'TypeID', 'UserID', 'DelegateEntityID', 'DelegateRecordID'],
+                ResultType: 'simple',
+                MaxRows: 500, // row-cap-ok: matches itemRows bound
+            },
+            system,
+        );
+        artifactRows = artifactsRes.Success ? (artifactsRes.Results ?? []) : [];
+    } else if (versionIds.length > 0) {
+        const versionsRes = await rv.RunView<ArtifactVersionSummaryRow>(
+            {
+                EntityName: ARTIFACT_VERSIONS_ENTITY,
+                ExtraFilter: `ID IN (${versionIds.map((id) => `'${escapeSql(id)}'`).join(', ')})`,
+                Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content', 'UserID'],
+                ResultType: 'simple',
+                MaxRows: 500, // row-cap-ok: matches itemRows bound
+            },
+            system,
+        );
+        versionRows = versionsRes.Success ? (versionsRes.Results ?? []) : [];
+    }
 
     const artifactMap = new Map<string, ArtifactSummaryRow>();
-    for (const a of artifactsRes.Results ?? []) {
+    for (const a of artifactRows) {
         artifactMap.set(a.ID.toLowerCase(), a);
     }
     const versionMap = new Map<string, ArtifactVersionSummaryRow>();
-    for (const v of versionsRes.Results ?? []) {
+    for (const v of versionRows) {
         versionMap.set(v.ID.toLowerCase(), v);
     }
 
@@ -534,6 +776,8 @@ export async function listSpaceDocs(params: {
             authorUserId: artifact.UserID,
             promotedByUserId: item.PromotedByUserID ?? null,
             promotedAt: item.PromotedAt ? new Date(item.PromotedAt) : null,
+            delegateEntityId: artifact.DelegateEntityID ?? null,
+            delegateRecordId: artifact.DelegateRecordID ?? null,
         });
     }
 
@@ -606,8 +850,8 @@ export async function getSpaceDoc(params: {
         return { ok: false, code: 'NOT_FOUND', message: 'Space document artifact linkage is incomplete.' };
     }
 
-    const [artifactRes, versionRes] = await Promise.all([
-        rv.RunView<ArtifactSummaryRow>(
+    const batchResults = await rv.RunViews<ArtifactSummaryRow | ArtifactVersionSummaryRow>(
+        [
             {
                 EntityName: ARTIFACTS_ENTITY,
                 ExtraFilter: `ID = '${artifactId}'`,
@@ -615,9 +859,6 @@ export async function getSpaceDoc(params: {
                 ResultType: 'simple',
                 MaxRows: 1,
             },
-            system,
-        ),
-        rv.RunView<ArtifactVersionSummaryRow>(
             {
                 EntityName: ARTIFACT_VERSIONS_ENTITY,
                 ExtraFilter: `ID = '${versionId}'`,
@@ -625,11 +866,13 @@ export async function getSpaceDoc(params: {
                 ResultType: 'simple',
                 MaxRows: 1,
             },
-            system,
-        ),
-    ]);
-    const artifact = artifactRes.Success ? artifactRes.Results?.[0] : undefined;
-    const version = versionRes.Success ? versionRes.Results?.[0] : undefined;
+        ],
+        system,
+    );
+    const artifactRes = batchResults[0] as RunViewResult<ArtifactSummaryRow> | undefined;
+    const versionRes = batchResults[1] as RunViewResult<ArtifactVersionSummaryRow> | undefined;
+    const artifact = artifactRes?.Success ? artifactRes.Results?.[0] : undefined;
+    const version = versionRes?.Success ? versionRes.Results?.[0] : undefined;
     if (!artifact || !version) {
         return { ok: false, code: 'NOT_FOUND', message: 'Space document artifact or version was not found.' };
     }
@@ -649,6 +892,8 @@ export async function getSpaceDoc(params: {
             authorUserId: artifact.UserID,
             promotedByUserId: item.PromotedByUserID ?? null,
             promotedAt: item.PromotedAt ? new Date(item.PromotedAt) : null,
+            delegateEntityId: artifact.DelegateEntityID ?? null,
+            delegateRecordId: artifact.DelegateRecordID ?? null,
         },
     };
 }
@@ -765,8 +1010,14 @@ export async function updateSpaceDoc(params: {
         return { ok: false, code: 'NOT_FOUND', message: 'Space document item could not be reloaded.' };
     }
     vouchStoredFile(itemAsCaller);
-    itemAsCaller.ArtifactVersionID = version.ID;
-    if (!(await itemAsCaller.Save())) {
+    let savedItem = false;
+    try {
+        itemAsCaller.ArtifactVersionID = version.ID;
+        savedItem = await itemAsCaller.Save();
+    } finally {
+        releaseStoredFile(itemAsCaller);
+    }
+    if (!savedItem) {
         return {
             ok: false,
             code: 'FAILED',
@@ -789,6 +1040,8 @@ export async function updateSpaceDoc(params: {
             authorUserId: artifact.UserID,
             promotedByUserId: itemAsCaller.PromotedByUserID ?? null,
             promotedAt: itemAsCaller.PromotedAt ?? null,
+            delegateEntityId: artifact.DelegateEntityID ?? null,
+            delegateRecordId: artifact.DelegateRecordID ?? null,
         },
     };
 }
@@ -860,8 +1113,14 @@ export async function promoteSpaceDocToShared(params: {
         return { ok: false, code: 'NOT_FOUND', message: 'Space document item could not be loaded under delivery principal.' };
     }
     vouchStoredFile(itemAsPrincipal);
-    itemAsPrincipal.Band = 'Shared';
-    if (!(await itemAsPrincipal.Save())) {
+    let promotedSaved = false;
+    try {
+        itemAsPrincipal.Band = 'Shared';
+        promotedSaved = await itemAsPrincipal.Save();
+    } finally {
+        releaseStoredFile(itemAsPrincipal);
+    }
+    if (!promotedSaved) {
         return {
             ok: false,
             code: 'FAILED',
@@ -876,3 +1135,195 @@ export async function promoteSpaceDocToShared(params: {
         spaceItemId: cleanItemId,
     });
 }
+
+/**
+ * Promotes a `SpaceNote` ("Turn into document") into a native, editable Markdown Document
+ * (`MJ: Artifacts` + initial v1 `MJ: Artifact Versions` with `ContentMode = 'Text'` + `SpaceItem`)
+ * inheriting `SpaceID`, `Band` (`Team` or `Shared`; `Private` notes remain locked to `Team`),
+ * `Visibility`, and `Artifact.DelegateEntityID` / `Artifact.DelegateRecordID` permission delegation
+ * without calling `upload-space-file.ts`.
+ */
+export async function promoteSpaceNoteToDoc(
+    params: PromoteSpaceNoteToDocParams,
+): Promise<SpaceDocOutcome<PromotedSpaceNoteDocRecord>> {
+    const callerId = parseUuid(params.callerUser?.ID);
+    if (!callerId) {
+        return { ok: false, code: 'INVALID_INPUT', message: 'Valid callerUser is required.' };
+    }
+
+    const hasNoteId = params.noteId !== undefined && params.noteId !== null && params.noteId.trim() !== '';
+    if (!hasNoteId && !params.note) {
+        return { ok: false, code: 'INVALID_INPUT', message: 'Either noteId or note payload is required.' };
+    }
+
+    const probe = await params.provider.GetEntityObject<SpaceItemEntityServer>(ITEMS_ENTITY, params.callerUser);
+    const system = await requireSystemUser(probe);
+
+    let resolvedSpaceId: string | null = null;
+    let sourceNoteId: string | null = null;
+    let resolvedTitle: string | null = null;
+    let resolvedBody: string | null = null;
+    let resolvedBand: Band;
+    let resolvedVisibility: NoteVisibility;
+    let resolvedAuthorUserId: string | null = null;
+
+    if (hasNoteId) {
+        const cleanNoteId = parseUuid(params.noteId);
+        if (!cleanNoteId) {
+            return { ok: false, code: 'INVALID_INPUT', message: 'Valid noteId UUID is required.' };
+        }
+        const rv = RunView.FromMetadataProvider(params.provider);
+        const noteRes = await rv.RunView<SpaceNoteSummaryRow>(
+            {
+                EntityName: SPACE_NOTES_ENTITY,
+                ExtraFilter: `ID = '${cleanNoteId}'`,
+                Fields: ['ID', 'SpaceID', 'Title', 'Body', 'Band', 'Visibility', 'AuthorUserID'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            system,
+        );
+        if (!noteRes.Success) {
+            return { ok: false, code: 'FAILED', message: noteRes.ErrorMessage || 'Failed to load SpaceNote.' };
+        }
+        const loaded = noteRes.Results?.[0];
+        if (!loaded) {
+            return { ok: false, code: 'NOT_FOUND', message: `SpaceNote ${cleanNoteId} was not found.` };
+        }
+        const loadedSpaceId = parseUuid(loaded.SpaceID);
+        if (!loadedSpaceId) {
+            return { ok: false, code: 'FAILED', message: 'SpaceNote has an invalid SpaceID.' };
+        }
+        if (params.spaceId !== undefined && params.spaceId.trim() !== '') {
+            const requestedSpaceId = parseUuid(params.spaceId);
+            if (!requestedSpaceId) {
+                return { ok: false, code: 'INVALID_INPUT', message: 'Valid spaceId UUID is required when specified.' };
+            }
+            if (requestedSpaceId.toLowerCase() !== loadedSpaceId.toLowerCase()) {
+                return { ok: false, code: 'NOT_FOUND', message: 'SpaceNote was not found in the requested space.' };
+            }
+        }
+        resolvedSpaceId = loadedSpaceId;
+        sourceNoteId = loaded.ID;
+        resolvedTitle = loaded.Title;
+        resolvedBody = loaded.Body;
+        resolvedBand = loaded.Band === 'Shared' ? 'Shared' : 'Team';
+        resolvedVisibility = loaded.Visibility === 'Private' ? 'Private' : 'Space';
+        resolvedAuthorUserId = loaded.AuthorUserID ?? null;
+    } else {
+        const inlineNote = params.note!;
+        const candidateSpaceId = parseUuid(params.spaceId ?? inlineNote.SpaceID);
+        if (!candidateSpaceId) {
+            return { ok: false, code: 'INVALID_INPUT', message: 'Valid spaceId is required.' };
+        }
+        if (inlineNote.Band !== 'Team' && inlineNote.Band !== 'Shared') {
+            return { ok: false, code: 'INVALID_INPUT', message: 'SpaceNote Band must be Team or Shared.' };
+        }
+        const rawInlineId = inlineNote.ID?.trim() ?? '';
+        if (rawInlineId) {
+            const parsedInlineId = parseUuid(rawInlineId);
+            if (!parsedInlineId) {
+                return { ok: false, code: 'INVALID_INPUT', message: 'SpaceNote ID must be a valid UUID when provided.' };
+            }
+            sourceNoteId = parsedInlineId;
+        }
+        resolvedSpaceId = candidateSpaceId;
+        resolvedTitle = inlineNote.Title ?? null;
+        resolvedBody = inlineNote.Body ?? null;
+        resolvedBand = inlineNote.Band;
+        resolvedVisibility = inlineNote.Visibility === 'Private' ? 'Private' : 'Space';
+        resolvedAuthorUserId = inlineNote.AuthorUserID ?? callerId;
+    }
+
+    let writeContext;
+    try {
+        writeContext = await loadWriteContext(probe, params.callerUser, resolvedSpaceId, null);
+    } catch (err) {
+        return {
+            ok: false,
+            code: 'UNAUTHORIZED',
+            message: err instanceof Error ? err.message : 'Space could not be read.',
+        };
+    }
+
+    const spaceNode = writeContext.spaces.find((s) => s.id.toLowerCase() === resolvedSpaceId.toLowerCase());
+    if (!spaceNode) {
+        return { ok: false, code: 'NOT_FOUND', message: `Space ${resolvedSpaceId} was not found.` };
+    }
+
+    const isAdmin = CollaborationEngine.Instance.UserMayAdministerSpaces(params.callerUser, params.provider);
+    const reach = membershipReaches(writeContext.spaces, writeContext.memberships, callerId, resolvedSpaceId);
+    const isSpaceOwner = spaceNode.ownerId.toLowerCase() === callerId.toLowerCase();
+    const verdict = noteTurnIntoDocumentVerdict(
+        {
+            userId: callerId,
+            isSpaceOwner,
+            role: reach?.role ?? null,
+            administers: isAdmin,
+            spaceReadOnly: spaceIsReadOnly(spaceNode),
+        },
+        {
+            Band: resolvedBand,
+            Visibility: resolvedVisibility,
+            AuthorUserID: resolvedAuthorUserId,
+        },
+    );
+    if (!verdict.ok) {
+        return {
+            ok: false,
+            code: verdict.reason === 'read-only' ? 'READ_ONLY' : 'UNAUTHORIZED',
+            message: verdict.message,
+        };
+    }
+
+    const folderOption = params.folder !== undefined ? params.folder : DEFAULT_NOTE_DOCUMENT_FOLDER;
+    const draft = noteToArtifactDocument(
+        {
+            ID: sourceNoteId,
+            SpaceID: resolvedSpaceId,
+            Title: resolvedTitle,
+            Body: resolvedBody,
+            Band: verdict.effectiveBand,
+            Visibility: verdict.visibility,
+            AuthorUserID: resolvedAuthorUserId,
+        },
+        { folder: folderOption },
+    );
+
+    const created = await createSpaceDoc({
+        provider: params.provider,
+        callerUser: params.callerUser,
+        spaceId: draft.spaceId,
+        title: draft.title,
+        content: draft.content,
+        band: draft.band,
+        folder: draft.folder,
+        attributionUser: params.attributionUser,
+        description: draft.sourceNoteId ? `Promoted from Space Note ${draft.sourceNoteId}` : 'Promoted from Space Note',
+        visibility: draft.visibility,
+        sourceNoteId: draft.sourceNoteId,
+    });
+    if (!created.ok) {
+        return created;
+    }
+
+    const itemsEntity = params.provider.EntityByName(ITEMS_ENTITY);
+    const delegateEntityId = created.data.delegateEntityId ?? itemsEntity?.ID ?? '';
+    const delegateRecordId = created.data.delegateRecordId ?? created.data.spaceItemId;
+
+    return {
+        ok: true,
+        data: {
+            ...created.data,
+            sourceNoteId: draft.sourceNoteId,
+            visibility: draft.visibility,
+            delegateEntityId,
+            delegateRecordId,
+            artifactTypeName: MARKDOWN_DOCUMENT_ARTIFACT_TYPE_NAME,
+            contentMode: NOTE_ARTIFACT_DOCUMENT_CONTENT_MODE,
+        },
+    };
+}
+
+/** Semantic alias for `promoteSpaceNoteToDoc` matching the "Turn into document" UI flow. */
+export const turnSpaceNoteIntoDocument = promoteSpaceNoteToDoc;

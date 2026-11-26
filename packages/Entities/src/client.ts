@@ -33,6 +33,35 @@ export interface UploadSpaceFilePayload {
     ErrorMessage?: string;
 }
 
+export interface PromoteSpaceNoteToDocGraphQLInput {
+    SpaceID: string;
+    NoteID?: string | null;
+    Title?: string | null;
+    Body?: string | null;
+    Band?: 'Team' | 'Shared';
+    Visibility?: 'Space' | 'Private';
+    Folder?: string | null;
+}
+
+export interface PromoteSpaceNoteToDocGraphQLPayload {
+    Success: boolean;
+    SpaceItemID?: string;
+    ArtifactID?: string;
+    VersionID?: string;
+    VersionNumber?: number;
+    Title?: string;
+    Band?: 'Team' | 'Shared';
+    Visibility?: 'Space' | 'Private';
+    Folder?: string | null;
+    DelegateEntityID?: string;
+    DelegateRecordID?: string;
+    ArtifactTypeName?: string;
+    ContentMode?: string;
+    SourceNoteID?: string | null;
+    ErrorCode?: string;
+    ErrorMessage?: string;
+}
+
 export interface CreateSpaceTaskInput {
     SpaceID: string;
     Name: string;
@@ -469,6 +498,29 @@ mutation UploadSpaceFile($input: UploadSpaceFileInput!) {
 }
 `;
 
+const PROMOTE_SPACE_NOTE_TO_DOC_MUTATION = `
+mutation PromoteSpaceNoteToDoc($input: PromoteSpaceNoteToDocInput!) {
+    PromoteSpaceNoteToDoc(input: $input) {
+        Success
+        SpaceItemID
+        ArtifactID
+        VersionID
+        VersionNumber
+        Title
+        Band
+        Visibility
+        Folder
+        DelegateEntityID
+        DelegateRecordID
+        ArtifactTypeName
+        ContentMode
+        SourceNoteID
+        ErrorCode
+        ErrorMessage
+    }
+}
+`;
+
 const CREATE_SPACE_TASK_MUTATION = `
 mutation CreateSpaceTask($input: CreateSpaceTaskInput!) {
     CreateSpaceTask(input: $input) {
@@ -576,6 +628,11 @@ export class CollaborationClient {
     async UploadSpaceFile(input: UploadSpaceFileInput): Promise<UploadSpaceFilePayload> {
         const res = await this.activeExecutor.ExecuteGQL(UPLOAD_SPACE_FILE_MUTATION, { input });
         return (res?.UploadSpaceFile as UploadSpaceFilePayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async PromoteSpaceNoteToDoc(input: PromoteSpaceNoteToDocGraphQLInput): Promise<PromoteSpaceNoteToDocGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(PROMOTE_SPACE_NOTE_TO_DOC_MUTATION, { input });
+        return (res?.PromoteSpaceNoteToDoc as PromoteSpaceNoteToDocGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
     async CreateSpaceTask(input: CreateSpaceTaskInput): Promise<CreateSpaceTaskPayload> {
