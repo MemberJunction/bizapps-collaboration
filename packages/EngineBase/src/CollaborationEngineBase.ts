@@ -170,6 +170,8 @@ interface UserProviderSpaceCache {
 
 @RegisterForStartup()
 export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase> {
+    private _activeProvider: IMetadataProvider | null = null;
+    private _lastConfiguredUserId = '';
     private _spaceTypes: mjBizAppsCollaborationSpaceTypeEntity[] = [];
     private _spaceTypeStatuses: mjBizAppsCollaborationSpaceTypeStatusEntity[] = [];
     private _spaceRoleTypes: mjBizAppsCollaborationSpaceRoleTypeEntity[] = [];
@@ -194,12 +196,26 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return super.getInstance<CollaborationEngineBase>();
     }
 
+    /**
+     * Follows the active provider passed to `Config()`, falling back to `super.ProviderToUse`
+     * (`Metadata.Provider`). Keeps multi-provider servers and browser impersonation sessions isolated.
+     */
+    public override get ProviderToUse(): IMetadataProvider {
+        return this._activeProvider ?? super.ProviderToUse;
+    }
+
     public async Config(
         forceRefresh?: boolean,
         contextUser?: UserInfo,
         provider?: IMetadataProvider
     ): Promise<void> {
         const md = provider ?? Metadata.Provider;
+        this._activeProvider = md;
+        const nextUserId = normalizeKey((contextUser ?? md.CurrentUser)?.ID);
+        if (nextUserId !== this._lastConfiguredUserId) {
+            this._lastConfiguredUserId = nextUserId;
+            this.ClearUserCaches();
+        }
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
             {
                 PropertyName: '_spaceTypes',
@@ -327,7 +343,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         provider?: IMetadataProvider,
     ): void {
         if (!user?.ID) return;
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const cache = this.getUserCache(md, user.ID);
         cache.spacesById.clear();
         cache.childrenByParentId.clear();
@@ -351,7 +367,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         isComplete = true,
     ): void {
         if (!user?.ID) return;
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const cache = this.getUserCache(md, user.ID);
         const normalizedUserId = normalizeKey(user.ID);
         if (isComplete) {
@@ -377,7 +393,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         options?: { forceRefresh?: boolean },
     ): Promise<ReadonlyMap<string, CachedSpaceReachRow>> {
         if (!user?.ID) return new Map();
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const cache = this.getUserCache(md, user.ID);
         if (cache.allSpacesLoaded && !options?.forceRefresh) {
             return cache.spacesById;
@@ -407,7 +423,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         options?: { forceRefresh?: boolean },
     ): Promise<readonly CachedSpaceReachRow[]> {
         if (!user?.ID) return [];
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         await this.GetReachableSpaces(user, md, options);
         const cache = this.getUserCache(md, user.ID);
         const key = parentSpaceId ? normalizeKey(parentSpaceId) : '__root__';
@@ -424,7 +440,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
     ): Promise<readonly CachedUserSpaceMemberRow[]> {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!user?.ID || !uuidRegex.test(user.ID.trim())) return [];
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const cache = this.getUserCache(md, user.ID);
         if (cache.allMembersLoaded && !options?.forceRefresh) {
             const all: CachedUserSpaceMemberRow[] = [];
@@ -648,7 +664,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
      * Refuses name-only matches outside the Collaboration hierarchy.
      */
     public FindCollaborationAuthorization(subAuthName: string, provider?: IMetadataProvider): AuthorizationInfo | null {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const auths = md?.Authorizations ?? [];
         const root = auths.find(a => (a.Name ?? '').trim().toLowerCase() === 'collaboration' && !a.ParentID);
         if (root) {
@@ -667,7 +683,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
      * Checks if a user has the "Configure Space Types" authorization under the "Collaboration" root.
      */
     public UserCanConfigureSpaceTypes(user: UserInfo, provider?: IMetadataProvider): boolean {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const auth = this.FindCollaborationAuthorization('Configure Space Types', md);
         if (!auth) {
             LogError("Missing authorization: 'Configure Space Types'");
@@ -687,7 +703,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         provider?: IMetadataProvider,
         roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
     ): Promise<boolean> {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const auth = this.FindCollaborationAuthorization('Configure Spaces', md);
         if (!auth) {
             LogError("Missing authorization: 'Configure Spaces'");
@@ -713,7 +729,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
      * looks at a role's name.
      */
     public UserMayAdministerSpaces(user: UserInfo, provider?: IMetadataProvider): boolean {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const auth = this.FindCollaborationAuthorization('Administer Spaces', md);
         if (!auth) {
             LogError("Missing authorization: 'Administer Spaces'");
@@ -727,7 +743,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
      * evaluated declaratively via MemberJunction Authorization metadata rather than hardcoded role names.
      */
     public UserCanIssueSpaceInviteLinks(user: UserInfo, provider?: IMetadataProvider): boolean {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const auth = this.FindCollaborationAuthorization('Issue Space Invite Links', md);
         if (!auth) {
             return false;
@@ -740,7 +756,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
      * 'Configure Spaces', or 'Configure Space Types'), evaluated declaratively via MJ Authorization metadata.
      */
     public UserHasStaffAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const auths = md?.Authorizations ?? [];
         const evaluator = new AuthorizationEvaluator();
         for (const name of ['Administer Spaces', 'Issue Space Invite Links', 'Configure Spaces', 'Configure Space Types']) {
@@ -754,7 +770,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
 
     /** Whether a user holds the 'Close and Reopen Spaces' authorization. It is granted apart from 'Configure Spaces', which changes settings. */
     public UserHoldsLifecycleAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const auth = this.FindCollaborationAuthorization('Close and Reopen Spaces', md);
         if (!auth) {
             LogError("Missing authorization: 'Close and Reopen Spaces'");
@@ -774,7 +790,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         provider?: IMetadataProvider,
         roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
     ): Promise<boolean> {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         if (!this.UserHoldsLifecycleAuthorization(user, md)) return false;
         const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf, true);
         return !!reached?.role.isOwnerRole;
@@ -790,7 +806,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         provider?: IMetadataProvider,
         roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
     ): Promise<boolean> {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         if (!this.UserHoldsLifecycleAuthorization(user, md)) return false;
         const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf);
         return !!reached?.role.isOwnerRole;
@@ -811,7 +827,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         provider?: IMetadataProvider,
         roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
     ): Promise<boolean> {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         if (!this.UserHoldsLifecycleAuthorization(user, md)) return false;
         const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf, true);
         return !!reached?.role.isOwnerRole;
@@ -828,7 +844,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         roleTypeOf?: (id: string) => RoleTypeFlags | undefined,
         ignoreStatusFilter: boolean = false
     ): Promise<ReturnType<typeof membershipReaches>> {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(spaceId.trim()) || !user?.ID || !uuidRegex.test(user.ID.trim())) {
             return null;
@@ -1026,7 +1042,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 ? options.pageSize
                 : 500;
 
-        const rv = RunView.FromMetadataProvider(provider ?? Metadata.Provider);
+        const md = provider ?? this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
         const allRows: mjBizAppsCollaborationSpaceAgentSourceReceiptEntityType[] = [];
         const seenIds = new Set<string>();
         let afterKey: CompositeKey | undefined;
@@ -1093,21 +1110,73 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             ),
         ];
 
+        const knowledgeSpaceIds = [
+            ...new Set(
+                allRows
+                    .filter((r) => r.SourceKind === 'KnowledgeSource')
+                    .map((r) => normalizeReceiptUuid(r.SpaceID))
+                    .filter((id): id is string => !!id),
+            ),
+        ];
+
+        const needsLiveKnowledgeSourceLookup =
+            knowledgeSpaceIds.length > 0 && !options?.activeKnowledgeSourceBandsBySpace;
+
+        // Build ONE batched rv.RunViews([...]) for all live Space Item chunks + KnowledgeSource verification queries
+        const verificationBatch: Array<{
+            EntityName: string;
+            ExtraFilter?: string;
+            Fields: string[];
+            ResultType: 'simple';
+            MaxRows: number;
+        }> = [];
+
+        const batchSize = 200;
+        const spaceItemChunkIndices: number[] = [];
+        for (let offset = 0; offset < spaceItemIds.length; offset += batchSize) {
+            const batch = spaceItemIds.slice(offset, offset + batchSize);
+            spaceItemChunkIndices.push(verificationBatch.length);
+            verificationBatch.push({
+                EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                ExtraFilter: `ID IN (${batch.map((id) => `'${id}'`).join(', ')})`,
+                Fields: ['ID', 'SpaceID', 'Band'],
+                ResultType: 'simple',
+                // row-cap-ok: bounded by deduplicated receipt SpaceItemID batch (<= 200)
+                MaxRows: batchSize,
+            });
+        }
+
+        let grantsIdx = -1;
+        let spacesIdx = -1;
+        if (needsLiveKnowledgeSourceLookup) {
+            grantsIdx = verificationBatch.length;
+            verificationBatch.push({
+                EntityName: 'MJ_BizApps_Collaboration: Space Grants',
+                ExtraFilter: `Kind = 'KnowledgeSource'`,
+                Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetEntityID', 'TargetRecordID', 'Sequence'],
+                ResultType: 'simple',
+                // row-cap-ok: bounded by KnowledgeSource grant configuration catalog
+                MaxRows: 2000,
+            });
+            spacesIdx = verificationBatch.length;
+            verificationBatch.push({
+                EntityName: 'MJ_BizApps_Collaboration: Spaces',
+                Fields: ['ID', 'ParentID', 'SpaceTypeID', 'Configuration'],
+                ResultType: 'simple',
+                // row-cap-ok: bounded by space hierarchy for grant inheritance resolution
+                MaxRows: 2000,
+            });
+        }
+
+        const verificationResults =
+            verificationBatch.length > 0 ? await rv.RunViews(verificationBatch, user) : [];
+
         if (spaceItemIds.length > 0) {
             const spaceItemsById = new Map<string, { spaceId: string; band: SourceReceiptBand }>();
-            const batchSize = 200;
-            for (let offset = 0; offset < spaceItemIds.length; offset += batchSize) {
-                const batch = spaceItemIds.slice(offset, offset + batchSize);
-                const itemsRes = await rv.RunView<{ ID: string; SpaceID: string; Band: string }>({
-                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
-                    ExtraFilter: `ID IN (${batch.map((id) => `'${id}'`).join(', ')})`,
-                    Fields: ['ID', 'SpaceID', 'Band'],
-                    ResultType: 'simple',
-                    // row-cap-ok: bounded by deduplicated receipt SpaceItemID batch (<= 200)
-                    MaxRows: batchSize,
-                }, user);
-                if (!itemsRes.Success || !itemsRes.Results) {
-                    LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to verify live Space Items: ${itemsRes.ErrorMessage ?? 'unknown error'}`);
+            for (const idx of spaceItemChunkIndices) {
+                const itemsRes = verificationResults[idx] as RunViewResult<{ ID: string; SpaceID: string; Band: string }> | undefined;
+                if (!itemsRes?.Success || !itemsRes.Results) {
+                    LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to verify live Space Items: ${itemsRes?.ErrorMessage ?? 'unknown error'}`);
                     return [];
                 }
                 for (const item of itemsRes.Results) {
@@ -1120,15 +1189,6 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             }
             liveSnapshot.spaceItemsById = spaceItemsById;
         }
-
-        const knowledgeSpaceIds = [
-            ...new Set(
-                allRows
-                    .filter((r) => r.SourceKind === 'KnowledgeSource')
-                    .map((r) => normalizeReceiptUuid(r.SpaceID))
-                    .filter((id): id is string => !!id),
-            ),
-        ];
 
         if (knowledgeSpaceIds.length > 0) {
             if (options?.activeKnowledgeSourceBandsBySpace) {
@@ -1147,25 +1207,12 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 }
                 liveSnapshot.knowledgeSourceBandsBySpace = bySpace;
             } else {
-                const grantsRes = await rv.RunView<LiveKnowledgeSourceGrantInput>({
-                    EntityName: 'MJ_BizApps_Collaboration: Space Grants',
-                    ExtraFilter: `Kind = 'KnowledgeSource'`,
-                    Fields: ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'Band', 'TargetEntityID', 'TargetRecordID', 'Sequence'],
-                    ResultType: 'simple',
-                    // row-cap-ok: bounded by KnowledgeSource grant configuration catalog
-                    MaxRows: 2000,
-                }, user);
+                const grantsRes = verificationResults[grantsIdx] as RunViewResult<LiveKnowledgeSourceGrantInput> | undefined;
+                const spacesRes = verificationResults[spacesIdx] as RunViewResult<LiveSpaceChainNodeInput> | undefined;
 
-                if (grantsRes.Success && grantsRes.Results) {
-                    const spacesRes = await rv.RunView<LiveSpaceChainNodeInput>({
-                        EntityName: 'MJ_BizApps_Collaboration: Spaces',
-                        Fields: ['ID', 'ParentID', 'SpaceTypeID', 'Configuration'],
-                        ResultType: 'simple',
-                        // row-cap-ok: bounded by space hierarchy for grant inheritance resolution
-                        MaxRows: 2000,
-                    }, user);
-                    if (!spacesRes.Success || !spacesRes.Results) {
-                        LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to read Spaces for grant resolution: ${spacesRes.ErrorMessage ?? 'unknown error'}`);
+                if (grantsRes?.Success && grantsRes.Results) {
+                    if (!spacesRes?.Success || !spacesRes.Results) {
+                        LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to read Spaces for grant resolution: ${spacesRes?.ErrorMessage ?? 'unknown error'}`);
                         return [];
                     }
 
@@ -1218,9 +1265,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                         appSettings,
                     });
                 } else {
-                    const errMsg = grantsRes.ErrorMessage ?? 'unknown error';
+                    const errMsg = grantsRes?.ErrorMessage ?? 'unknown error';
                     const isPermissionDenied = /permission|denied|does not have read|unauthorized/i.test(errMsg);
-                    const md = provider ?? Metadata.Provider;
                     const canResolveViaServer = Boolean(options?.resolveSpaceConfiguration) || hasExecuteGQL(md);
                     if (!isPermissionDenied && !canResolveViaServer) {
                         LogError(`LoadSpaceAgentSourceReceiptsForConversation failed to verify Space Grants: ${errMsg}`);
@@ -1287,7 +1333,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationRemoteOperation<PublishSpaceNoticeEventInput, PublishSpaceNoticeEventResult>(
             PUBLISH_SPACE_NOTICE_EVENT_OPERATION_KEY,
             input,
-            provider ?? Metadata.Provider,
+            provider ?? this.ProviderToUse,
             user,
         );
     }
@@ -1304,7 +1350,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationRemoteOperation<GetSpaceNoticesInput, GetSpaceNoticesResult>(
             GET_SPACE_NOTICES_OPERATION_KEY,
             input,
-            provider ?? Metadata.Provider,
+            provider ?? this.ProviderToUse,
             user,
         );
     }
@@ -1321,7 +1367,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationRemoteOperation<GetSpaceUnreadNoticeCountsInput, GetSpaceUnreadNoticeCountsResult>(
             GET_SPACE_UNREAD_NOTICE_COUNTS_OPERATION_KEY,
             input,
-            provider ?? Metadata.Provider,
+            provider ?? this.ProviderToUse,
             user,
         );
     }
@@ -1338,7 +1384,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationRemoteOperation<AdvanceSpaceNoticeWatermarkInput, AdvanceSpaceNoticeWatermarkResult>(
             ADVANCE_SPACE_NOTICE_WATERMARK_OPERATION_KEY,
             input,
-            provider ?? Metadata.Provider,
+            provider ?? this.ProviderToUse,
             user,
         );
     }
@@ -1376,7 +1422,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationNotificationOperation<
             GetUserNotificationPreferencesInput,
             GetUserNotificationPreferencesResult
-        >(GET_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+        >(GET_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY, input, provider ?? this.ProviderToUse, user);
     }
 
     /**
@@ -1391,7 +1437,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationNotificationOperation<
             UpdateUserNotificationPreferencesInput,
             UpdateUserNotificationPreferencesResult
-        >(UPDATE_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+        >(UPDATE_USER_NOTIFICATION_PREFERENCES_OPERATION_KEY, input, provider ?? this.ProviderToUse, user);
     }
 
     /**
@@ -1406,7 +1452,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationNotificationOperation<
             RouteCollaborationNotificationsInput,
             RouteCollaborationNotificationsResult
-        >(ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+        >(ROUTE_COLLABORATION_NOTIFICATIONS_OPERATION_KEY, input, provider ?? this.ProviderToUse, user);
     }
 
     // ─── NT-2 Reach-Verified Scoped Digests ────────────────────────────────────
@@ -1423,7 +1469,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationDigestOperation<RunScopedSpaceDigestsInput, RunScopedSpaceDigestsResult>(
             RUN_SCOPED_SPACE_DIGESTS_OPERATION_KEY,
             input,
-            provider ?? Metadata.Provider,
+            provider ?? this.ProviderToUse,
             user,
         );
     }
@@ -1439,7 +1485,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationDigestOperation<PreviewScopedSpaceDigestInput, PreviewScopedSpaceDigestResult>(
             PREVIEW_SCOPED_SPACE_DIGEST_OPERATION_KEY,
             input,
-            provider ?? Metadata.Provider,
+            provider ?? this.ProviderToUse,
             user,
         );
     }
@@ -1455,7 +1501,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return invokeCollaborationDigestOperation<
             UpdateSpaceDigestCheckpointInput,
             UpdateSpaceDigestCheckpointResult
-        >(UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY, input, provider ?? Metadata.Provider, user);
+        >(UPDATE_SPACE_DIGEST_CHECKPOINT_OPERATION_KEY, input, provider ?? this.ProviderToUse, user);
     }
 }
 

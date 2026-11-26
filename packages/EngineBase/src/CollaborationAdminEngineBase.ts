@@ -48,6 +48,7 @@ const normalizeKey = (key: string | null | undefined): string => (key ?? '').tri
 
 @RegisterForStartup()
 export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminEngineBase> {
+    private _activeProvider: IMetadataProvider | null = null;
     private _authorizations: MJAuthorizationEntity[] = [];
     private _authorizationRoles: MJAuthorizationRoleEntity[] = [];
     private _appAndTypeSpaceGrants: mjBizAppsCollaborationSpaceGrantEntity[] = [];
@@ -59,12 +60,17 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
         return super.getInstance<CollaborationAdminEngineBase>();
     }
 
+    public override get ProviderToUse(): IMetadataProvider {
+        return this._activeProvider ?? super.ProviderToUse;
+    }
+
     public async Config(
         forceRefresh?: boolean,
         contextUser?: UserInfo,
         provider?: IMetadataProvider
     ): Promise<void> {
         const md = provider ?? Metadata.Provider;
+        this._activeProvider = md;
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
             {
                 PropertyName: '_authorizations',
@@ -150,7 +156,7 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
         contextUser?: UserInfo,
         provider?: IMetadataProvider,
     ): Promise<SpaceParticipantRoleAuditResult> {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const user = contextUser ?? md.CurrentUser;
         const auth = authorizeSecurityAuditCaller(user, md);
         if (!auth.authorized) {
@@ -165,7 +171,7 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
         contextUser?: UserInfo,
         provider?: IMetadataProvider,
     ): Promise<StaffRoleAuditResult> {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const user = contextUser ?? md.CurrentUser;
         const auth = authorizeSecurityAuditCaller(user, md);
         if (!auth.authorized) {
@@ -180,7 +186,7 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
         contextUser?: UserInfo,
         provider?: IMetadataProvider,
     ): Promise<BootEntityGrantInventoryResult> {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const user = contextUser ?? md.CurrentUser;
         const auth = authorizeSecurityAuditCaller(user, md);
         if (!auth.authorized) {
@@ -195,7 +201,7 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
         contextUser?: UserInfo,
         provider?: IMetadataProvider,
     ): Promise<PersonaSecurityProbeResult> {
-        const md = provider ?? Metadata.Provider;
+        const md = provider ?? this.ProviderToUse;
         const user = contextUser ?? md.CurrentUser;
         const auth = authorizeSecurityAuditCaller(user, md);
         if (!auth.authorized) {

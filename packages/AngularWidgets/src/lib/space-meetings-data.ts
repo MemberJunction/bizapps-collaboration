@@ -701,26 +701,52 @@ export async function loadSpaceMeetingsWithRollup(
 
         const spaceInSql = targetSpaceIds.map((id) => `'${escapeSqlLiteral(id)}'`).join(', ');
         const viewerUserId = (options?.CurrentUserId ?? Metadata.Provider?.CurrentUser?.ID ?? '').trim();
+        const needsViewerPersonLookup = !options?.CurrentPersonId && Boolean(viewerUserId);
 
-        const [meetingsRes, chatsRes, viewerPersonId] = await Promise.all([
-            rv.RunView<RawMeetingRow>({
+        const rollupBatch: Array<{
+            EntityName: string;
+            ExtraFilter?: string;
+            OrderBy?: string;
+            Fields?: string[];
+            MaxRows?: number;
+            ResultType: 'simple';
+        }> = [
+            {
                 EntityName: 'MJ_BizApps_Tasks: Meetings',
                 ExtraFilter: clauses.join(' OR '),
                 OrderBy: 'StartsAt ASC',
                 ResultType: 'simple',
-            }),
-            rv.RunView<{ ID: string; ConversationID: string; Subject?: string | null }>({
+            },
+            {
                 EntityName: 'MJ_BizApps_Collaboration: Space Chats',
                 ExtraFilter: `SpaceID IN (${spaceInSql}) AND Status = 'Active' AND Subject LIKE 'meeting:%'`,
                 Fields: ['ID', 'ConversationID', 'Subject'],
                 ResultType: 'simple',
-            }),
-            options?.CurrentPersonId
-                ? Promise.resolve(options.CurrentPersonId)
-                : resolveViewerPersonId(viewerUserId, provider),
-        ]);
+            },
+        ];
+        if (needsViewerPersonLookup) {
+            rollupBatch.push({
+                EntityName: 'MJ_BizApps_Common: People',
+                ExtraFilter: `LinkedUserID = '${escapeSqlLiteral(viewerUserId)}'`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            });
+        }
 
-        if (!meetingsRes.Success || (meetingsRes.Results?.length ?? 0) === 0) {
+        const rollupResults = await rv.RunViews(rollupBatch);
+        const meetingsRes = rollupResults[0] as { Success?: boolean; Results?: RawMeetingRow[] } | undefined;
+        const chatsRes = rollupResults[1] as
+            | { Success?: boolean; Results?: Array<{ ID: string; ConversationID: string; Subject?: string | null }> }
+            | undefined;
+        const viewerPersonRes = needsViewerPersonLookup
+            ? (rollupResults[2] as { Success?: boolean; Results?: Array<{ ID: string }> } | undefined)
+            : undefined;
+        const viewerPersonId =
+            options?.CurrentPersonId ??
+            (viewerPersonRes?.Success && viewerPersonRes.Results?.[0]?.ID ? viewerPersonRes.Results[0].ID : null);
+
+        if (!meetingsRes?.Success || (meetingsRes.Results?.length ?? 0) === 0) {
             return { Meetings: [], ChildSpaces: childSpaces };
         }
 
@@ -736,7 +762,7 @@ export async function loadSpaceMeetingsWithRollup(
                 : { Success: true, Results: [] as RawAttendeeRow[] };
 
         const chatByMeetingId = new Map<string, { spaceChatId: string; conversationId: string }>();
-        if (chatsRes.Success) {
+        if (chatsRes?.Success) {
             for (const c of chatsRes.Results ?? []) {
                 const sub = (c.Subject ?? '').trim();
                 if (sub.toLowerCase().startsWith('meeting:')) {
@@ -850,60 +876,98 @@ export async function loadSpaceMeetingDetail(
     const cleanMeetingId = escapeSqlLiteral(meeting.ID.trim());
     const viewerUserId = (options?.CurrentUserId ?? Metadata.Provider?.CurrentUser?.ID ?? '').trim();
     const canSeeTeam = options?.CanSeeTeamSide === true;
+    const needsViewerPersonLookup = !options?.CurrentPersonId && Boolean(viewerUserId);
 
+    const detailBatch: Array<{
+        EntityName: string;
+        ExtraFilter?: string;
+        OrderBy?: string;
+        Fields?: string[];
+        MaxRows?: number;
+        ResultType: 'simple';
+    }> = [
+        {
+            EntityName: 'MJ_BizApps_Tasks: Meeting Agenda Items',
+            ExtraFilter: `MeetingID = '${cleanMeetingId}'`,
+            OrderBy: 'Sequence ASC',
+            ResultType: 'simple',
+        },
+        {
+            EntityName: 'MJ_BizApps_Tasks: Meeting Agenda Item Types',
+            ExtraFilter: 'IsActive = 1',
+            OrderBy: 'Sequence ASC',
+            Fields: ['ID', 'Name', 'Code', 'DefaultDurationMinutes'],
+            ResultType: 'simple',
+        },
+        {
+            EntityName: 'MJ_BizApps_Tasks: Meeting Attendees',
+            ExtraFilter: `MeetingID = '${cleanMeetingId}'`,
+            ResultType: 'simple',
+        },
+        {
+            EntityName: 'MJ_BizApps_Tasks: Meeting Notes',
+            ExtraFilter: `MeetingID = '${cleanMeetingId}'`,
+            OrderBy: '__mj_UpdatedAt DESC',
+            ResultType: 'simple',
+        },
+        {
+            EntityName: 'MJ_BizApps_Tasks: Task Links',
+            ExtraFilter: `EntityID = '${TASKS_MEETINGS_ENTITY_ID}' AND RecordID IN (${recordCandidatesSql([meeting.ID])})`,
+            Fields: ['ID', 'TaskID', 'EntityID', 'RecordID'],
+            ResultType: 'simple',
+        },
+    ];
+    let peopleIdx = -1;
+    if (canSeeTeam) {
+        peopleIdx = detailBatch.length;
+        detailBatch.push({
+            EntityName: 'MJ_BizApps_Common: People',
+            Fields: ['ID', 'Name', 'FirstName', 'LastName', 'Email', 'LinkedUserID'],
+            OrderBy: 'Name ASC',
+            // row-cap-ok: UI picker dropdown bounded to 250 people in reach
+            MaxRows: 250,
+            ResultType: 'simple',
+        });
+    }
+    let viewerPersonIdx = -1;
+    if (needsViewerPersonLookup) {
+        viewerPersonIdx = detailBatch.length;
+        detailBatch.push({
+            EntityName: 'MJ_BizApps_Common: People',
+            ExtraFilter: `LinkedUserID = '${escapeSqlLiteral(viewerUserId)}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        });
+    }
+
+    const detailResults = await rv.RunViews(detailBatch);
+    const agendaRes = (detailResults[0] ?? { Success: false, Results: [] }) as { Success?: boolean; Results?: RawAgendaRow[] };
+    const itemTypesRes = (detailResults[1] ?? { Success: false, Results: [] }) as {
+        Success?: boolean;
+        Results?: Array<{
+            ID: string;
+            Name: string;
+            Code?: string | null;
+            DefaultDurationMinutes?: number | null;
+        }>;
+    };
+    const attendeesRes = (detailResults[2] ?? { Success: false, Results: [] }) as { Success?: boolean; Results?: RawAttendeeRow[] };
+    const notesRes = (detailResults[3] ?? { Success: false, Results: [] }) as { Success?: boolean; Results?: RawNoteRow[] };
+    const meetingTaskLinksRes = (detailResults[4] ?? { Success: false, Results: [] }) as { Success?: boolean; Results?: RawTaskLinkRow[] };
+    const peopleRes =
+        peopleIdx >= 0
+            ? ((detailResults[peopleIdx] ?? { Success: false, Results: [] }) as { Success?: boolean; Results?: RawPersonRow[] })
+            : { Success: true, Results: [] as RawPersonRow[] };
+    const viewerPersonRes =
+        viewerPersonIdx >= 0
+            ? (detailResults[viewerPersonIdx] as { Success?: boolean; Results?: Array<{ ID: string }> } | undefined)
+            : undefined;
     const viewerPersonId =
-        options?.CurrentPersonId ?? (await resolveViewerPersonId(viewerUserId, provider));
+        options?.CurrentPersonId ??
+        (viewerPersonRes?.Success && viewerPersonRes.Results?.[0]?.ID ? viewerPersonRes.Results[0].ID : null);
     const viewerUserLower = viewerUserId.toLowerCase();
     const viewerPersonLower = (viewerPersonId ?? '').trim().toLowerCase();
-
-    const [agendaRes, itemTypesRes, attendeesRes, notesRes, peopleRes, meetingTaskLinksRes] =
-        await Promise.all([
-            rv.RunView<RawAgendaRow>({
-                EntityName: 'MJ_BizApps_Tasks: Meeting Agenda Items',
-                ExtraFilter: `MeetingID = '${cleanMeetingId}'`,
-                OrderBy: 'Sequence ASC',
-                ResultType: 'simple',
-            }),
-            rv.RunView<{
-                ID: string;
-                Name: string;
-                Code?: string | null;
-                DefaultDurationMinutes?: number | null;
-            }>({
-                EntityName: 'MJ_BizApps_Tasks: Meeting Agenda Item Types',
-                ExtraFilter: 'IsActive = 1',
-                OrderBy: 'Sequence ASC',
-                Fields: ['ID', 'Name', 'Code', 'DefaultDurationMinutes'],
-                ResultType: 'simple',
-            }),
-            rv.RunView<RawAttendeeRow>({
-                EntityName: 'MJ_BizApps_Tasks: Meeting Attendees',
-                ExtraFilter: `MeetingID = '${cleanMeetingId}'`,
-                ResultType: 'simple',
-            }),
-            rv.RunView<RawNoteRow>({
-                EntityName: 'MJ_BizApps_Tasks: Meeting Notes',
-                ExtraFilter: `MeetingID = '${cleanMeetingId}'`,
-                OrderBy: '__mj_UpdatedAt DESC',
-                ResultType: 'simple',
-            }),
-            canSeeTeam
-                ? rv.RunView<RawPersonRow>({
-                      EntityName: 'MJ_BizApps_Common: People',
-                      Fields: ['ID', 'Name', 'FirstName', 'LastName', 'Email', 'LinkedUserID'],
-                      OrderBy: 'Name ASC',
-                      // row-cap-ok: UI picker dropdown bounded to 250 people in reach
-                      MaxRows: 250,
-                      ResultType: 'simple',
-                  })
-                : Promise.resolve({ Success: true, Results: [] as RawPersonRow[] }),
-            rv.RunView<RawTaskLinkRow>({
-                EntityName: 'MJ_BizApps_Tasks: Task Links',
-                ExtraFilter: `EntityID = '${TASKS_MEETINGS_ENTITY_ID}' AND RecordID IN (${recordCandidatesSql([meeting.ID])})`,
-                Fields: ['ID', 'TaskID', 'EntityID', 'RecordID'],
-                ResultType: 'simple',
-            }),
-        ]);
 
     const agendaItemTypes: AgendaItemTypeOption[] = (itemTypesRes.Success ? itemTypesRes.Results ?? [] : []).map(
         (t) => ({
