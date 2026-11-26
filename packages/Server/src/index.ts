@@ -60,6 +60,7 @@ export const RESOLVER_PATHS = [
     resolve(here, 'grant-operations.resolver.{js,ts}'),
     resolve(here, 'create-space-meeting.resolver.{js,ts}'),
     resolve(here, 'ensure-meeting-space-chat.resolver.{js,ts}'),
+    resolve(here, 'promote-space-note-to-doc.resolver.{js,ts}'),
 ];
 
 export {

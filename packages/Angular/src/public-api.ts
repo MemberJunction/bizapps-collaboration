@@ -12,8 +12,9 @@ export {
     type SpaceWorkQuickAddEvent,
 } from './lib/space-work-workspace.component.js';
 export { CollaborationSectionResource, CollaborationNoAccessComponent };
+import { GeneratedFormsModule } from './lib/generated/generated-forms.module';
 // The generated forms: exported so Explorer's class-registration manifest keeps them, and their @RegisterClass runs (as common-ng does)
-export { GeneratedFormsModule } from './lib/generated/generated-forms.module';
+export { GeneratedFormsModule };
 export { mjBizAppsCollaborationSpaceAgentSourceReceiptFormComponent } from './lib/generated/Entities/mjBizAppsCollaborationSpaceAgentSourceReceipt/mjbizappscollaborationspaceagentsourcereceipt.form.component';
 export { mjBizAppsCollaborationSpaceNoticeEventFormComponent } from './lib/generated/Entities/mjBizAppsCollaborationSpaceNoticeEvent/mjbizappscollaborationspacenoticeevent.form.component';
 export { mjBizAppsCollaborationSpaceNoticeWatermarkFormComponent } from './lib/generated/Entities/mjBizAppsCollaborationSpaceNoticeWatermark/mjbizappscollaborationspacenoticewatermark.form.component';
@@ -23,6 +24,7 @@ export { mjBizAppsCollaborationSpaceDigestCheckpointFormComponent } from './lib/
 export function LoadBizAppsCollaborationClient(): void {
     LoadCollaborationPermissionProvider();
     LoadSpaceSubtypeResolver();
+    void GeneratedFormsModule;
     void CollaborationSectionResource;
     void CollaborationNoAccessComponent;
 }
