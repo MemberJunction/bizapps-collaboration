@@ -1599,6 +1599,11 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Display Name: Background Image URL
         * * SQL Data Type: nvarchar(1000)
         * * Description: URL of an optional hero banner or background image displayed in the space header and overview.`),
+    ImageURL: z.string().nullable().describe(`
+        * * Field Name: ImageURL
+        * * Display Name: Image URL
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional square avatar/logo URL or 128x128 WebP data URI for the Space.`),
     Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
@@ -5062,6 +5067,19 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     }
     set BackgroundImageURL(value: string | null) {
         this.Set('BackgroundImageURL', value);
+    }
+
+    /**
+    * * Field Name: ImageURL
+    * * Display Name: Image URL
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional square avatar/logo URL or 128x128 WebP data URI for the Space.
+    */
+    get ImageURL(): string | null {
+        return this.Get('ImageURL');
+    }
+    set ImageURL(value: string | null) {
+        this.Set('ImageURL', value);
     }
 
     /**

@@ -16,6 +16,7 @@ import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { COLLAB_TOKENS_CSS } from './tokens';
 import { CollabTypeTileComponent } from './type-tile.component';
+import { CollabSpaceAvatarStudioComponent, type SpaceAvatarChangePayload } from './space-avatar-studio.component';
 
 /** One kind of space a person may start. */
 export interface NewSpaceTypeOption {
@@ -24,6 +25,7 @@ export interface NewSpaceTypeOption {
   description: string;
   iconClass: string;
   color: string;
+  imageUrl?: string | null;
 }
 
 export interface NewSpaceSubmitPayload {
@@ -32,6 +34,12 @@ export interface NewSpaceSubmitPayload {
   description: string;
   /** D22, for a sub-space: whether its members come from the parent. Absent for a top-level space. */
   inheritsMembership?: boolean;
+  /** Optional customized icon class overriding the space type default. */
+  iconClass?: string;
+  /** Optional customized accent color overriding the space type default. */
+  color?: string;
+  /** Optional square avatar/logo URL or 128x128 WebP data URI. */
+  imageUrl?: string | null;
 }
 
 /**
@@ -46,7 +54,7 @@ export interface NewSpaceSubmitPayload {
   selector: 'mjc-new-space-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, SharedGenericModule, CollabTypeTileComponent],
+  imports: [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, SharedGenericModule, CollabTypeTileComponent, CollabSpaceAvatarStudioComponent],
   template: `
     <mj-dialog [Visible]="true" [Title]="ParentName ? 'New sub-space' : 'New space'" [Width]="600" [Closeable]="!IsSubmitting" (Close)="onCancel()">
       <div class="space-modal">
@@ -74,7 +82,7 @@ export interface NewSpaceSubmitPayload {
                       [disabled]="IsSubmitting"
                       (change)="onSelectType(type.id)"
                     />
-                    <mjc-type-tile [IconClass]="type.iconClass" [Color]="type.color" Size="lg"></mjc-type-tile>
+                    <mjc-type-tile [IconClass]="type.iconClass" [Color]="type.color" [ImageUrl]="type.imageUrl || null" Size="lg"></mjc-type-tile>
                     <div class="kind-card-text">
                       <div class="kind-title">{{ type.name }}</div>
                       @if (type.description) {
@@ -112,6 +120,46 @@ export interface NewSpaceSubmitPayload {
                 [(ngModel)]="description"
                 [disabled]="IsSubmitting"
               ></textarea>
+            </div>
+
+            <div class="form-group">
+              <span class="f-label">Avatar &amp; Brand Mark <span class="optional">optional</span></span>
+              <div class="avatar-preview-strip">
+                <mjc-type-tile
+                  [IconClass]="effectiveIconClass"
+                  [Color]="effectiveColor"
+                  [ImageUrl]="customImageUrl"
+                  Size="lg"
+                ></mjc-type-tile>
+                <div class="avatar-preview-copy">
+                  <div class="avatar-preview-title">{{ customImageUrl ? 'Custom logo selected' : 'Type default icon & color' }}</div>
+                  <div class="avatar-preview-sub">Generate with AI, pick an icon, or upload a logo.</div>
+                </div>
+                <button
+                  type="button"
+                  mjButton
+                  Variant="outline"
+                  Size="sm"
+                  [disabled]="IsSubmitting"
+                  (click)="showAvatarStudio = !showAvatarStudio"
+                >
+                  <i [class]="showAvatarStudio ? 'fa-solid fa-chevron-up' : 'fa-solid fa-wand-magic-sparkles'" aria-hidden="true"></i>
+                  <span>{{ showAvatarStudio ? 'Hide Studio' : 'Customize Icon / Logo' }}</span>
+                </button>
+              </div>
+              @if (showAvatarStudio) {
+                <mjc-space-avatar-studio
+                  [Compact]="true"
+                  [SpaceName]="trimmedName"
+                  [SpaceDescription]="description"
+                  [SpaceTypeName]="selectedType?.name || ''"
+                  [IconClass]="effectiveIconClass"
+                  [Color]="effectiveColor"
+                  [ImageUrl]="customImageUrl"
+                  [Disabled]="IsSubmitting"
+                  (AvatarChange)="onAvatarChanged($event)"
+                ></mjc-space-avatar-studio>
+              }
             </div>
 
             @if (ParentName) {
@@ -330,6 +378,29 @@ export interface NewSpaceSubmitPayload {
         background: var(--mj-status-error-bg, #fef2f2);
         border: 1px solid var(--mj-status-error-border, #fecaca);
       }
+
+      .avatar-preview-strip {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        background: var(--mj-bg-surface-card);
+      }
+      .avatar-preview-copy {
+        flex: 1;
+        min-width: 0;
+      }
+      .avatar-preview-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--mj-text-primary);
+      }
+      .avatar-preview-sub {
+        font-size: 12px;
+        color: var(--mj-text-secondary);
+      }
     `,
   ],
 })
@@ -358,6 +429,30 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
   public description = '';
   /** D22: a sub-space is sealed unless its creator asks. */
   public inheritsMembership = false;
+  public showAvatarStudio = false;
+  public customIconClass: string | null = null;
+  public customColor: string | null = null;
+  public customImageUrl: string | null = null;
+  private hasCustomAvatar = false;
+
+  public get selectedType(): NewSpaceTypeOption | undefined {
+    return this.Types.find((t) => t.id === this.SelectedTypeId);
+  }
+
+  public get effectiveIconClass(): string {
+    return this.customIconClass || this.selectedType?.iconClass || 'fa-solid fa-compass';
+  }
+
+  public get effectiveColor(): string {
+    return this.customColor || this.selectedType?.color || '#0076b6'; // hex-ok: default space brand color
+  }
+
+  public onAvatarChanged(payload: SpaceAvatarChangePayload): void {
+    this.hasCustomAvatar = true;
+    this.customIconClass = payload.iconClass;
+    this.customColor = payload.color;
+    this.customImageUrl = payload.imageUrl;
+  }
 
   /**
    * `mj-dialog` focuses the first kind when the dialog opens, keeps Tab inside and gives focus back on close. What it can't know is
@@ -392,6 +487,11 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
 
   public onSelectType(typeId: string): void {
     if (this.IsSubmitting || typeId === this.SelectedTypeId) return;
+    if (!this.hasCustomAvatar) {
+      this.customIconClass = null;
+      this.customColor = null;
+      this.customImageUrl = null;
+    }
     this.TypeSelected.emit(typeId);
   }
 
@@ -406,6 +506,13 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
       name: this.trimmedName,
       description: this.description.trim(),
       ...(this.ParentName ? { inheritsMembership: this.inheritsMembership } : {}),
+      ...(this.hasCustomAvatar
+        ? {
+            iconClass: this.effectiveIconClass,
+            color: this.effectiveColor,
+            imageUrl: this.customImageUrl,
+          }
+        : {}),
     });
   }
 }

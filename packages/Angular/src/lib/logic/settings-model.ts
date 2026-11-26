@@ -12,6 +12,7 @@ export interface SettingsSpaceRow {
     SpaceTypeID: string;
     IconClass?: string | null;
     Color?: string | null;
+    ImageURL?: string | null;
     BackgroundImageURL?: string | null;
     InheritsMembership?: boolean;
     AgentRetrieval?: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' | null;
@@ -44,6 +45,7 @@ export function buildSettingsModel(space: SettingsSpaceRow, type: SettingsTypeIn
         spaceTypeId: space.SpaceTypeID,
         iconClass: space.IconClass || type.icon || 'fa-solid fa-compass',
         color: space.Color || type.color || DEFAULT_TYPE_COLOR,
+        imageUrl: space.ImageURL || null,
         backgroundImageUrl: space.BackgroundImageURL || '',
         inheritsMembership: space.InheritsMembership === true,
         agentRetrieval: space.AgentRetrieval || 'Included',
@@ -56,7 +58,7 @@ export function buildSettingsModel(space: SettingsSpaceRow, type: SettingsTypeIn
 /** The columns a save writes: only those whose value the person changed from what the screen showed them. Keys are the entity's own. */
 export type SettingsChanges = Partial<Pick<
     mjBizAppsCollaborationSpaceEntity,
-    'Name' | 'Description' | 'IconClass' | 'Color' | 'BackgroundImageURL' | 'InheritsMembership' | 'AgentRetrieval'
+    'Name' | 'Description' | 'IconClass' | 'Color' | 'ImageURL' | 'BackgroundImageURL' | 'InheritsMembership' | 'AgentRetrieval'
 >>;
 
 export function changedSettings(baseline: SpaceSettingsModel, edited: SpaceSettingsModel): SettingsChanges {
@@ -65,6 +67,7 @@ export function changedSettings(baseline: SpaceSettingsModel, edited: SpaceSetti
     if (edited.description !== baseline.description) changes.Description = edited.description;
     if (edited.iconClass !== baseline.iconClass) changes.IconClass = edited.iconClass;
     if (edited.color !== baseline.color) changes.Color = edited.color;
+    if ((edited.imageUrl || null) !== (baseline.imageUrl || null)) changes.ImageURL = edited.imageUrl || null;
     if (edited.backgroundImageUrl !== baseline.backgroundImageUrl) changes.BackgroundImageURL = edited.backgroundImageUrl || null;
     if (edited.inheritsMembership !== baseline.inheritsMembership) changes.InheritsMembership = edited.inheritsMembership;
     if (edited.agentRetrieval !== baseline.agentRetrieval) changes.AgentRetrieval = edited.agentRetrieval as mjBizAppsCollaborationSpaceEntity['AgentRetrieval'];
@@ -77,6 +80,7 @@ export function applySettingsChanges(target: Required<SettingsChanges>, changes:
     if (changes.Description !== undefined) target.Description = changes.Description;
     if (changes.IconClass !== undefined) target.IconClass = changes.IconClass;
     if (changes.Color !== undefined) target.Color = changes.Color;
+    if (changes.ImageURL !== undefined) target.ImageURL = changes.ImageURL;
     if (changes.BackgroundImageURL !== undefined) target.BackgroundImageURL = changes.BackgroundImageURL;
     if (changes.InheritsMembership !== undefined) target.InheritsMembership = changes.InheritsMembership;
     if (changes.AgentRetrieval !== undefined) target.AgentRetrieval = changes.AgentRetrieval;

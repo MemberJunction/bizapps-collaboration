@@ -33,6 +33,7 @@ export interface RailSpaceNode {
   name: string;
   iconClass: string;
   color?: string;
+  imageUrl?: string | null;
   level?: 0 | 1 | 2;
   unread?: boolean;
   isLocked?: boolean;
@@ -271,6 +272,7 @@ export interface SpaceSettingsModel {
   spaceTypeId: string;
   iconClass: string;
   color: string;
+  imageUrl?: string | null;
   backgroundImageUrl: string;
   inheritsMembership: boolean;
   agentRetrieval: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' | string;

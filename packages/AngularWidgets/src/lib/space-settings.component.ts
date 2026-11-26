@@ -6,12 +6,14 @@ import type { SpaceSettingsModel } from './types';
 import { MJAlertComponent, MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { COLLAB_TOKENS_CSS } from './tokens';
+import { CollabTypeTileComponent } from './type-tile.component';
+import { CollabSpaceAvatarStudioComponent, type SpaceAvatarChangePayload } from './space-avatar-studio.component';
 
 @Component({
   selector: 'mjc-space-settings',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, MJDropdownComponent, SharedGenericModule],
+  imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, MJDropdownComponent, SharedGenericModule, CollabTypeTileComponent, CollabSpaceAvatarStudioComponent],
   template: `
     <div class="settings-container">
       <div class="settings-header">
@@ -87,6 +89,45 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 placeholder="Describe what this space is for..."
                 rows="2"
               ></textarea>
+            </div>
+
+            <div class="form-field full-width">
+              <span class="field-label">Space Avatar &amp; Brand Mark</span>
+              <div class="avatar-preview-strip">
+                <mjc-type-tile
+                  [IconClass]="formData.iconClass || 'fa-solid fa-compass'"
+                  [Color]="formData.color || ''"
+                  [ImageUrl]="formData.imageUrl || null"
+                  Size="xl"
+                ></mjc-type-tile>
+                <div class="avatar-preview-copy">
+                  <div class="avatar-preview-title">{{ formData.imageUrl ? 'Custom avatar image' : 'Icon & accent color' }}</div>
+                  <div class="avatar-preview-sub">Generate a logo with AI, pick a Font Awesome icon &amp; color, or upload a square image.</div>
+                </div>
+                <button
+                  type="button"
+                  mjButton
+                  Variant="outline"
+                  Size="sm"
+                  [disabled]="isSaving"
+                  (click)="showAvatarStudio = !showAvatarStudio"
+                >
+                  <i [class]="showAvatarStudio ? 'fa-solid fa-chevron-up' : 'fa-solid fa-wand-magic-sparkles'" aria-hidden="true"></i>
+                  <span>{{ showAvatarStudio ? 'Hide Studio' : 'Customize Icon / Logo' }}</span>
+                </button>
+              </div>
+              @if (showAvatarStudio) {
+                <mjc-space-avatar-studio
+                  [SpaceName]="formData.name"
+                  [SpaceDescription]="formData.description"
+                  [SpaceTypeName]="formData.spaceType"
+                  [IconClass]="formData.iconClass || 'fa-solid fa-compass'"
+                  [Color]="formData.color || ''"
+                  [ImageUrl]="formData.imageUrl || null"
+                  [Disabled]="isSaving"
+                  (AvatarChange)="onAvatarChanged($event)"
+                ></mjc-space-avatar-studio>
+              }
             </div>
 
             <div class="form-field">
@@ -469,6 +510,30 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         object-fit: cover;
       }
 
+      .avatar-preview-strip {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 14px;
+        border: 1px solid var(--mj-border-subtle);
+        border-radius: 8px;
+        background: var(--mj-bg-surface-card);
+      }
+      .avatar-preview-copy {
+        flex: 1;
+        min-width: 0;
+      }
+      .avatar-preview-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--mj-text-primary);
+      }
+      .avatar-preview-sub {
+        font-size: 12px;
+        color: var(--mj-text-secondary);
+        margin-top: 2px;
+      }
+
       .radio-group {
         display: flex;
         flex-direction: column;
@@ -591,9 +656,20 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
     return Object.keys(this.changedFields()).length > 0;
   }
   public confirmingLifecycle = false;
+  public showAvatarStudio = false;
 
   public onEdit(): void {
     this.bannerVisible = false;
+  }
+
+  public onAvatarChanged(payload: SpaceAvatarChangePayload): void {
+    this.formData = {
+      ...this.formData,
+      iconClass: payload.iconClass,
+      color: payload.color,
+      imageUrl: payload.imageUrl,
+    };
+    this.onEdit();
   }
 
   public get isTerminalStatus(): boolean {

@@ -82,7 +82,16 @@ export class NewSpaceDraft {
     /** Asks the server to make the space and seat the person as its owner, together. */
     public async Create(
         creator: SpaceCreator,
-        input: { name: string; description: string; parentId?: string | null; inheritsMembership?: boolean },
+        input: {
+            name: string;
+            description: string;
+            parentId?: string | null;
+            inheritsMembership?: boolean;
+            iconClass?: string;
+            color?: string;
+            imageUrl?: string | null;
+            backgroundImageUrl?: string | null;
+        },
     ): Promise<NewSpaceOutcome> {
         const res = await creator.CreateSpace({
             TypeID: this.Space.SpaceTypeID,
@@ -90,6 +99,10 @@ export class NewSpaceDraft {
             Description: input.description || undefined,
             // A sub-space names its parent and whether its members come from it (D22: the creator chooses; a top-level space has no parent)
             ...(input.parentId ? { ParentID: input.parentId, InheritsMembership: input.inheritsMembership ?? false } : {}),
+            ...(input.iconClass !== undefined ? { IconClass: input.iconClass } : {}),
+            ...(input.color !== undefined ? { Color: input.color } : {}),
+            ...(input.imageUrl !== undefined ? { ImageURL: input.imageUrl } : {}),
+            ...(input.backgroundImageUrl !== undefined ? { BackgroundImageURL: input.backgroundImageUrl } : {}),
             ...(this.HasDetails ? { Details: this.Details() } : {}),
         });
         if (res.Success && res.SpaceID) return { status: 'created', spaceId: res.SpaceID };
@@ -121,9 +134,17 @@ export class SpaceDetails {
     }
 
     /** Loads a space and returns its details, or null when the space is plain (its type names no subtype) or can't be read. */
-    public static async Load(provider: IMetadataProvider, user: UserInfo, spaceId: string): Promise<SpaceDetails | null> {
-        const space = await provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, user);
-        if (!(await space.Load(spaceId))) return null;
+    public static async Load(
+        provider: IMetadataProvider,
+        user: UserInfo,
+        spaceId: string,
+        existingSpace?: mjBizAppsCollaborationSpaceEntity | null,
+    ): Promise<SpaceDetails | null> {
+        let space = existingSpace ?? null;
+        if (!space) {
+            space = await provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, user);
+            if (!(await space.Load(spaceId))) return null;
+        }
         const leaf: BaseEntity = space.LeafEntity;
         if (leaf === space) return null;
         return new SpaceDetails(leaf, ownDetailFields(leaf));

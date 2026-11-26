@@ -16,10 +16,9 @@ export interface BuiltInTab {
 
 export const BUILT_IN_TABS: readonly BuiltInTab[] = [
     { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high', sortKey: 10 },
-    { id: 'Library', label: 'Library', iconClass: 'fa-solid fa-folder-open', panel: 'LibraryPanel', sortKey: 20 },
+    { id: 'Library', label: 'Files', iconClass: 'fa-solid fa-folder-open', panel: 'LibraryPanel', sortKey: 20 },
     { id: 'Data', label: 'Data', iconClass: 'fa-solid fa-table-cells', needsData: true, sortKey: 25 },
     { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check', panel: 'WorkPanel', sortKey: 30 },
-    { id: 'Notes', label: 'Notes', iconClass: 'fa-solid fa-note-sticky', sortKey: 35 },
     { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments', panel: 'MessagingPanel', sortKey: 40 },
     { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group', sortKey: 50 },
     { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders', sortKey: 100 },

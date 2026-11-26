@@ -153,4 +153,46 @@ describe('CollaborationEngineBase.ReachedSeat', () => {
         expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, providerOver([seat(CLOSED_NONE, MEMBER_ROLE)]), roleTypeOf)).toBe(false);
         expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, providerOver([]), roleTypeOf)).toBe(false);
     });
+
+    it('memoizes spaces, memberships, and ReachedSeat per user and resets on userId change or invalidation', async () => {
+        let runViewCalls = 0;
+        const baseProvider = providerOver([seat(NORTHWIND, OWNER_ROLE)]);
+        const countingProvider = {
+            ...baseProvider,
+            RunView: async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
+                runViewCalls += 1;
+                return (baseProvider as unknown as { RunView: (p: RunViewParams) => Promise<RunViewResult<T>> }).RunView(params);
+            },
+        } as unknown as IMetadataProvider;
+
+        // First call fetches DISCOVERY, NORTHWIND, and Space Members (3 RunViews)
+        const first = await engine.ReachedSeat(user, DISCOVERY, countingProvider, roleTypeOf);
+        expect(first?.role.isOwnerRole).toBe(true);
+        expect(runViewCalls).toBe(3);
+
+        // Second call hits per-user space & membership cache (0 additional RunViews!)
+        const second = await engine.ReachedSeat(user, DISCOVERY, countingProvider, roleTypeOf);
+        expect(second?.role.isOwnerRole).toBe(true);
+        expect(runViewCalls).toBe(3);
+
+        // Switching userId (persona impersonation) automatically resets the cache
+        const otherUser = { ID: OTHER_ID, UserRoles: [{ Role: 'Space Participant' }] } as unknown as UserInfo;
+        await engine.ReachedSeat(otherUser, DISCOVERY, countingProvider, roleTypeOf);
+        expect(runViewCalls).toBe(6);
+
+        // Priming reachable spaces & memberships resolves ReachedSeat with 0 RunViews
+        engine.ClearUserCaches();
+        runViewCalls = 0;
+        engine.PrimeReachableSpacesCache(user, spaces.map(s => ({ ...s, SpaceTypeID: s.SpaceTypeID ?? null, StatusID: s.StatusID ?? null })), countingProvider);
+        engine.PrimeUserSpaceMembershipsCache(user, [seat(NORTHWIND, OWNER_ROLE)], countingProvider, true);
+        const primed = await engine.ReachedSeat(user, DISCOVERY, countingProvider, roleTypeOf);
+        expect(primed?.role.isOwnerRole).toBe(true);
+        expect(runViewCalls).toBe(0);
+
+        // Invalidating a space clears its cached entry so next lookup refetches
+        engine.InvalidateSpaceCache(DISCOVERY);
+        const afterInvalidate = await engine.ReachedSeat(user, DISCOVERY, countingProvider, roleTypeOf);
+        expect(afterInvalidate?.role.isOwnerRole).toBe(true);
+        expect(runViewCalls).toBeGreaterThan(0);
+    });
 });
