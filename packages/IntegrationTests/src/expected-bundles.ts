@@ -18,6 +18,7 @@ export const EXPECTED_BUNDLES: Record<string, number> = {
     'adversarial-persona': 7,
     'cross-stack-enterprise': 6,
     'round2-substrate': 6,
+    'space-note-to-artifact-doc': 3,
 };
 
 export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
