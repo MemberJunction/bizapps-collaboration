@@ -14,7 +14,7 @@ import '@angular/compiler';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { CompositeKey, type IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { CompositeKey, type IMetadataProvider, type IRunViewProvider, type RunViewParams, type RunViewResult, UserInfo } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import {
     CollabSpaceNotesComponent,
@@ -428,5 +428,293 @@ describe('Angular SpaceNotes "Turn into document" native MJ: Artifacts wiring', 
         expect(openBtn).not.toBeNull();
         openBtn.click();
         expect(opened).toEqual([{ artifactId: ARTIFACT_ID, title: 'Architecture Notes', versionNumber: 1 }]);
+    });
+
+    it('rejects invalid spaceId values in loadSpaceNotes without executing an unsafe ExtraFilter and matches pins with NormalizeUUID', async () => {
+        const SECOND_NOTE_ID = '99999999-9999-4999-8999-999999999999';
+        const NOTES_ENTITY_ID = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
+        const runViewCalls: RunViewParams[] = [];
+
+        const runViewProvider: IRunViewProvider = {
+            RunView: async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
+                runViewCalls.push(params);
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: NOTE_ID.toUpperCase(),
+                            SpaceID: SPACE_ID,
+                            Title: 'Pinned Case-Variant Note',
+                            Body: 'Body text',
+                            Band: 'Team',
+                            Visibility: 'Space',
+                            AuthorUserID: USER_ID,
+                            AuthorUser: 'Ada Lovell',
+                            __mj_UpdatedAt: '2026-11-26T12:00:00.000Z',
+                        },
+                        {
+                            ID: SECOND_NOTE_ID,
+                            SpaceID: SPACE_ID,
+                            Title: 'Unpinned Note',
+                            Body: 'More text',
+                            Band: 'Shared',
+                            Visibility: 'Space',
+                            AuthorUserID: USER_ID,
+                            AuthorUser: 'Ada Lovell',
+                            __mj_UpdatedAt: '2026-11-26T11:00:00.000Z',
+                        },
+                    ] as object as T[],
+                    RowCount: 2,
+                    TotalRowCount: 2,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                };
+            },
+            RunViews: async <T>(paramsList: RunViewParams[]): Promise<RunViewResult<T>[]> =>
+                Promise.all(paramsList.map((p) => runViewProvider.RunView<T>(p))),
+        };
+
+        interface NotesLoadInternals extends SectionTurnIntoDocInternals {
+            RunViewToUse: IRunViewProvider;
+            spaceNotes: NoteModel[];
+            isLoadingNotes: boolean;
+            notesError: string;
+            rawPins: Array<{ ID: string; Kind: string; TargetEntityID: string | null; TargetRecordID: string | null; GrantID: string | null }>;
+            loadSpaceNotes: (spaceId: string, isCurrent: () => boolean) => Promise<void>;
+            onNotePinToggle: (note: NoteModel) => Promise<void>;
+            removePin: (pinId: string) => Promise<void>;
+            addPin: (payload: { Kind: string; TargetEntityID: string; TargetRecordID: string; GrantID: null }) => Promise<void>;
+        }
+
+        const { instance } = createHarness();
+        const notesHost = instance as NotesLoadInternals;
+        Object.defineProperty(notesHost, 'RunViewToUse', { value: runViewProvider, configurable: true });
+        Object.defineProperty(notesHost, 'ProviderToUse', {
+            value: {
+                ...instance.ProviderToUse,
+                EntityByName: (name: string) => (name === 'MJ_BizApps_Collaboration: Space Notes' ? { ID: NOTES_ENTITY_ID } : undefined),
+            },
+            configurable: true,
+        });
+        notesHost.spaceNotes = [];
+        notesHost.isLoadingNotes = false;
+        notesHost.notesError = '';
+        notesHost.rawPins = [
+            {
+                ID: 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB',
+                Kind: 'Record',
+                TargetEntityID: NOTES_ENTITY_ID.toLowerCase(),
+                TargetRecordID: `ID|${NOTE_ID.toLowerCase()}`,
+                GrantID: null,
+            },
+        ];
+
+        // Reject empty, malformed, and SQL-injection spaceId values cleanly without calling RunView
+        await notesHost.loadSpaceNotes('', () => true);
+        await notesHost.loadSpaceNotes('not-a-valid-uuid', () => true);
+        await notesHost.loadSpaceNotes(`${SPACE_ID}' OR '1'='1`, () => true);
+        expect(runViewCalls).toHaveLength(0);
+        expect(notesHost.spaceNotes).toEqual([]);
+
+        // Valid canonical UUID runs the query and resolves pinned state case-insensitively via NormalizeUUID/UUIDsEqual
+        await notesHost.loadSpaceNotes(`  ${SPACE_ID}  `, () => true);
+        expect(runViewCalls).toHaveLength(1);
+        expect(runViewCalls[0].ExtraFilter).toBe(`SpaceID = '${SPACE_ID}'`);
+        expect(notesHost.spaceNotes).toHaveLength(2);
+        expect(notesHost.spaceNotes[0].isPinned).toBe(true);
+        expect(notesHost.spaceNotes[1].isPinned).toBe(false);
+
+        // Pin toggle removes matching case-variant pin via UUIDsEqual
+        const removePin = vi.fn().mockResolvedValue(undefined);
+        const addPin = vi.fn().mockResolvedValue(undefined);
+        notesHost.removePin = removePin;
+        notesHost.addPin = addPin;
+        await notesHost.onNotePinToggle(notesHost.spaceNotes[0]);
+        expect(removePin).toHaveBeenCalledWith('BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB');
+        expect(addPin).not.toHaveBeenCalled();
+    });
+
+    it('invokes loadSpaceNotes on ?tab=notes initial load and when switching spaces while on the Notes tab', async () => {
+        const SPACE_A = '11111111-1111-4111-8111-111111111111';
+        const SPACE_B = '22222222-2222-4222-8222-222222222222';
+        const TYPE_ID = '33333333-3333-4333-8333-333333333333';
+
+        interface SpaceSelectInternals {
+            activeSpaceId: string;
+            _loadedSpaceId: string;
+            activeTab: string;
+            activeView: string;
+            activeConversationId: string;
+            selectSpaceRequestId: number;
+            isSpaceClosed: boolean;
+            currentUser: UserInfo | null;
+            rawSpaces: Array<{
+                ID: string;
+                Name: string;
+                SpaceTypeID: string;
+                SpaceType?: string;
+                OwnerID: string;
+                ParentID?: string | null;
+                InheritsMembership?: boolean;
+                ClosedAt?: string | null;
+                IconClass?: string | null;
+                Color?: string | null;
+                ImageURL?: string | null;
+                Description?: string | null;
+            }>;
+            spaceTypeMap: Map<string, { name: string; icon: string | null; color: string | null }>;
+            spaceTabModel: {
+                tabs: Array<{ id: string; label: string; iconClass?: string }>;
+                contributed: ReadonlyMap<string, object>;
+            } | null;
+            settingsSession: { Open: (model: object) => void; Shown: object };
+            spaceSettings: object | null;
+            spaceNotes: NoteModel[];
+            overviewSubSpaces: object[];
+            rawPins: object[];
+            spacePinArtifacts: Map<string, { name: string; type: string | null }>;
+            spaceConversations: object[];
+            chatAudienceBand: 'Team' | 'Shared';
+            _pendingConvId: string | null;
+            cachedOverviewDetails: null;
+            overviewRoomMessages: object[];
+            ProviderToUse: { EntityByName: (name: string) => { ID: string } | undefined };
+            RunViewToUse: IRunViewProvider;
+            resetForSelection: (spaceId: string) => void;
+            loadActiveSpaceEntity: (space: object, isCurrent: () => boolean, quiet: boolean) => Promise<void>;
+            showHeaderFor: (space: object) => void;
+            effectiveStatusOf: (space: object) => undefined;
+            isSpaceTerminal: (space: object) => boolean;
+            buildSpaceUi: (space: object, keepTab?: boolean) => void;
+            updateCanConfigureCurrentSpace: () => Promise<void>;
+            loadSpaceDetails: (space: object, isCurrent: () => boolean) => Promise<void>;
+            updateBandChoice: (space: object, isCurrent: () => boolean) => Promise<void>;
+            loadStar: (spaceId: string, isCurrent: () => boolean) => Promise<void>;
+            artifactsEntityId: () => string;
+            applySpaceMembersResult: () => void;
+            applySpaceItemsResult: () => void;
+            refreshPinModels: () => void;
+            refreshDataEntries: (spaceId: string) => void;
+            applyLightweightTasks: () => void;
+            clearConversationSourceReceipts: () => void;
+            ensureTabDataLoaded: (tabId: string) => void;
+            loadSpaceNeedsYou: () => Promise<void>;
+            loadSpaceHeaderChips: () => Promise<void>;
+            loadSpaceNotes: (spaceId: string, isCurrent: () => boolean) => Promise<void>;
+            syncStateWithAgent: () => void;
+            RefreshView: () => void;
+            UpdateQueryParams: (params: Record<string, string>) => void;
+            selectSpaceInternal: (spaceId: string) => Promise<void>;
+            selectSpaceBody: (spaceId: string, requestId: number, quiet: boolean) => Promise<void>;
+            applyQueryParams: (params: Record<string, string>) => Promise<void>;
+        }
+
+        const emptyRunViewResult = <T>(): RunViewResult<T> => ({
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+        });
+        const stubRunView: IRunViewProvider = {
+            RunView: async <T>() => emptyRunViewResult<T>(),
+            RunViews: async <T>(list: RunViewParams[]) => list.map(() => emptyRunViewResult<T>()),
+        };
+
+        const loadSpaceNotesSpy = vi.fn().mockResolvedValue(undefined);
+        const host = Object.create(CollaborationSectionResource.prototype) as SpaceSelectInternals;
+        Object.defineProperty(host, 'ProviderToUse', {
+            value: { EntityByName: () => undefined },
+            configurable: true,
+        });
+        Object.defineProperty(host, 'RunViewToUse', { value: stubRunView, configurable: true });
+        Object.defineProperty(host, 'isSpaceClosed', { value: false, configurable: true });
+        Object.defineProperty(host, 'showsSettings', { value: false, configurable: true });
+
+        host.currentUser = Object.assign(new UserInfo(), { ID: USER_ID, Name: 'Ada Lovell' });
+        host.activeSpaceId = '';
+        host._loadedSpaceId = '';
+        host.activeTab = 'Notes';
+        host.activeView = 'space';
+        host.activeConversationId = '';
+        host.selectSpaceRequestId = 1;
+        host.rawSpaces = [
+            { ID: SPACE_A, Name: 'Space Alpha', SpaceTypeID: TYPE_ID, SpaceType: 'Workspace', OwnerID: USER_ID },
+            { ID: SPACE_B, Name: 'Space Beta', SpaceTypeID: TYPE_ID, SpaceType: 'Workspace', OwnerID: USER_ID },
+        ];
+        host.spaceTypeMap = new Map([[TYPE_ID, { name: 'Workspace', icon: 'fa-solid fa-compass', color: null }]]);
+        const tabsModel = {
+            tabs: [
+                { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' },
+                { id: 'Notes', label: 'Notes', iconClass: 'fa-solid fa-note-sticky' },
+            ],
+            contributed: new Map<string, object>(),
+        };
+        host.spaceTabModel = tabsModel;
+        host.settingsSession = { Open: vi.fn(), Shown: {} };
+        host.spaceSettings = null;
+        host.spaceNotes = [makeNote()];
+        host.overviewSubSpaces = [];
+        host.rawPins = [];
+        host.spacePinArtifacts = new Map();
+        host.spaceConversations = [];
+        host.chatAudienceBand = 'Team';
+        host._pendingConvId = null;
+        host.cachedOverviewDetails = null;
+        host.overviewRoomMessages = [];
+        host.resetForSelection = vi.fn(() => {
+            host.spaceNotes = [];
+            host.spaceTabModel = null;
+        });
+        host.loadActiveSpaceEntity = vi.fn().mockResolvedValue(undefined);
+        host.showHeaderFor = vi.fn();
+        host.effectiveStatusOf = vi.fn().mockReturnValue(undefined);
+        host.isSpaceTerminal = vi.fn().mockReturnValue(false);
+        host.buildSpaceUi = vi.fn(() => {
+            host.spaceTabModel = tabsModel;
+        });
+        host.updateCanConfigureCurrentSpace = vi.fn().mockResolvedValue(undefined);
+        host.loadSpaceDetails = vi.fn().mockResolvedValue(undefined);
+        host.updateBandChoice = vi.fn().mockResolvedValue(undefined);
+        host.loadStar = vi.fn().mockResolvedValue(undefined);
+        host.artifactsEntityId = vi.fn().mockReturnValue('');
+        host.applySpaceMembersResult = vi.fn();
+        host.applySpaceItemsResult = vi.fn();
+        host.refreshPinModels = vi.fn();
+        host.refreshDataEntries = vi.fn();
+        host.applyLightweightTasks = vi.fn();
+        host.clearConversationSourceReceipts = vi.fn();
+        host.ensureTabDataLoaded = vi.fn();
+        host.loadSpaceNeedsYou = vi.fn().mockResolvedValue(undefined);
+        host.loadSpaceHeaderChips = vi.fn().mockResolvedValue(undefined);
+        host.loadSpaceNotes = loadSpaceNotesSpy;
+        host.syncStateWithAgent = vi.fn();
+        host.RefreshView = vi.fn();
+        host.UpdateQueryParams = vi.fn();
+        host.selectSpaceInternal = vi.fn(async (spaceId: string) => {
+            host.selectSpaceRequestId += 1;
+            await host.selectSpaceBody(spaceId, host.selectSpaceRequestId, false);
+        });
+
+        // 1. Deep-link initial load with ?tab=notes selects Space A and triggers loadSpaceNotes(SPACE_A, ...)
+        await host.applyQueryParams({ tab: 'notes', space: SPACE_A });
+        expect(host.activeTab).toBe('Notes');
+        expect(loadSpaceNotesSpy).toHaveBeenCalledTimes(1);
+        expect(loadSpaceNotesSpy).toHaveBeenNthCalledWith(1, SPACE_A, expect.any(Function));
+
+        // 2. Switching to Space B in the rail while on the Notes tab clears stale notes and triggers loadSpaceNotes(SPACE_B, ...)
+        host.selectSpaceRequestId += 1;
+        await host.selectSpaceBody(SPACE_B, host.selectSpaceRequestId, false);
+        expect(host.resetForSelection).toHaveBeenCalledWith(SPACE_B);
+        expect(loadSpaceNotesSpy).toHaveBeenCalledTimes(2);
+        expect(loadSpaceNotesSpy).toHaveBeenNthCalledWith(2, SPACE_B, expect.any(Function));
+
+        // 3. Deep-link/popstate switching to ?tab=notes on an already-loaded space also triggers loadSpaceNotes
+        host.activeTab = 'Overview';
+        await host.applyQueryParams({ tab: 'notes', space: SPACE_B });
+        expect(host.activeTab).toBe('Notes');
+        expect(loadSpaceNotesSpy).toHaveBeenCalledTimes(3);
+        expect(loadSpaceNotesSpy).toHaveBeenNthCalledWith(3, SPACE_B, expect.any(Function));
     });
 });

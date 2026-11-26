@@ -4331,8 +4331,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.clearConversationSourceReceipts();
         }
 
-        // 6. Trigger lazy tab-specific heavy loaders ONLY if the user is currently on Work, Settings, or Chat
+        // 6. Trigger lazy tab-specific heavy loaders ONLY if the user is currently on Work, Settings, Chat, or Notes
         this.ensureTabDataLoaded(this.activeTab);
+        if (this.activeTab === 'Notes') {
+            void this.loadSpaceNotes(spaceId, isCurrent);
+        }
 
         void this.loadSpaceNeedsYou(space, isCurrent);
         void this.loadSpaceHeaderChips(space, isCurrent);
@@ -5427,7 +5430,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ? this._loadedSpaceId
                 : this.rawSpaces[0]?.ID);
 
+        let selectedSpace = false;
         if (targetSpaceId && !UUIDsEqual(targetSpaceId, this._loadedSpaceId)) {
+            selectedSpace = true;
             await this.selectSpaceInternal(targetSpaceId);
         }
 
@@ -5438,6 +5443,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             else if (!resolveTabId(this.spaceTabModel, this.activeTab)) this.activeTab = 'Overview';
             // A link to a tab the space doesn't have: the URL says the tab that opened
             if (params['tab'] && !named) this.UpdateQueryParams({ tab: this.activeTab.toLowerCase() });
+        }
+
+        if (!selectedSpace && this.activeTab === 'Notes' && this.activeSpaceId) {
+            void this.loadSpaceNotes(this.activeSpaceId, this.currentSelection());
         }
 
         if (params['item'] && isValidUuid(params['item'])) {
@@ -6002,7 +6011,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public async loadSpaceNotes(spaceId: string, isCurrent: () => boolean): Promise<void> {
-        if (!spaceId || !this.currentUser) return;
+        const cleanSpaceId = typeof spaceId === 'string' ? spaceId.trim() : '';
+        if (!isValidUuid(cleanSpaceId) || !this.currentUser) return;
         this.isLoadingNotes = true;
         this.notesError = '';
         this.RefreshView();
@@ -6011,7 +6021,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const res = await rv.RunView<NoteRow>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Notes',
                 BypassCache: true,
-                ExtraFilter: `SpaceID = '${spaceId}'`,
+                ExtraFilter: `SpaceID = '${cleanSpaceId}'`,
                 Fields: ['ID', 'SpaceID', 'Title', 'Body', 'Band', 'Visibility', 'AuthorUserID', 'AuthorUser', '__mj_UpdatedAt'],
                 OrderBy: '__mj_UpdatedAt DESC',
                 ResultType: 'simple',
@@ -6027,7 +6037,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 const pinnedNoteIds = new Set(
                     this.rawPins
                         .filter((p) => p.Kind === 'Record' && !!notesEntId && UUIDsEqual(p.TargetEntityID, notesEntId))
-                        .map((p) => bareRecordId(p.TargetRecordID ?? '').toLowerCase()),
+                        .map((p) => NormalizeUUID(bareRecordId(p.TargetRecordID ?? ''))),
                 );
                 const isSpaceOwner = !!this.activeSpaceRecord?.OwnerID && UUIDsEqual(this.activeSpaceRecord.OwnerID, this.currentUser.ID);
                 this.spaceNotes = visible.map((row) => {
@@ -6055,14 +6065,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         updatedLabel: this.formatDate(row.__mj_UpdatedAt),
                         isMine: UUIDsEqual(row.AuthorUserID, this.currentUser!.ID),
                         canPromote: verdict.ok,
-                        isPinned: pinnedNoteIds.has(row.ID.toLowerCase()),
+                        isPinned: pinnedNoteIds.has(NormalizeUUID(row.ID)),
                     };
                 });
             }
         } catch (err) {
             if (!isCurrent()) return;
             this.notesError = err instanceof Error ? err.message : String(err);
-            LogError(`Error loading space notes for ${spaceId}: ${this.notesError}`);
+            LogError(`Error loading space notes for ${cleanSpaceId}: ${this.notesError}`);
         } finally {
             if (isCurrent()) {
                 this.isLoadingNotes = false;
@@ -6290,9 +6300,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public async onNotePinToggle(note: NoteModel): Promise<void> {
         const spaceId = this.activeSpaceId;
         const notesEntId = this.notesEntityId();
-        if (!spaceId || !notesEntId) return;
+        if (!isValidUuid(spaceId) || !notesEntId) return;
         const existing = this.rawPins.find(
-            (p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntId) && bareRecordId(p.TargetRecordID ?? '').toLowerCase() === note.id.toLowerCase(),
+            (p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntId) && UUIDsEqual(bareRecordId(p.TargetRecordID ?? ''), note.id),
         );
         if (existing) await this.removePin(existing.ID);
         else await this.addPin({ Kind: 'Record', TargetEntityID: notesEntId, TargetRecordID: `ID|${note.id}`, GrantID: null });
