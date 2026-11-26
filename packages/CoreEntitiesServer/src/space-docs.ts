@@ -230,6 +230,38 @@ async function safeDeleteRecord(entity: BaseEntity, label: string): Promise<void
 }
 
 /**
+ * Deletes a filed `SpaceItem` during compensating rollback, falling back to reloading and deleting
+ * under the `system` user when `authorUser` (e.g., a Shared-band `Space Participant`) lacks Delete
+ * permission on `MJ_BizApps_Collaboration: Space Items`.
+ */
+async function safeDeleteSpaceItem(
+    provider: IMetadataProvider,
+    system: UserInfo,
+    item: SpaceItemEntityServer,
+): Promise<void> {
+    const itemId = item.ID;
+    const label = `space item ${itemId}`;
+    try {
+        const deleted = await item.Delete();
+        if (deleted) return;
+    } catch (err) {
+        LogError(`SpaceDoc compensating cleanup under author user failed for ${label}, retrying as system user: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!itemId) return;
+    try {
+        const systemItem = await provider.GetEntityObject<SpaceItemEntityServer>(ITEMS_ENTITY, system);
+        if (await systemItem.Load(itemId)) {
+            const deletedAsSystem = await systemItem.Delete();
+            if (!deletedAsSystem) {
+                LogError(`SpaceDoc compensating cleanup as system user returned false for ${label}: ${systemItem.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        }
+    } catch (err) {
+        LogError(`SpaceDoc compensating cleanup as system user failed for ${label}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
+/**
  * MJ Docs permission delegate for `'MJ_BizApps_Collaboration: Space Items'` (CX-13).
  * Ensures ArtifactPermissionEngine enforces Space seat reach and Team vs. Shared band isolation.
  */
@@ -525,7 +557,7 @@ export async function createSpaceDoc(params: {
     try {
         delegationSaved = await artifact.Save();
     } catch (err) {
-        await safeDeleteRecord(item, `space item ${item.ID}`);
+        await safeDeleteSpaceItem(params.provider, system, item);
         await safeDeleteRecord(version, `artifact version ${version.ID}`);
         await safeDeleteRecord(artifact, `artifact ${artifact.ID}`);
         return {
@@ -535,7 +567,7 @@ export async function createSpaceDoc(params: {
         };
     }
     if (!delegationSaved) {
-        await safeDeleteRecord(item, `space item ${item.ID}`);
+        await safeDeleteSpaceItem(params.provider, system, item);
         await safeDeleteRecord(version, `artifact version ${version.ID}`);
         await safeDeleteRecord(artifact, `artifact ${artifact.ID}`);
         return {

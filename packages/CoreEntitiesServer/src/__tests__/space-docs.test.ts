@@ -124,6 +124,7 @@ interface MockOptions {
     failItemSave?: boolean;
     throwOnItemSave?: boolean;
     failDelegationSave?: boolean;
+    denyNonSystemItemDelete?: boolean;
     notes?: StoredNote[];
 }
 
@@ -133,6 +134,7 @@ function createSpaceNoteDocMockProvider(options: MockOptions = {}) {
     const items: StoredItem[] = [];
     const filesAccessed: string[] = [];
     const runViewsBatches: number[] = [];
+    const itemDeleteUsers: string[] = [];
     let artifactTypeQueries = 0;
     const notes: StoredNote[] = options.notes ?? [
         {
@@ -356,6 +358,12 @@ function createSpaceNoteDocMockProvider(options: MockOptions = {}) {
                         return true;
                     },
                     async Delete() {
+                        const deleterId = contextUser?.ID ?? '';
+                        itemDeleteUsers.push(deleterId);
+                        if (options.denyNonSystemItemDelete && deleterId.toLowerCase() !== SYSTEM_ID.toLowerCase()) {
+                            obj.LatestResult.CompleteMessage = 'Caller lacks Delete permission on Space Items.';
+                            return false;
+                        }
                         const idx = items.findIndex((i) => i.ID === obj.ID);
                         if (idx >= 0) items.splice(idx, 1);
                         return true;
@@ -462,6 +470,7 @@ function createSpaceNoteDocMockProvider(options: MockOptions = {}) {
         items,
         filesAccessed,
         runViewsBatches,
+        itemDeleteUsers,
         getArtifactTypeQueries: () => artifactTypeQueries,
     };
 }
@@ -778,6 +787,27 @@ describe('promoteSpaceNoteToDoc — native MJ: Artifacts Markdown Document promo
         assert.equal(failDel.artifacts.length, 0);
         assert.equal(failDel.versions.length, 0);
         assert.equal(failDel.items.length, 0);
+
+        // 5. Shared-band participant lacking SpaceItem Delete permission -> compensating rollback falls back to system user
+        const sharedUser = makeUser(SHARED_CONTRIBUTOR_ID, 'Shared Contributor');
+        const failDelShared = createSpaceNoteDocMockProvider({
+            failDelegationSave: true,
+            denyNonSystemItemDelete: true,
+        });
+        const r5 = await promoteSpaceNoteToDoc({
+            provider: failDelShared.provider,
+            callerUser: sharedUser,
+            noteId: SHARED_NOTE_ID,
+        });
+        assert.equal(r5.ok, false);
+        if (!r5.ok) {
+            assert.equal(r5.code, 'FAILED');
+            assert.match(r5.message, /delegation/i);
+        }
+        assert.equal(failDelShared.artifacts.length, 0);
+        assert.equal(failDelShared.versions.length, 0);
+        assert.equal(failDelShared.items.length, 0);
+        assert.deepEqual(failDelShared.itemDeleteUsers, [SHARED_CONTRIBUTOR_ID, SYSTEM_ID]);
     });
 
     it('caches Markdown Document ArtifactTypeID via SpaceDocMetadataCache BaseSingleton and batches listSpaceDocs/getSpaceDoc via RunViews', async () => {
