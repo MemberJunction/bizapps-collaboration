@@ -56,157 +56,190 @@ export interface NewSpaceSubmitPayload {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, SharedGenericModule, CollabTypeTileComponent, CollabSpaceAvatarStudioComponent],
   template: `
-    <mj-dialog [Visible]="true" [Title]="ParentName ? 'New sub-space' : 'New space'" [Width]="600" [Closeable]="!IsSubmitting" (Close)="onCancel()">
+    <mj-dialog
+      [Visible]="true"
+      [Title]="dialogTitle"
+      [Width]="'min(600px, calc(100vw - 24px))'"
+      [MinWidth]="320"
+      [Closeable]="!IsSubmitting && !isGeneratingAvatar"
+      (Close)="onCancel()">
       <div class="space-modal">
-        @if (ParentName) {
-          <p class="d-sub">A sub-space of <strong>{{ ParentName }}</strong>. Pick the kind, then give it a name. You are seated as its owner.</p>
-        } @else {
-          <p class="d-sub">Pick the kind of space, then give it a name. You are seated as its owner.</p>
+        @if (showAvatarStudio) {
+          <div class="studio-overlay-view">
+            <mjc-space-avatar-studio
+              [Frameless]="true"
+              [ShowBackButton]="true"
+              BackButtonLabel="Back to space details"
+              [SpaceName]="trimmedName || selectedType?.name || 'New Space'"
+              [SpaceDescription]="description"
+              [SpaceTypeName]="selectedType?.name || ''"
+              [IconClass]="effectiveIconClass"
+              [Color]="effectiveColor"
+              [ImageUrl]="customImageUrl"
+              [Disabled]="IsSubmitting"
+              (AvatarChange)="onAvatarChanged($event)"
+              (GeneratingChange)="isGeneratingAvatar = $event"
+              (BackClicked)="closeAvatarStudio()"
+            ></mjc-space-avatar-studio>
+          </div>
         }
 
-        <div class="d-body">
-          <div class="form-group">
-            <span class="f-label" id="new-space-kind-label">Kind of space</span>
-            @if (Types.length === 0) {
-              <p class="d-empty">There is no kind of space you can start.</p>
-            } @else {
-              <div class="kind-options" role="radiogroup" aria-labelledby="new-space-kind-label">
-                @for (type of Types; track type.id) {
-                  <label class="kind-card" [class.selected]="type.id === SelectedTypeId">
-                    <input
-                      type="radio"
-                      name="newSpaceKind"
-                      class="sr-only"
-                      [value]="type.id"
-                      [checked]="type.id === SelectedTypeId"
-                      [disabled]="IsSubmitting"
-                      (change)="onSelectType(type.id)"
-                    />
-                    <mjc-type-tile [IconClass]="type.iconClass" [Color]="type.color" [ImageUrl]="type.imageUrl || null" Size="lg"></mjc-type-tile>
-                    <div class="kind-card-text">
-                      <div class="kind-title">{{ type.name }}</div>
-                      @if (type.description) {
-                        <div class="kind-desc">{{ type.description }}</div>
-                      }
-                    </div>
+        <div class="space-form-view" [class.view-hidden]="showAvatarStudio" [hidden]="showAvatarStudio">
+          @if (ParentName) {
+            <p class="d-sub">A sub-space of <strong>{{ ParentName }}</strong>. Pick the kind, then give it a name. You are seated as its owner.</p>
+          } @else {
+            <p class="d-sub">Pick the kind of space, then give it a name. You are seated as its owner.</p>
+          }
+
+          <div class="d-body">
+            <div class="form-group">
+              <span class="f-label" id="new-space-kind-label">Kind of space</span>
+              @if (Types.length === 0) {
+                <p class="d-empty">There is no kind of space you can start.</p>
+              } @else {
+                <div class="kind-options" role="radiogroup" aria-labelledby="new-space-kind-label">
+                  @for (type of Types; track type.id) {
+                    <label class="kind-card" [class.selected]="type.id === SelectedTypeId">
+                      <input
+                        type="radio"
+                        name="newSpaceKind"
+                        class="sr-only"
+                        [value]="type.id"
+                        [checked]="type.id === SelectedTypeId"
+                        [disabled]="IsSubmitting"
+                        (change)="onSelectType(type.id)"
+                      />
+                      <mjc-type-tile [IconClass]="type.iconClass" [Color]="type.color" [ImageUrl]="type.imageUrl || null" Size="lg"></mjc-type-tile>
+                      <div class="kind-card-text">
+                        <div class="kind-title">{{ type.name }}</div>
+                        @if (type.description) {
+                          <div class="kind-desc">{{ type.description }}</div>
+                        }
+                      </div>
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+
+            @if (SelectedTypeId) {
+              <!-- Compact Identity Row: 64x64 clickable avatar trigger + Name input -->
+              <div class="identity-row">
+                <button
+                  type="button"
+                  class="avatar-trigger-btn"
+                  [class.has-image]="!!customImageUrl"
+                  [style.--mjc-type-color]="effectiveColor"
+                  [disabled]="IsSubmitting"
+                  aria-label="Customize space avatar or logo"
+                  title="Customize space avatar or logo"
+                  (click)="openAvatarStudio()"
+                >
+                  @if (customImageUrl) {
+                    <img class="avatar-trigger-img" [src]="customImageUrl" [alt]="(trimmedName || 'Space') + ' avatar'" />
+                  } @else {
+                    <i [class]="effectiveIconClass" aria-hidden="true"></i>
+                  }
+                  <span class="avatar-trigger-badge" aria-hidden="true">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Edit
+                  </span>
+                </button>
+
+                <div class="identity-name-col">
+                  <label class="f-label" for="new-space-name">Name</label>
+                  <input
+                    #nameInput
+                    id="new-space-name"
+                    type="text"
+                    class="f-input"
+                    maxlength="255"
+                    [(ngModel)]="name"
+                    [disabled]="IsSubmitting"
+                    placeholder="e.g. 2026 Board of Directors"
+                    (keydown.enter)="onSubmit()"
+                  />
+                  <button
+                    type="button"
+                    class="avatar-customize-link"
+                    [disabled]="IsSubmitting"
+                    (click)="openAvatarStudio()"
+                  >
+                    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                    <span>{{ customImageUrl ? 'Change custom logo or icon' : 'Customize avatar / logo' }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="f-label" for="new-space-description">Description <span class="optional">optional</span></label>
+                <textarea
+                  id="new-space-description"
+                  class="f-input f-textarea"
+                  rows="2"
+                  [(ngModel)]="description"
+                  [disabled]="IsSubmitting"
+                ></textarea>
+              </div>
+
+              @if (ParentName) {
+                <div class="form-group">
+                  <label class="f-check">
+                    <input type="checkbox" [(ngModel)]="inheritsMembership" [disabled]="IsSubmitting" />
+                    <span>
+                      <span class="fw6">Members of {{ ParentName }} receive access</span>
+                      <span class="cb-sub">Off, the sub-space starts with you alone and seats people on its own.</span>
+                    </span>
                   </label>
+                </div>
+              }
+
+              <div class="details" [class.details-hidden]="!HasDetails">
+                @if (HasDetails) {
+                  <div class="details-title">{{ DetailsTitle || 'Details' }}</div>
                 }
+                <ng-content select="[mjcDetails]"></ng-content>
+              </div>
+            }
+
+            @if (ErrorMessage) {
+              <div class="error" role="alert">
+                <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                <span>{{ ErrorMessage }}</span>
               </div>
             }
           </div>
-
-          @if (SelectedTypeId) {
-            <div class="form-group">
-              <label class="f-label" for="new-space-name">Name</label>
-              <input
-                #nameInput
-                id="new-space-name"
-                type="text"
-                class="f-input"
-                maxlength="255"
-                [(ngModel)]="name"
-                [disabled]="IsSubmitting"
-                placeholder="e.g. 2026 Board of Directors"
-                (keydown.enter)="onSubmit()"
-              />
-            </div>
-
-            <div class="form-group">
-              <label class="f-label" for="new-space-description">Description <span class="optional">optional</span></label>
-              <textarea
-                id="new-space-description"
-                class="f-input f-textarea"
-                rows="2"
-                [(ngModel)]="description"
-                [disabled]="IsSubmitting"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <span class="f-label">Avatar &amp; Brand Mark <span class="optional">optional</span></span>
-              <div class="avatar-preview-strip">
-                <mjc-type-tile
-                  [IconClass]="effectiveIconClass"
-                  [Color]="effectiveColor"
-                  [ImageUrl]="customImageUrl"
-                  Size="lg"
-                ></mjc-type-tile>
-                <div class="avatar-preview-copy">
-                  <div class="avatar-preview-title">{{ customImageUrl ? 'Custom logo selected' : 'Type default icon & color' }}</div>
-                  <div class="avatar-preview-sub">Generate with AI, pick an icon, or upload a logo.</div>
-                </div>
-                <button
-                  type="button"
-                  mjButton
-                  Variant="outline"
-                  Size="sm"
-                  [disabled]="IsSubmitting"
-                  (click)="showAvatarStudio = !showAvatarStudio"
-                >
-                  <i [class]="showAvatarStudio ? 'fa-solid fa-chevron-up' : 'fa-solid fa-wand-magic-sparkles'" aria-hidden="true"></i>
-                  <span>{{ showAvatarStudio ? 'Hide Studio' : 'Customize Icon / Logo' }}</span>
-                </button>
-              </div>
-              @if (showAvatarStudio) {
-                <mjc-space-avatar-studio
-                  [Compact]="true"
-                  [SpaceName]="trimmedName"
-                  [SpaceDescription]="description"
-                  [SpaceTypeName]="selectedType?.name || ''"
-                  [IconClass]="effectiveIconClass"
-                  [Color]="effectiveColor"
-                  [ImageUrl]="customImageUrl"
-                  [Disabled]="IsSubmitting"
-                  (AvatarChange)="onAvatarChanged($event)"
-                ></mjc-space-avatar-studio>
-              }
-            </div>
-
-            @if (ParentName) {
-              <div class="form-group">
-                <label class="f-check">
-                  <input type="checkbox" [(ngModel)]="inheritsMembership" [disabled]="IsSubmitting" />
-                  <span>
-                    <span class="fw6">Members of {{ ParentName }} receive access</span>
-                    <span class="cb-sub">Off, the sub-space starts with you alone and seats people on its own.</span>
-                  </span>
-                </label>
-              </div>
-            }
-
-            <div class="details" [class.details-hidden]="!HasDetails">
-              @if (HasDetails) {
-                <div class="details-title">{{ DetailsTitle || 'Details' }}</div>
-              }
-              <ng-content select="[mjcDetails]"></ng-content>
-            </div>
-          }
-
-          @if (ErrorMessage) {
-            <div class="error" role="alert">
-              <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
-              <span>{{ ErrorMessage }}</span>
-            </div>
-          }
         </div>
       </div>
 
       <mj-dialog-actions>
-        <button
-          type="button"
-          mjButton
-          Variant="primary"
-          Size="md"
-          [disabled]="!canSubmit"
-          (click)="onSubmit()"
-        >
-          @if (IsSubmitting) {
-            <mj-loading Size="small" [ShowText]="false"></mj-loading> Creating...
-          } @else {
-            <i class="fa-solid fa-plus" aria-hidden="true"></i> Create space
-          }
-        </button>
-        <button type="button" mjButton Variant="secondary" Size="md" [disabled]="IsSubmitting" (click)="onCancel()">Cancel</button>
+        @if (showAvatarStudio) {
+          <button
+            type="button"
+            mjButton
+            Variant="primary"
+            Size="md"
+            [disabled]="isGeneratingAvatar"
+            (click)="closeAvatarStudio()"
+          >
+            <i class="fa-solid fa-check" aria-hidden="true"></i> Done
+          </button>
+        } @else {
+          <button
+            type="button"
+            mjButton
+            Variant="primary"
+            Size="md"
+            [disabled]="!canSubmit"
+            (click)="onSubmit()"
+          >
+            @if (IsSubmitting) {
+              <mj-loading Size="small" [ShowText]="false"></mj-loading> Creating...
+            } @else {
+              <i class="fa-solid fa-plus" aria-hidden="true"></i> Create space
+            }
+          </button>
+          <button type="button" mjButton Variant="secondary" Size="md" [disabled]="IsSubmitting" (click)="onCancel()">Cancel</button>
+        }
       </mj-dialog-actions>
     </mj-dialog>
   `,
@@ -215,6 +248,15 @@ export interface NewSpaceSubmitPayload {
     `
       :host {
         display: contents;
+      }
+
+      .view-hidden {
+        display: none;
+      }
+
+      .studio-overlay-view {
+        min-width: 0;
+        width: 100%;
       }
 
       .f-check {
@@ -237,6 +279,8 @@ export interface NewSpaceSubmitPayload {
         font-family: var(--mj-font-family, Inter, sans-serif);
         font-size: 14px;
         line-height: var(--mjc-line-height, 1.5);
+        min-width: 0;
+        overflow-x: hidden;
       }
 
       .d-sub {
@@ -254,13 +298,126 @@ export interface NewSpaceSubmitPayload {
       .d-body {
         display: flex;
         flex-direction: column;
-        gap: 18px;
+        gap: 16px;
+        min-width: 0;
+      }
+
+      .identity-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .avatar-trigger-btn {
+        position: relative;
+        flex: 0 0 64px;
+        width: 64px;
+        height: 64px;
+        padding: 0;
+        border-radius: 14px;
+        border: 2px solid color-mix(in srgb, var(--mjc-type-color, var(--mj-brand-primary)) 65%, var(--mj-border-default));
+        background: var(--mjc-type-color, var(--mj-brand-primary));
+        color: var(--mj-brand-on-primary);
+        font-size: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        cursor: pointer;
+        box-shadow: var(--mj-shadow-sm);
+        transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+        margin-top: 22px;
+      }
+
+      .avatar-trigger-btn.has-image {
+        background: var(--mj-bg-surface-sunken);
+      }
+
+      .avatar-trigger-btn:hover:not(:disabled) {
+        transform: scale(1.03);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
+      }
+
+      .avatar-trigger-btn:focus-visible {
+        outline: none;
+        box-shadow: var(--mj-focus-ring);
+      }
+
+      .avatar-trigger-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .avatar-trigger-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .avatar-trigger-badge {
+        position: absolute;
+        left: 50%;
+        bottom: 3px;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 6px;
+        border-radius: var(--mj-radius-full, 999px);
+        background: var(--mj-bg-overlay);
+        color: var(--mj-text-inverse);
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+
+      .identity-name-col {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .avatar-customize-link {
+        appearance: none;
+        align-self: flex-start;
+        border: 0;
+        background: transparent;
+        padding: 2px 0;
+        color: var(--mj-brand-primary);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+
+      .avatar-customize-link:hover:not(:disabled) {
+        text-decoration: underline;
+      }
+
+      .avatar-customize-link:focus-visible {
+        outline: none;
+        box-shadow: var(--mj-focus-ring);
+        border-radius: var(--mj-radius-sm, 4px);
+      }
+
+      .avatar-customize-link:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
 
       .form-group {
         display: flex;
         flex-direction: column;
         gap: 6px;
+        min-width: 0;
       }
 
       .f-label {
@@ -276,6 +433,8 @@ export interface NewSpaceSubmitPayload {
       }
 
       .f-input {
+        width: 100%;
+        box-sizing: border-box;
         border: 1px solid var(--mj-border-default, #e2e8f0);
         border-radius: 8px;
         background: var(--mj-bg-surface, #ffffff);
@@ -298,7 +457,7 @@ export interface NewSpaceSubmitPayload {
         display: flex;
         flex-direction: column;
         gap: 8px;
-        max-height: 260px;
+        max-height: 220px;
         overflow-y: auto;
       }
 
@@ -379,27 +538,25 @@ export interface NewSpaceSubmitPayload {
         border: 1px solid var(--mj-status-error-border, #fecaca);
       }
 
-      .avatar-preview-strip {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 12px;
-        border: 1px solid var(--mj-border-default);
-        border-radius: 8px;
-        background: var(--mj-bg-surface-card);
-      }
-      .avatar-preview-copy {
-        flex: 1;
-        min-width: 0;
-      }
-      .avatar-preview-title {
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--mj-text-primary);
-      }
-      .avatar-preview-sub {
-        font-size: 12px;
-        color: var(--mj-text-secondary);
+      @media (max-width: 640px) {
+        .identity-row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 10px;
+        }
+
+        .avatar-trigger-btn {
+          margin-top: 0;
+        }
+
+        .avatar-customize-link {
+          min-height: 44px;
+        }
+
+        .kind-card {
+          min-height: 44px;
+          padding: 10px 12px;
+        }
       }
     `,
   ],
@@ -430,10 +587,18 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
   /** D22: a sub-space is sealed unless its creator asks. */
   public inheritsMembership = false;
   public showAvatarStudio = false;
+  public isGeneratingAvatar = false;
   public customIconClass: string | null = null;
   public customColor: string | null = null;
   public customImageUrl: string | null = null;
   private hasCustomAvatar = false;
+
+  public get dialogTitle(): string {
+    if (this.showAvatarStudio) {
+      return 'Customize Space Avatar';
+    }
+    return this.ParentName ? 'New sub-space' : 'New space';
+  }
 
   public get selectedType(): NewSpaceTypeOption | undefined {
     return this.Types.find((t) => t.id === this.SelectedTypeId);
@@ -445,6 +610,16 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
 
   public get effectiveColor(): string {
     return this.customColor || this.selectedType?.color || '#0076b6'; // hex-ok: default space brand color
+  }
+
+  public openAvatarStudio(): void {
+    if (this.IsSubmitting) return;
+    this.showAvatarStudio = true;
+  }
+
+  public closeAvatarStudio(): void {
+    if (this.isGeneratingAvatar) return;
+    this.showAvatarStudio = false;
   }
 
   public onAvatarChanged(payload: SpaceAvatarChangePayload): void {
@@ -473,7 +648,9 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
     if (this.refocusTimer !== undefined) clearTimeout(this.refocusTimer);
     this.refocusTimer = setTimeout(() => {
       this.refocusTimer = undefined;
-      this.nameInputElement?.nativeElement.focus();
+      if (!this.showAvatarStudio) {
+        this.nameInputElement?.nativeElement.focus();
+      }
     }, 0);
   }
 
@@ -496,7 +673,9 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
   }
 
   public onCancel(): void {
-    if (!this.IsSubmitting) this.CancelRequested.emit();
+    if (!this.IsSubmitting && !this.isGeneratingAvatar) {
+      this.CancelRequested.emit();
+    }
   }
 
   public onSubmit(): void {

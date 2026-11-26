@@ -3,17 +3,26 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { SpaceSettingsSectionDescriptor } from './base-space-type-ui-driver';
 import type { SpaceSettingsModel } from './types';
-import { MJAlertComponent, MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJButtonDirective, MJDialogActionsComponent, MJDialogComponent, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { COLLAB_TOKENS_CSS } from './tokens';
-import { CollabTypeTileComponent } from './type-tile.component';
 import { CollabSpaceAvatarStudioComponent, type SpaceAvatarChangePayload } from './space-avatar-studio.component';
 
 @Component({
   selector: 'mjc-space-settings',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, MJDropdownComponent, SharedGenericModule, CollabTypeTileComponent, CollabSpaceAvatarStudioComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    MJAlertComponent,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJDropdownComponent,
+    SharedGenericModule,
+    CollabSpaceAvatarStudioComponent,
+  ],
   template: `
     <div class="settings-container">
       <div class="settings-header">
@@ -94,12 +103,25 @@ import { CollabSpaceAvatarStudioComponent, type SpaceAvatarChangePayload } from 
             <div class="form-field full-width">
               <span class="field-label">Space Avatar &amp; Brand Mark</span>
               <div class="avatar-preview-strip">
-                <mjc-type-tile
-                  [IconClass]="formData.iconClass || 'fa-solid fa-compass'"
-                  [Color]="formData.color || ''"
-                  [ImageUrl]="formData.imageUrl || null"
-                  Size="xl"
-                ></mjc-type-tile>
+                <button
+                  type="button"
+                  class="avatar-tile-trigger"
+                  [class.has-image]="!!formData.imageUrl"
+                  [style.--mjc-type-color]="formData.color || null"
+                  [disabled]="isSaving"
+                  aria-label="Customize space avatar or logo"
+                  title="Customize space avatar or logo"
+                  (click)="openAvatarStudio()"
+                >
+                  @if (formData.imageUrl) {
+                    <img class="avatar-tile-img" [src]="formData.imageUrl" [alt]="(formData.name || 'Space') + ' avatar'" />
+                  } @else {
+                    <i [class]="formData.iconClass || 'fa-solid fa-compass'" aria-hidden="true"></i>
+                  }
+                  <span class="avatar-tile-badge" aria-hidden="true">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Edit
+                  </span>
+                </button>
                 <div class="avatar-preview-copy">
                   <div class="avatar-preview-title">{{ formData.imageUrl ? 'Custom avatar image' : 'Icon & accent color' }}</div>
                   <div class="avatar-preview-sub">Generate a logo with AI, pick a Font Awesome icon &amp; color, or upload a square image.</div>
@@ -110,24 +132,12 @@ import { CollabSpaceAvatarStudioComponent, type SpaceAvatarChangePayload } from 
                   Variant="outline"
                   Size="sm"
                   [disabled]="isSaving"
-                  (click)="showAvatarStudio = !showAvatarStudio"
+                  (click)="openAvatarStudio()"
                 >
-                  <i [class]="showAvatarStudio ? 'fa-solid fa-chevron-up' : 'fa-solid fa-wand-magic-sparkles'" aria-hidden="true"></i>
-                  <span>{{ showAvatarStudio ? 'Hide Studio' : 'Customize Icon / Logo' }}</span>
+                  <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                  <span>Customize Icon / Logo</span>
                 </button>
               </div>
-              @if (showAvatarStudio) {
-                <mjc-space-avatar-studio
-                  [SpaceName]="formData.name"
-                  [SpaceDescription]="formData.description"
-                  [SpaceTypeName]="formData.spaceType"
-                  [IconClass]="formData.iconClass || 'fa-solid fa-compass'"
-                  [Color]="formData.color || ''"
-                  [ImageUrl]="formData.imageUrl || null"
-                  [Disabled]="isSaving"
-                  (AvatarChange)="onAvatarChanged($event)"
-                ></mjc-space-avatar-studio>
-              }
             </div>
 
             <div class="form-field">
@@ -358,6 +368,45 @@ import { CollabSpaceAvatarStudioComponent, type SpaceAvatarChangePayload } from 
               }
             </div>
       </ng-template>
+
+      @if (showAvatarStudio && CanEdit) {
+        <mj-dialog
+          [Visible]="true"
+          Title="Customize Space Avatar"
+          [Width]="'min(600px, calc(100vw - 24px))'"
+          [MinWidth]="320"
+          [Closeable]="!isSaving && !isGeneratingAvatar"
+          (Close)="closeAvatarStudio()"
+        >
+          <mjc-space-avatar-studio
+            [Frameless]="true"
+            [ShowBackButton]="true"
+            BackButtonLabel="Back to settings"
+            [SpaceName]="formData.name"
+            [SpaceDescription]="formData.description"
+            [SpaceTypeName]="formData.spaceType"
+            [IconClass]="formData.iconClass || 'fa-solid fa-compass'"
+            [Color]="formData.color || ''"
+            [ImageUrl]="formData.imageUrl || null"
+            [Disabled]="isSaving"
+            (AvatarChange)="onAvatarChanged($event)"
+            (GeneratingChange)="isGeneratingAvatar = $event"
+            (BackClicked)="closeAvatarStudio()"
+          ></mjc-space-avatar-studio>
+          <mj-dialog-actions>
+            <button
+              type="button"
+              mjButton
+              Variant="primary"
+              Size="md"
+              [disabled]="isGeneratingAvatar"
+              (click)="closeAvatarStudio()"
+            >
+              <i class="fa-solid fa-check" aria-hidden="true"></i> Done
+            </button>
+          </mj-dialog-actions>
+        </mj-dialog>
+      }
     </div>
   `,
   styles: [
@@ -519,6 +568,62 @@ import { CollabSpaceAvatarStudioComponent, type SpaceAvatarChangePayload } from 
         border-radius: 8px;
         background: var(--mj-bg-surface-card);
       }
+      .avatar-tile-trigger {
+        position: relative;
+        flex: 0 0 64px;
+        width: 64px;
+        height: 64px;
+        padding: 0;
+        border-radius: 14px;
+        border: 2px solid color-mix(in srgb, var(--mjc-type-color, var(--mj-brand-primary)) 65%, var(--mj-border-default));
+        background: var(--mjc-type-color, var(--mj-brand-primary));
+        color: var(--mj-brand-on-primary);
+        font-size: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        cursor: pointer;
+        box-shadow: var(--mj-shadow-sm);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .avatar-tile-trigger.has-image {
+        background: var(--mj-bg-surface-sunken);
+      }
+      .avatar-tile-trigger:hover:not(:disabled) {
+        transform: scale(1.03);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+      }
+      .avatar-tile-trigger:focus-visible {
+        outline: none;
+        box-shadow: var(--mj-focus-ring);
+      }
+      .avatar-tile-trigger:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .avatar-tile-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .avatar-tile-badge {
+        position: absolute;
+        left: 50%;
+        bottom: 3px;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 6px;
+        border-radius: var(--mj-radius-full, 999px);
+        background: var(--mj-bg-overlay);
+        color: var(--mj-text-inverse);
+        font-size: 9.5px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
       .avatar-preview-copy {
         flex: 1;
         min-width: 0;
@@ -532,6 +637,22 @@ import { CollabSpaceAvatarStudioComponent, type SpaceAvatarChangePayload } from 
         font-size: 12px;
         color: var(--mj-text-secondary);
         margin-top: 2px;
+      }
+
+      @media (max-width: 640px) {
+        .settings-container {
+          padding: 16px 14px 36px;
+        }
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+        .avatar-preview-strip {
+          flex-wrap: wrap;
+        }
+        .avatar-preview-strip > button[mjButton] {
+          width: 100%;
+          min-height: 44px;
+        }
       }
 
       .radio-group {
@@ -657,6 +778,17 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   }
   public confirmingLifecycle = false;
   public showAvatarStudio = false;
+  public isGeneratingAvatar = false;
+
+  public openAvatarStudio(): void {
+    if (this.isSaving || !this.CanEdit) return;
+    this.showAvatarStudio = true;
+  }
+
+  public closeAvatarStudio(): void {
+    if (this.isGeneratingAvatar) return;
+    this.showAvatarStudio = false;
+  }
 
   public onEdit(): void {
     this.bannerVisible = false;
