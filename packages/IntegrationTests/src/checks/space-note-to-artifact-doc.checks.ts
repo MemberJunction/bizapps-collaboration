@@ -7,6 +7,11 @@
  * Live SQL Server Integration Checks for SpaceNote -> Native MJ: Artifacts (Markdown Document)
  * promotion and `DelegateEntityID` / `DelegateRecordID` permission delegation across Team,
  * Shared, Private, and cross-organization boundaries.
+ *
+ * Every mutating check runs inside an isolated `CHECK_SPACE_PREFIX` space cleaned via
+ * `cleanupSpace` (plus full promoted Artifact/Version/Attribute/SpaceItem teardown) so the
+ * shared seeded world spaces (e.g. Northwind) are never polluted for `scripts/persona-check.sql`
+ * or subsequent check bundles.
  */
 import { type ArtifactDelegateContext } from '@memberjunction/core-entities';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
@@ -14,7 +19,14 @@ import {
     DEFAULT_NOTE_DOCUMENT_TITLE,
     MARKDOWN_DOCUMENT_ARTIFACT_TYPE_NAME,
     NOTE_ARTIFACT_DOCUMENT_CONTENT_MODE,
+    type Band,
+    type NoteVisibility,
 } from '@mj-biz-apps/collaboration-core';
+import {
+    type mjBizAppsCollaborationSpaceEntity,
+    type mjBizAppsCollaborationSpaceMemberEntity,
+    type mjBizAppsCollaborationSpaceNoteEntity,
+} from '@mj-biz-apps/collaboration-entities';
 import {
     CollaborationSpaceItemArtifactPermissionDelegate,
     LoadCollaborationSpaceItemArtifactPermissionDelegate,
@@ -24,25 +36,160 @@ import {
 import {
     ARTIFACT_ENTITY,
     ARTIFACT_VERSION_ENTITY,
+    SPACE_ENTITY,
     SPACE_ITEM_ENTITY,
+    SPACE_MEMBER_ENTITY,
+    SPACE_NOTE_ENTITY,
+    SPACE_NOTICE_EVENT_ENTITY,
+    SPACE_ROLE_TYPE_ENTITY,
+    SPACE_TYPE_ENTITY,
 } from '../entity-names.js';
-import { getPersonaContext } from '../persona-provider.js';
+import { getPersonaContext, type PersonaIntegrationCheckContext } from '../persona-provider.js';
 import { FindRows, SameID } from '../wire.js';
-import { cleanupStep, deleteWhere, registerChecks } from './cleanup-helpers.js';
+import { CHECK_SPACE_PREFIX } from '../world/ids.js';
+import { cleanupSpace, cleanupStep, deleteWhere, registerChecks } from './cleanup-helpers.js';
 
-const NORTHWIND = 'C1000001-0000-4000-8000-000000000001';
-const SPACE_NOTES = 'MJ_BizApps_Collaboration: Space Notes';
+const ARTIFACT_VERSION_ATTRIBUTE_ENTITY = 'MJ: Artifact Version Attributes';
+
+interface IsolatedNoteSpace {
+    spaceId: string;
+    teamNoteId: string;
+    sharedNoteId: string;
+    privateNoteId: string;
+}
 
 async function cleanupPromotedDoc(
     ctx: IntegrationCheckContext,
-    ids: { spaceItemId?: string | null; versionIds?: string[]; artifactId?: string | null },
+    ids: { spaceId?: string | null; spaceItemId?: string | null; artifactId?: string | null },
 ): Promise<void> {
     if (ids.spaceItemId) {
         await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, `ID = '${ids.spaceItemId}'`, 'promoted SpaceItem'));
     }
+    if (ids.spaceId) {
+        await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, SPACE_NOTICE_EVENT_ENTITY, `SpaceID = '${ids.spaceId}'`, 'promoted Space Notice Events'));
+    }
     if (ids.artifactId) {
+        if (ctx.Provider.EntityByName(ARTIFACT_VERSION_ATTRIBUTE_ENTITY)) {
+            await cleanupStep(async () => {
+                const versionRows = await FindRows<{ ID: string }>(
+                    ctx,
+                    ARTIFACT_VERSION_ENTITY,
+                    `ArtifactID = '${ids.artifactId}'`,
+                    ['ID'],
+                    ctx.User,
+                    { BypassCache: true },
+                );
+                if (versionRows.length > 0) {
+                    const idList = versionRows.map((v) => `'${v.ID}'`).join(', ');
+                    await deleteWhere(
+                        ctx.Provider,
+                        ctx.User,
+                        ARTIFACT_VERSION_ATTRIBUTE_ENTITY,
+                        `ArtifactVersionID IN (${idList})`,
+                        'promoted Artifact Version Attributes',
+                    );
+                }
+            });
+        }
         await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, ARTIFACT_VERSION_ENTITY, `ArtifactID = '${ids.artifactId}'`, 'promoted Artifact Versions'));
         await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, ARTIFACT_ENTITY, `ID = '${ids.artifactId}'`, 'promoted Artifact'));
+    }
+}
+
+async function createNoteInSpace(
+    author: PersonaIntegrationCheckContext,
+    spaceId: string,
+    title: string,
+    body: string,
+    band: Band,
+    visibility: NoteVisibility,
+): Promise<string> {
+    const note = await author.Provider.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>(SPACE_NOTE_ENTITY, author.User);
+    note.NewRecord();
+    note.SpaceID = spaceId;
+    note.Title = title;
+    note.Body = body;
+    note.Band = band;
+    note.Visibility = visibility;
+    Assert(await note.Save() && !!note.ID, `Failed to seed check note "${title}": ${note.LatestResult?.CompleteMessage ?? ''}`);
+    return note.ID;
+}
+
+async function createIsolatedNoteSpace(
+    ctx: IntegrationCheckContext,
+    label: string,
+    personas: {
+        ada: PersonaIntegrationCheckContext;
+        sam: PersonaIntegrationCheckContext;
+        casey: PersonaIntegrationCheckContext;
+        dana: PersonaIntegrationCheckContext;
+    },
+): Promise<IsolatedNoteSpace> {
+    const [workspaceType] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'workspace'", ['ID']);
+    const [ownerRole] = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']);
+    const [memberRole] = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'member'", ['ID']);
+    const [clientAdminRole] = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'client-admin'", ['ID']);
+    const [guestRole] = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'guest'", ['ID']);
+    Assert(
+        !!workspaceType && !!ownerRole && !!memberRole && !!clientAdminRole && !!guestRole,
+        'Workspace type and required SpaceRoleTypes must exist',
+    );
+
+    const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, personas.ada.User);
+    space.NewRecord();
+    space.Name = `${CHECK_SPACE_PREFIX}NoteToDoc ${label} ${Date.now()}`;
+    space.SpaceTypeID = workspaceType.ID;
+    space.OwnerID = personas.ada.User.ID;
+    space.InheritsMembership = false;
+    Assert(await space.Save() && !!space.ID, `Create isolated check space failed: ${space.LatestResult?.CompleteMessage ?? ''}`);
+    const spaceId = space.ID;
+
+    try {
+        for (const seatSpec of [
+            { userId: personas.ada.User.ID, roleId: ownerRole.ID, band: 'Team' as const },
+            { userId: personas.sam.User.ID, roleId: memberRole.ID, band: 'Team' as const },
+            { userId: personas.casey.User.ID, roleId: clientAdminRole.ID, band: 'Shared' as const },
+            { userId: personas.dana.User.ID, roleId: guestRole.ID, band: 'Shared' as const },
+        ]) {
+            const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, personas.ada.User);
+            seat.NewRecord();
+            seat.SpaceID = spaceId;
+            seat.UserID = seatSpec.userId;
+            seat.SpaceRoleTypeID = seatSpec.roleId;
+            seat.Band = seatSpec.band;
+            seat.Status = 'Active';
+            Assert(await seat.Save(), `Seat user ${seatSpec.userId} on isolated NoteToDoc space failed: ${seat.LatestResult?.CompleteMessage ?? ''}`);
+        }
+
+        const teamNoteId = await createNoteInSpace(
+            personas.sam,
+            spaceId,
+            'Pricing thoughts (internal)',
+            'Hold the 8% uplift until the roadmap lands. Casey will push back on the services line; have the comparison ready.',
+            'Team',
+            'Space',
+        );
+        const sharedNoteId = await createNoteInSpace(
+            personas.ada,
+            spaceId,
+            'Kickoff recap',
+            'Scope agreed with Casey: the executive roadmap by the 20th and a pricing review after. Next check-in is Thursday.',
+            'Shared',
+            'Space',
+        );
+        const privateNoteId = await createNoteInSpace(
+            personas.ada,
+            spaceId,
+            'My follow-ups',
+            'Call Casey Thursday. Send Sam the renewal numbers.',
+            'Team',
+            'Private',
+        );
+
+        return { spaceId, teamNoteId, sharedNoteId, privateNoteId };
+    } catch (err) {
+        await cleanupSpace(ctx.Provider, ctx.User, spaceId);
+        throw err;
     }
 }
 
@@ -56,26 +203,22 @@ const checks: NamedCheck[] = [
             const ada = await getPersonaContext(ctx, 'ada');
             const sam = await getPersonaContext(ctx, 'sam');
             const casey = await getPersonaContext(ctx, 'casey');
-            const harbor = await getPersonaContext(ctx, 'harbor');
+            const dana = await getPersonaContext(ctx, 'dana');
+            // Harper is the rival external organization (Solstice Logistics) Space Participant — never seated here and not a staff UI admin
+            const harper = await getPersonaContext(ctx, 'harper');
 
-            const notes = await FindRows<{ ID: string; Title: string; Band: string }>(
-                ctx,
-                SPACE_NOTES,
-                `SpaceID = '${NORTHWIND}' AND Title = 'Pricing thoughts (internal)'`,
-                ['ID', 'Title', 'Band'],
-                undefined,
-                { BypassCache: true },
-            );
-            Assert(notes.length === 1, `Expected seeded Team note 'Pricing thoughts (internal)', found ${notes.length}`);
-
+            let isolatedSpaceId: string | null = null;
             let createdItemId: string | null = null;
             let createdArtifactId: string | null = null;
             try {
+                const isolated = await createIsolatedNoteSpace(ctx, 'N1', { ada, sam, casey, dana });
+                isolatedSpaceId = isolated.spaceId;
+
                 const outcome = await promoteSpaceNoteToDoc({
                     provider: ctx.Provider,
                     callerUser: sam.User,
-                    spaceId: NORTHWIND,
-                    noteId: notes[0].ID,
+                    spaceId: isolated.spaceId,
+                    noteId: isolated.teamNoteId,
                 });
                 Assert(outcome.ok === true, `Team SpaceNote promotion failed: ${outcome.ok ? '' : outcome.message}`);
                 if (!outcome.ok) return;
@@ -139,9 +282,12 @@ const checks: NamedCheck[] = [
                 Assert((await delegate.CanRead(delegateCtx, ada.User)) === 'Allow', 'Space owner Ada can read Team doc via delegate');
                 Assert((await delegate.CanRead(delegateCtx, sam.User)) === 'Allow', 'Team member Sam can read Team doc via delegate');
                 Assert((await delegate.CanRead(delegateCtx, casey.User)) === 'Deny', 'Shared participant Casey is denied Team doc via delegate');
-                Assert((await delegate.CanRead(delegateCtx, harbor.User)) === 'Deny', 'Cross-org outsider Harbor is denied Team doc via delegate');
+                Assert((await delegate.CanRead(delegateCtx, harper.User)) === 'Deny', 'Cross-org outsider Harper is denied Team doc via delegate');
             } finally {
-                await cleanupPromotedDoc(ctx, { spaceItemId: createdItemId, artifactId: createdArtifactId });
+                await cleanupPromotedDoc(ctx, { spaceId: isolatedSpaceId, spaceItemId: createdItemId, artifactId: createdArtifactId });
+                if (isolatedSpaceId) {
+                    await cleanupSpace(ctx.Provider, ctx.User, isolatedSpaceId);
+                }
             }
         },
     },
@@ -152,27 +298,23 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             LoadCollaborationSpaceItemArtifactPermissionDelegate();
             const ada = await getPersonaContext(ctx, 'ada');
+            const sam = await getPersonaContext(ctx, 'sam');
             const casey = await getPersonaContext(ctx, 'casey');
-            const harbor = await getPersonaContext(ctx, 'harbor');
+            const dana = await getPersonaContext(ctx, 'dana');
+            const harper = await getPersonaContext(ctx, 'harper');
 
-            const notes = await FindRows<{ ID: string }>(
-                ctx,
-                SPACE_NOTES,
-                `SpaceID = '${NORTHWIND}' AND Title = 'Kickoff recap'`,
-                ['ID'],
-                undefined,
-                { BypassCache: true },
-            );
-            Assert(notes.length === 1, `Expected seeded Shared note 'Kickoff recap', found ${notes.length}`);
-
+            let isolatedSpaceId: string | null = null;
             let createdItemId: string | null = null;
             let createdArtifactId: string | null = null;
             try {
+                const isolated = await createIsolatedNoteSpace(ctx, 'N2', { ada, sam, casey, dana });
+                isolatedSpaceId = isolated.spaceId;
+
                 const outcome = await promoteSpaceNoteToDoc({
                     provider: ctx.Provider,
                     callerUser: ada.User,
-                    spaceId: NORTHWIND,
-                    noteId: notes[0].ID,
+                    spaceId: isolated.spaceId,
+                    noteId: isolated.sharedNoteId,
                 });
                 Assert(outcome.ok === true, `Shared SpaceNote promotion failed: ${outcome.ok ? '' : outcome.message}`);
                 if (!outcome.ok) return;
@@ -194,108 +336,124 @@ const checks: NamedCheck[] = [
                     DelegateEntityName: SPACE_ITEM_ENTITY,
                 };
                 Assert((await delegate.CanRead(delegateCtx, casey.User)) === 'Allow', 'Shared participant Casey can read Shared doc via delegate');
-                Assert((await delegate.CanRead(delegateCtx, harbor.User)) === 'Deny', 'Cross-org outsider Harbor is denied Shared doc via delegate');
+                Assert((await delegate.CanRead(delegateCtx, harper.User)) === 'Deny', 'Cross-org outsider Harper is denied Shared doc via delegate');
 
                 // Verify native document editability by appending v2 via updateSpaceDoc
                 const updated = await updateSpaceDoc({
                     provider: ctx.Provider,
                     callerUser: ada.User,
-                    spaceId: NORTHWIND,
+                    spaceId: isolated.spaceId,
                     spaceItemId: outcome.data.spaceItemId,
                     content: `${outcome.data.content}\n## Follow-up\nConfirmed next Thursday.\n`,
                 });
                 Assert(updated.ok === true && updated.data.versionNumber === 2, `Native doc edit to v2 failed: ${updated.ok ? '' : updated.message}`);
             } finally {
-                await cleanupPromotedDoc(ctx, { spaceItemId: createdItemId, artifactId: createdArtifactId });
+                await cleanupPromotedDoc(ctx, { spaceId: isolatedSpaceId, spaceItemId: createdItemId, artifactId: createdArtifactId });
+                if (isolatedSpaceId) {
+                    await cleanupSpace(ctx.Provider, ctx.User, isolatedSpaceId);
+                }
             }
         },
     },
     {
         Id: 'space-note-to-artifact-doc.N3',
-        Name: 'N3 — Adversarial & untitled guards: Shared participant denied Team note, peer denied Private note, cross-org denied, and untitled note falls back deterministically',
+        Name: 'N3 — Adversarial & untitled guards: Shared participant denied Team note, read-only guest denied Shared note, cross-org outsider denied, Private note locked to Team band, and untitled note falls back deterministically',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await getPersonaContext(ctx, 'ada');
             const sam = await getPersonaContext(ctx, 'sam');
             const casey = await getPersonaContext(ctx, 'casey');
-            const harbor = await getPersonaContext(ctx, 'harbor');
+            const dana = await getPersonaContext(ctx, 'dana');
+            const harper = await getPersonaContext(ctx, 'harper');
 
-            const teamNotes = await FindRows<{ ID: string }>(
-                ctx,
-                SPACE_NOTES,
-                `SpaceID = '${NORTHWIND}' AND Title = 'Pricing thoughts (internal)'`,
-                ['ID'],
-                undefined,
-                { BypassCache: true },
-            );
-            const privateNotes = await FindRows<{ ID: string }>(
-                ctx,
-                SPACE_NOTES,
-                `SpaceID = '${NORTHWIND}' AND Title = 'My follow-ups'`,
-                ['ID'],
-                undefined,
-                { BypassCache: true },
-            );
-            Assert(teamNotes.length === 1 && privateNotes.length === 1, 'Expected seeded Team and Private notes on Northwind');
-
-            const caseyBlocked = await promoteSpaceNoteToDoc({
-                provider: ctx.Provider,
-                callerUser: casey.User,
-                spaceId: NORTHWIND,
-                noteId: teamNotes[0].ID,
-            });
-            Assert(caseyBlocked.ok === false && caseyBlocked.code === 'UNAUTHORIZED', 'Shared participant Casey cannot promote Team note');
-
-            const harborBlocked = await promoteSpaceNoteToDoc({
-                provider: ctx.Provider,
-                callerUser: harbor.User,
-                spaceId: NORTHWIND,
-                noteId: teamNotes[0].ID,
-            });
-            Assert(harborBlocked.ok === false && harborBlocked.code === 'UNAUTHORIZED', 'Cross-org outsider Harbor cannot promote Northwind note');
-
-            const samOnAdaPrivate = await promoteSpaceNoteToDoc({
-                provider: ctx.Provider,
-                callerUser: sam.User,
-                spaceId: NORTHWIND,
-                noteId: privateNotes[0].ID,
-            });
-            // Note: Sam is a UI staff admin in the default sample world unless non-admin; verify fail-closed if non-admin or allowed only for admin
-            Assert(
-                samOnAdaPrivate.ok === false || samOnAdaPrivate.data.band === 'Team',
-                'Private note never escapes the Team band',
-            );
-            if (samOnAdaPrivate.ok) {
-                await cleanupPromotedDoc(ctx, {
-                    spaceItemId: samOnAdaPrivate.data.spaceItemId,
-                    artifactId: samOnAdaPrivate.data.artifactId,
-                });
-            }
-
-            let untitledItemId: string | null = null;
-            let untitledArtifactId: string | null = null;
+            let isolatedSpaceId: string | null = null;
             try {
-                const untitled = await promoteSpaceNoteToDoc({
+                const isolated = await createIsolatedNoteSpace(ctx, 'N3', { ada, sam, casey, dana });
+                isolatedSpaceId = isolated.spaceId;
+
+                const caseyBlocked = await promoteSpaceNoteToDoc({
                     provider: ctx.Provider,
-                    callerUser: ada.User,
-                    spaceId: NORTHWIND,
-                    note: {
-                        Title: '   ',
-                        Body: '   ',
-                        Band: 'Team',
-                        Visibility: 'Space',
-                        AuthorUserID: ada.User.ID,
-                    },
+                    callerUser: casey.User,
+                    spaceId: isolated.spaceId,
+                    noteId: isolated.teamNoteId,
                 });
-                Assert(untitled.ok === true, `Untitled note promotion should succeed with fallback: ${untitled.ok ? '' : untitled.message}`);
-                if (untitled.ok) {
-                    untitledItemId = untitled.data.spaceItemId;
-                    untitledArtifactId = untitled.data.artifactId;
-                    Assert(untitled.data.title === DEFAULT_NOTE_DOCUMENT_TITLE, `Fallback title must be '${DEFAULT_NOTE_DOCUMENT_TITLE}'`);
-                    Assert(untitled.data.content === `# ${DEFAULT_NOTE_DOCUMENT_TITLE}\n\n`, 'Fallback Markdown content is deterministic');
+                Assert(caseyBlocked.ok === false && caseyBlocked.code === 'UNAUTHORIZED', 'Shared participant Casey cannot promote Team note');
+
+                const danaGuestBlocked = await promoteSpaceNoteToDoc({
+                    provider: ctx.Provider,
+                    callerUser: dana.User,
+                    spaceId: isolated.spaceId,
+                    noteId: isolated.sharedNoteId,
+                });
+                Assert(danaGuestBlocked.ok === false && danaGuestBlocked.code === 'UNAUTHORIZED', 'Read-only guest Dana cannot promote Shared note');
+
+                const harperBlocked = await promoteSpaceNoteToDoc({
+                    provider: ctx.Provider,
+                    callerUser: harper.User,
+                    spaceId: isolated.spaceId,
+                    noteId: isolated.teamNoteId,
+                });
+                Assert(harperBlocked.ok === false && harperBlocked.code === 'UNAUTHORIZED', 'Cross-org outsider Harper cannot promote space note');
+
+                let samPrivateItemId: string | null = null;
+                let samPrivateArtifactId: string | null = null;
+                try {
+                    const samOnAdaPrivate = await promoteSpaceNoteToDoc({
+                        provider: ctx.Provider,
+                        callerUser: sam.User,
+                        spaceId: isolated.spaceId,
+                        noteId: isolated.privateNoteId,
+                    });
+                    if (samOnAdaPrivate.ok) {
+                        samPrivateItemId = samOnAdaPrivate.data.spaceItemId;
+                        samPrivateArtifactId = samOnAdaPrivate.data.artifactId;
+                    }
+                    // Sam holds UI staff role (administers spaces in COLLAB-WORLD); verify fail-closed if non-admin or strictly locked to Team band if admin
+                    Assert(
+                        samOnAdaPrivate.ok === false || samOnAdaPrivate.data.band === 'Team',
+                        'Private note never escapes the Team band',
+                    );
+                } finally {
+                    await cleanupPromotedDoc(ctx, {
+                        spaceId: isolatedSpaceId,
+                        spaceItemId: samPrivateItemId,
+                        artifactId: samPrivateArtifactId,
+                    });
+                }
+
+                let untitledItemId: string | null = null;
+                let untitledArtifactId: string | null = null;
+                try {
+                    const untitled = await promoteSpaceNoteToDoc({
+                        provider: ctx.Provider,
+                        callerUser: ada.User,
+                        spaceId: isolated.spaceId,
+                        note: {
+                            Title: '   ',
+                            Body: '   ',
+                            Band: 'Team',
+                            Visibility: 'Space',
+                            AuthorUserID: ada.User.ID,
+                        },
+                    });
+                    Assert(untitled.ok === true, `Untitled note promotion should succeed with fallback: ${untitled.ok ? '' : untitled.message}`);
+                    if (untitled.ok) {
+                        untitledItemId = untitled.data.spaceItemId;
+                        untitledArtifactId = untitled.data.artifactId;
+                        Assert(untitled.data.title === DEFAULT_NOTE_DOCUMENT_TITLE, `Fallback title must be '${DEFAULT_NOTE_DOCUMENT_TITLE}'`);
+                        Assert(untitled.data.content === `# ${DEFAULT_NOTE_DOCUMENT_TITLE}\n\n`, 'Fallback Markdown content is deterministic');
+                    }
+                } finally {
+                    await cleanupPromotedDoc(ctx, {
+                        spaceId: isolatedSpaceId,
+                        spaceItemId: untitledItemId,
+                        artifactId: untitledArtifactId,
+                    });
                 }
             } finally {
-                await cleanupPromotedDoc(ctx, { spaceItemId: untitledItemId, artifactId: untitledArtifactId });
+                if (isolatedSpaceId) {
+                    await cleanupSpace(ctx.Provider, ctx.User, isolatedSpaceId);
+                }
             }
         },
     },
