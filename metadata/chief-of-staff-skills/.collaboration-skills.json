@@ -21,8 +21,7 @@
           "fields": {
             "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
             "SkillID": "@parent:ID",
-            "Status": "Active",
-            "AllowMetadataSyncUpdate": true
+            "Status": "Active"
           }
         }
       ]
@@ -50,8 +49,7 @@
           "fields": {
             "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
             "SkillID": "@parent:ID",
-            "Status": "Active",
-            "AllowMetadataSyncUpdate": true
+            "Status": "Active"
           }
         }
       ]
@@ -79,8 +77,7 @@
           "fields": {
             "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
             "SkillID": "@parent:ID",
-            "Status": "Active",
-            "AllowMetadataSyncUpdate": true
+            "Status": "Active"
           }
         }
       ]
