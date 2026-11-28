@@ -1,0 +1,26 @@
+{
+  "entity": "MJ: AI Skills",
+  "filePattern": "**/.*.json",
+  "ignoreDirectories": [
+    "templates"
+  ],
+  "defaults": {
+    "Status": "Active",
+    "ActivationMode": "Auto",
+    "Category": "Collaboration",
+    "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+  },
+  "pull": {
+    "filter": "Name IN ('Collaboration Spaces', 'Promote', 'Summarize', 'Find & act')",
+    "relatedEntities": {
+      "MJ: AI Agent Skills": {
+        "entity": "MJ: AI Agent Skills",
+        "foreignKey": "SkillID"
+      },
+      "MJ: AI Skill Actions": {
+        "entity": "MJ: AI Skill Actions",
+        "foreignKey": "SkillID"
+      }
+    }
+  }
+}
