@@ -11,6 +11,21 @@
       "ActivationMode": "Auto",
       "Category": "Collaboration",
       "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Skills": [
+        {
+          "primaryKey": {
+            "ID": "1B54F8DA-FF07-42DD-9A84-51D1B06A1A5D"
+          },
+          "fields": {
+            "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+            "SkillID": "@parent:ID",
+            "Status": "Active",
+            "AllowMetadataSyncUpdate": true
+          }
+        }
+      ]
     }
   },
   {
@@ -25,6 +40,21 @@
       "ActivationMode": "Auto",
       "Category": "Collaboration",
       "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Skills": [
+        {
+          "primaryKey": {
+            "ID": "A978ECD8-6246-497E-9CCA-902F06FABEAB"
+          },
+          "fields": {
+            "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+            "SkillID": "@parent:ID",
+            "Status": "Active",
+            "AllowMetadataSyncUpdate": true
+          }
+        }
+      ]
     }
   },
   {
@@ -39,6 +69,21 @@
       "ActivationMode": "Auto",
       "Category": "Collaboration",
       "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Skills": [
+        {
+          "primaryKey": {
+            "ID": "A551C555-2D33-4AE2-83AA-AC0AB44857DD"
+          },
+          "fields": {
+            "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+            "SkillID": "@parent:ID",
+            "Status": "Active",
+            "AllowMetadataSyncUpdate": true
+          }
+        }
+      ]
     }
   }
 ]

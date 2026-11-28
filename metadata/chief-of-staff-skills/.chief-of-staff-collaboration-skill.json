@@ -1,0 +1,32 @@
+[
+  {
+    "primaryKey": {
+      "ID": "C289457B-96E6-4C6B-9648-56662F2326B8"
+    },
+    "fields": {
+      "Name": "Collaboration Spaces",
+      "Description": "Navigates BizApps Collaboration spaces, memberships, Team vs Shared visibility bands, filed items, notes, chats, notices, and digests through RLS-enforced RunView reads and space governance actions. Installed by the BizApps Collaboration app.",
+      "Instructions": "@file:templates/collaboration-chief-of-staff.skill.md",
+      "Status": "Active",
+      "ActivationMode": "Auto",
+      "Category": "Collaboration",
+      "IconClass": "fa-solid fa-users-viewfinder",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Skills": [
+        {
+          "primaryKey": {
+            "ID": "B317AB68-3790-4946-9A0F-02412AA3F85E"
+          },
+          "fields": {
+            "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+            "SkillID": "@parent:ID",
+            "Status": "Active",
+            "AllowMetadataSyncUpdate": true
+          }
+        }
+      ]
+    }
+  }
+]
